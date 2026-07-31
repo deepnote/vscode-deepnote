@@ -1,9 +1,9 @@
 import { assert } from 'chai';
 import sinon from 'sinon';
 import { EventEmitter, Uri } from 'vscode';
-import { anyString, anything, instance, mock, reset, verify, when } from 'ts-mockito';
+import { anyString, anything, deepEqual, instance, mock, reset, resetCalls, verify, when } from 'ts-mockito';
 
-import { ITelemetryService, type TelemetryEvent } from '../../../platform/analytics/types';
+import { ITelemetryService } from '../../../platform/analytics/types';
 import { IExtensionContext, IDisposable } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../../types';
@@ -96,6 +96,7 @@ suite('IntegrationWebviewProvider', () => {
     let extensionContext: IExtensionContext;
     let integrationStorage: IIntegrationStorage;
     let notebookManager: IDeepnoteNotebookManager;
+    let mockTelemetryService: ITelemetryService;
     let tokens: Map<string, FederatedAuthTokenEntry>;
     let onDidChangeTokens: EventEmitter<string>;
     let tokenSaveSpy: sinon.SinonSpy<[FederatedAuthTokenEntry, { silent?: boolean }?], Promise<void>>;
@@ -103,14 +104,13 @@ suite('IntegrationWebviewProvider', () => {
     let tokenStorage: IFederatedAuthTokenStorage;
     let extensionSubscriptions: IDisposable[];
     let fakePanel: FakeWebviewPanel;
-    let trackedEvents: TelemetryEvent[];
 
     setup(() => {
         resetVSCodeMocks();
-        trackedEvents = [];
         extensionContext = mock<IExtensionContext>();
         integrationStorage = mock<IIntegrationStorage>();
         notebookManager = mock<IDeepnoteNotebookManager>();
+        mockTelemetryService = mock<ITelemetryService>();
         extensionSubscriptions = [];
         when(extensionContext.subscriptions).thenReturn(extensionSubscriptions);
         when(extensionContext.extensionUri).thenReturn(Uri.file('/ext'));
@@ -159,12 +159,7 @@ suite('IntegrationWebviewProvider', () => {
             instance(extensionContext),
             instance(integrationStorage),
             instance(notebookManager),
-            {
-                dispose: () => Promise.resolve(),
-                trackEvent: (event: TelemetryEvent) => {
-                    trackedEvents.push(event);
-                }
-            } as ITelemetryService,
+            instance(mockTelemetryService),
             extensionSubscriptions,
             opts.tokenStorage
         );
@@ -290,7 +285,7 @@ suite('IntegrationWebviewProvider', () => {
                 provider,
                 singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId }))
             );
-            trackedEvents.length = 0;
+            resetCalls(mockTelemetryService);
 
             await fakePanel.onDidReceiveMessage({ type: 'authenticate', integrationId });
         }
@@ -298,23 +293,29 @@ suite('IntegrationWebviewProvider', () => {
         test('reports the outcome returned by the command, after it settles', async () => {
             await authenticate(Promise.resolve('cancelled'));
 
-            assert.deepStrictEqual(trackedEvents, [
-                {
-                    eventName: 'authenticate_integration',
-                    properties: { integrationType: 'big-query', outcome: 'cancelled' }
-                }
-            ]);
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({
+                        eventName: 'authenticate_integration',
+                        properties: { integrationType: 'big-query', outcome: 'cancelled' }
+                    })
+                )
+            ).once();
+            verify(mockTelemetryService.trackEvent(anything())).once();
         });
 
         test('reports failed when the command returns nothing (web stub / unexpected undefined)', async () => {
             await authenticate(Promise.resolve(undefined));
 
-            assert.deepStrictEqual(trackedEvents, [
-                {
-                    eventName: 'authenticate_integration',
-                    properties: { integrationType: 'big-query', outcome: 'failed' }
-                }
-            ]);
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({
+                        eventName: 'authenticate_integration',
+                        properties: { integrationType: 'big-query', outcome: 'failed' }
+                    })
+                )
+            ).once();
+            verify(mockTelemetryService.trackEvent(anything())).once();
         });
 
         test('reports failed when the command rejects', async () => {
@@ -323,12 +324,15 @@ suite('IntegrationWebviewProvider', () => {
 
             await authenticate(rejection);
 
-            assert.deepStrictEqual(trackedEvents, [
-                {
-                    eventName: 'authenticate_integration',
-                    properties: { integrationType: 'big-query', outcome: 'failed' }
-                }
-            ]);
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({
+                        eventName: 'authenticate_integration',
+                        properties: { integrationType: 'big-query', outcome: 'failed' }
+                    })
+                )
+            ).once();
+            verify(mockTelemetryService.trackEvent(anything())).once();
         });
     });
 
@@ -338,7 +342,7 @@ suite('IntegrationWebviewProvider', () => {
 
             const provider = buildProvider({ tokenStorage });
             await show(provider, singleIntegrationMap(config.id, config));
-            trackedEvents.length = 0;
+            resetCalls(mockTelemetryService);
 
             await fakePanel.onDidReceiveMessage({ type: 'save', integrationId: config.id, config });
         }
@@ -346,12 +350,15 @@ suite('IntegrationWebviewProvider', () => {
         test('reports authMethod google-oauth for an OAuth BigQuery config', async () => {
             await save(buildGoogleOauthIntegration({ id: 'bq-save-oauth' }));
 
-            assert.deepStrictEqual(trackedEvents, [
-                {
-                    eventName: 'save_integration',
-                    properties: { integrationType: 'big-query', authMethod: 'google-oauth' }
-                }
-            ]);
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({
+                        eventName: 'save_integration',
+                        properties: { integrationType: 'big-query', authMethod: 'google-oauth' }
+                    })
+                )
+            ).once();
+            verify(mockTelemetryService.trackEvent(anything())).once();
         });
 
         test('reports authMethod service-account for a legacy BigQuery config that omits authMethod', async () => {
@@ -360,20 +367,26 @@ suite('IntegrationWebviewProvider', () => {
 
             await save(config);
 
-            assert.deepStrictEqual(trackedEvents, [
-                {
-                    eventName: 'save_integration',
-                    properties: { integrationType: 'big-query', authMethod: 'service-account' }
-                }
-            ]);
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({
+                        eventName: 'save_integration',
+                        properties: { integrationType: 'big-query', authMethod: 'service-account' }
+                    })
+                )
+            ).once();
+            verify(mockTelemetryService.trackEvent(anything())).once();
         });
 
         test('omits authMethod for non-BigQuery configs', async () => {
             await save(buildPostgresIntegration({ id: 'pg-save' }));
 
-            assert.deepStrictEqual(trackedEvents, [
-                { eventName: 'save_integration', properties: { integrationType: 'pgsql' } }
-            ]);
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({ eventName: 'save_integration', properties: { integrationType: 'pgsql' } })
+                )
+            ).once();
+            verify(mockTelemetryService.trackEvent(anything())).once();
         });
     });
 

@@ -163,9 +163,11 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
 
     private getMaxIterations(metadata: Record<string, unknown> | undefined): number {
         const value = metadata?.deepnote_max_iterations;
-        const result = MaxIterationsSchema.safeParse(value);
+        // z.coerce.number() turns true into 1, which then satisfies the range check, so booleans
+        // would be accepted as an iteration count instead of falling back to the default.
+        const result = typeof value === 'boolean' ? undefined : MaxIterationsSchema.safeParse(value);
 
-        if (result.success) {
+        if (result?.success) {
             return result.data;
         }
 

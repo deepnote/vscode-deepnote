@@ -3,8 +3,9 @@
 declare const POSTHOG_API_KEY_BUILD: string | undefined;
 
 // Substituted at build time from the POSTHOG_CHANNEL env var (see build/esbuild/build.ts):
-// 'stable' for main/release builds, 'pr' for pull-request builds. Left undefined in local
-// builds, where it falls back to 'development' so dogfood/PR events can be segmented out.
+// 'stable' for main/release builds, 'pr' for pull-request builds, 'development' for CI builds off
+// any other ref. Left undefined in local builds, where it also falls back to 'development' so
+// dogfood/PR events can be segmented out.
 declare const POSTHOG_CHANNEL_BUILD: string | undefined;
 
 const POSTHOG_API_KEY_PLACEHOLDER = '__POSTHOG_API_KEY__';

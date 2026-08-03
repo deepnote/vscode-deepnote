@@ -28,6 +28,8 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
     // version, platform, and session.
     private readonly commonProperties: Record<string, string | number | boolean>;
 
+    private readonly userId: string;
+
     private userIdState: IPersistentState<string>;
 
     constructor(
@@ -39,6 +41,7 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
         asyncDisposables.push(this);
         this.client = null;
         this.userIdState = this.stateFactory.createGlobalPersistentState<string>(USER_ID_STORAGE_KEY, '');
+        this.userId = this.userIdState.value || generateUuid();
         this.commonProperties = {
             channel: POSTHOG_CHANNEL,
             extensionVersion: appEnvironment.extensionVersion,
@@ -47,10 +50,14 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
         };
     }
 
-    public async activate(): Promise<void> {
+    public activate(): void {
         try {
-            if (!this.userIdState.value) {
-                await this.userIdState.updateValue(generateUuid());
+            // Persistence is floated deliberately: the client and distinctId do not depend on it, and
+            // awaiting it here would leave `client` null for any event racing activation.
+            if (this.userIdState.value !== this.userId) {
+                this.userIdState
+                    .updateValue(this.userId)
+                    .catch((error) => logger.debug(`Failed to persist telemetry user ID: ${error}`));
             }
 
             this.createClient();
@@ -74,12 +81,12 @@ export class TelemetryService implements ITelemetryService, IExtensionSyncActiva
 
     public trackEvent(event: TelemetryEvent): void {
         try {
-            if (!this.client || !this.userIdState) {
+            if (!this.client) {
                 return;
             }
 
             this.client.capture({
-                distinctId: this.userIdState.value,
+                distinctId: this.userId,
                 event: event.eventName,
                 properties: { ...event.properties, ...this.commonProperties, $process_person_profile: false }
             });

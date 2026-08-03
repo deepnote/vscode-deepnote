@@ -25,7 +25,8 @@ import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
 import {
     ConfigurableDatabaseIntegrationType,
-    DATAFRAME_SQL_INTEGRATION_ID
+    DATAFRAME_SQL_INTEGRATION_ID,
+    toTelemetryIntegrationType
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
 import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
@@ -463,12 +464,14 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         this._onDidChangeCellStatusBarItems.fire();
 
         const selectedIntegration = projectIntegrations.find((i) => i.id === selectedId);
+        const integrationType =
+            selectedId === DATAFRAME_SQL_INTEGRATION_ID
+                ? 'duckdb'
+                : toTelemetryIntegrationType(selectedIntegration?.type);
+
         this.analytics.trackEvent({
             eventName: 'switch_sql_integration',
-            properties: {
-                integrationType:
-                    selectedId === DATAFRAME_SQL_INTEGRATION_ID ? 'duckdb' : selectedIntegration?.type ?? 'unknown'
-            }
+            properties: { integrationType }
         });
     }
 }

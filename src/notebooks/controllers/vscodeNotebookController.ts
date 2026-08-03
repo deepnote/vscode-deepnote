@@ -56,6 +56,7 @@ import {
 } from '../../kernels/types';
 import { IJupyterVariablesProvider } from '../../kernels/variables/types';
 import { IPyWidgetMessages } from '../../messageTypes';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
 import { isCancellationError } from '../../platform/common/cancellation';
 import {
@@ -461,6 +462,18 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                 } finally {
                     cts.dispose();
                 }
+            }
+
+            // A batch covering every code cell is the only signal core gives us that the user ran the
+            // whole notebook; the built-in Run All button never routes through an extension command.
+            // deliberate: a single-code-cell notebook and "Run All Above" from the last cell both
+            // match this shape and are counted — unavoidable without a core API naming the command.
+            const codeCellCount = notebook.getCells().filter((cell) => cell.kind === NotebookCellKind.Code).length;
+
+            if (codeCellCount > 0 && cells.length === codeCellCount) {
+                this.serviceContainer
+                    .get<ITelemetryService>(ITelemetryService)
+                    .trackEvent({ eventName: 'execute_notebook' });
             }
         }
 

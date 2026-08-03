@@ -163,6 +163,13 @@ export class DeepnoteMultiNotebookSplitter {
 
             // Write all children before retiring the original (see step below).
             const entries = splitByNotebooks(deepnoteFile, getFileStem(fileUri));
+
+            // Guards the retire below: with no entries the rename would strand the original with no
+            // replacement while still reporting success.
+            if (entries.length === 0) {
+                throw new Error(l10n.t('The file has no notebooks that can be split into separate files.'));
+            }
+
             const reserved = new Set<string>();
             const newUris: Uri[] = [];
             const encoder = new TextEncoder();

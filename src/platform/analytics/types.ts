@@ -51,7 +51,7 @@ export interface TelemetryEventProperties {
     execute_notebook: undefined;
     export_notebook: { outcome: CommandOutcome; format?: string };
     import_notebook: { outcome: CommandOutcome; source: 'deepnote' | 'jupyter' };
-    open_in_deepnote: { completed: boolean };
+    open_in_deepnote: { outcome: CommandOutcome };
     open_notebook: { outcome: CommandOutcome };
     rename_notebook: { outcome: CommandOutcome };
     rename_project: { outcome: CommandOutcome };

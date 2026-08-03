@@ -2,7 +2,7 @@ import { deserializeDeepnoteFile, ExecutableBlock, serializeDeepnoteFile, type D
 import { assert, expect } from 'chai';
 import esmock from 'esmock';
 import * as sinon from 'sinon';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import {
     FileType,
     Uri,
@@ -248,6 +248,7 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     let mockContext: IExtensionContext;
     let sandbox: sinon.SinonSandbox;
     let uuidStubs: sinon.SinonStub[] = [];
+    let mockAnalyticsMock: ITelemetryService;
     let mockAnalytics: ITelemetryService;
 
     setup(() => {
@@ -259,7 +260,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         mockContext = makeExtensionContext();
 
         const mockLogger = createMockLogger();
-        mockAnalytics = instance(mock<ITelemetryService>());
+        mockAnalyticsMock = mock<ITelemetryService>();
+        mockAnalytics = instance(mockAnalyticsMock);
         explorerView = new DeepnoteExplorerView(
             mockContext,
             mockLogger,
@@ -274,6 +276,25 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         uuidStubs.forEach((stub) => stub.restore());
         uuidStubs = [];
         resetVSCodeMocks();
+    });
+
+    suite('newNotebook', () => {
+        test('reports failed, not cancelled, when no Deepnote file is open', async () => {
+            // Reachable from the Command Palette, where the command is not gated on an active editor.
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            await handlerFor(Commands.NewNotebook)();
+
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({
+                        eventName: 'create_notebook',
+                        properties: { outcome: 'failed', source: 'toolbar' }
+                    })
+                )
+            ).once();
+        });
     });
 
     suite('newProject', () => {

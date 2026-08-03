@@ -1,16 +1,21 @@
 import { inject, injectable } from 'inversify';
-import { Disposable } from 'vscode';
+import { Disposable, NotebookCellKind, workspace } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { ITelemetryService } from '../../platform/analytics/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { isDeepnoteNotebook } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
-import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
+import {
+    DATAFRAME_SQL_INTEGRATION_ID,
+    toTelemetryIntegrationType
+} from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
 
 /**
- * Tracks cell execution events for telemetry.
+ * Tracks notebook usage events for telemetry: cell executions, and the plain code/markdown cell
+ * insertions that VS Code's built-in "+ Code" / "+ Markdown" affordances perform without routing
+ * through any extension command.
  */
 @injectable()
 export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationService {
@@ -21,6 +26,36 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
     ) {}
 
     public activate(): void {
+        this.disposables.push(
+            workspace.onDidChangeNotebookDocument((e) => {
+                if (!isDeepnoteNotebook(e.notebook)) {
+                    return;
+                }
+
+                for (const change of e.contentChanges) {
+                    // Only pure insertions are user-authored. Every reload/replace path in the
+                    // extension (file-change watcher, remove-all-cells, input-block protection) uses
+                    // replaceCells, which reports the displaced cells in removedCells.
+                    if (change.removedCells.length > 0) {
+                        continue;
+                    }
+
+                    for (const cell of change.addedCells) {
+                        // Typed Deepnote blocks stamp their pocket type on insert and are already
+                        // counted by DeepnoteNotebookCommandListener; only plain cells are missing.
+                        if (cell.metadata?.__deepnotePocket?.type) {
+                            continue;
+                        }
+
+                        this.analytics.trackEvent({
+                            eventName: 'add_block',
+                            properties: { blockType: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown' }
+                        });
+                    }
+                }
+            })
+        );
+
         this.disposables.push(
             notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
                 if (e.state !== NotebookCellExecutionState.Executing) {
@@ -54,7 +89,7 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
                             const integration = project?.project.integrations?.find((i) => i.id === integrationId);
 
                             if (integration?.type) {
-                                properties.integrationType = integration.type;
+                                properties.integrationType = toTelemetryIntegrationType(integration.type);
                             }
                         }
                     }

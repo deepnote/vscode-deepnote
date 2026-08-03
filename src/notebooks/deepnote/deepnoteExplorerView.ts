@@ -114,7 +114,8 @@ export class DeepnoteExplorerView {
      * Never appends to `project.notebooks`.
      * @param sourceUri A sibling file used as the source for project-level metadata
      * @param existingNames Notebook names already in use across the project group (for uniqueness)
-     * @returns Object with notebook id and name if successful, or null if aborted/failed
+     * @returns Object with notebook id and name, or null if the user cancelled the name prompt
+     * @throws If `sourceUri` is not a readable Deepnote project file
      */
     public async createNotebookSiblingFile(
         sourceUri: Uri,
@@ -123,9 +124,7 @@ export class DeepnoteExplorerView {
         const sourceProject = await readDeepnoteProjectFile(sourceUri);
 
         if (!sourceProject?.project) {
-            await window.showErrorMessage(l10n.t('Invalid Deepnote file format'));
-
-            return null;
+            throw new Error(l10n.t('Invalid Deepnote file format'));
         }
 
         const suggestedName = this.generateSuggestedNotebookName(existingNames);
@@ -905,7 +904,7 @@ export class DeepnoteExplorerView {
         if (!activeEditor || activeEditor.notebook.notebookType !== 'deepnote') {
             await window.showErrorMessage(l10n.t('No active Deepnote file opened. Please open a Deepnote file first.'));
 
-            return 'cancelled';
+            return 'failed';
         }
 
         const document = activeEditor.notebook;

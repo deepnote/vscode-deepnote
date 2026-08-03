@@ -795,6 +795,36 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             ).once();
             verify(mockTelemetryService.trackEvent(anything())).once();
         });
+
+        test('a split that yields no files leaves the original in place and reports failed', async () => {
+            // Every notebook is the init notebook, so splitByNotebooks produces nothing. Retiring the
+            // original here would strand the user with no replacement file.
+            const file = makeFile(
+                [makeNotebook('init-1', 'Init', 'a'), makeNotebook('init-1', 'Also Init', 'b')],
+                'init-1'
+            );
+            stubReadFile(file);
+            acceptSplit();
+
+            onDidOpen.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
+            await waitFor(hasTrackedAnEvent);
+
+            assert.strictEqual(writeTargets.length, 0, 'must not write any child file');
+            assert.strictEqual(
+                renameOps.length,
+                0,
+                'the original must NEVER be retired when no children were produced'
+            );
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).atLeast(1);
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({
+                        eventName: 'split_notebook',
+                        properties: { notebookCount: 2, outcome: 'failed' }
+                    })
+                )
+            ).once();
+        });
     });
 
     suite('init shape', () => {

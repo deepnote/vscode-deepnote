@@ -29,11 +29,10 @@ import { IServiceContainer } from '../platform/ioc/types';
 import { endCellAndDisplayErrorsInCell } from '../kernels/execution/helpers';
 import { chainWithPendingUpdates } from '../kernels/execution/notebookUpdater';
 import { IDataScienceErrorHandler } from '../kernels/errors/types';
-import { getNotebookMetadata, isDeepnoteNotebook } from '../platform/common/utils';
+import { getNotebookMetadata } from '../platform/common/utils';
 import { KernelConnector } from './controllers/kernelConnector';
 import { IControllerRegistration } from './controllers/types';
 import { IExtensionSyncActivationService } from '../platform/activation/types';
-import { ITelemetryService } from '../platform/analytics/types';
 import { IKernelStatusProvider } from '../kernels/kernelStatusProvider';
 
 export const INotebookCommandHandler = Symbol('INotebookCommandHandler');
@@ -55,8 +54,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         @inject(IDataScienceErrorHandler) private errorHandler: IDataScienceErrorHandler,
         @inject(INotebookEditorProvider) private notebookEditorProvider: INotebookEditorProvider,
         @inject(IServiceContainer) private serviceContainer: IServiceContainer,
-        @inject(IKernelStatusProvider) private kernelStatusProvider: IKernelStatusProvider,
-        @inject(ITelemetryService) private readonly analytics: ITelemetryService
+        @inject(IKernelStatusProvider) private kernelStatusProvider: IKernelStatusProvider
     ) {}
 
     activate(): void {
@@ -66,9 +64,6 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     public register(): void {
         this.disposableRegistry.push(
             commands.registerCommand(Commands.NotebookEditorRemoveAllCells, () => this.removeAllCells())
-        );
-        this.disposableRegistry.push(
-            commands.registerCommand(Commands.NotebookEditorRunAllCells, () => this.runAllCells())
         );
         this.disposableRegistry.push(
             commands.registerCommand(Commands.NotebookEditorRunFocusedCell, () => this.runFocusedCell())
@@ -117,12 +112,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     private runAllCells() {
         const editor = window.activeNotebookEditor;
         if (editor) {
-            const isDeepnote = isDeepnoteNotebook(editor.notebook);
-            commands.executeCommand('notebook.execute').then(() => {
-                if (isDeepnote) {
-                    this.analytics.trackEvent({ eventName: 'execute_notebook' });
-                }
-            }, noop);
+            commands.executeCommand('notebook.execute').then(noop, noop);
         }
     }
 
@@ -150,12 +140,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     private addCellBelow() {
         const editor = window.activeNotebookEditor;
         if (editor) {
-            const isDeepnote = isDeepnoteNotebook(editor.notebook);
-            commands.executeCommand('notebook.cell.insertCodeCellBelow').then(() => {
-                if (isDeepnote) {
-                    this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType: 'code' } });
-                }
-            }, noop);
+            commands.executeCommand('notebook.cell.insertCodeCellBelow').then(noop, noop);
         }
     }
 

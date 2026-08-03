@@ -254,6 +254,53 @@ suite('IntegrationWebviewProvider', () => {
         });
     });
 
+    suite('configure_integration telemetry', () => {
+        test('tracks when the form is opened directly via show() (SQL status bar entry point)', async () => {
+            const provider = buildProvider({ tokenStorage });
+            const id = 'pg-preselected';
+
+            await provider.show(
+                PROJECT_ID,
+                singleIntegrationMap(id, buildPostgresIntegration({ id })),
+                Uri.file('/ws/active.deepnote'),
+                id
+            );
+
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({ eventName: 'configure_integration', properties: { integrationType: 'pgsql' } })
+                )
+            ).once();
+        });
+
+        test('tracks exactly once when the form is opened from the webview configure message', async () => {
+            const provider = buildProvider({ tokenStorage });
+            const id = 'pg-configure';
+            await show(provider, singleIntegrationMap(id, buildPostgresIntegration({ id })));
+            resetCalls(mockTelemetryService);
+
+            await fakePanel.onDidReceiveMessage({ type: 'configure', integrationId: id });
+
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({ eventName: 'configure_integration', properties: { integrationType: 'pgsql' } })
+                )
+            ).once();
+            verify(mockTelemetryService.trackEvent(anything())).once();
+        });
+
+        test('does not track for an unknown integration id', async () => {
+            const provider = buildProvider({ tokenStorage });
+            const id = 'pg-known';
+            await show(provider, singleIntegrationMap(id, buildPostgresIntegration({ id })));
+            resetCalls(mockTelemetryService);
+
+            await fakePanel.onDidReceiveMessage({ type: 'configure', integrationId: 'does-not-exist' });
+
+            verify(mockTelemetryService.trackEvent(anything())).never();
+        });
+    });
+
     test('handleMessage: "authenticate" → commands.executeCommand(AuthenticateIntegration, integrationId)', async () => {
         const executeCommandStub = sinon.stub().resolves(undefined);
         when(mockedVSCodeNamespaces.commands.executeCommand(anyString(), anything())).thenCall((command, arg) =>

@@ -582,8 +582,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         switch (message.type) {
             case 'configure':
                 if (message.integrationId) {
-                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
-                    this.trackIntegrationEvent({ eventName: 'configure_integration', integrationType });
                     await this.showConfigurationForm(message.integrationId);
                 }
                 break;
@@ -657,7 +655,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Show the configuration form for an integration
+     * Show the configuration form for an integration. Tracking lives here rather than in the webview
+     * `configure` handler so the SQL status bar's "Configure current integration" entry point, which
+     * opens the form directly via `show()`, is counted too.
      */
     private async showConfigurationForm(integrationId: string): Promise<void> {
         const integration = this.integrations.get(integrationId);
@@ -671,6 +671,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationName: integration.integrationName,
             integrationType: integration.integrationType,
             type: 'showForm'
+        });
+
+        this.trackIntegrationEvent({
+            eventName: 'configure_integration',
+            integrationType: integration.integrationType
         });
     }
 

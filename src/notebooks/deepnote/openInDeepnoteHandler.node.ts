@@ -22,8 +22,13 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
     public activate(): void {
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.OpenInDeepnote, async () => {
+                // Every falsy return from the handler is preceded by an error message; there is no
+                // user-cancel path, so `false` maps to 'failed' rather than 'cancelled'.
                 const completed = await this.handleOpenInDeepnote();
-                this.analytics.trackEvent({ eventName: 'open_in_deepnote', properties: { completed } });
+                this.analytics.trackEvent({
+                    eventName: 'open_in_deepnote',
+                    properties: { outcome: completed ? 'completed' : 'failed' }
+                });
             })
         );
     }

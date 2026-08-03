@@ -206,6 +206,66 @@ suite('TelemetryService', () => {
         );
     });
 
+    test('should track events without waiting for user ID persistence to settle', () => {
+        // A global-state write that never settles, as on a fresh profile whose memento RPC is slow.
+        const userIdState: IPersistentState<string> = {
+            get value() {
+                return '';
+            },
+            updateValue: sinon.stub().returns(new Promise<void>(() => {}))
+        };
+        (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns(userIdState);
+
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
+        stubTelemetryEnabled(analyticsService, true);
+        stubPostHogConfigured(analyticsService, true);
+        const fakeClient = stubClientFactory(analyticsService);
+
+        analyticsService.activate();
+        analyticsService.trackEvent({ eventName: 'execute_notebook' });
+
+        assert.isTrue(
+            fakeClient.capture.calledOnce,
+            'The first event must not be dropped while persistence is pending'
+        );
+        assert.isNotEmpty(
+            fakeClient.capture.firstCall.args[0].distinctId,
+            'distinctId should come from the in-memory user ID'
+        );
+    });
+
+    test('should still create the client when persisting the user ID fails', () => {
+        const userIdState: IPersistentState<string> = {
+            get value() {
+                return '';
+            },
+            updateValue: sinon.stub().rejects(new Error('global state unavailable'))
+        };
+        (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns(userIdState);
+
+        analyticsService = new TelemetryService(
+            mockDisposables,
+            mockStateFactory,
+            mockAsyncDisposableRegistry,
+            mockAppEnv
+        );
+        stubTelemetryEnabled(analyticsService, true);
+        stubPostHogConfigured(analyticsService, true);
+        stubClientFactory(analyticsService);
+
+        analyticsService.activate();
+
+        assert.isNotNull(
+            getPostHogClient(analyticsService),
+            'A failed user ID write must not disable telemetry for the whole session'
+        );
+    });
+
     test('settings change should destroy client when telemetry is disabled', async () => {
         analyticsService = new TelemetryService(
             mockDisposables,

@@ -110,8 +110,8 @@ function joinMultilineString(value: unknown): unknown {
  * lines — both for stream `text` and for the `text/*` entries of `execute_result`/`display_data`
  * `data`. `extractOutputsText` reads stream text only when it is a string, and stringifies
  * `data['text/plain']` with `String(...)`, which joins an array with commas. Join the lines first so
- * `print()` output isn't dropped and a `df.head()` repr doesn't reach the agent with a comma glued to
- * the start of every line.
+ * `print()` output isn't dropped and a `df.head()` string representation doesn't reach the agent with a
+ * comma glued to the start of every line.
  */
 function normalizeOutputsForTextExtraction(outputs: unknown[]): unknown[] {
     return outputs.map((output) => {

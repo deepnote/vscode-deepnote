@@ -625,20 +625,41 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         if (!this.cellQueue.has(doc)) {
             return;
         }
+        const allCells = this.cellQueue.get(doc) || [];
+        // Cleared before any await so the re-entrant execute request an agent cell issues for its
+        // generated code starts from an empty queue.
+        this.cellQueue.delete(doc);
+
+        // Walk in document order rather than running every agent cell first: an agent executes the
+        // code it generates against the kernel immediately, so it must not overtake the cells above
+        // it that set up the state it reads.
+        let pendingKernelCells: NotebookCell[] = [];
+
+        for (const cell of allCells) {
+            if (!isAgentCell(cell)) {
+                pendingKernelCells.push(cell);
+                continue;
+            }
+
+            await this.executeKernelCells(doc, pendingKernelCells);
+            pendingKernelCells = [];
+
+            logger.trace(`Executing agent cell ${cell.index} for ${getDisplayPath(doc.uri)} without kernel`);
+            await executeAgentCell(cell, this.controller).catch(noop);
+        }
+
+        await this.executeKernelCells(doc, pendingKernelCells);
+    }
+
+    private async executeKernelCells(doc: NotebookDocument, cells: NotebookCell[]) {
         // Start execution now (from the user's point of view)
         // Creating these execution objects marks the cell as queued for execution (vscode will update cell UI).
         type CellExec = { cell: NotebookCell; exec: NotebookCellExecution };
-        const allCells = this.cellQueue.get(doc) || [];
-        this.cellQueue.delete(doc);
 
-        const agentCells = allCells.filter((cell) => isAgentCell(cell));
-        const kernelCells = allCells.filter((cell) => !isAgentCell(cell));
-
-        // Execute agent cells directly without kernel involvement
-        if (agentCells.length > 0) {
-            logger.trace(`Executing ${agentCells.length} agent cell(s) for ${getDisplayPath(doc.uri)} without kernel`);
-            await Promise.all(agentCells.map((cell) => executeAgentCell(cell, this.controller))).catch(noop);
-        }
+        // An agent run deletes the ephemeral cells it produced last time, and those are ordinary code
+        // cells that Run All queues. createNotebookCellExecution throws for a cell that has since been
+        // removed, which would abort the rest of the batch.
+        const kernelCells = cells.filter((cell) => cell.index >= 0);
 
         if (kernelCells.length === 0) {
             return;

@@ -4,6 +4,8 @@
 
 import { NotebookCell, NotebookCellData } from 'vscode';
 
+import type { Pocket } from '../../platform/deepnote/pocket';
+
 export function parseJsonWithFallback(value: string, fallback?: unknown): unknown | null {
     try {
         return JSON.parse(value);
@@ -22,6 +24,18 @@ export function generateBlockId(): string {
         id += chars[Math.floor(Math.random() * chars.length)];
     }
     return id;
+}
+
+/**
+ * Returns true if the cell is backed by an agent block.
+ *
+ * Lives here rather than next to the execution handler so callers that only need the predicate
+ * don't pull `@deepnote/runtime-core` into their module graph.
+ */
+export function isAgentCell(cell: NotebookCell): boolean {
+    const pocket = cell.metadata?.__deepnotePocket as Pocket | undefined;
+
+    return pocket?.type === 'agent';
 }
 
 /**

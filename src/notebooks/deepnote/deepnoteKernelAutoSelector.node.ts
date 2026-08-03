@@ -1100,25 +1100,26 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 } cells`
             );
 
-            const agentCells = cells.filter((cell) => isAgentCell(cell));
+            // Agent blocks can run arbitrary commands declared in the project file (MCP servers), so
+            // gate this path the same way VSCodeNotebookController gates its own execute handler.
+            if (!workspace.isTrusted) {
+                logger.info(`Workspace is not trusted, skipping execution for ${getDisplayPath(doc.uri)}`);
+
+                return;
+            }
+
             const kernelCells = cells.filter((cell) => !isAgentCell(cell));
 
-            // Execute agent cells directly without kernel involvement
-            if (agentCells.length > 0) {
-                logger.info(
-                    `Executing ${agentCells.length} agent cell(s) for ${getDisplayPath(doc.uri)} without kernel`
-                );
-
-                for (const cell of agentCells) {
+            if (kernelCells.length === 0) {
+                // Nothing needs the kernel, so don't make the user configure an environment first.
+                for (const cell of cells) {
                     try {
                         await executeAgentCell(cell, controller);
                     } catch (cellError) {
                         logger.error(`Error executing agent cell ${cell.index}`, cellError);
                     }
                 }
-            }
 
-            if (kernelCells.length === 0) {
                 return;
             }
 
@@ -1150,7 +1151,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     return;
                 }
 
-                logger.info(`Executing ${kernelCells.length} cells through kernel after environment configuration`);
+                logger.info(`Executing ${cells.length} cells after environment configuration`);
 
                 // Get or create a kernel for this notebook with the new connection
                 const kernel = this.kernelProvider.getOrCreate(doc, {
@@ -1162,15 +1163,21 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 // Execute cells through the kernel
                 const kernelExecution = this.kernelProvider.getKernelExecution(kernel);
 
-                for (const cell of kernelCells) {
+                // Document order matters: an agent executes the code it generates immediately, so it
+                // must not overtake the cells above it that set up the state it reads.
+                for (const cell of cells) {
                     try {
-                        await kernelExecution.executeCell(cell);
+                        if (isAgentCell(cell)) {
+                            await executeAgentCell(cell, controller);
+                        } else {
+                            await kernelExecution.executeCell(cell);
+                        }
                     } catch (cellError) {
                         logger.error(`Error executing cell ${cell.index}`, cellError);
                     }
                 }
 
-                logger.info(`Finished executing ${kernelCells.length} cells`);
+                logger.info(`Finished executing ${cells.length} cells`);
             } catch (error) {
                 if (isCancellationError(error)) {
                     logger.info(`Environment setup cancelled for ${getDisplayPath(doc.uri)}`);

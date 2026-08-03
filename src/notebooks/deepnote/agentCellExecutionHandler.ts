@@ -26,28 +26,49 @@ import type { IDisposable } from '../../platform/common/types';
 import { createDeferred } from '../../platform/common/utils/async';
 import { dispose } from '../../platform/common/utils/lifecycle';
 import { uuidUtils } from '../../platform/common/uuid';
-import type { Pocket } from '../../platform/deepnote/pocket';
+import { ServiceContainer } from '../../platform/ioc/container';
 import { logger } from '../../platform/logging';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
-import { generateBlockId, generateSortingKey, isEphemeralCell } from './dataConversionUtils';
+import { IDeepnoteNotebookManager } from '../types';
+import { generateBlockId, generateSortingKey, isAgentCell, isEphemeralCell } from './dataConversionUtils';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { getOrPromptOpenAiApiKey } from './deepnoteSecretStore';
+
+export { isAgentCell };
+
+/**
+ * Project-level MCP servers declared in the `.deepnote` file, matching what the CLI's ExecutionEngine
+ * passes. `executeAgentBlock` merges these with any block-level `deepnote_mcp_servers` (block wins on
+ * name), so leaving this empty silently drops the project-level half of that contract.
+ *
+ * Spawning these is arbitrary local command execution declared by a workspace file, so every caller
+ * must already be behind a `workspace.isTrusted` check.
+ */
+function getProjectMcpServers(notebook: NotebookDocument): AgentBlockContext['mcpServers'] {
+    const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
+    const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+
+    if (!projectId || !notebookId) {
+        return [];
+    }
+
+    const manager = ServiceContainer.instance.tryGet<IDeepnoteNotebookManager>(IDeepnoteNotebookManager);
+    const servers = manager?.getProjectForNotebook(projectId, notebookId)?.project.settings?.mcpServers ?? [];
+
+    if (servers.length > 0) {
+        logger.info(
+            `Agent cell: using ${servers.length} project MCP server(s): ${servers.map((s) => s.name).join(', ')}`
+        );
+    }
+
+    return servers;
+}
 
 // Tool results reported back to the agent. These mirror the wording @deepnote/runtime-core uses in
 // its own ExecutionEngine implementation of the same tools, so the agent sees identical phrasing
 // whether a block runs in the extension or on the backend.
 const MARKDOWN_BLOCK_ADDED_TEXT = 'Markdown block added.';
 const NO_OUTPUT_TEXT = '(no output)';
-
-export async function getOpenAiApiKey(): Promise<string> {
-    return getOrPromptOpenAiApiKey();
-}
-
-export function isAgentCell(cell: NotebookCell): boolean {
-    const pocket = cell.metadata?.__deepnotePocket as Pocket | undefined;
-
-    return pocket?.type === 'agent';
-}
 
 export function serializeNotebookContext({
     cells,
@@ -80,24 +101,46 @@ export function serializeNotebookContext({
     return serializeNotebookContextFromBlocks({ blocks, notebookName });
 }
 
+function joinMultilineString(value: unknown): unknown {
+    return Array.isArray(value) && value.every((entry) => typeof entry === 'string') ? value.join('') : value;
+}
+
 /**
- * `translateCellDisplayOutput` follows nbformat's multiline convention and emits stream `text` as an
- * array of lines. `extractOutputsText` only reads `text` when it is a string, so join it first —
- * otherwise every `print()` an ephemeral cell produces would be dropped from the agent's tool result.
+ * `translateCellDisplayOutput` follows nbformat's multiline convention and emits text as an array of
+ * lines — both for stream `text` and for the `text/*` entries of `execute_result`/`display_data`
+ * `data`. `extractOutputsText` reads stream text only when it is a string, and stringifies
+ * `data['text/plain']` with `String(...)`, which joins an array with commas. Join the lines first so
+ * `print()` output isn't dropped and a `df.head()` repr doesn't reach the agent with a comma glued to
+ * the start of every line.
  */
 function normalizeOutputsForTextExtraction(outputs: unknown[]): unknown[] {
     return outputs.map((output) => {
-        const candidate = output as { output_type?: unknown; text?: unknown } | null;
+        const candidate = output as { output_type?: unknown; text?: unknown; data?: unknown } | null;
 
-        if (candidate?.output_type === 'stream' && Array.isArray(candidate.text)) {
-            return { ...candidate, text: candidate.text.join('') };
+        if (candidate?.output_type === 'stream') {
+            return { ...candidate, text: joinMultilineString(candidate.text) };
+        }
+
+        if (
+            (candidate?.output_type === 'execute_result' || candidate?.output_type === 'display_data') &&
+            candidate.data != null &&
+            typeof candidate.data === 'object'
+        ) {
+            const data = Object.fromEntries(
+                Object.entries(candidate.data).map(([mime, value]) => [
+                    mime,
+                    mime.startsWith('text/') ? joinMultilineString(value) : value
+                ])
+            );
+
+            return { ...candidate, data };
         }
 
         return output;
     });
 }
 
-function describeExecutionOutputs(outputs: unknown[]): string {
+export function describeExecutionOutputs(outputs: unknown[]): string {
     return extractOutputsText(normalizeOutputsForTextExtraction(outputs), { includeTraceback: true }) || NO_OUTPUT_TEXT;
 }
 
@@ -119,8 +162,12 @@ export async function executeAgentCell(
 
         const prompt = cell.document.getText();
 
-        let accumulated = `[Agent] Planning next steps...`;
-        const output = new NotebookCellOutput([NotebookCellOutputItem.text(accumulated)]);
+        // Streamed as stdout items so each event can be appended rather than re-sending the whole
+        // transcript: `NotebookCellOutputItem.text` re-encodes the full buffer on every token, which
+        // is O(n²) bytes across the extension-host boundary — and since runtime-core awaits
+        // `onAgentEvent` inside its stream loop, that cost is added to the run's wall clock.
+        // The stdout mime is the one the renderer concatenates, matching how kernel output streams.
+        const output = new NotebookCellOutput([NotebookCellOutputItem.stdout(`[Agent] Planning next steps...`)]);
         await execution.replaceOutput([output]);
 
         const dataConverter = new DeepnoteDataConverter();
@@ -141,33 +188,48 @@ export async function executeAgentCell(
             throw new Error('Cell is not an agent cell');
         }
 
+        // Acquire the key before the destructive cleanup below: it prompts, and throws when the user
+        // dismisses the prompt, which would otherwise leave the previous run's cells already deleted.
+        const openAiToken = await getOrPromptOpenAiApiKey();
+
         await removeEphemeralCellsForAgent(cell.notebook, agentBlock.id);
 
         let lastAgentEventType: AgentStreamEvent['type'] | undefined;
 
+        // Must run after the removal — serializeNotebookContextFromBlocks does no ephemeral
+        // filtering, so the agent would otherwise be handed its own previous scratch cells.
         const notebookContext = serializeNotebookContext({
             cells: cell.notebook.getCells().filter((c) => c.index !== cell.index),
             notebookName: (cell.notebook.metadata?.deepnoteNotebookName as string | undefined) ?? ''
         });
 
-        const openAiToken = await getOpenAiApiKey();
-
         const context: AgentBlockContext = {
             openAiToken,
-            mcpServers: [],
+            mcpServers: getProjectMcpServers(cell.notebook),
             notebookContext,
             addMarkdownBlock: async ({ content }: { content: string }) => {
-                await insertEphemeralCell(cell.notebook, cell.index, agentBlock.id, 'markdown', content);
+                try {
+                    await insertEphemeralCell(cell.notebook, cell.index, agentBlock.id, 'markdown', content);
 
-                return MARKDOWN_BLOCK_ADDED_TEXT;
+                    return MARKDOWN_BLOCK_ADDED_TEXT;
+                } catch (error) {
+                    const insertError = error instanceof Error ? error : new Error(String(error));
+
+                    return `Failed to add markdown block: ${insertError.message}`;
+                }
             },
             addAndExecuteCodeBlock: async ({ code }: { code: string }) => {
                 try {
-                    const cellIndex = await insertEphemeralCell(cell.notebook, cell.index, agentBlock.id, 'code', code);
-                    const insertedCell = cell.notebook.cellAt(cellIndex);
+                    const insertedCell = await insertEphemeralCell(
+                        cell.notebook,
+                        cell.index,
+                        agentBlock.id,
+                        'code',
+                        code
+                    );
 
-                    const { success, outputs } = await executeEphemeralCell(insertedCell, execution.token);
-                    const outputText = describeExecutionOutputs(outputs);
+                    const { success, outputs, error } = await executeEphemeralCell(insertedCell, execution.token);
+                    const outputText = error ?? describeExecutionOutputs(outputs);
 
                     return success ? `Output:\n${outputText}` : `Execution failed:\n${outputText}`;
                 } catch (error) {
@@ -177,37 +239,36 @@ export async function executeAgentCell(
                 }
             },
             onAgentEvent: async (event: AgentStreamEvent) => {
-                logger.info('Agent event', JSON.stringify(event));
-                if (lastAgentEventType != null && lastAgentEventType !== event.type) {
-                    accumulated += `\n\n`;
-                }
+                logger.trace(`Agent event: ${event.type}`);
+
+                let delta = lastAgentEventType != null && lastAgentEventType !== event.type ? `\n\n` : '';
+
                 switch (event.type) {
                     case 'tool_called':
-                        // Ignore calling tool_called events
-                        accumulated += `[Agent] Tool called: ${event.toolName}`;
+                        delta += `[Agent] Tool called: ${event.toolName}`;
                         break;
                     case 'tool_output':
-                        accumulated += `[Agent] Tool output: ${event.toolName}\n`;
-                        accumulated += `[Agent] Tool output length: ${event.output?.length}`;
+                        delta += `[Agent] Tool output: ${event.toolName}\n`;
+                        delta += `[Agent] Tool output length: ${event.output?.length}`;
                         break;
                     case 'text_delta':
                         if (lastAgentEventType !== 'text_delta') {
-                            accumulated += `[Agent] Text:\n`;
+                            delta += `[Agent] Text:\n`;
                         }
-                        accumulated += event.text;
+                        delta += event.text;
                         break;
                     case 'reasoning_delta':
                         if (lastAgentEventType !== 'reasoning_delta') {
-                            accumulated += `[Agent] Reasoning:\n`;
+                            delta += `[Agent] Reasoning:\n`;
                         }
-                        accumulated += event.text;
+                        delta += event.text;
                         break;
                     default:
                         event satisfies never;
                 }
                 lastAgentEventType = event.type;
 
-                await execution.replaceOutputItems(NotebookCellOutputItem.text(accumulated), output);
+                await execution.appendOutputItems(NotebookCellOutputItem.stdout(delta), output);
             }
         };
 
@@ -219,9 +280,10 @@ export async function executeAgentCell(
 
         execution.end(true, Date.now());
     } catch (error) {
+        // `logger.error(msg, error)` only renders `Error.prototype.toString()` unless the error is
+        // branded with `isJupyterError`, so the stack has to be logged explicitly.
         logger.error('Agent cell execution failed', error);
         if (error instanceof Error) {
-            logger.error(`Agent error name=${error.name}, message=${error.message}`);
             if (error.cause) {
                 logger.error('Agent error cause:', error.cause);
             }
@@ -256,13 +318,20 @@ function getInsertIndexAfterAgentCell(
     return index;
 }
 
+/**
+ * Inserts an ephemeral cell after the agent cell and returns the cell that was actually created.
+ *
+ * Resolving by block id rather than by index matters: `cellAt` clamps out-of-range indices instead of
+ * throwing, so a rejected edit or a concurrent structural change would otherwise hand the caller a
+ * pre-existing user cell — which `addAndExecuteCodeBlock` would then run.
+ */
 async function insertEphemeralCell(
     notebook: NotebookDocument,
     agentCellIndex: number,
     agentBlockId: string,
     blockType: 'code' | 'markdown',
     content: string
-): Promise<number> {
+): Promise<NotebookCell> {
     const insertIndex = getInsertIndexAfterAgentCell(notebook, agentCellIndex, agentBlockId);
 
     const block: DeepnoteBlock = {
@@ -282,17 +351,42 @@ async function insertEphemeralCell(
 
     const edit = new WorkspaceEdit();
     edit.set(notebook.uri, [NotebookEdit.insertCells(insertIndex, [cellData])]);
-    await workspace.applyEdit(edit);
 
-    return insertIndex;
+    if (!(await workspace.applyEdit(edit))) {
+        throw new Error(`Failed to insert ephemeral ${blockType} cell for agent block ${agentBlockId}`);
+    }
+
+    // The converter mirrors the block id into `__deepnoteBlockId` precisely because VS Code may
+    // rewrite `id`, so match on that.
+    const insertedCell = notebook.getCells().find((c) => c.metadata?.__deepnoteBlockId === block.id);
+
+    if (!insertedCell) {
+        throw new Error(`Inserted ephemeral ${blockType} cell ${block.id} not found in notebook`);
+    }
+
+    return insertedCell;
 }
 
 const EPHEMERAL_CELL_EXECUTION_TIMEOUT_MS = 5 * 60 * 1000;
 
+export interface EphemeralCellExecutionResult {
+    success: boolean;
+    outputs: unknown[];
+    executionCount: number | null;
+    /** Why the run failed, when the failure wasn't the cell's own output (cancellation, timeout). */
+    error?: string;
+}
+
 export async function executeEphemeralCell(
     cell: NotebookCell,
     token?: CancellationToken
-): Promise<{ success: boolean; outputs: unknown[]; executionCount: number | null }> {
+): Promise<EphemeralCellExecutionResult> {
+    // Bail before dispatching: rejecting the deferred alone would abandon the wait but still hand the
+    // generated code to the kernel.
+    if (token?.isCancellationRequested) {
+        throw new CancellationError();
+    }
+
     const completionDeferred = createDeferred<void>();
     const disposables: IDisposable[] = [];
 
@@ -305,11 +399,7 @@ export async function executeEphemeralCell(
     );
 
     if (token) {
-        if (token.isCancellationRequested) {
-            completionDeferred.reject(new CancellationError());
-        } else {
-            disposables.push(token.onCancellationRequested(() => completionDeferred.reject(new CancellationError())));
-        }
+        disposables.push(token.onCancellationRequested(() => completionDeferred.reject(new CancellationError())));
     }
 
     const timeout = setTimeout(() => {
@@ -332,10 +422,17 @@ export async function executeEphemeralCell(
             executionCount: cell.executionSummary?.executionOrder ?? null
         };
     } catch (error) {
+        if (error instanceof CancellationError) {
+            throw error;
+        }
+
+        // Report the reason rather than collapsing everything into "(no output)" — a timed-out cell
+        // is still running, and telling the agent it produced nothing invites an immediate retry.
         return {
             success: false,
             outputs: [],
-            executionCount: null
+            executionCount: null,
+            error: error instanceof Error ? error.message : String(error)
         };
     } finally {
         dispose(disposables);

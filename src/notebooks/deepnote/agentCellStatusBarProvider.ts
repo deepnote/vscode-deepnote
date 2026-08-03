@@ -14,22 +14,22 @@ import {
     workspace
 } from 'vscode';
 import { injectable } from 'inversify';
-import { z } from 'zod';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import type { Pocket } from '../../platform/deepnote/pocket';
-import { logger } from '../../platform/logging';
+import { isAgentCell } from './dataConversionUtils';
 import { clearOpenAiApiKey, promptForOpenAiApiKey } from './deepnoteSecretStore';
 
-const DEFAULT_MAX_ITERATIONS = 20;
-const MIN_ITERATIONS = 1;
-const MAX_ITERATIONS = 100;
-const AGENT_MODEL_OPTIONS = ['auto', 'gpt-4o', 'sonnet'];
-const MaxIterationsSchema = z.coerce.number().int().min(MIN_ITERATIONS).max(MAX_ITERATIONS);
+/** The key `agentBlockSchema` defines and `executeAgentBlock` reads. */
+const AGENT_MODEL_METADATA_KEY = 'deepnote_agent_model';
+
+/** The schema default, and the sentinel runtime-core compares against to fall back to its own choice. */
+const AGENT_MODEL_AUTO = 'auto';
+
+const AGENT_MODEL_OPTIONS = [AGENT_MODEL_AUTO, 'gpt-4o', 'gpt-5'];
 
 /**
- * Provides status bar items for agent cells showing the block type indicator,
- * AI model picker, and max iterations setting.
+ * Provides status bar items for agent cells showing the block type indicator
+ * and the AI model picker.
  */
 @injectable()
 export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProvider, IExtensionSyncActivationService {
@@ -54,15 +54,6 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
                 const activeCell = cell || this.getActiveCell();
                 if (activeCell) {
                     await this.switchModel(activeCell);
-                }
-            })
-        );
-
-        this.disposables.push(
-            commands.registerCommand('deepnote.setAgentMaxIterations', async (cell?: NotebookCell) => {
-                const activeCell = cell || this.getActiveCell();
-                if (activeCell) {
-                    await this.setMaxIterations(activeCell);
                 }
             })
         );
@@ -100,19 +91,14 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
             return undefined;
         }
 
-        if (!this.isAgentCell(cell)) {
+        if (!isAgentCell(cell)) {
             return undefined;
         }
 
         const metadata = cell.metadata as Record<string, unknown> | undefined;
         const model = this.getModel(metadata);
-        const maxIterations = this.getMaxIterations(metadata);
 
-        return [
-            this.createAgentIndicatorItem(),
-            this.createModelPickerItem(cell, model),
-            this.createMaxIterationsItem(cell, maxIterations)
-        ];
+        return [this.createAgentIndicatorItem(), this.createModelPickerItem(cell, model)];
     }
 
     private createAgentIndicatorItem(): NotebookCellStatusBarItem {
@@ -121,20 +107,6 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
             alignment: 1,
             priority: 100,
             tooltip: l10n.t('Deepnote Agent Block\nAI-powered block that autonomously generates code and analysis')
-        };
-    }
-
-    private createMaxIterationsItem(cell: NotebookCell, maxIterations: number): NotebookCellStatusBarItem {
-        return {
-            text: l10n.t('$(iterations) Max iterations: {0}', maxIterations),
-            alignment: 1,
-            priority: 80,
-            tooltip: l10n.t('Maximum iterations for agent\nClick to change'),
-            command: {
-                title: l10n.t('Set Max Iterations'),
-                command: 'deepnote.setAgentMaxIterations',
-                arguments: [cell]
-            }
         };
     }
 
@@ -161,78 +133,17 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
         return undefined;
     }
 
-    private getMaxIterations(metadata: Record<string, unknown> | undefined): number {
-        const value = metadata?.deepnote_max_iterations;
-        // z.coerce.number() turns true into 1, which then satisfies the range check, so booleans
-        // would be accepted as an iteration count instead of falling back to the default.
-        const result = typeof value === 'boolean' ? undefined : MaxIterationsSchema.safeParse(value);
-
-        if (result?.success) {
-            return result.data;
-        }
-
-        if (value !== undefined) {
-            logger.debug(
-                `getMaxIterations: invalid value ${JSON.stringify(value)}, using default ${DEFAULT_MAX_ITERATIONS}`
-            );
-        }
-
-        return DEFAULT_MAX_ITERATIONS;
-    }
-
     private getModel(metadata: Record<string, unknown> | undefined): string {
-        const value = metadata?.deepnote_model;
+        const value = metadata?.[AGENT_MODEL_METADATA_KEY];
         if (typeof value === 'string' && value) {
             return value;
         }
 
-        return 'auto';
-    }
-
-    private isAgentCell(cell: NotebookCell): boolean {
-        const pocket = cell.metadata?.__deepnotePocket as Pocket | undefined;
-
-        return pocket?.type === 'agent';
-    }
-
-    private async setMaxIterations(cell: NotebookCell): Promise<void> {
-        if (!this.isAgentCell(cell)) {
-            return;
-        }
-
-        const metadata = cell.metadata as Record<string, unknown> | undefined;
-        const currentValue = this.getMaxIterations(metadata);
-
-        const input = await window.showInputBox({
-            prompt: l10n.t('Enter maximum number of iterations ({0}-{1})', MIN_ITERATIONS, MAX_ITERATIONS),
-            value: String(currentValue),
-            validateInput: (value) => {
-                const num = parseInt(value, 10);
-                if (isNaN(num) || !Number.isInteger(num)) {
-                    return l10n.t('Please enter a whole number');
-                }
-                if (num < MIN_ITERATIONS || num > MAX_ITERATIONS) {
-                    return l10n.t('Value must be between {0} and {1}', MIN_ITERATIONS, MAX_ITERATIONS);
-                }
-
-                return undefined;
-            }
-        });
-
-        if (input === undefined) {
-            return;
-        }
-
-        const newValue = parseInt(input, 10);
-        if (newValue === currentValue) {
-            return;
-        }
-
-        await this.updateCellMetadata(cell, { deepnote_max_iterations: newValue });
+        return AGENT_MODEL_AUTO;
     }
 
     private async switchModel(cell: NotebookCell): Promise<void> {
-        if (!this.isAgentCell(cell)) {
+        if (!isAgentCell(cell)) {
             return;
         }
 
@@ -252,9 +163,10 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
             return;
         }
 
-        const newModel = selected.label === 'auto' ? undefined : selected.label;
-
-        await this.updateCellMetadata(cell, { deepnote_model: newModel });
+        // Write 'auto' rather than deleting the key: `convertCellToBlock` doesn't re-run the zod
+        // schema, so a missing key reaches runtime-core as `undefined` — which fails its
+        // `!== "auto"` check and gets passed to `openai()` as the model name.
+        await this.updateCellMetadata(cell, { [AGENT_MODEL_METADATA_KEY]: selected.label });
     }
 
     private async updateCellMetadata(cell: NotebookCell, updates: Record<string, unknown>): Promise<void> {

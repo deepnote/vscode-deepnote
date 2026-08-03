@@ -47,6 +47,11 @@ export interface CreateMockNotebookOptions {
     notebookType?: string;
     uri?: Uri;
     metadata?: Record<string, unknown>;
+    /**
+     * Backing cells. Pass the same array you mutate in the test — `cellAt`/`getCells`/`cellCount`
+     * read through to it, so edits applied during the test are visible to the code under test.
+     */
+    cells?: NotebookCell[];
 }
 
 /**
@@ -56,15 +61,23 @@ export interface CreateMockNotebookOptions {
  * @returns A mock NotebookDocument
  */
 export function createMockNotebook(options?: CreateMockNotebookOptions): NotebookDocument {
-    const { notebookType = 'deepnote', uri = Uri.file('/test/notebook.deepnote'), metadata = {} } = options ?? {};
+    const {
+        notebookType = 'deepnote',
+        uri = Uri.file('/test/notebook.deepnote'),
+        metadata = {},
+        cells = []
+    } = options ?? {};
 
     return {
         uri,
         notebookType,
         metadata,
-        cellCount: 0,
-        cellAt: () => ({}) as NotebookCell,
-        getCells: () => [],
+        get cellCount() {
+            return cells.length;
+        },
+        // Mirrors VS Code: the index is clamped to the notebook rather than throwing.
+        cellAt: (index: number) => cells[Math.min(Math.max(index, 0), cells.length - 1)] ?? ({} as NotebookCell),
+        getCells: () => cells,
         version: 1,
         isDirty: false,
         isUntitled: false,

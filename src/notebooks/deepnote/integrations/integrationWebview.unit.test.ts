@@ -453,6 +453,15 @@ suite('IntegrationWebviewProvider', () => {
 
             sinon.assert.calledWith(tokenDeleteSpy, integrationId);
             verify(integrationStorage.delete(integrationId)).once();
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({
+                        eventName:
+                            messageType === 'reset' ? ('reset_integration' as const) : ('delete_integration' as const),
+                        properties: { integrationType: 'big-query' }
+                    })
+                )
+            ).once();
         });
     });
 

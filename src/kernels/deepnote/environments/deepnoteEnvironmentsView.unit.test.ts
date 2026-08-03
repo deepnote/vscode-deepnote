@@ -204,6 +204,11 @@ suite('DeepnoteEnvironmentsView', () => {
 
             verify(mockConfigManager.updateEnvironment(testEnvironmentId, deepEqual({ name: 'New Name' }))).once();
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({ eventName: 'update_environment', properties: { field: 'name' } })
+                )
+            ).once();
         });
 
         test('should show error message if update fails', async () => {
@@ -216,6 +221,7 @@ suite('DeepnoteEnvironmentsView', () => {
 
             verify(mockConfigManager.updateEnvironment(anything(), anything())).once();
             verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockTelemetryService.trackEvent(anything())).never();
         });
 
         test('should call updateEnvironment with correct parameters', async () => {
@@ -412,6 +418,15 @@ suite('DeepnoteEnvironmentsView', () => {
 
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({
+                        eventName: 'create_environment',
+                        properties: { hasDescription: true, packageCount: 3 }
+                    })
+                )
+            ).once();
         });
     });
 
@@ -515,6 +530,8 @@ suite('DeepnoteEnvironmentsView', () => {
 
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+
+            verify(mockTelemetryService.trackEvent(deepEqual({ eventName: 'delete_environment' }))).once();
         });
 
         test('should dispose kernels from open notebooks using the deleted environment', async () => {
@@ -1028,6 +1045,8 @@ suite('DeepnoteEnvironmentsView', () => {
 
             // Verify success message was shown
             verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+
+            verify(mockTelemetryService.trackEvent(deepEqual({ eventName: 'select_environment' }))).once();
         });
 
         test('should successfully switch from managed to external environment (managedVenv: false)', async () => {
@@ -1237,6 +1256,11 @@ suite('DeepnoteEnvironmentsView', () => {
                 mockConfigManager.updateEnvironment(
                     testEnvironmentId,
                     deepEqual({ packages: ['matplotlib', 'scipy', 'sklearn'] })
+                )
+            ).once();
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({ eventName: 'update_environment', properties: { field: 'packages', packageCount: 3 } })
                 )
             ).once();
         });

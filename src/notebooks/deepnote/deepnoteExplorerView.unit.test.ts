@@ -297,6 +297,108 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         });
     });
 
+    suite('command wrapper telemetry', () => {
+        test('tree commands invoked on a non-matching item report their own event with outcome cancelled', async () => {
+            // Notebook-scoped commands handed a project group (and vice versa) take the guard path,
+            // pinning each wrapper's event name and property shape without any file-system setup.
+            const projectGroupItem = {
+                extra: { type: DeepnoteTreeItemType.ProjectGroup }
+            } as unknown as DeepnoteTreeItem;
+            const notebookItem = { extra: { type: DeepnoteTreeItemType.Notebook } } as unknown as DeepnoteTreeItem;
+
+            await handlerFor(Commands.RenameNotebook)(projectGroupItem);
+            await handlerFor(Commands.DeleteNotebook)(projectGroupItem);
+            await handlerFor(Commands.DuplicateNotebook)(projectGroupItem);
+            await handlerFor(Commands.ExportNotebook)(projectGroupItem);
+            await handlerFor(Commands.RenameProject)(notebookItem);
+            await handlerFor(Commands.AddNotebookToProject)(notebookItem);
+
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({ eventName: 'rename_notebook', properties: { outcome: 'cancelled' } })
+                )
+            ).once();
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({ eventName: 'delete_notebook', properties: { outcome: 'cancelled' } })
+                )
+            ).once();
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({ eventName: 'duplicate_notebook', properties: { outcome: 'cancelled' } })
+                )
+            ).once();
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({ eventName: 'export_notebook', properties: { outcome: 'cancelled' } })
+                )
+            ).once();
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({ eventName: 'rename_project', properties: { outcome: 'cancelled' } })
+                )
+            ).once();
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({
+                        eventName: 'create_notebook',
+                        properties: { outcome: 'cancelled', source: 'project_menu' }
+                    })
+                )
+            ).once();
+            verify(mockAnalyticsMock.trackEvent(anything())).times(6);
+        });
+
+        test('a failed notebook open reports open_notebook failed', async () => {
+            when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenReject(
+                new Error('cannot open')
+            );
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            await handlerFor(Commands.OpenDeepnoteNotebook)({ filePath: '/ws/missing.deepnote', projectId: 'p1' });
+
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({ eventName: 'open_notebook', properties: { outcome: 'failed' } })
+                )
+            ).once();
+        });
+
+        test('dismissing the open-folder prompt reports create_project and both imports as cancelled', async () => {
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            await handlerFor(Commands.NewProject)();
+            await handlerFor(Commands.ImportNotebook)();
+            await handlerFor(Commands.ImportJupyterNotebook)();
+
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({ eventName: 'create_project', properties: { outcome: 'cancelled' } })
+                )
+            ).once();
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({
+                        eventName: 'import_notebook',
+                        properties: { outcome: 'cancelled', source: 'deepnote' }
+                    })
+                )
+            ).once();
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({
+                        eventName: 'import_notebook',
+                        properties: { outcome: 'cancelled', source: 'jupyter' }
+                    })
+                )
+            ).once();
+            verify(mockAnalyticsMock.trackEvent(anything())).times(3);
+        });
+    });
+
     suite('newProject', () => {
         test('should create a new project with valid input', async () => {
             const projectName = 'My Test Project';

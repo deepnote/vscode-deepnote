@@ -110,8 +110,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     }
 
     private runAllCells() {
-        const editor = window.activeNotebookEditor;
-        if (editor) {
+        if (window.activeNotebookEditor) {
             commands.executeCommand('notebook.execute').then(noop, noop);
         }
     }
@@ -138,8 +137,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     }
 
     private addCellBelow() {
-        const editor = window.activeNotebookEditor;
-        if (editor) {
+        if (window.activeNotebookEditor) {
             commands.executeCommand('notebook.cell.insertCodeCellBelow').then(noop, noop);
         }
     }

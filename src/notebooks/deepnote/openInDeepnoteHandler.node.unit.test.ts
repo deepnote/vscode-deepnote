@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { instance, mock, when, anything } from 'ts-mockito';
+import { deepEqual, instance, mock, verify, when, anything } from 'ts-mockito';
 import { Uri, TextDocument, TextEditor, NotebookDocument, NotebookEditor } from 'vscode';
 import * as fs from 'fs';
 import esmock from 'esmock';
@@ -14,6 +14,7 @@ import { MAX_FILE_SIZE } from './importClient.node';
 suite('OpenInDeepnoteHandler', () => {
     let handler: OpenInDeepnoteHandler;
     let mockExtensionContext: IExtensionContext;
+    let mockTelemetryService: ITelemetryService;
     let sandbox: sinon.SinonSandbox;
     let initImportStub: sinon.SinonStub;
     let uploadFileStub: sinon.SinonStub;
@@ -50,7 +51,8 @@ suite('OpenInDeepnoteHandler', () => {
             subscriptions: []
         } as any;
 
-        handler = new OpenInDeepnoteHandlerClass(mockExtensionContext, instance(mock<ITelemetryService>()));
+        mockTelemetryService = mock<ITelemetryService>();
+        handler = new OpenInDeepnoteHandlerClass(mockExtensionContext, instance(mockTelemetryService));
     });
 
     teardown(() => {
@@ -103,6 +105,29 @@ suite('OpenInDeepnoteHandler', () => {
                 'Command should be registered with correct ID'
             );
             assert.isFunction(registeredCallback, 'Second argument should be a function');
+        });
+
+        test('the registered command tracks open_in_deepnote failed when there is nothing to open', async () => {
+            let registeredCallback: (() => Promise<void>) | undefined;
+
+            when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenCall((_id, callback) => {
+                registeredCallback = callback;
+
+                return { dispose: () => undefined };
+            });
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.activeTextEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            handler.activate();
+            await registeredCallback!();
+
+            verify(
+                mockTelemetryService.trackEvent(
+                    deepEqual({ eventName: 'open_in_deepnote', properties: { outcome: 'failed' } })
+                )
+            ).once();
+            verify(mockTelemetryService.trackEvent(anything())).once();
         });
     });
 

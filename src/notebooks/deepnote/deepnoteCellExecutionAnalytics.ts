@@ -13,9 +13,9 @@ import {
 import { IDeepnoteNotebookManager } from '../types';
 
 /**
- * Tracks notebook usage events for telemetry: cell executions, and the plain code/markdown cell
- * insertions that VS Code's built-in "+ Code" / "+ Markdown" affordances perform without routing
- * through any extension command.
+ * Tracks notebook usage events for telemetry: cell executions, and plain code/markdown cell
+ * insertions from VS Code's built-in "+ Code" / "+ Markdown" controls that do not go through
+ * any extension command.
  */
 @injectable()
 export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationService {

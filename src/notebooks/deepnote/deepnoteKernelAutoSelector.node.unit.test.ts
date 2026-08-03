@@ -409,29 +409,27 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             verify(mockTelemetryService.trackEvent(deepEqual({ eventName: 'select_environment' }))).once();
         });
 
-        test('should not track select_environment when the user cancels the execution picker', async () => {
+        test('should not track select_environment when the picker is cancelled or setup fails', async () => {
             arrangeFirstRunPicker(undefined);
 
-            const result = await selector.ensureEnvironmentConfiguredBeforeExecution(
-                mockNotebook,
-                instance(mockCancellationToken)
+            assert.isFalse(
+                await selector.ensureEnvironmentConfiguredBeforeExecution(
+                    mockNotebook,
+                    instance(mockCancellationToken)
+                ),
+                'Cancelling the picker should not configure an environment'
             );
 
-            assert.isFalse(result, 'Cancelling the picker should not configure an environment');
-            verify(mockTelemetryService.trackEvent(anything())).never();
-        });
-
-        test('should not track select_environment when kernel setup fails', async () => {
-            const mockEnvironment = createMockEnvironment('env-1', 'Environment 1');
-            arrangeFirstRunPicker(mockEnvironment);
+            arrangeFirstRunPicker(createMockEnvironment('env-1', 'Environment 1'));
             sandbox.stub(selector as any, 'setupKernelForEnvironment').resolves(false);
 
-            const result = await selector.ensureEnvironmentConfiguredBeforeExecution(
-                mockNotebook,
-                instance(mockCancellationToken)
+            assert.isFalse(
+                await selector.ensureEnvironmentConfiguredBeforeExecution(
+                    mockNotebook,
+                    instance(mockCancellationToken)
+                ),
+                'Failed setup should not report success'
             );
-
-            assert.isFalse(result, 'Failed setup should not report success');
             verify(mockTelemetryService.trackEvent(anything())).never();
         });
     });

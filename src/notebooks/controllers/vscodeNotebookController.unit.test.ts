@@ -889,24 +889,15 @@ suite(`Notebook Controller`, function () {
                 verify(telemetry.trackEvent(anything())).once();
             });
 
-            test('a partial batch (single cell run) does not report execute_notebook', async () => {
+            test('a partial batch or a non-Deepnote notebook does not report execute_notebook', async () => {
                 const allCells = [codeCell(0), codeCell(1)];
-                const notebook = deepnoteNotebook(allCells);
 
-                await handleExecution([allCells[0]], notebook);
-
-                verify(telemetry.trackEvent(anything())).never();
-            });
-
-            test('does not report execute_notebook for non-Deepnote notebooks', async () => {
-                const cells = [codeCell(0)];
-                const notebook = {
+                await handleExecution([allCells[0]], deepnoteNotebook(allCells));
+                await handleExecution(allCells, {
                     notebookType: 'jupyter-notebook',
                     uri: Uri.file('/ws/n.ipynb'),
-                    getCells: () => cells
-                } as never as NotebookDocument;
-
-                await handleExecution(cells, notebook);
+                    getCells: () => allCells
+                } as never as NotebookDocument);
 
                 verify(telemetry.trackEvent(anything())).never();
             });

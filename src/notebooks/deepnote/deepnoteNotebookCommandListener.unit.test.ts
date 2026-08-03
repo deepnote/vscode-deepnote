@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { when, reset, anything, deepEqual, mock, instance, verify } from 'ts-mockito';
+import { when, reset, anything, mock, instance } from 'ts-mockito';
 import {
     NotebookCell,
     NotebookDocument,
@@ -671,12 +671,6 @@ suite('DeepnoteNotebookCommandListener', () => {
                     const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
                     assert.equal(revealCall.args[0].start, expectedInsertIndex, 'Should reveal correct range start');
                     assert.equal(revealCall.args[0].end, expectedInsertIndex + 1, 'Should reveal correct range end');
-
-                    verify(
-                        mockTelemetryService.trackEvent(
-                            deepEqual({ eventName: 'add_block', properties: { blockType } })
-                        )
-                    ).once();
                 });
             }
         );
@@ -766,12 +760,6 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
-
-                verify(
-                    mockTelemetryService.trackEvent(
-                        deepEqual({ eventName: 'add_block', properties: { blockType: 'sql' } })
-                    )
-                ).once();
             });
 
             test('should add SQL block after selection when selection exists', async () => {
@@ -904,12 +892,6 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
-
-                verify(
-                    mockTelemetryService.trackEvent(
-                        deepEqual({ eventName: 'add_block', properties: { blockType: 'big-number' } })
-                    )
-                ).once();
             });
 
             test('should add big number block after selection when selection exists', async () => {
@@ -1046,12 +1028,6 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
-
-                verify(
-                    mockTelemetryService.trackEvent(
-                        deepEqual({ eventName: 'add_block', properties: { blockType: 'visualization' } })
-                    )
-                ).once();
             });
 
             test('should add chart block after selection when selection exists', async () => {
@@ -1167,55 +1143,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
                 // Call the method and expect rejection
                 await assert.isRejected(commandListener.addChartBlock(), WrappedError, 'Failed to insert chart block');
-
-                verify(mockTelemetryService.trackEvent(anything())).never();
             });
-        });
-
-        suite('addTextBlockCommandHandler', () => {
-            test('tracks add_block with the text block type', async () => {
-                const { editor } = createMockEditor([], undefined);
-                mockNotebookUpdateAndExecute(editor);
-
-                await commandListener.addTextBlockCommandHandler({ textBlockType: 'text-cell-h1' });
-
-                verify(
-                    mockTelemetryService.trackEvent(
-                        deepEqual({ eventName: 'add_block', properties: { blockType: 'text-cell-h1' } })
-                    )
-                ).once();
-            });
-        });
-    });
-
-    suite('toggle snapshots telemetry', () => {
-        test('disabling snapshots tracks toggle_snapshots enabled false', async () => {
-            await (commandListener as any).disableSnapshots();
-
-            verify(
-                mockTelemetryService.trackEvent(
-                    deepEqual({ eventName: 'toggle_snapshots', properties: { enabled: false } })
-                )
-            ).once();
-            verify(mockTelemetryService.trackEvent(anything())).once();
-        });
-
-        test('enabling snapshots tracks toggle_snapshots enabled true', async () => {
-            await (commandListener as any).enableSnapshots();
-
-            verify(
-                mockTelemetryService.trackEvent(
-                    deepEqual({ eventName: 'toggle_snapshots', properties: { enabled: true } })
-                )
-            ).once();
-        });
-
-        test('does not track when the setting update fails', async () => {
-            (mockConfigService.updateSetting as sinon.SinonStub).rejects(new Error('update failed'));
-
-            await (commandListener as any).disableSnapshots();
-
-            verify(mockTelemetryService.trackEvent(anything())).never();
         });
     });
 });

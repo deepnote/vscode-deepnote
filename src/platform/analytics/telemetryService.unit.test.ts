@@ -206,15 +206,15 @@ suite('TelemetryService', () => {
         );
     });
 
-    test('should track events without waiting for user ID persistence to settle', () => {
-        // A global-state write that never settles, as on a fresh profile whose memento RPC is slow.
-        const userIdState: IPersistentState<string> = {
+    // A fresh profile whose global-state write never settles or outright rejects. Either way the
+    // client and distinctId must not wait on it — activate() is registered as a sync service.
+    function buildServiceWithUnsettledPersist(updateValue: sinon.SinonStub) {
+        (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns({
             get value() {
                 return '';
             },
-            updateValue: sinon.stub().returns(new Promise<void>(() => {}))
-        };
-        (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns(userIdState);
+            updateValue
+        } as IPersistentState<string>);
 
         analyticsService = new TelemetryService(
             mockDisposables,
@@ -224,7 +224,12 @@ suite('TelemetryService', () => {
         );
         stubTelemetryEnabled(analyticsService, true);
         stubPostHogConfigured(analyticsService, true);
-        const fakeClient = stubClientFactory(analyticsService);
+
+        return stubClientFactory(analyticsService);
+    }
+
+    test('should track events without waiting for user ID persistence to settle', () => {
+        const fakeClient = buildServiceWithUnsettledPersist(sinon.stub().returns(new Promise<void>(() => {})));
 
         analyticsService.activate();
         analyticsService.trackEvent({ eventName: 'execute_notebook' });
@@ -240,23 +245,7 @@ suite('TelemetryService', () => {
     });
 
     test('should still create the client when persisting the user ID fails', () => {
-        const userIdState: IPersistentState<string> = {
-            get value() {
-                return '';
-            },
-            updateValue: sinon.stub().rejects(new Error('global state unavailable'))
-        };
-        (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns(userIdState);
-
-        analyticsService = new TelemetryService(
-            mockDisposables,
-            mockStateFactory,
-            mockAsyncDisposableRegistry,
-            mockAppEnv
-        );
-        stubTelemetryEnabled(analyticsService, true);
-        stubPostHogConfigured(analyticsService, true);
-        stubClientFactory(analyticsService);
+        buildServiceWithUnsettledPersist(sinon.stub().rejects(new Error('global state unavailable')));
 
         analyticsService.activate();
 

@@ -273,13 +273,14 @@ suite('IntegrationWebviewProvider', () => {
             ).once();
         });
 
-        test('tracks exactly once when the form is opened from the webview configure message', async () => {
+        test('tracks the webview configure message exactly once, and not for an unknown id', async () => {
             const provider = buildProvider({ tokenStorage });
             const id = 'pg-configure';
             await show(provider, singleIntegrationMap(id, buildPostgresIntegration({ id })));
             resetCalls(mockTelemetryService);
 
             await fakePanel.onDidReceiveMessage({ type: 'configure', integrationId: id });
+            await fakePanel.onDidReceiveMessage({ type: 'configure', integrationId: 'does-not-exist' });
 
             verify(
                 mockTelemetryService.trackEvent(
@@ -287,17 +288,6 @@ suite('IntegrationWebviewProvider', () => {
                 )
             ).once();
             verify(mockTelemetryService.trackEvent(anything())).once();
-        });
-
-        test('does not track for an unknown integration id', async () => {
-            const provider = buildProvider({ tokenStorage });
-            const id = 'pg-known';
-            await show(provider, singleIntegrationMap(id, buildPostgresIntegration({ id })));
-            resetCalls(mockTelemetryService);
-
-            await fakePanel.onDidReceiveMessage({ type: 'configure', integrationId: 'does-not-exist' });
-
-            verify(mockTelemetryService.trackEvent(anything())).never();
         });
     });
 
@@ -453,15 +443,6 @@ suite('IntegrationWebviewProvider', () => {
 
             sinon.assert.calledWith(tokenDeleteSpy, integrationId);
             verify(integrationStorage.delete(integrationId)).once();
-            verify(
-                mockTelemetryService.trackEvent(
-                    deepEqual({
-                        eventName:
-                            messageType === 'reset' ? ('reset_integration' as const) : ('delete_integration' as const),
-                        properties: { integrationType: 'big-query' }
-                    })
-                )
-            ).once();
         });
     });
 

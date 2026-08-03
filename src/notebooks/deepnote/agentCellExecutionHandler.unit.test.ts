@@ -27,19 +27,16 @@ import { NotebookCellExecutionState, notebookCellExecutions } from '../../platfo
 import { dispose } from '../../platform/common/utils/lifecycle';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 import { ServiceContainer } from '../../platform/ioc/container';
-import {
-    describeExecutionOutputs,
-    executeAgentCell,
-    executeEphemeralCell,
-    isAgentCell
-} from './agentCellExecutionHandler';
-import { createMockCell, createMockNotebook } from './deepnoteTestHelpers';
+import { describeExecutionOutputs, executeAgentCell, executeEphemeralCell } from './agentCellExecutionHandler';
+import { isAgentCell } from './dataConversionUtils';
+import { IDeepnoteNotebookManager } from '../types';
+import { createDeepnoteFile, createDeepnoteProject, createMockCell, createMockNotebook } from './deepnoteTestHelpers';
 
 /**
  * Wires up a ServiceContainer whose IExtensionContext exposes an in-memory SecretStorage, so the
  * secret-store helpers take their real code paths instead of the ExtensionMode.Test no-op branch.
  */
-function stubSecretStorage(secretStorage: Map<string, string>): void {
+function stubSecretStorage(secretStorage: Map<string, string>): ServiceContainer {
     const context = mock<IExtensionContext>();
     const secrets = mock<SecretStorage>();
     const onDidChangeSecrets = new EventEmitter<SecretStorageChangeEvent>();
@@ -56,6 +53,8 @@ function stubSecretStorage(secretStorage: Map<string, string>): void {
 
         return Promise.resolve();
     });
+
+    return serviceContainer;
 }
 
 suite('AgentCellExecutionHandler', () => {
@@ -156,11 +155,12 @@ suite('AgentCellExecutionHandler', () => {
         };
         let mockController: NotebookController;
         let executeAgentBlockStub: sinon.SinonStub;
+        let mockServiceContainer: ServiceContainer;
 
         setup(() => {
             secretStorage.clear();
             secretStorage.set('openAiApiKey', 'test-key');
-            stubSecretStorage(secretStorage);
+            mockServiceContainer = stubSecretStorage(secretStorage);
             disposables.push(new Disposable(() => sinon.restore()));
 
             mockExecution = {
@@ -504,6 +504,49 @@ suite('AgentCellExecutionHandler', () => {
             expect(cells).to.include(otherAgentResult);
             expect(cells).to.include(userCell);
         });
+
+        // The notebook context is read off the live document, and Run All keeps stale ephemeral cells
+        // out of the kernel batch only by their index going negative on deletion.
+        test('fails the run without calling the agent when the cleanup edit is rejected', async () => {
+            const previousResult = createMockCell({
+                text: 'print("previous run")',
+                metadata: { is_ephemeral: true, agent_source_block_id: 'agent-block-1' },
+                index: 1
+            });
+            const { agentCell } = createAgentCellInMutableNotebook([previousResult]);
+
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(false));
+
+            await executeAgentCell(agentCell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+
+            expect(executeAgentBlockStub.called).to.be.false;
+            expect(mockExecution.end.firstCall.args[0]).to.be.false;
+        });
+
+        test('passes project MCP servers and integrations to the agent', async () => {
+            const integrations = [{ id: 'warehouse', name: 'Warehouse', type: 'postgres' }];
+            const mcpServers = [{ name: 'files', command: 'mcp-files', args: [] }];
+            const notebookManager = mock<IDeepnoteNotebookManager>();
+
+            when(mockServiceContainer.tryGet<IDeepnoteNotebookManager>(IDeepnoteNotebookManager)).thenReturn(
+                instance(notebookManager)
+            );
+            when(notebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({ project: createDeepnoteProject({ integrations, settings: { mcpServers } }) })
+            );
+
+            const cell = createMockCell({
+                metadata: { __deepnotePocket: { type: 'agent' } },
+                text: 'Test prompt',
+                notebookMetadata: { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' }
+            });
+
+            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+
+            const context = executeAgentBlockStub.firstCall.args[1] as AgentBlockContext;
+            expect(context.mcpServers).to.deep.equal(mcpServers);
+            expect(context.integrations).to.deep.equal(integrations);
+        });
     });
 
     suite('executeEphemeralCell', () => {
@@ -569,6 +612,29 @@ suite('AgentCellExecutionHandler', () => {
 
             expect(result.success).to.be.false;
             expect(result.error).to.equal('kernel is dead');
+        });
+
+        // The dispatch settles independently of the cell reaching Idle, so waiting on it first would
+        // leave the timeout unable to end a run whose command never resolves.
+        test('times out while the dispatch is still pending', async () => {
+            const cell = createMockCell({ index: 0 });
+            const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
+            try {
+                when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenCall(
+                    () => new Promise(() => undefined)
+                );
+
+                const resultPromise = executeEphemeralCell(cell);
+                await clock.tickAsync(5 * 60 * 1000);
+
+                const result = await resultPromise;
+
+                expect(result.success).to.be.false;
+                expect(result.error).to.equal('Ephemeral cell execution timed out');
+            } finally {
+                clock.restore();
+            }
         });
     });
 });

@@ -57,7 +57,8 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
-import { executeAgentCell, isAgentCell } from './agentCellExecutionHandler';
+import { executeAgentCell } from './agentCellExecutionHandler';
+import { isAgentCell } from './dataConversionUtils';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
@@ -1168,7 +1169,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 for (const cell of cells) {
                     try {
                         if (isAgentCell(cell)) {
-                            await executeAgentCell(cell, controller);
+                            // Configuring the environment disposed this placeholder and handed the
+                            // notebook to the real controller, which now owns its executions.
+                            await executeAgentCell(cell, realController.controller);
                         } else {
                             await kernelExecution.executeCell(cell);
                         }

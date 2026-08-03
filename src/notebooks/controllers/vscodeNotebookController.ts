@@ -91,7 +91,8 @@ import { RemoteKernelReconnectBusyIndicator } from './remoteKernelReconnectBusyI
 import { IConnectionDisplayData, IConnectionDisplayDataProvider, IVSCodeNotebookController } from './types';
 import { notebookPathToDeepnoteProjectFilePath } from '../../platform/deepnote/deepnoteProjectUtils';
 import { DEEPNOTE_NOTEBOOK_TYPE, IDeepnoteKernelAutoSelector } from '../../kernels/deepnote/types';
-import { executeAgentCell, isAgentCell } from '../deepnote/agentCellExecutionHandler';
+import { executeAgentCell } from '../deepnote/agentCellExecutionHandler';
+import { isAgentCell } from '../deepnote/dataConversionUtils';
 
 /**
  * Our implementation of the VSCode Notebook Controller. Called by VS code to execute cells in a notebook. Also displayed

@@ -20,7 +20,7 @@ import { IConfigurationService } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
+import { EventEmitter, NotebookCell, NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
@@ -1032,6 +1032,84 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 // Should have filtered and sorted correctly
                 assert.strictEqual(hash, 'numpy|pandas|scipy');
             });
+        });
+    });
+
+    suite('Placeholder controller execution', () => {
+        function createExecutionStub() {
+            return {
+                start: sandbox.stub(),
+                end: sandbox.stub(),
+                clearOutput: sandbox.stub().resolves(),
+                replaceOutput: sandbox.stub().resolves(),
+                appendOutput: sandbox.stub().resolves(),
+                appendOutputItems: sandbox.stub().resolves()
+            };
+        }
+
+        // Configuring the environment disposes and deselects the placeholder, and VS Code throws for
+        // executions created on either a disposed or an unassociated controller.
+        test('runs agent cells on the real controller after configuring the environment', async () => {
+            const placeholderExecution = createExecutionStub();
+            const placeholder = {
+                supportsExecutionOrder: false,
+                supportedLanguages: [] as string[],
+                updateNotebookAffinity: sandbox.stub(),
+                dispose: sandbox.stub(),
+                createNotebookCellExecution: sandbox.stub().returns(placeholderExecution)
+            } as unknown as NotebookController;
+
+            when(
+                mockedVSCodeNamespaces.notebooks!.createNotebookController(anything(), anything(), anything())
+            ).thenReturn(placeholder);
+            when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(true);
+
+            const onDidCloseNotebookDocument = new EventEmitter<NotebookDocument>();
+            when(mockedVSCodeNamespaces.workspace.onDidCloseNotebookDocument).thenReturn(
+                onDidCloseNotebookDocument.event
+            );
+
+            const realExecution = createExecutionStub();
+            const realNotebookController = {
+                createNotebookCellExecution: sandbox.stub().returns(realExecution)
+            } as unknown as NotebookController;
+            const realController = mock<IVSCodeNotebookController>();
+            when(realController.controller).thenReturn(realNotebookController);
+
+            const internals = selector as unknown as {
+                createPlaceholderController(notebook: NotebookDocument): NotebookController;
+                notebookControllers: Map<string, IVSCodeNotebookController>;
+            };
+
+            internals.createPlaceholderController(mockNotebook);
+            internals.notebookControllers.set(getNotebookKey(mockNotebook.uri), instance(realController));
+
+            sandbox.stub(selector, 'ensureEnvironmentConfiguredBeforeExecution').resolves(true);
+
+            const kernelExecution = { executeCell: sandbox.stub().resolves() };
+            when(mockKernelProvider.getOrCreate(anything(), anything())).thenReturn(instance(mock<IKernel>()));
+            when(mockKernelProvider.getKernelExecution(anything())).thenReturn(
+                kernelExecution as unknown as ReturnType<IKernelProvider['getKernelExecution']>
+            );
+
+            const agentCell = {
+                index: 0,
+                metadata: { __deepnotePocket: { type: 'agent' } }
+            } as unknown as NotebookCell;
+            const codeCell = { index: 1, metadata: {} } as unknown as NotebookCell;
+
+            await placeholder.executeHandler!([agentCell, codeCell], mockNotebook, placeholder);
+
+            assert.isTrue(
+                (realNotebookController.createNotebookCellExecution as sinon.SinonStub).calledOnceWithExactly(
+                    agentCell
+                ),
+                'agent cell execution should be created on the real controller'
+            );
+            assert.isTrue(
+                (placeholder.createNotebookCellExecution as sinon.SinonStub).notCalled,
+                'no execution should be created on the disposed placeholder'
+            );
         });
     });
 });

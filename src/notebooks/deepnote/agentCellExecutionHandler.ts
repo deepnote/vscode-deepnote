@@ -30,38 +30,48 @@ import { ServiceContainer } from '../../platform/ioc/container';
 import { logger } from '../../platform/logging';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { IDeepnoteNotebookManager } from '../types';
-import { generateBlockId, generateSortingKey, isAgentCell, isEphemeralCell } from './dataConversionUtils';
+import { generateBlockId, generateSortingKey, isEphemeralCell } from './dataConversionUtils';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { getOrPromptOpenAiApiKey } from './deepnoteSecretStore';
 
-export { isAgentCell };
-
 /**
- * Project-level MCP servers declared in the `.deepnote` file, matching what the CLI's ExecutionEngine
- * passes. `executeAgentBlock` merges these with any block-level `deepnote_mcp_servers` (block wins on
- * name), so leaving this empty silently drops the project-level half of that contract.
+ * Project-level MCP servers and database integrations declared in the `.deepnote` file, matching what
+ * the CLI's ExecutionEngine passes. `executeAgentBlock` merges the servers with any block-level
+ * `deepnote_mcp_servers` (block wins on name), and only names the integrations — along with the
+ * `dntk.execute_sql` instructions — in its system prompt when that list is non-empty, so leaving
+ * either empty silently drops the project-level half of that contract.
  *
- * Spawning these is arbitrary local command execution declared by a workspace file, so every caller
- * must already be behind a `workspace.isTrusted` check.
+ * Spawning MCP servers is arbitrary local command execution declared by a workspace file, so every
+ * caller must already be behind a `workspace.isTrusted` check.
  */
-function getProjectMcpServers(notebook: NotebookDocument): AgentBlockContext['mcpServers'] {
+function getProjectAgentContext(notebook: NotebookDocument): Pick<AgentBlockContext, 'mcpServers' | 'integrations'> {
     const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
     const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
 
     if (!projectId || !notebookId) {
-        return [];
+        return { mcpServers: [] };
     }
 
     const manager = ServiceContainer.instance.tryGet<IDeepnoteNotebookManager>(IDeepnoteNotebookManager);
-    const servers = manager?.getProjectForNotebook(projectId, notebookId)?.project.settings?.mcpServers ?? [];
+    const project = manager?.getProjectForNotebook(projectId, notebookId)?.project;
+    const mcpServers = project?.settings?.mcpServers ?? [];
+    const integrations = project?.integrations ?? [];
 
-    if (servers.length > 0) {
+    if (mcpServers.length > 0) {
         logger.info(
-            `Agent cell: using ${servers.length} project MCP server(s): ${servers.map((s) => s.name).join(', ')}`
+            `Agent cell: using ${mcpServers.length} project MCP server(s): ${mcpServers.map((s) => s.name).join(', ')}`
         );
     }
 
-    return servers;
+    if (integrations.length > 0) {
+        logger.info(
+            `Agent cell: using ${integrations.length} project integration(s): ${integrations
+                .map((i) => i.name)
+                .join(', ')}`
+        );
+    }
+
+    return { mcpServers, integrations };
 }
 
 // Tool results reported back to the agent. These mirror the wording @deepnote/runtime-core uses in
@@ -205,7 +215,7 @@ export async function executeAgentCell(
 
         const context: AgentBlockContext = {
             openAiToken,
-            mcpServers: getProjectMcpServers(cell.notebook),
+            ...getProjectAgentContext(cell.notebook),
             notebookContext,
             addMarkdownBlock: async ({ content }: { content: string }) => {
                 try {
@@ -409,12 +419,16 @@ export async function executeEphemeralCell(
     try {
         const cellIndex = cell.index;
 
-        await commands.executeCommand('notebook.cell.execute', {
-            ranges: [{ start: cellIndex, end: cellIndex + 1 }],
-            document: cell.notebook.uri
-        });
-
-        await completionDeferred.promise;
+        // The dispatch settles independently of the cell reaching Idle, so both waits have to start
+        // together — otherwise the timeout cannot end a run whose command never resolves, and a
+        // rejection arriving before the second await is reported as unhandled.
+        await Promise.all([
+            commands.executeCommand('notebook.cell.execute', {
+                ranges: [{ start: cellIndex, end: cellIndex + 1 }],
+                document: cell.notebook.uri
+            }),
+            completionDeferred.promise
+        ]);
 
         return {
             success: cell.executionSummary?.success === true,
@@ -458,10 +472,12 @@ async function removeEphemeralCellsForAgent(notebook: NotebookDocument, agentBlo
     const edit = new WorkspaceEdit();
     edit.set(notebook.uri, deletions);
 
-    const success = await workspace.applyEdit(edit);
-    if (success) {
-        logger.info(`Removed ${deletions.length} ephemeral cell(s) for agent block ${agentBlockId}`);
-    } else {
-        logger.warn(`Failed to remove ephemeral cells for agent block ${agentBlockId}`);
+    // Fatal rather than a warning: the notebook context the agent receives is read off the live
+    // document, and Run All keeps these cells out of its kernel batch only by their index going
+    // negative once they are deleted.
+    if (!(await workspace.applyEdit(edit))) {
+        throw new Error(`Failed to remove ephemeral cells for agent block ${agentBlockId}`);
     }
+
+    logger.info(`Removed ${deletions.length} ephemeral cell(s) for agent block ${agentBlockId}`);
 }

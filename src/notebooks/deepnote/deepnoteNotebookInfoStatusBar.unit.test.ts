@@ -1,5 +1,5 @@
 import { assert, expect } from 'chai';
-import { anything, capture, verify, when } from 'ts-mockito';
+import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import {
     EventEmitter,
     NotebookDocument,
@@ -12,6 +12,7 @@ import {
 import { DeepnoteNotebookInfoStatusBar } from './deepnoteNotebookInfoStatusBar';
 import { Commands } from '../../platform/common/constants';
 import { mockedVSCode, mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import type { ITelemetryService } from '../../platform/analytics/types';
 import type { IDisposableRegistry } from '../../platform/common/types';
 
 /**
@@ -81,12 +82,14 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
     let disposableRegistry: IDisposableRegistry;
     let activeEditorEmitter: EventEmitter<NotebookEditor | undefined>;
     let docChangeEmitter: EventEmitter<NotebookDocumentChangeEvent>;
+    let mockTelemetryService: ITelemetryService;
 
     setup(() => {
         resetVSCodeMocks();
 
         fakeItem = createFakeStatusBarItem();
         disposableRegistry = [];
+        mockTelemetryService = mock<ITelemetryService>();
 
         // Real emitters drive the active-editor / document-change subscriptions; the status bar
         // subscribes through `.event` (which honours thisArg + the disposables array it passes).
@@ -99,7 +102,7 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
         when(mockedVSCodeNamespaces.window.onDidChangeActiveNotebookEditor).thenReturn(activeEditorEmitter.event);
         when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument).thenReturn(docChangeEmitter.event);
 
-        statusBar = new DeepnoteNotebookInfoStatusBar(disposableRegistry);
+        statusBar = new DeepnoteNotebookInfoStatusBar(disposableRegistry, instance(mockTelemetryService));
     });
 
     teardown(() => {
@@ -210,6 +213,8 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
         ].join('\n');
 
         assert.strictEqual(clipboardText, expected, 'clipboard must contain the full notebook detail block');
+        verify(mockTelemetryService.trackEvent(deepEqual({ eventName: 'copy_notebook_details' }))).once();
+        verify(mockTelemetryService.trackEvent(anything())).once();
     });
 
     test('CopyNotebookDetails warns and writes nothing when there is no active deepnote notebook', async () => {
@@ -223,6 +228,7 @@ suite('DeepnoteNotebookInfoStatusBar', () => {
         verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
         const clipboardText = await mockedVSCode.env!.clipboard.readText();
         assert.strictEqual(clipboardText, '', 'nothing should be copied when there is no active deepnote notebook');
+        verify(mockTelemetryService.trackEvent(anything())).never();
     });
 
     test('dispose() disposes the status bar item and clears its subscriptions', () => {

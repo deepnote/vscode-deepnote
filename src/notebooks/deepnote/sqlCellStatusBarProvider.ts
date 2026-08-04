@@ -19,12 +19,14 @@ import {
 import { inject, injectable } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
 import {
     ConfigurableDatabaseIntegrationType,
-    DATAFRAME_SQL_INTEGRATION_ID
+    DATAFRAME_SQL_INTEGRATION_ID,
+    toTelemetryIntegrationType
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
 import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
@@ -69,7 +71,8 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {}
 
     public activate(): void {
@@ -459,5 +462,16 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Trigger status bar update
         this._onDidChangeCellStatusBarItems.fire();
+
+        const selectedIntegration = projectIntegrations.find((i) => i.id === selectedId);
+        const integrationType =
+            selectedId === DATAFRAME_SQL_INTEGRATION_ID
+                ? 'duckdb'
+                : toTelemetryIntegrationType(selectedIntegration?.type);
+
+        this.analytics.trackEvent({
+            eventName: 'switch_sql_integration',
+            properties: { integrationType }
+        });
     }
 }

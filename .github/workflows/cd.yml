@@ -60,6 +60,11 @@ jobs:
 
       - name: Package extension
         run: npm run package
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          # workflow_dispatch accepts any ref, so gate `stable` on the ref rather than the event to keep
+          # manually packaged feature branches out of stable analytics.
+          POSTHOG_CHANNEL: ${{ github.event_name == 'pull_request' && 'pr' || (github.ref == 'refs/heads/main' && 'stable' || 'development') }}
 
       - name: Rename VSIX file
         run: |

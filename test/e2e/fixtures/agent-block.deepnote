@@ -1,0 +1,22 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-agent-block-project
+  name: E2E Agent Block
+  notebooks:
+    - id: e2e-agent-block-notebook
+      name: Agent Block
+      blocks:
+        - id: e2e-agent-block
+          blockGroup: e2e-agent-group
+          type: agent
+          content: |-
+            Run some Python, then add a markdown block summarising this notebook.
+          sortingKey: a0
+          metadata:
+            deepnote_agent_model: gpt-5
+      executionMode: block
+      isModule: false
+  settings: {}

@@ -42,27 +42,57 @@ export async function clickRunAll(notebookFileName: string): Promise<void> {
 }
 
 /**
- * Reads the notebook cell output once.
- *
- * Output lives two iframes deep (iframe.webview.ready -> #active-frame). We only attempt to switch
- * when an output webview iframe actually exists (`getViewToSwitchTo`), and we read output-specific
- * elements inside the frame — so we never match the cell's source code that is visible in the editor
- * of the main document. Returns '' when no output is present yet.
+ * Runs `read` inside the notebook webview (iframe.webview.ready -> #active-frame) and switches back
+ * afterwards. `read` only ever sees the webview, never the cell source in the main document — the
+ * guarantee callers rely on to avoid matching a cell's own text. Returns '' when the frame is absent,
+ * went stale, or has painted nothing yet, so callers can poll.
  */
-export async function readRenderedOutput(): Promise<string> {
+async function readInsideNotebookWebview(read: (webView: WebView) => Promise<string>): Promise<string> {
+    const driver = VSBrowser.instance.driver;
     const webView = new WebView();
-    const outputFrame = await webView.getViewToSwitchTo().catch((error) => {
-        console.warn('[deepnote-e2e] locate notebook output webview:', error);
+    const frame = await webView.getViewToSwitchTo().catch((error) => {
+        console.warn('[deepnote-e2e] locate notebook webview:', error);
 
         return undefined;
     });
-    if (!outputFrame) {
+    if (!frame) {
         return '';
     }
 
-    let text = '';
     try {
         await webView.switchToFrame(OUTPUT_FRAME_SWITCH_TIMEOUT);
+
+        // switchToFrame re-resolves the view and returns silently when it has gone, leaving the
+        // driver on the workbench document — where a body read would scrape the editor, and the cell
+        // source with it. Confirm we actually descended before letting `read` run.
+        if (await driver.executeScript<boolean>('return window.self === window.top')) {
+            return '';
+        }
+
+        return (await read(webView)).trim();
+    } catch (error) {
+        console.warn('[deepnote-e2e] read inside notebook webview:', error);
+
+        return '';
+    } finally {
+        await webView.switchBack().catch((error) => {
+            console.warn('[deepnote-e2e] switch back from notebook webview:', error);
+        });
+    }
+}
+
+/**
+ * Reads everything the notebook webview currently paints — rendered markdown cells as well as cell
+ * outputs. Use it when a rendered markdown cell is part of the assertion, since `readRenderedOutput`
+ * deliberately narrows to output-only elements.
+ */
+export async function readNotebookWebviewText(): Promise<string> {
+    return readInsideNotebookWebview(async (webView) => (await webView.findWebElement(By.css('body'))).getText());
+}
+
+/** Reads the notebook cell output once, falling back to the whole frame if the renderer used unexpected classes. */
+export async function readRenderedOutput(): Promise<string> {
+    return readInsideNotebookWebview(async (webView) => {
         const elements = await webView.findWebElements(By.css(OUTPUT_SELECTOR));
         const texts = await Promise.all(
             elements.map((element) =>
@@ -73,36 +103,11 @@ export async function readRenderedOutput(): Promise<string> {
                 })
             )
         );
-        text = texts.join('\n').trim();
+        const text = texts.join('\n').trim();
 
-        // Fallback: if the renderer used unexpected classes, read the frame body — safe here because
-        // we have confirmed we are inside the output iframe, not the editor.
-        if (!text) {
-            const body = await webView.findWebElement(By.css('body')).catch((error) => {
-                console.warn('[deepnote-e2e] read output frame body:', error);
-
-                return undefined;
-            });
-            text = body
-                ? (
-                      await body.getText().catch((error) => {
-                          console.warn('[deepnote-e2e] read output frame body text:', error);
-
-                          return '';
-                      })
-                  ).trim()
-                : '';
-        }
-    } catch (error) {
-        // Frame went stale or output not painted yet — treat as no output this tick.
-        console.warn('[deepnote-e2e] read rendered notebook output:', error);
-    } finally {
-        await webView.switchBack().catch((error) => {
-            console.warn('[deepnote-e2e] switch back from notebook output webview:', error);
-        });
-    }
-
-    return text;
+        // Safe as a fallback because we have already confirmed we are inside the webview, not the editor.
+        return text || (await webView.findWebElement(By.css('body'))).getText();
+    });
 }
 
 /**

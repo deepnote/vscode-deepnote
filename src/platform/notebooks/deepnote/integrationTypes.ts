@@ -148,9 +148,8 @@ export type ConfigurableDatabaseIntegrationConfig = Extract<
 export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationType, 'pandas-dataframe'>;
 
 /**
- * Narrows a project-file integration type to a value safe to report as telemetry. The `.deepnote`
- * schema types `integrations[].type` as a free-form string, so unrecognized values collapse to
- * `'unknown'` instead of reaching analytics as unbounded property cardinality.
+ * `integrations[].type` is free-form in the `.deepnote` schema; collapsing unrecognized values to
+ * `'unknown'` keeps analytics property cardinality bounded.
  */
 export function toTelemetryIntegrationType(type: string | undefined): DatabaseIntegrationType | 'unknown' {
     return type && isDatabaseIntegrationType(type) ? type : 'unknown';

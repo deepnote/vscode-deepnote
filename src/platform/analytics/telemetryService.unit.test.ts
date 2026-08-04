@@ -147,7 +147,6 @@ suite('TelemetryService', () => {
     });
 
     test('should generate and persist a user ID and send it as distinctId with common properties', async () => {
-        // Default is empty, so the mock state starts empty and activate() must generate + persist a UUID.
         const userIdState = createMockPersistentState('');
         (mockStateFactory.createGlobalPersistentState as sinon.SinonStub).returns(userIdState);
 
@@ -163,7 +162,6 @@ suite('TelemetryService', () => {
 
         await analyticsService.activate();
 
-        // Catches: distinctId churning because the empty default is never persisted (updateValue never called).
         assert.isTrue(
             (userIdState.updateValue as sinon.SinonStub).calledOnce,
             'A user ID should be generated and persisted on first activation'

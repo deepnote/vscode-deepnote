@@ -25,7 +25,6 @@ import { buildSingleNotebookFile, buildSiblingNotebookFileUri } from './deepnote
 import { deepnoteFileExists } from './deepnoteSiblingFileAllocator';
 import { isSnapshotFile } from './snapshots/snapshotFiles';
 
-/** Outcome of a tracked explorer command, so telemetry can separate user drop-off from real failures. */
 type CommandOutcome = 'completed' | 'cancelled' | 'failed';
 
 /**

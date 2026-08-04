@@ -232,7 +232,7 @@ function createConfig(
         }
     }
     if (target === 'desktop') {
-        // Bake the PostHog key and channel in from CI at build time; both fall back to safe defaults locally (see constants.ts).
+        // Empty when unset locally; src/platform/analytics/constants.ts falls back to safe defaults.
         define = {
             POSTHOG_API_KEY_BUILD: JSON.stringify(process.env.POSTHOG_API_KEY ?? ''),
             POSTHOG_CHANNEL_BUILD: JSON.stringify(process.env.POSTHOG_CHANNEL ?? '')

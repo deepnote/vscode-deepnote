@@ -44,10 +44,7 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
         );
     }
 
-    /**
-     * Core flow. Public so tests can drive the handler without `commands.executeCommand`. Returns the
-     * outcome so the invoking UI layer can attach it to its telemetry.
-     */
+    /** Public so tests can drive the handler without `commands.executeCommand`. */
     public async authenticate(integrationId: string): Promise<CommandOutcome> {
         if (typeof integrationId !== 'string' || integrationId.length === 0) {
             logger.warn(

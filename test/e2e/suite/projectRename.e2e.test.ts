@@ -40,8 +40,8 @@ async function leaveUnsavedCellEdit(): Promise<void> {
 
     await openWorkspaceFile(DIRTIED_FILE);
 
-    // Click the first CODE cell's source line to focus its editor (markdown cells have none); locate
-    // and click in one retried step, since the cell re-renders on open and can stale a prior reference.
+    // `.code-cell-row` because markdown cells have no source line; located and clicked in one retried
+    // step since the cell re-renders on open and can stale a prior reference.
     await driver.wait(
         async () => {
             const line = (await driver.findElements(By.css('.notebookOverlay .code-cell-row .view-line')))[0];

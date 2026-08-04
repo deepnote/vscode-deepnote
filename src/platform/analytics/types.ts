@@ -31,10 +31,7 @@ export type TelemetryEventName =
 /** Result of a tracked command, so telemetry can separate user drop-off from real failures. */
 export type CommandOutcome = 'completed' | 'cancelled' | 'failed';
 
-/**
- * Caller-supplied property shape per event. `undefined` means the event carries no caller
- * properties (the service still attaches common properties such as version/platform/channel).
- */
+/** Caller-supplied properties per event; `undefined` means none beyond the common properties the service attaches. */
 export interface TelemetryEventProperties {
     add_block: { blockType: string };
     authenticate_integration: { integrationType: string; outcome: CommandOutcome };
@@ -64,11 +61,7 @@ export interface TelemetryEventProperties {
     update_environment: { field: 'name' | 'packages'; packageCount?: number };
 }
 
-/**
- * An event name paired with its event-specific properties. Events whose property type is
- * `undefined` may omit `properties`. Distributes over `E` so a union of event names yields the
- * corresponding union of `{ eventName, properties }` shapes.
- */
+/** Distributes over `E` so a union of event names yields a union of `{ eventName, properties }` shapes. */
 export type TelemetryEvent<E extends TelemetryEventName = TelemetryEventName> = E extends TelemetryEventName
     ? TelemetryEventProperties[E] extends undefined
         ? { eventName: E; properties?: never }

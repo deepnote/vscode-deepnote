@@ -797,8 +797,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         });
 
         test('a split that yields no files leaves the original in place and reports failed', async () => {
-            // Every notebook is the init notebook, so splitByNotebooks produces nothing. Retiring the
-            // original here would strand the user with no replacement file.
+            // Both notebooks are the init notebook, so splitByNotebooks yields nothing and retiring
+            // the original would strand the user with no replacement file.
             const file = makeFile(
                 [makeNotebook('init-1', 'Init', 'a'), makeNotebook('init-1', 'Also Init', 'b')],
                 'init-1'

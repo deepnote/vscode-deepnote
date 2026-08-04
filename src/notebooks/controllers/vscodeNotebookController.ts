@@ -464,10 +464,8 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                 }
             }
 
-            // A batch covering every code cell is the only signal core gives us that the user ran the
-            // whole notebook; the built-in Run All button never routes through an extension command.
-            // deliberate: a single-code-cell notebook and "Run All Above" from the last cell both
-            // match this shape and are counted — unavoidable without a core API naming the command.
+            // Run All never routes through an extension command, so a batch covering every code cell is the
+            // only signal; deliberate: one-code-cell notebooks and "Run All Above" on the last cell match too.
             const codeCellCount = notebook.getCells().filter((cell) => cell.kind === NotebookCellKind.Code).length;
 
             if (codeCellCount > 0 && cells.length === codeCellCount) {

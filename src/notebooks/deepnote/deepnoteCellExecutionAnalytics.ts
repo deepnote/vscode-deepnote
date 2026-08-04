@@ -13,9 +13,8 @@ import {
 import { IDeepnoteNotebookManager } from '../types';
 
 /**
- * Tracks notebook usage events for telemetry: cell executions, and plain code/markdown cell
- * insertions from VS Code's built-in "+ Code" / "+ Markdown" controls that do not go through
- * any extension command.
+ * Tracks cell executions, plus the plain code/markdown insertions from VS Code's built-in
+ * "+ Code" / "+ Markdown" controls that never reach an extension command.
  */
 @injectable()
 export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationService {
@@ -33,16 +32,15 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
                 }
 
                 for (const change of e.contentChanges) {
-                    // Only pure insertions are user-authored. Every reload/replace path in the
-                    // extension (file-change watcher, remove-all-cells, input-block protection) uses
-                    // replaceCells, which reports the displaced cells in removedCells.
+                    // Reload/replace paths (file-change watcher, remove-all-cells, input-block protection) all
+                    // go through replaceCells, so a non-empty removedCells means this is not a user insertion.
                     if (change.removedCells.length > 0) {
                         continue;
                     }
 
                     for (const cell of change.addedCells) {
-                        // Typed Deepnote blocks stamp their pocket type on insert and are already
-                        // counted by DeepnoteNotebookCommandListener; only plain cells are missing.
+                        // Typed Deepnote blocks stamp a pocket on insert and are already counted by
+                        // DeepnoteNotebookCommandListener.
                         if (cell.metadata?.__deepnotePocket?.type) {
                             continue;
                         }
@@ -72,13 +70,12 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
                 const properties: { cellType: 'sql' | 'markdown' | 'code'; integrationType?: string } = { cellType };
 
                 if (cellType === 'sql') {
-                    // Read the authoritative top-level key only; the status-bar switch updates only this
-                    // key (the __deepnotePocket copy can go stale after an in-session integration switch).
+                    // The status-bar switch updates only this key, so the __deepnotePocket copy can go stale.
                     const integrationId = e.cell.metadata?.sql_integration_id;
 
                     if (integrationId === DATAFRAME_SQL_INTEGRATION_ID) {
-                        // The built-in DataFrame SQL integration is a pseudo-id never present in
-                        // project.integrations; map it the same way switch_sql_integration does.
+                        // A pseudo-id never present in project.integrations; 'duckdb' is what
+                        // switch_sql_integration reports for it.
                         properties.integrationType = 'duckdb';
                     } else if (integrationId) {
                         const projectId = e.cell.notebook.metadata?.deepnoteProjectId;

@@ -82,8 +82,7 @@ suite('DeepnoteCellExecutionAnalytics', () => {
         (
             [
                 {
-                    // Typed blocks stamp a pocket and are already counted by
-                    // DeepnoteNotebookCommandListener; the built-in "+ Code"/"+ Markdown" don't.
+                    // Typed blocks are already counted by DeepnoteNotebookCommandListener.
                     name: 'counts the untyped cells of an insertion, by kind',
                     added: [
                         addedCell(NotebookCellKind.Code, 'sql'),
@@ -94,8 +93,7 @@ suite('DeepnoteCellExecutionAnalytics', () => {
                     expected: ['code', 'markdown']
                 },
                 {
-                    // Every replace path (file-change watcher, remove-all-cells, input-block
-                    // protection) rebuilds cells without a pocket, so removedCells is the only signal.
+                    // Reload/replace paths rebuild cells without a pocket, so removedCells is the only signal.
                     name: 'a replace is not an insertion',
                     added: [addedCell(NotebookCellKind.Code), addedCell(NotebookCellKind.Markup)],
                     removed: [addedCell(NotebookCellKind.Code), addedCell(NotebookCellKind.Markup)],

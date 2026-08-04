@@ -655,9 +655,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Show the configuration form for an integration. Tracking lives here rather than in the webview
-     * `configure` handler so the SQL status bar's "Configure current integration" entry point, which
-     * opens the form directly via `show()`, is counted too.
+     * Tracked here rather than in the webview `configure` handler so the SQL status bar's
+     * "Configure current integration", which opens the form directly via `show()`, is counted too.
      */
     private async showConfigurationForm(integrationId: string): Promise<void> {
         const integration = this.integrations.get(integrationId);
@@ -722,8 +721,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            // The credential save above is the operation being tracked; a skipped/failed
-            // project-YAML sync must not report the whole operation as a failure.
+            // The credential save above is the tracked operation; a skipped project-YAML sync is not a failure.
             return true;
         } catch (error) {
             logger.error('Failed to save integration configuration', error);
@@ -768,8 +766,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            // The credential reset above is the operation being tracked; a skipped/failed
-            // project-YAML sync must not report the whole operation as a failure.
+            // The credential reset above is the tracked operation; a skipped project-YAML sync is not a failure.
             return true;
         } catch (error) {
             logger.error('Failed to reset integration configuration', error);
@@ -809,8 +806,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            // The credential delete above is the operation being tracked; a skipped/failed
-            // project-YAML sync must not report the whole operation as a failure.
+            // The credential delete above is the tracked operation; a skipped project-YAML sync is not a failure.
             return true;
         } catch (error) {
             logger.error('Failed to delete integration', error);

@@ -24,8 +24,6 @@ const POSTHOG_SHUTDOWN_TIMEOUT = 5000;
 export class TelemetryService implements ITelemetryService, IExtensionSyncActivationService {
     private client: PostHog | null;
 
-    // Attached to every event so metrics can be segmented by build channel, extension/VS Code
-    // version, platform, and session.
     private readonly commonProperties: Record<string, string | number | boolean>;
 
     private readonly userId: string;

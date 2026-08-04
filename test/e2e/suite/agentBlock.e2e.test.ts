@@ -151,49 +151,27 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
         await screenshot('kernel-connected');
     });
 
-    // Per attempt, not per suite: `.mocharc.js` sets `retries: 1` and `before`/`after` do not run
-    // between attempts, so a server started once would still hold the port when the retry starts —
-    // and `startMockOpenAiServer`'s pre-flight check would reject it as a leftover, failing the retry
-    // for a different reason than the original and losing the real signal.
-    //
-    // Leg 2 and leg 3 are reachable only via what the extension sends back, so the script itself
-    // asserts the round-trip: leg 2 needs the kernel's real stdout, leg 3 the markdown tool's reply.
-    beforeEach(async function () {
-        mockServer = await startMockOpenAiServer([
-            {
-                match: { hasToolResult: false },
-                response: {
-                    toolCall: {
-                        arguments: JSON.stringify({ code: GENERATED_PYTHON }),
-                        id: 'call_e2e_code',
-                        name: CODE_TOOL_NAME
-                    }
-                }
-            },
-            {
-                match: { toolResultContains: PYTHON_OUTPUT_MARKER },
-                response: {
-                    toolCall: {
-                        arguments: JSON.stringify({ content: EPHEMERAL_MARKDOWN_TEXT }),
-                        id: 'call_e2e_markdown',
-                        name: MARKDOWN_TOOL_NAME
-                    }
-                }
-            },
-            {
-                match: { toolResultContains: MARKDOWN_BLOCK_ADDED_TEXT },
-                response: { content: FINAL_AGENT_TEXT }
-            }
-        ]);
-    });
-
-    afterEach(async function () {
+    /**
+     * Releases the server the running test started, if any.
+     *
+     * Runs on both sides of the test rather than only after it. `.mocharc.js` sets `retries: 1` and
+     * `before`/`after` do not run between attempts, so a server surviving a failed attempt would still
+     * hold the port when the retry starts — and `startMockOpenAiServer`'s pre-flight check would then
+     * reject it as a leftover, failing the retry for a different reason than the original and losing
+     * the real signal. `afterEach` normally prevents that; `beforeEach` covers the case where it was
+     * itself interrupted.
+     */
+    async function releaseMockServer(): Promise<void> {
         await mockServer?.stop().catch((error) => {
             console.warn('[agent-block] stop the mock OpenAI server:', error);
         });
-        // Cleared so a failed start cannot leave the next attempt stopping a dead handle.
+        // Cleared so a later release cannot stop an already-dead handle.
         mockServer = undefined;
-    });
+    }
+
+    beforeEach(releaseMockServer);
+
+    afterEach(releaseMockServer);
 
     after(async function () {
         // Filesystem cleanup goes FIRST. The UI steps below can each stall for minutes — this is the
@@ -238,6 +216,37 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
     // for an unrelated reason, losing the original signal. Only reachable on an already-failing test,
     // so it costs debuggability rather than correctness.
     it('executes the code block the agent generates, then inserts its markdown block', async function () {
+        // Scripted here because the conversation is what a given test is about — a different test
+        // scripts different legs. Leg 2 and leg 3 are reachable only via what the extension sends
+        // back, so the script itself asserts the round-trip: leg 2 needs the kernel's real stdout,
+        // leg 3 the markdown tool's reply.
+        mockServer = await startMockOpenAiServer([
+            {
+                match: { hasToolResult: false },
+                response: {
+                    toolCall: {
+                        arguments: JSON.stringify({ code: GENERATED_PYTHON }),
+                        id: 'call_e2e_code',
+                        name: CODE_TOOL_NAME
+                    }
+                }
+            },
+            {
+                match: { toolResultContains: PYTHON_OUTPUT_MARKER },
+                response: {
+                    toolCall: {
+                        arguments: JSON.stringify({ content: EPHEMERAL_MARKDOWN_TEXT }),
+                        id: 'call_e2e_markdown',
+                        name: MARKDOWN_TOOL_NAME
+                    }
+                }
+            },
+            {
+                match: { toolResultContains: MARKDOWN_BLOCK_ADDED_TEXT },
+                response: { content: FINAL_AGENT_TEXT }
+            }
+        ]);
+
         // Clears the "OpenAI API key has been saved." and "switched successfully" toasts, which would
         // otherwise intercept the toolbar click.
         await dismissAllNotifications();

@@ -91,7 +91,7 @@ import { RemoteKernelReconnectBusyIndicator } from './remoteKernelReconnectBusyI
 import { IConnectionDisplayData, IConnectionDisplayDataProvider, IVSCodeNotebookController } from './types';
 import { notebookPathToDeepnoteProjectFilePath } from '../../platform/deepnote/deepnoteProjectUtils';
 import { DEEPNOTE_NOTEBOOK_TYPE, IDeepnoteKernelAutoSelector } from '../../kernels/deepnote/types';
-import { executeAgentCell } from '../deepnote/agentCellExecutionHandler';
+import { executeAgentCell, removeEphemeralCellsForAgentBlocks } from '../deepnote/agentCellExecutionHandler';
 import { isAgentCell } from '../deepnote/dataConversionUtils';
 
 /**
@@ -626,17 +626,19 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         if (!this.cellQueue.has(doc)) {
             return;
         }
-        const allCells = this.cellQueue.get(doc) || [];
+        const queuedCells = this.cellQueue.get(doc) || [];
         // Cleared before any await so the re-entrant execute request an agent cell issues for its
         // generated code starts from an empty queue.
         this.cellQueue.delete(doc);
+
+        const cellsToExecute = await removeEphemeralCellsForAgentBlocks(doc, queuedCells);
 
         // Walk in document order rather than running every agent cell first: an agent executes the
         // code it generates against the kernel immediately, so it must not overtake the cells above
         // it that set up the state it reads.
         let pendingKernelCells: NotebookCell[] = [];
 
-        for (const cell of allCells) {
+        for (const cell of cellsToExecute) {
             if (!isAgentCell(cell)) {
                 pendingKernelCells.push(cell);
                 continue;
@@ -657,9 +659,9 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         // Creating these execution objects marks the cell as queued for execution (vscode will update cell UI).
         type CellExec = { cell: NotebookCell; exec: NotebookCellExecution };
 
-        // An agent run deletes the ephemeral cells it produced last time, and those are ordinary code
-        // cells that Run All queues. createNotebookCellExecution throws for a cell that has since been
-        // removed, which would abort the rest of the batch.
+        // `pendingKernelCells` holds NotebookCell references captured earlier in the batch; the document
+        // may have changed meanwhile (user delete, overlapping run that calls removeEphemeralCellsForAgentBlocks,
+        // etc.). Stale handles report index -1; createNotebookCellExecution throws and would abort the batch.
         const kernelCells = cells.filter((cell) => cell.index >= 0);
 
         if (kernelCells.length === 0) {

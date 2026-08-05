@@ -12,6 +12,7 @@ import {
     NotebookCellOutput,
     NotebookCellOutputItem,
     NotebookController,
+    NotebookDocument,
     SecretStorage,
     SecretStorageChangeEvent,
     Uri,
@@ -27,7 +28,12 @@ import { NotebookCellExecutionState, notebookCellExecutions } from '../../platfo
 import { dispose } from '../../platform/common/utils/lifecycle';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 import { ServiceContainer } from '../../platform/ioc/container';
-import { describeExecutionOutputs, executeAgentCell, executeEphemeralCell } from './agentCellExecutionHandler';
+import {
+    describeExecutionOutputs,
+    executeAgentCell,
+    executeEphemeralCell,
+    removeEphemeralCellsForAgentBlocks
+} from './agentCellExecutionHandler';
 import { IDeepnoteNotebookManager } from '../types';
 import { createDeepnoteFile, createDeepnoteProject, createMockCell, createMockNotebook } from './deepnoteTestHelpers';
 
@@ -54,6 +60,51 @@ function stubSecretStorage(secretStorage: Map<string, string>): ServiceContainer
     });
 
     return serviceContainer;
+}
+
+/**
+ * Makes `workspace.applyEdit` apply the notebook edits it is given to `cells`, so the code under test
+ * observes its own inserts and deletes.
+ *
+ * The mocked `WorkspaceEdit.set` discards the edits it is given, so record them off the prototype
+ * rather than reading them back off the edit object.
+ *
+ * Returns the number of edits applied so far — the shared `workspace` mock is never reset between
+ * tests, so its own call counts are useless here.
+ */
+function applyNotebookEditsTo(cells: NotebookCell[], notebook: NotebookDocument) {
+    type RecordedEdit = { range: { start: number; end: number }; newCells: NotebookCellData[] };
+    let recordedEdits: RecordedEdit[] = [];
+    let appliedEdits = 0;
+
+    sinon.stub(WorkspaceEdit.prototype, 'set').callsFake((_uri, edits) => {
+        recordedEdits = edits as unknown as RecordedEdit[];
+    });
+
+    when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
+        appliedEdits++;
+
+        for (const notebookEdit of recordedEdits) {
+            const { start, end } = notebookEdit.range;
+            const inserted = notebookEdit.newCells.map((cellData) => {
+                const created = createMockCell({
+                    text: cellData.value,
+                    metadata: cellData.metadata
+                });
+                (created as { notebook: NotebookDocument }).notebook = notebook;
+
+                return created;
+            });
+
+            cells.splice(start, end - start, ...inserted);
+        }
+        cells.forEach((cell, index) => ((cell as { index: number }).index = index));
+        recordedEdits = [];
+
+        return Promise.resolve(true);
+    });
+
+    return { appliedEdits: () => appliedEdits };
 }
 
 suite('AgentCellExecutionHandler', () => {
@@ -164,9 +215,6 @@ suite('AgentCellExecutionHandler', () => {
         /**
          * Builds an agent cell inside a notebook whose cell list the test can mutate, and applies
          * insert/delete notebook edits to that list so the handler observes its own mutations.
-         *
-         * The mocked `WorkspaceEdit.set` discards the edits it is given, so record them off the
-         * prototype rather than reading them back off the edit object.
          */
         function createAgentCellInMutableNotebook(cells: NotebookCell[] = [], agentBlockId = 'agent-block-1') {
             const notebook = createMockNotebook({ cells });
@@ -179,33 +227,7 @@ suite('AgentCellExecutionHandler', () => {
             (agentCell as { index: number }).index = 0;
             cells.unshift(agentCell);
 
-            type RecordedEdit = { range: { start: number; end: number }; newCells: NotebookCellData[] };
-            let recordedEdits: RecordedEdit[] = [];
-
-            sinon.stub(WorkspaceEdit.prototype, 'set').callsFake((_uri, edits) => {
-                recordedEdits = edits as unknown as RecordedEdit[];
-            });
-
-            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
-                for (const notebookEdit of recordedEdits) {
-                    const { start, end } = notebookEdit.range;
-                    const inserted = notebookEdit.newCells.map((cellData) => {
-                        const created = createMockCell({
-                            text: cellData.value,
-                            metadata: cellData.metadata
-                        });
-                        (created as { notebook: typeof notebook }).notebook = notebook;
-
-                        return created;
-                    });
-
-                    cells.splice(start, end - start, ...inserted);
-                }
-                cells.forEach((cell, index) => ((cell as { index: number }).index = index));
-                recordedEdits = [];
-
-                return Promise.resolve(true);
-            });
+            applyNotebookEditsTo(cells, notebook);
 
             return { agentCell, cells, notebook };
         }
@@ -377,12 +399,10 @@ suite('AgentCellExecutionHandler', () => {
             expect(text).to.include('OpenAI API key is not set');
         });
 
-        // The key prompt is the last fallible step before the run starts, so it has to come before
-        // the cleanup that throws away the previous run's generated cells.
-        test('keeps previous ephemeral cells when the API key prompt is cancelled', async () => {
-            secretStorage.clear();
-            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
-
+        // Clearing the previous run belongs to the caller. Running against a dirty notebook fails
+        // silently — the agent gets its own old output as context and appends a second copy below it
+        // — so the precondition is checked rather than assumed.
+        test('refuses to run rather than clearing the previous run itself', async () => {
             const previousResult = createMockCell({
                 text: 'print("previous run")',
                 metadata: { is_ephemeral: true, agent_source_block_id: 'agent-block-1' },
@@ -392,8 +412,13 @@ suite('AgentCellExecutionHandler', () => {
 
             await executeAgentCell(agentCell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
+            expect(executeAgentBlockStub.called).to.be.false;
             expect(mockExecution.end.firstCall.args[0]).to.be.false;
             expect(cells).to.include(previousResult);
+
+            const [outputs] = mockExecution.appendOutput.firstCall.args as [NotebookCellOutput[]];
+            const text = Buffer.from(outputs[0].items[0].data).toString('utf-8');
+            expect(text).to.include('previous run');
         });
 
         test('inserts a markdown cell after the agent cell with ephemeral metadata', async () => {
@@ -450,46 +475,6 @@ suite('AgentCellExecutionHandler', () => {
             verify(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).never();
         });
 
-        test('removes only the ephemeral cells belonging to this agent', async () => {
-            const ownResult = createMockCell({
-                text: 'own',
-                metadata: { is_ephemeral: true, agent_source_block_id: 'agent-block-1' },
-                index: 1
-            });
-            const otherAgentResult = createMockCell({
-                text: 'other agent',
-                metadata: { is_ephemeral: true, agent_source_block_id: 'agent-block-2' },
-                index: 2
-            });
-            const userCell = createMockCell({ text: 'user code', metadata: {}, index: 3 });
-
-            const { agentCell, cells } = createAgentCellInMutableNotebook([ownResult, otherAgentResult, userCell]);
-
-            await executeAgentCell(agentCell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
-
-            expect(cells).to.not.include(ownResult);
-            expect(cells).to.include(otherAgentResult);
-            expect(cells).to.include(userCell);
-        });
-
-        // The notebook context is read off the live document, and Run All keeps stale ephemeral cells
-        // out of the kernel batch only by their index going negative on deletion.
-        test('fails the run without calling the agent when the cleanup edit is rejected', async () => {
-            const previousResult = createMockCell({
-                text: 'print("previous run")',
-                metadata: { is_ephemeral: true, agent_source_block_id: 'agent-block-1' },
-                index: 1
-            });
-            const { agentCell } = createAgentCellInMutableNotebook([previousResult]);
-
-            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(false));
-
-            await executeAgentCell(agentCell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
-
-            expect(executeAgentBlockStub.called).to.be.false;
-            expect(mockExecution.end.firstCall.args[0]).to.be.false;
-        });
-
         test('passes project MCP servers and integrations to the agent', async () => {
             const integrations = [{ id: 'warehouse', name: 'Warehouse', type: 'postgres' }];
             const mcpServers = [{ name: 'files', command: 'mcp-files', args: [] }];
@@ -513,6 +498,108 @@ suite('AgentCellExecutionHandler', () => {
             const context = executeAgentBlockStub.firstCall.args[1] as AgentBlockContext;
             expect(context.mcpServers).to.deep.equal(mcpServers);
             expect(context.integrations).to.deep.equal(integrations);
+        });
+    });
+
+    suite('removeEphemeralCellsForAgentBatch', () => {
+        teardown(() => {
+            sinon.restore();
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(true));
+        });
+
+        function createAgentCell(agentBlockId: string) {
+            return createMockCell({
+                metadata: { __deepnotePocket: { type: 'agent' }, id: agentBlockId },
+                text: 'Test prompt'
+            });
+        }
+
+        function createEphemeralCell(agentBlockId: string, text: string) {
+            return createMockCell({
+                metadata: { is_ephemeral: true, agent_source_block_id: agentBlockId },
+                text
+            });
+        }
+
+        /** Wires the cells into a notebook whose list the applied edits actually mutate. */
+        function createMutableNotebook(cells: NotebookCell[]) {
+            const notebook = createMockNotebook({ cells });
+
+            cells.forEach((cell, index) => {
+                (cell as { notebook: NotebookDocument }).notebook = notebook;
+                (cell as { index: number }).index = index;
+            });
+
+            return { notebook, ...applyNotebookEditsTo(cells, notebook) };
+        }
+
+        test('drops the previous run from the batch and deletes it from the notebook', async () => {
+            const agentCell = createAgentCell('agent-block-1');
+            const previousResult = createEphemeralCell('agent-block-1', 'print("previous run")');
+            const cells = [agentCell, previousResult];
+            const { notebook } = createMutableNotebook(cells);
+
+            const batch = await removeEphemeralCellsForAgentBlocks(notebook, [...cells]);
+
+            expect(batch).to.deep.equal([agentCell]);
+            expect(cells).to.deep.equal([agentCell]);
+        });
+
+        test('keeps another agent and ordinary cells', async () => {
+            const agentCell = createAgentCell('agent-block-1');
+            const ownResult = createEphemeralCell('agent-block-1', 'own');
+            const otherAgentResult = createEphemeralCell('agent-block-2', 'other agent');
+            const userCell = createMockCell({ text: 'user code', metadata: {} });
+            const cells = [agentCell, ownResult, otherAgentResult, userCell];
+            const { notebook } = createMutableNotebook(cells);
+
+            const batch = await removeEphemeralCellsForAgentBlocks(notebook, [...cells]);
+
+            expect(batch).to.deep.equal([agentCell, otherAgentResult, userCell]);
+            expect(cells).to.deep.equal([agentCell, otherAgentResult, userCell]);
+        });
+
+        // An agent runs the code cell it just generated through `notebook.cell.execute`, which arrives
+        // here as a batch of that cell alone. Dropping it would hang the agent until its timeout.
+        test('leaves an ephemeral cell whose agent is not in the batch', async () => {
+            const agentCell = createAgentCell('agent-block-1');
+            const generatedCell = createEphemeralCell('agent-block-1', 'print("just generated")');
+            const cells = [agentCell, generatedCell];
+            const { notebook, appliedEdits } = createMutableNotebook(cells);
+
+            const batch = await removeEphemeralCellsForAgentBlocks(notebook, [generatedCell]);
+
+            expect(batch).to.deep.equal([generatedCell]);
+            expect(cells).to.deep.equal([agentCell, generatedCell]);
+            expect(appliedEdits()).to.equal(0);
+        });
+
+        test('applies no edit when the batch has no agent cell', async () => {
+            const userCell = createMockCell({ text: 'user code', metadata: {} });
+            const cells = [userCell];
+            const { notebook, appliedEdits } = createMutableNotebook(cells);
+
+            const batch = await removeEphemeralCellsForAgentBlocks(notebook, [...cells]);
+
+            expect(batch).to.deep.equal([userCell]);
+            expect(appliedEdits()).to.equal(0);
+        });
+
+        // The agent cells re-check the notebook and report it on the cell, so a rejected edit must not
+        // hold back the batch's ordinary code cells.
+        test('still drops the previous run from the batch when the edit is rejected', async () => {
+            const agentCell = createAgentCell('agent-block-1');
+            const previousResult = createEphemeralCell('agent-block-1', 'print("previous run")');
+            const userCell = createMockCell({ text: 'user code', metadata: {} });
+            const cells = [agentCell, previousResult, userCell];
+            const { notebook } = createMutableNotebook(cells);
+
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(false));
+
+            const batch = await removeEphemeralCellsForAgentBlocks(notebook, [...cells]);
+
+            expect(batch).to.deep.equal([agentCell, userCell]);
+            expect(cells).to.deep.equal([agentCell, previousResult, userCell]);
         });
     });
 

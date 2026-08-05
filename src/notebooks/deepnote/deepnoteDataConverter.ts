@@ -1,7 +1,7 @@
 import { isExecutableBlock, type DeepnoteBlock } from '@deepnote/blocks';
 import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
 
-import { generateBlockId, generateSortingKey } from './dataConversionUtils';
+import { generateBlockId, generateSortingKey, getBlockId } from './dataConversionUtils';
 import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 import { ConverterRegistry } from './converters/converterRegistry';
 import { BlockConverter } from './converters/blockConverter';
@@ -439,7 +439,7 @@ export class DeepnoteDataConverter {
 
     private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
         const meta = cell.metadata as Record<string, unknown> | undefined;
-        const preservedId = (meta?.__deepnoteBlockId ?? meta?.id ?? meta?.deepnoteBlockId) as string | undefined;
+        const preservedId = getBlockId(cell);
         const preservedSortingKey = (meta?.sortingKey ?? meta?.deepnoteSortingKey) as string | undefined;
         const preservedBlockGroup = meta?.blockGroup as string | undefined;
 

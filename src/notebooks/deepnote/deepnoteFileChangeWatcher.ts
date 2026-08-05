@@ -18,6 +18,7 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
+import { getBlockId } from './dataConversionUtils';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
@@ -279,14 +280,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         const liveCells = notebook.getCells();
         const liveOutputsByBlockId = new Map<string, readonly NotebookCellOutput[]>();
         for (const liveCell of liveCells) {
-            const blockId = this.getBlockIdFromMetadata(liveCell.metadata);
+            const blockId = getBlockId(liveCell);
             if (blockId && liveCell.outputs.length > 0) {
                 liveOutputsByBlockId.set(blockId, liveCell.outputs);
             }
         }
 
         for (const cell of newCells) {
-            const blockId = this.getBlockIdFromMetadata(cell.metadata);
+            const blockId = getBlockId(cell);
             if (blockId && (!cell.outputs || cell.outputs.length === 0)) {
                 const liveOutputs = liveOutputsByBlockId.get(blockId);
                 if (liveOutputs) {
@@ -300,7 +301,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         edits.push(NotebookEdit.replaceCells(new NotebookRange(0, notebook.cellCount), newCells));
 
         for (let i = 0; i < newCells.length; i++) {
-            const blockId = this.getBlockIdFromMetadata(newCells[i].metadata);
+            const blockId = getBlockId(newCells[i]);
             if (blockId) {
                 edits.push(
                     NotebookEdit.updateCellMetadata(i, {
@@ -376,7 +377,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         for (let i = 0; i < liveCells.length; i++) {
             try {
                 const cell = liveCells[i];
-                let blockId = this.getBlockIdFromMetadata(cell.metadata);
+                let blockId = getBlockId(cell);
                 let blockIdFromFallback = false;
 
                 // Fallback to original project blocks when metadata was lost
@@ -500,10 +501,6 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         logger.info(`[FileChangeWatcher] Updated notebook outputs from external snapshot: ${notebook.uri.path}`);
-    }
-
-    private getBlockIdFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
-        return (metadata?.__deepnoteBlockId ?? metadata?.id) as string | undefined;
     }
 
     private handleFileChange(uri: Uri): void {

@@ -30,7 +30,13 @@ import { ServiceContainer } from '../../platform/ioc/container';
 import { logger } from '../../platform/logging';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { IDeepnoteNotebookManager } from '../types';
-import { generateBlockId, generateSortingKey, isEphemeralCell } from './dataConversionUtils';
+import {
+    generateBlockId,
+    generateSortingKey,
+    getBlockId,
+    getEphemeralCellAgentSourceBlockId,
+    isAgentCell
+} from './dataConversionUtils';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { getOrPromptOpenAiApiKey } from './deepnoteSecretStore';
 
@@ -49,7 +55,7 @@ function getProjectAgentContext(notebook: NotebookDocument): Pick<AgentBlockCont
     const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
 
     if (!projectId || !notebookId) {
-        return { mcpServers: [] };
+        return { mcpServers: [], integrations: [] };
     }
 
     const manager = ServiceContainer.instance.tryGet<IDeepnoteNotebookManager>(IDeepnoteNotebookManager);
@@ -158,6 +164,14 @@ export interface ExecuteAgentCellOptions {
     executeAgentBlockFn?: typeof executeAgentBlock;
 }
 
+/**
+ * Runs an agent block, streaming its progress into the cell's output and inserting the cells it
+ * generates below itself.
+ *
+ * Requires the cell's previous run to have been cleared first — call
+ * `removeEphemeralCellsForAgentBatch` on the batch. Never rejects: failures, including an uncleared
+ * previous run, are reported on the cell as stderr output and end the execution unsuccessfully.
+ */
 export async function executeAgentCell(
     cell: NotebookCell,
     controller: NotebookController,
@@ -198,16 +212,26 @@ export async function executeAgentCell(
             throw new Error('Cell is not an agent cell');
         }
 
-        // Acquire the key before the destructive cleanup below: it prompts, and throws when the user
-        // dismisses the prompt, which would otherwise leave the previous run's cells already deleted.
-        const openAiToken = await getOrPromptOpenAiApiKey();
+        // Verify rather than assume the caller cleared them: nothing enforces the precondition across
+        // the three call sites, and running dirty fails silently — the agent would be handed its own
+        // previous output as context, and insertEphemeralCell appends below the stale cells rather
+        // than replacing them, so every run would leave another copy behind.
+        const staleCellCount = cell.notebook
+            .getCells()
+            .filter((c) => getEphemeralCellAgentSourceBlockId(c) === agentBlock.id).length;
 
-        await removeEphemeralCellsForAgent(cell.notebook, agentBlock.id);
+        if (staleCellCount > 0) {
+            throw new Error(
+                `Agent block ${agentBlock.id} still has ${staleCellCount} generated cell(s) from its previous run`
+            );
+        }
+
+        const openAiToken = await getOrPromptOpenAiApiKey();
 
         let lastAgentEventType: AgentStreamEvent['type'] | undefined;
 
-        // Must run after the removal — serializeNotebookContextFromBlocks does no ephemeral
-        // filtering, so the agent would otherwise be handed its own previous scratch cells.
+        // serializeNotebookContextFromBlocks does no ephemeral filtering, so this is safe only
+        // because of the precondition checked above.
         const notebookContext = serializeNotebookContext({
             cells: cell.notebook.getCells().filter((c) => c.index !== cell.index),
             notebookName: (cell.notebook.metadata?.deepnoteNotebookName as string | undefined) ?? ''
@@ -317,8 +341,7 @@ function getInsertIndexAfterAgentCell(
     let index = agentCellIndex + 1;
 
     while (index < notebook.cellCount) {
-        const cell = notebook.cellAt(index);
-        if (isEphemeralCell(cell) && cell.metadata?.agent_source_block_id === agentBlockId) {
+        if (getEphemeralCellAgentSourceBlockId(notebook.cellAt(index)) === agentBlockId) {
             index++;
         } else {
             break;
@@ -366,9 +389,7 @@ async function insertEphemeralCell(
         throw new Error(`Failed to insert ephemeral ${blockType} cell for agent block ${agentBlockId}`);
     }
 
-    // The converter mirrors the block id into `__deepnoteBlockId` precisely because VS Code may
-    // rewrite `id`, so match on that.
-    const insertedCell = notebook.getCells().find((c) => c.metadata?.__deepnoteBlockId === block.id);
+    const insertedCell = notebook.getCells().find((c) => getBlockId(c) === block.id);
 
     if (!insertedCell) {
         throw new Error(`Inserted ephemeral ${blockType} cell ${block.id} not found in notebook`);
@@ -454,30 +475,64 @@ export async function executeEphemeralCell(
     }
 }
 
-async function removeEphemeralCellsForAgent(notebook: NotebookDocument, agentBlockId: string): Promise<void> {
+/**
+ * Deletes the scratch cells the agent cells in `cells` generated on their previous run, and returns
+ * the batch without them. Call this before executing a batch of cells; `executeAgentCell` requires it.
+ *
+ * Ephemeral cells are agent-owned: the agent regenerates them on every run and the serializer never
+ * persists them. Left in the batch they would run the previous run's generated code against the
+ * kernel — so they are dropped up front, whether or not the agent that owns them gets far enough to
+ * replace them.
+ *
+ * Scoped to the agents present in the batch, because two callers legitimately run an ephemeral cell
+ * on its own: the user selecting one, and the agent executing the code cell it just generated via
+ * `notebook.cell.execute`. Neither carries its agent, so neither is touched.
+ *
+ * A rejected edit is logged rather than thrown: the agent cells re-check the notebook themselves and
+ * report it on the cell, and a failed edit is no reason to hold back the batch's ordinary code cells.
+ */
+export async function removeEphemeralCellsForAgentBlocks(
+    notebook: NotebookDocument,
+    cells: NotebookCell[]
+): Promise<NotebookCell[]> {
+    const agentBlockIds = new Set(
+        cells
+            .filter(isAgentCell)
+            .map(getBlockId)
+            .filter((id): id is string => typeof id === 'string')
+    );
+
+    if (agentBlockIds.size === 0) {
+        return cells;
+    }
+
+    const isOwnedScratch = (cell: NotebookCell) => {
+        const owner = getEphemeralCellAgentSourceBlockId(cell);
+
+        return owner !== undefined && agentBlockIds.has(owner);
+    };
+
+    const remainingCells = cells.filter((cell) => !isOwnedScratch(cell));
     const deletions: NotebookEdit[] = [];
 
     for (let i = notebook.cellCount - 1; i >= 0; i--) {
-        const cell = notebook.cellAt(i);
-
-        if (isEphemeralCell(cell) && cell.metadata?.agent_source_block_id === agentBlockId) {
+        if (isOwnedScratch(notebook.cellAt(i))) {
             deletions.push(NotebookEdit.deleteCells(new NotebookRange(i, i + 1)));
         }
     }
 
     if (deletions.length === 0) {
-        return;
+        return remainingCells;
     }
 
     const edit = new WorkspaceEdit();
     edit.set(notebook.uri, deletions);
 
-    // Fatal rather than a warning: the notebook context the agent receives is read off the live
-    // document, and Run All keeps these cells out of its kernel batch only by their index going
-    // negative once they are deleted.
-    if (!(await workspace.applyEdit(edit))) {
-        throw new Error(`Failed to remove ephemeral cells for agent block ${agentBlockId}`);
+    if (await workspace.applyEdit(edit)) {
+        logger.info(`Removed ${deletions.length} ephemeral cell(s) for ${agentBlockIds.size} agent block(s)`);
+    } else {
+        logger.error(`Failed to remove ephemeral cells for agent blocks ${[...agentBlockIds].join(', ')}`);
     }
 
-    logger.info(`Removed ${deletions.length} ephemeral cell(s) for agent block ${agentBlockId}`);
+    return remainingCells;
 }

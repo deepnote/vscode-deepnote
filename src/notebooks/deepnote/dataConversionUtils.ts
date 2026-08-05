@@ -46,6 +46,32 @@ export function isEphemeralCell(cell: NotebookCell | NotebookCellData): boolean 
 }
 
 /**
+ * Returns the id of the block a cell is backed by, or undefined for a cell that has never been
+ * serialized.
+ *
+ * `__deepnoteBlockId` wins because VS Code may rewrite `id`, which is why the converter mirrors it.
+ * `deepnoteBlockId` is a third name the fallback-cell path writes; it is only ever set alongside the
+ * other two, so it resolves nothing new in practice and exists to tolerate metadata that has lost
+ * them. Losing an id here is worse than reading a redundant one: callers mint a fresh one, which
+ * reassigns the block on save.
+ */
+export function getBlockId(cell: NotebookCell | NotebookCellData): string | undefined {
+    return (
+        (cell.metadata?.__deepnoteBlockId as string | undefined) ||
+        (cell.metadata?.id as string | undefined) ||
+        (cell.metadata?.deepnoteBlockId as string | undefined)
+    );
+}
+
+/**
+ * Returns the id of the agent block that generated this ephemeral cell, or undefined if the cell
+ * isn't agent-generated scratch.
+ */
+export function getEphemeralCellAgentSourceBlockId(cell: NotebookCell): string | undefined {
+    return isEphemeralCell(cell) ? (cell.metadata?.agent_source_block_id as string | undefined) : undefined;
+}
+
+/**
  * Generate sorting key based on index (format: a0, a1, ..., a99, b0, b1, ...)
  */
 export function generateSortingKey(index: number): string {

@@ -57,8 +57,6 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
-import { executeAgentCell } from './agentCellExecutionHandler';
-import { isAgentCell } from './dataConversionUtils';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
@@ -1093,7 +1091,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         controller.supportsExecutionOrder = true;
         controller.supportedLanguages = ['python', 'sql', 'markdown', 'plaintext'];
 
-        // Execution handler that shows environment picker when user tries to run without an environment
+        // Turns a Run gesture into the environment picker and nothing else. Executing here means
+        // executing without a kernel: configuring the environment disposes this controller mid-run
+        // (see ensureKernelSelectedWithConfiguration), orphaning any execution created from it.
         controller.executeHandler = async (cells, doc) => {
             logger.info(
                 `Placeholder controller execute handler called for ${getDisplayPath(doc.uri)} with ${
@@ -1101,25 +1101,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 } cells`
             );
 
-            // Agent blocks can run arbitrary commands declared in the project file (MCP servers), so
-            // gate this path the same way VSCodeNotebookController gates its own execute handler.
+            // Setting up an environment runs a workspace-provided Python interpreter and installs into
+            // it, so gate this path the same way VSCodeNotebookController gates its own execute handler.
             if (!workspace.isTrusted) {
-                logger.info(`Workspace is not trusted, skipping execution for ${getDisplayPath(doc.uri)}`);
-
-                return;
-            }
-
-            const kernelCells = cells.filter((cell) => !isAgentCell(cell));
-
-            if (kernelCells.length === 0) {
-                // Nothing needs the kernel, so don't make the user configure an environment first.
-                for (const cell of cells) {
-                    try {
-                        await executeAgentCell(cell, controller);
-                    } catch (cellError) {
-                        logger.error(`Error executing agent cell ${cell.index}`, cellError);
-                    }
-                }
+                logger.info(`Workspace is not trusted, skipping environment setup for ${getDisplayPath(doc.uri)}`);
 
                 return;
             }
@@ -1142,45 +1127,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     return;
                 }
 
-                // Environment is now configured, execute the cells through the kernel
-                const docNotebookKey = getNotebookKey(doc.uri);
-                const realController = this.notebookControllers.get(docNotebookKey);
-
-                if (!realController) {
-                    logger.error(`No controller found after environment configuration for ${docNotebookKey}`);
-
-                    return;
-                }
-
-                logger.info(`Executing ${cells.length} cells after environment configuration`);
-
-                // Get or create a kernel for this notebook with the new connection
-                const kernel = this.kernelProvider.getOrCreate(doc, {
-                    metadata: realController.connection,
-                    controller: realController.controller,
-                    resourceUri: doc.uri
-                });
-
-                // Execute cells through the kernel
-                const kernelExecution = this.kernelProvider.getKernelExecution(kernel);
-
-                // Document order matters: an agent executes the code it generates immediately, so it
-                // must not overtake the cells above it that set up the state it reads.
-                for (const cell of cells) {
-                    try {
-                        if (isAgentCell(cell)) {
-                            // Configuring the environment disposed this placeholder and handed the
-                            // notebook to the real controller, which now owns its executions.
-                            await executeAgentCell(cell, realController.controller);
-                        } else {
-                            await kernelExecution.executeCell(cell);
-                        }
-                    } catch (cellError) {
-                        logger.error(`Error executing cell ${cell.index}`, cellError);
-                    }
-                }
-
-                logger.info(`Finished executing ${cells.length} cells`);
+                void window.showInformationMessage(l10n.t('Environment ready. Run the cells again to execute them.'));
             } catch (error) {
                 if (isCancellationError(error)) {
                     logger.info(`Environment setup cancelled for ${getDisplayPath(doc.uri)}`);

@@ -1036,80 +1036,70 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     });
 
     suite('Placeholder controller execution', () => {
-        function createExecutionStub() {
-            return {
-                start: sandbox.stub(),
-                end: sandbox.stub(),
-                clearOutput: sandbox.stub().resolves(),
-                replaceOutput: sandbox.stub().resolves(),
-                appendOutput: sandbox.stub().resolves(),
-                appendOutputItems: sandbox.stub().resolves()
-            };
-        }
-
-        // Configuring the environment disposes and deselects the placeholder, and VS Code throws for
-        // executions created on either a disposed or an unassociated controller.
-        test('runs agent cells on the real controller after configuring the environment', async () => {
-            const placeholderExecution = createExecutionStub();
+        function createPlaceholder() {
             const placeholder = {
                 supportsExecutionOrder: false,
                 supportedLanguages: [] as string[],
                 updateNotebookAffinity: sandbox.stub(),
                 dispose: sandbox.stub(),
-                createNotebookCellExecution: sandbox.stub().returns(placeholderExecution)
+                createNotebookCellExecution: sandbox.stub()
             } as unknown as NotebookController;
 
             when(
                 mockedVSCodeNamespaces.notebooks!.createNotebookController(anything(), anything(), anything())
             ).thenReturn(placeholder);
-            when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(true);
 
             const onDidCloseNotebookDocument = new EventEmitter<NotebookDocument>();
             when(mockedVSCodeNamespaces.workspace.onDidCloseNotebookDocument).thenReturn(
                 onDidCloseNotebookDocument.event
             );
 
-            const realExecution = createExecutionStub();
-            const realNotebookController = {
-                createNotebookCellExecution: sandbox.stub().returns(realExecution)
-            } as unknown as NotebookController;
-            const realController = mock<IVSCodeNotebookController>();
-            when(realController.controller).thenReturn(realNotebookController);
-
             const internals = selector as unknown as {
                 createPlaceholderController(notebook: NotebookDocument): NotebookController;
-                notebookControllers: Map<string, IVSCodeNotebookController>;
             };
 
             internals.createPlaceholderController(mockNotebook);
-            internals.notebookControllers.set(getNotebookKey(mockNotebook.uri), instance(realController));
 
-            sandbox.stub(selector, 'ensureEnvironmentConfiguredBeforeExecution').resolves(true);
+            return placeholder;
+        }
 
-            const kernelExecution = { executeCell: sandbox.stub().resolves() };
-            when(mockKernelProvider.getOrCreate(anything(), anything())).thenReturn(instance(mock<IKernel>()));
-            when(mockKernelProvider.getKernelExecution(anything())).thenReturn(
-                kernelExecution as unknown as ReturnType<IKernelProvider['getKernelExecution']>
-            );
+        const agentCell = {
+            index: 0,
+            metadata: { __deepnotePocket: { type: 'agent' } }
+        } as unknown as NotebookCell;
+        const codeCell = { index: 1, metadata: {} } as unknown as NotebookCell;
 
-            const agentCell = {
-                index: 0,
-                metadata: { __deepnotePocket: { type: 'agent' } }
-            } as unknown as NotebookCell;
-            const codeCell = { index: 1, metadata: {} } as unknown as NotebookCell;
+        // This controller has no kernel, and configuring one disposes it mid-run — so it prompts and
+        // stops, rather than executing anything itself or handing the batch on.
+        test('configures the environment and executes nothing', async () => {
+            when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(true);
+            const placeholder = createPlaceholder();
+            const ensureEnvironment = sandbox
+                .stub(selector, 'ensureEnvironmentConfiguredBeforeExecution')
+                .resolves(true);
 
             await placeholder.executeHandler!([agentCell, codeCell], mockNotebook, placeholder);
 
-            assert.isTrue(
-                (realNotebookController.createNotebookCellExecution as sinon.SinonStub).calledOnceWithExactly(
-                    agentCell
-                ),
-                'agent cell execution should be created on the real controller'
-            );
+            assert.isTrue(ensureEnvironment.calledOnce, 'should prompt for an environment');
             assert.isTrue(
                 (placeholder.createNotebookCellExecution as sinon.SinonStub).notCalled,
-                'no execution should be created on the disposed placeholder'
+                'placeholder must not create executions'
             );
+            verify(mockKernelProvider.getOrCreate(anything(), anything())).never();
+        });
+
+        // Agent blocks spawn MCP servers declared by the workspace file, and setting up an environment
+        // runs a workspace-provided interpreter.
+        test('does nothing at all in an untrusted workspace', async () => {
+            when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(false);
+            const placeholder = createPlaceholder();
+            const ensureEnvironment = sandbox
+                .stub(selector, 'ensureEnvironmentConfiguredBeforeExecution')
+                .resolves(true);
+
+            await placeholder.executeHandler!([agentCell, codeCell], mockNotebook, placeholder);
+
+            assert.isTrue(ensureEnvironment.notCalled, 'should not prompt in an untrusted workspace');
         });
     });
 });

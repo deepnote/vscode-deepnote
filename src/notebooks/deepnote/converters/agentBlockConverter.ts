@@ -15,7 +15,7 @@ import type { BlockConverter } from './blockConverter';
  */
 export class AgentBlockConverter implements BlockConverter {
     applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
-        block.content = cell.value || '';
+        block.content = cell.value;
     }
 
     canConvert(blockType: string): boolean {

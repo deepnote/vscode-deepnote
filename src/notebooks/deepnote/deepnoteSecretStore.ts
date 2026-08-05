@@ -87,8 +87,6 @@ export async function getOrPromptSecret(
     return value;
 }
 
-// OpenAI API key - specific wrappers
-
 const OPENAI_API_KEY = 'openAiApiKey';
 
 const OPENAI_PROMPT_OPTIONS: SecretPromptOptions = {

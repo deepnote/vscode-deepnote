@@ -24,12 +24,13 @@ import type { AgentBlockContext, AgentBlockResult } from '@deepnote/runtime-core
 
 import type { IDisposable } from '../../platform/common/types';
 import { IExtensionContext } from '../../platform/common/types';
-import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { dispose } from '../../platform/common/utils/lifecycle';
-import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 import { ServiceContainer } from '../../platform/ioc/container';
+import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 import {
     describeExecutionOutputs,
+    EPHEMERAL_CELL_EXECUTION_TIMEOUT_MS,
     executeAgentCell,
     executeEphemeralCell,
     removeEphemeralCellsForAgentBlocks
@@ -232,6 +233,12 @@ suite('AgentCellExecutionHandler', () => {
             return { agentCell, cells, notebook };
         }
 
+        function getStdoutChunkText(callIndex: number): string {
+            const item = mockExecution.appendOutputItems.getCall(callIndex).args[0] as NotebookCellOutputItem;
+
+            return Buffer.from(item.data).toString('utf-8');
+        }
+
         test('creates execution and starts it', async () => {
             const cell = createAgentCell('Analyze data');
 
@@ -297,14 +304,8 @@ suite('AgentCellExecutionHandler', () => {
 
             await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
-            const getChunkText = (callIndex: number): string => {
-                const item = mockExecution.appendOutputItems.getCall(callIndex).args[0] as NotebookCellOutputItem;
-
-                return Buffer.from(item.data).toString('utf-8');
-            };
-
-            expect(getChunkText(0)).to.equal('[Agent] Text:\nfirst');
-            expect(getChunkText(1)).to.equal(' second');
+            expect(getStdoutChunkText(0)).to.equal('[Agent] Text:\nfirst');
+            expect(getStdoutChunkText(1)).to.equal(' second');
         });
 
         test('separates different event types with blank lines', async () => {
@@ -319,13 +320,7 @@ suite('AgentCellExecutionHandler', () => {
 
             await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
-            const getChunkText = (callIndex: number): string => {
-                const item = mockExecution.appendOutputItems.getCall(callIndex).args[0] as NotebookCellOutputItem;
-
-                return Buffer.from(item.data).toString('utf-8');
-            };
-
-            const chunk2 = getChunkText(1);
+            const chunk2 = getStdoutChunkText(1);
             expect(chunk2).to.include('\n\n');
             expect(chunk2).to.include('[Agent] Tool called: search');
         });
@@ -501,7 +496,7 @@ suite('AgentCellExecutionHandler', () => {
         });
     });
 
-    suite('removeEphemeralCellsForAgentBatch', () => {
+    suite('removeEphemeralCellsForAgentBlocks', () => {
         teardown(() => {
             sinon.restore();
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(true));
@@ -680,7 +675,7 @@ suite('AgentCellExecutionHandler', () => {
                 );
 
                 const resultPromise = executeEphemeralCell(cell);
-                await clock.tickAsync(5 * 60 * 1000);
+                await clock.tickAsync(EPHEMERAL_CELL_EXECUTION_TIMEOUT_MS);
 
                 const result = await resultPromise;
 

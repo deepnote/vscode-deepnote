@@ -135,8 +135,6 @@ suite('Pocket', () => {
             assert.strictEqual((block as any).outputs, undefined);
         });
 
-        // VS Code may rewrite `id`, which is the whole reason the converter mirrors it into
-        // `__deepnoteBlockId`. Losing this preference silently reassigns block ids on every save.
         test('takes the id from the backup rather than a rewritten id', () => {
             const cell = new NotebookCellData(NotebookCellKind.Code, 'print("hello")', 'python');
 

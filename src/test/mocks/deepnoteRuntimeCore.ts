@@ -1,5 +1,5 @@
-import type { AgentBlockContext, ServerInfo, ServerOptions } from '@deepnote/runtime-core';
 import type { AgentBlock } from '@deepnote/blocks';
+import type { AgentBlockContext, ServerInfo, ServerOptions } from '@deepnote/runtime-core';
 import type { ChildProcess } from 'child_process';
 
 /**

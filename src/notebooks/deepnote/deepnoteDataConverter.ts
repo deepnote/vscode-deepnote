@@ -3,6 +3,7 @@ import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOut
 
 import { generateBlockId, generateSortingKey, getBlockId } from './dataConversionUtils';
 import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
+import { AgentBlockConverter } from './converters/agentBlockConverter';
 import { ConverterRegistry } from './converters/converterRegistry';
 import { BlockConverter } from './converters/blockConverter';
 import { CodeBlockConverter } from './converters/codeBlockConverter';
@@ -11,7 +12,6 @@ import { MarkdownBlockConverter } from './converters/markdownBlockConverter';
 import { VisualizationBlockConverter } from './converters/visualizationBlockConverter';
 import { compile as convertVegaLiteSpecToVega, ensureVegaLiteLoaded } from './vegaLiteWrapper';
 import { produce } from 'immer';
-import { AgentBlockConverter } from './converters/agentBlockConverter';
 import { SqlBlockConverter } from './converters/sqlBlockConverter';
 import { TextBlockConverter } from './converters/textBlockConverter';
 // @ts-ignore - types_unstable subpath requires moduleResolution: "node16" which mandates module: "node16" and .js extensions on all imports

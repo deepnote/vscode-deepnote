@@ -12,21 +12,12 @@ import {
 } from 'vscode';
 import { injectable } from 'inversify';
 
-import { isEphemeralCell } from './dataConversionUtils';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { isEphemeralCell } from './dataConversionUtils';
 
 const NOTEBOOK_CELL_SCHEME = 'vscode-notebook-cell';
 
-/**
- * Applies visual decorations (left border, background tint, reduced opacity) to
- * code cell editors that belong to ephemeral blocks (`is_ephemeral: true`).
- *
- * The left border is rendered via a `before` pseudo-element on each line,
- * which avoids overlapping or shifting the code text.
- *
- * Markup cells are handled separately by the markdown-it renderer plugin in
- * `src/renderers/client/markdown.ts`.
- */
+/** Code cell editor decorations for `is_ephemeral` blocks; markup uses `src/renderers/client/markdown.ts`. */
 @injectable()
 export class EphemeralCellDecorationProvider implements IExtensionSyncActivationService {
     private readonly disposables: Disposable[] = [];
@@ -104,23 +95,27 @@ export class EphemeralCellDecorationProvider implements IExtensionSyncActivation
 
     private updateDecorations(): void {
         for (const editor of window.visibleTextEditors) {
-            if (editor.document.uri.scheme !== NOTEBOOK_CELL_SCHEME) {
+            try {
+                if (editor.document.uri.scheme !== NOTEBOOK_CELL_SCHEME) {
+                    continue;
+                }
+
+                const cell = this.findCellForEditor(editor);
+                if (!cell || !isEphemeralCell(cell)) {
+                    editor.setDecorations(this.ephemeralDecorationType, []);
+                    continue;
+                }
+
+                const lineRanges: Range[] = [];
+                for (let i = 0; i < editor.document.lineCount; i++) {
+                    const line = editor.document.lineAt(i);
+                    lineRanges.push(line.range);
+                }
+
+                editor.setDecorations(this.ephemeralDecorationType, lineRanges);
+            } catch {
                 continue;
             }
-
-            const cell = this.findCellForEditor(editor);
-            if (!cell || !isEphemeralCell(cell)) {
-                editor.setDecorations(this.ephemeralDecorationType, []);
-                continue;
-            }
-
-            const lineRanges: Range[] = [];
-            for (let i = 0; i < editor.document.lineCount; i++) {
-                const line = editor.document.lineAt(i);
-                lineRanges.push(line.range);
-            }
-
-            editor.setDecorations(this.ephemeralDecorationType, lineRanges);
         }
     }
 }

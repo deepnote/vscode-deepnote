@@ -70,7 +70,7 @@ suite('DataConversionUtils', () => {
         });
     });
 
-    suite('getEphemeralCellOwner', () => {
+    suite('getEphemeralCellAgentSourceBlockId', () => {
         test('returns the agent block that generated the cell', () => {
             const cell = createMockCell({ metadata: { is_ephemeral: true, agent_source_block_id: 'agent-block-1' } });
 

@@ -627,15 +627,11 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
             return;
         }
         const queuedCells = this.cellQueue.get(doc) || [];
-        // Cleared before any await so the re-entrant execute request an agent cell issues for its
-        // generated code starts from an empty queue.
+        // Clear before await so agent-driven re-entrant runs start with an empty queue.
         this.cellQueue.delete(doc);
 
         const cellsToExecute = await removeEphemeralCellsForAgentBlocks(doc, queuedCells);
 
-        // Walk in document order rather than running every agent cell first: an agent executes the
-        // code it generates against the kernel immediately, so it must not overtake the cells above
-        // it that set up the state it reads.
         let pendingKernelCells: NotebookCell[] = [];
 
         for (const cell of cellsToExecute) {
@@ -659,9 +655,7 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         // Creating these execution objects marks the cell as queued for execution (vscode will update cell UI).
         type CellExec = { cell: NotebookCell; exec: NotebookCellExecution };
 
-        // `pendingKernelCells` holds NotebookCell references captured earlier in the batch; the document
-        // may have changed meanwhile (user delete, overlapping run that calls removeEphemeralCellsForAgentBlocks,
-        // etc.). Stale handles report index -1; createNotebookCellExecution throws and would abort the batch.
+        // Stale cell handles report index -1; createNotebookCellExecution would abort the batch.
         const kernelCells = cells.filter((cell) => cell.index >= 0);
 
         if (kernelCells.length === 0) {

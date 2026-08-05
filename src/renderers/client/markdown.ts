@@ -1,7 +1,6 @@
 import type { ActivationFunction } from 'vscode-notebook-renderer';
 
-// markdown-it ships no type declarations and is only a transitive dependency, so describe the
-// small surface this renderer touches rather than depending on its internals wholesale.
+// Minimal markdown-it surface (no package types; transitive dependency only).
 interface MarkdownItToken {
     content: string;
 }
@@ -87,8 +86,6 @@ export const activate: ActivationFunction = async (ctx) => {
     document.head.appendChild(template);
 
     const markdownRenderer = await ctx.getRenderer('vscode.markdown-it-renderer');
-    // RendererApi exposes extension hooks through an index signature, so extendMarkdownIt arrives
-    // as unknown and has to be narrowed before it can be called.
     const extendMarkdownIt = markdownRenderer?.extendMarkdownIt as ExtendMarkdownIt | undefined;
 
     if (typeof extendMarkdownIt === 'function') {

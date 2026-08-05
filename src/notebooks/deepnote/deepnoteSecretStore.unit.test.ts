@@ -1,8 +1,9 @@
-import { expect } from 'chai';
+import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
 import { EventEmitter, ExtensionMode, SecretStorage, SecretStorageChangeEvent } from 'vscode';
 
+import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 import { IExtensionContext } from '../../platform/common/types';
 import { ServiceContainer } from '../../platform/ioc/container';
 import {
@@ -17,7 +18,6 @@ import {
     setOpenAiApiKey,
     setSecret
 } from './deepnoteSecretStore';
-import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 
 suite('deepnoteSecretStore', () => {
     const secretStorage = new Map<string, string>();
@@ -61,13 +61,13 @@ suite('deepnoteSecretStore', () => {
 
             const value = await getSecret('customKey');
 
-            expect(value).to.equal('custom-value');
+            assert.strictEqual(value, 'custom-value');
         });
 
         test('returns undefined when not set', async () => {
             const value = await getSecret('customKey');
 
-            expect(value).to.be.undefined;
+            assert.isUndefined(value);
         });
 
         test('returns undefined when value is empty string', async () => {
@@ -75,7 +75,7 @@ suite('deepnoteSecretStore', () => {
 
             const value = await getSecret('customKey');
 
-            expect(value).to.be.undefined;
+            assert.isUndefined(value);
         });
     });
 
@@ -83,7 +83,7 @@ suite('deepnoteSecretStore', () => {
         test('stores value in secrets', async () => {
             await setSecret('customKey', 'custom-value');
 
-            expect(secretStorage.get('customKey')).to.equal('custom-value');
+            assert.strictEqual(secretStorage.get('customKey'), 'custom-value');
         });
     });
 
@@ -93,7 +93,7 @@ suite('deepnoteSecretStore', () => {
 
             await clearSecret('customKey');
 
-            expect(secretStorage.has('customKey')).to.be.false;
+            assert.isFalse(secretStorage.has('customKey'));
         });
     });
 
@@ -107,8 +107,8 @@ suite('deepnoteSecretStore', () => {
                 password: false
             });
 
-            expect(value).to.equal('user-input');
-            expect(secretStorage.get('customKey')).to.equal('user-input');
+            assert.strictEqual(value, 'user-input');
+            assert.strictEqual(secretStorage.get('customKey'), 'user-input');
         });
 
         test('returns undefined when user cancels', async () => {
@@ -116,7 +116,7 @@ suite('deepnoteSecretStore', () => {
 
             const value = await promptForSecret('customKey', { prompt: 'Enter value' });
 
-            expect(value).to.be.undefined;
+            assert.isUndefined(value);
         });
     });
 
@@ -126,7 +126,7 @@ suite('deepnoteSecretStore', () => {
 
             const value = await getOrPromptSecret('customKey', { prompt: 'Enter value' }, 'Value is required');
 
-            expect(value).to.equal('stored-value');
+            assert.strictEqual(value, 'stored-value');
         });
 
         test('throws when value missing and user cancels prompt', async () => {
@@ -134,9 +134,9 @@ suite('deepnoteSecretStore', () => {
 
             try {
                 await getOrPromptSecret('customKey', { prompt: 'Enter value' }, 'Value is required');
-                expect.fail('Should have thrown');
+                assert.fail('Should have thrown');
             } catch (e) {
-                expect((e as Error).message).to.equal('Value is required');
+                assert.strictEqual((e as Error).message, 'Value is required');
             }
         });
     });
@@ -147,13 +147,13 @@ suite('deepnoteSecretStore', () => {
 
             const key = await getOpenAiApiKey();
 
-            expect(key).to.equal('test-key');
+            assert.strictEqual(key, 'test-key');
         });
 
         test('returns undefined when not set', async () => {
             const key = await getOpenAiApiKey();
 
-            expect(key).to.be.undefined;
+            assert.isUndefined(key);
         });
 
         test('returns undefined when key is empty string', async () => {
@@ -161,7 +161,7 @@ suite('deepnoteSecretStore', () => {
 
             const key = await getOpenAiApiKey();
 
-            expect(key).to.be.undefined;
+            assert.isUndefined(key);
         });
     });
 
@@ -169,7 +169,7 @@ suite('deepnoteSecretStore', () => {
         test('stores key in secrets', async () => {
             await setOpenAiApiKey('my-api-key');
 
-            expect(secretStorage.get('openAiApiKey')).to.equal('my-api-key');
+            assert.strictEqual(secretStorage.get('openAiApiKey'), 'my-api-key');
         });
     });
 
@@ -179,7 +179,7 @@ suite('deepnoteSecretStore', () => {
 
             await clearOpenAiApiKey();
 
-            expect(secretStorage.has('openAiApiKey')).to.be.false;
+            assert.isFalse(secretStorage.has('openAiApiKey'));
         });
     });
 
@@ -189,8 +189,8 @@ suite('deepnoteSecretStore', () => {
 
             const key = await promptForOpenAiApiKey();
 
-            expect(key).to.equal('sk-abc123');
-            expect(secretStorage.get('openAiApiKey')).to.equal('sk-abc123');
+            assert.strictEqual(key, 'sk-abc123');
+            assert.strictEqual(secretStorage.get('openAiApiKey'), 'sk-abc123');
         });
 
         test('returns undefined when user cancels', async () => {
@@ -198,7 +198,7 @@ suite('deepnoteSecretStore', () => {
 
             const key = await promptForOpenAiApiKey();
 
-            expect(key).to.be.undefined;
+            assert.isUndefined(key);
         });
 
         test('returns undefined when user enters empty string', async () => {
@@ -206,7 +206,7 @@ suite('deepnoteSecretStore', () => {
 
             const key = await promptForOpenAiApiKey();
 
-            expect(key).to.be.undefined;
+            assert.isUndefined(key);
         });
     });
 
@@ -216,7 +216,7 @@ suite('deepnoteSecretStore', () => {
 
             const key = await getOrPromptOpenAiApiKey();
 
-            expect(key).to.equal('stored-key');
+            assert.strictEqual(key, 'stored-key');
         });
 
         test('prompts and returns key when missing', async () => {
@@ -224,7 +224,7 @@ suite('deepnoteSecretStore', () => {
 
             const key = await getOrPromptOpenAiApiKey();
 
-            expect(key).to.equal('prompted-key');
+            assert.strictEqual(key, 'prompted-key');
         });
 
         test('throws when key missing and user cancels prompt', async () => {
@@ -232,9 +232,9 @@ suite('deepnoteSecretStore', () => {
 
             try {
                 await getOrPromptOpenAiApiKey();
-                expect.fail('Should have thrown');
+                assert.fail('Should have thrown');
             } catch (e) {
-                expect((e as Error).message).to.include('OpenAI API key is not set');
+                assert.include((e as Error).message, 'OpenAI API key is not set');
             }
         });
     });

@@ -47,10 +47,6 @@ export interface CreateMockNotebookOptions {
     notebookType?: string;
     uri?: Uri;
     metadata?: Record<string, unknown>;
-    /**
-     * Backing cells. Pass the same array you mutate in the test — `cellAt`/`getCells`/`cellCount`
-     * read through to it, so edits applied during the test are visible to the code under test.
-     */
     cells?: NotebookCell[];
 }
 

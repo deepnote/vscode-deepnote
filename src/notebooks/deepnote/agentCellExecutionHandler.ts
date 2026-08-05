@@ -2,6 +2,7 @@ import {
     CancellationError,
     CancellationToken,
     NotebookCell,
+    NotebookCellData,
     NotebookCellOutput,
     NotebookCellOutputItem,
     NotebookController,
@@ -86,6 +87,20 @@ function getProjectAgentContext(notebook: NotebookDocument): Pick<AgentBlockCont
 const MARKDOWN_BLOCK_ADDED_TEXT = 'Markdown block added.';
 const NO_OUTPUT_TEXT = '(no output)';
 
+function notebookCellDataFromCell(cell: NotebookCell): NotebookCellData {
+    return {
+        kind: cell.kind,
+        value: cell.document.getText(),
+        languageId: cell.document.languageId,
+        metadata: cell.metadata,
+        outputs: [...(cell.outputs || [])]
+    };
+}
+
+function toError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+}
+
 export function serializeNotebookContext({
     cells,
     notebookName
@@ -97,16 +112,7 @@ export function serializeNotebookContext({
 
     const blocks = cells.reduce<DeepnoteBlock[]>((acc, cell) => {
         try {
-            const block = converter.convertCellToBlock(
-                {
-                    kind: cell.kind,
-                    value: cell.document.getText(),
-                    languageId: cell.document.languageId,
-                    metadata: cell.metadata,
-                    outputs: [...(cell.outputs || [])]
-                },
-                cell.index
-            );
+            const block = converter.convertCellToBlock(notebookCellDataFromCell(cell), cell.index);
             acc.push(block);
         } catch (error) {
             logger.error(`Error converting cell to block: ${error}`);
@@ -169,7 +175,7 @@ export interface ExecuteAgentCellOptions {
  * generates below itself.
  *
  * Requires the cell's previous run to have been cleared first — call
- * `removeEphemeralCellsForAgentBatch` on the batch. Never rejects: failures, including an uncleared
+ * `removeEphemeralCellsForAgentBlocks` on the batch. Never rejects: failures, including an uncleared
  * previous run, are reported on the cell as stderr output and end the execution unsuccessfully.
  */
 export async function executeAgentCell(
@@ -195,20 +201,10 @@ export async function executeAgentCell(
         await execution.replaceOutput([output]);
 
         const dataConverter = new DeepnoteDataConverter();
-        const deepnoteBlock = dataConverter.convertCellToBlock(
-            {
-                kind: cell.kind,
-                value: cell.document.getText(),
-                languageId: cell.document.languageId,
-                metadata: cell.metadata,
-                outputs: [...(cell.outputs || [])]
-            },
-            cell.index
-        );
+        const deepnoteBlock = dataConverter.convertCellToBlock(notebookCellDataFromCell(cell), cell.index);
         const agentBlock: AgentBlock | null = deepnoteBlock.type === 'agent' ? deepnoteBlock : null;
 
         if (agentBlock == null) {
-            // TODO: better DX error handling
             throw new Error('Cell is not an agent cell');
         }
 
@@ -247,9 +243,7 @@ export async function executeAgentCell(
 
                     return MARKDOWN_BLOCK_ADDED_TEXT;
                 } catch (error) {
-                    const insertError = error instanceof Error ? error : new Error(String(error));
-
-                    return `Failed to add markdown block: ${insertError.message}`;
+                    return `Failed to add markdown block: ${toError(error).message}`;
                 }
             },
             addAndExecuteCodeBlock: async ({ code }: { code: string }) => {
@@ -267,9 +261,7 @@ export async function executeAgentCell(
 
                     return success ? `Output:\n${outputText}` : `Execution failed:\n${outputText}`;
                 } catch (error) {
-                    const executionError = error instanceof Error ? error : new Error(String(error));
-
-                    return `Execution error: ${executionError.message}`;
+                    return `Execution error: ${toError(error).message}`;
                 }
             },
             onAgentEvent: async (event: AgentStreamEvent) => {
@@ -398,7 +390,7 @@ async function insertEphemeralCell(
     return insertedCell;
 }
 
-const EPHEMERAL_CELL_EXECUTION_TIMEOUT_MS = 5 * 60 * 1000;
+export const EPHEMERAL_CELL_EXECUTION_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface EphemeralCellExecutionResult {
     success: boolean;

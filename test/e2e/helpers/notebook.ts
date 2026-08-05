@@ -41,12 +41,7 @@ export async function clickRunAll(notebookFileName: string): Promise<void> {
     );
 }
 
-/**
- * Runs `read` inside the notebook webview (iframe.webview.ready -> #active-frame) and switches back
- * afterwards. `read` only ever sees the webview, never the cell source in the main document — the
- * guarantee callers rely on to avoid matching a cell's own text. Returns '' when the frame is absent,
- * went stale, or has painted nothing yet, so callers can poll.
- */
+/** Runs `read` inside the notebook output webview; returns '' when the frame is missing or not ready. */
 async function readInsideNotebookWebview(read: (webView: WebView) => Promise<string>): Promise<string> {
     const driver = VSBrowser.instance.driver;
     const webView = new WebView();
@@ -62,9 +57,6 @@ async function readInsideNotebookWebview(read: (webView: WebView) => Promise<str
     try {
         await webView.switchToFrame(OUTPUT_FRAME_SWITCH_TIMEOUT);
 
-        // switchToFrame re-resolves the view and returns silently when it has gone, leaving the
-        // driver on the workbench document — where a body read would scrape the editor, and the cell
-        // source with it. Confirm we actually descended before letting `read` run.
         if (await driver.executeScript<boolean>('return window.self === window.top')) {
             return '';
         }
@@ -81,11 +73,7 @@ async function readInsideNotebookWebview(read: (webView: WebView) => Promise<str
     }
 }
 
-/**
- * Reads everything the notebook webview currently paints — rendered markdown cells as well as cell
- * outputs. Use it when a rendered markdown cell is part of the assertion, since `readRenderedOutput`
- * deliberately narrows to output-only elements.
- */
+/** Full notebook webview body text (markdown previews and outputs). */
 export async function readNotebookWebviewText(): Promise<string> {
     return readInsideNotebookWebview(async (webView) => (await webView.findWebElement(By.css('body'))).getText());
 }
@@ -105,7 +93,6 @@ export async function readRenderedOutput(): Promise<string> {
         );
         const text = texts.join('\n').trim();
 
-        // Safe as a fallback because we have already confirmed we are inside the webview, not the editor.
         return text || (await webView.findWebElement(By.css('body'))).getText();
     });
 }

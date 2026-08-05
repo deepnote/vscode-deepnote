@@ -72,10 +72,7 @@ jobs:
         run: npm run setup:e2e:deps
 
       - name: Pre-download the mock LLM server
-        # The agent-block suite starts this mid-run via npx. setup-node's cache is keyed on the
-        # lockfile, which aimock is deliberately absent from, so ~/.npm/_npx is never restored and the
-        # fetch would otherwise happen inside the test — where a registry blip surfaces as an opaque
-        # start-up timeout. Failing here instead points straight at the cause.
+        # aimock is npx-only (not in lockfile), so setup-node never restores ~/.npm/_npx.
         run: npm run setup:e2e:mock
 
       - name: Cache pip wheel downloads

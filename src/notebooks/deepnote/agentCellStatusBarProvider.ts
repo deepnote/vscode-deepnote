@@ -22,15 +22,14 @@ import { clearOpenAiApiKey, promptForOpenAiApiKey } from './deepnoteSecretStore'
 /** The key `agentBlockSchema` defines and `executeAgentBlock` reads. */
 const AGENT_MODEL_METADATA_KEY = 'deepnote_agent_model';
 
-/** The schema default, and the sentinel runtime-core compares against to fall back to its own choice. */
+/** Must be stored explicitly; a missing key becomes `undefined` in runtime-core and is passed to openai() as the model name. */
 const AGENT_MODEL_AUTO = 'auto';
 
 const AGENT_MODEL_OPTIONS = [AGENT_MODEL_AUTO, 'gpt-4o', 'gpt-5'];
 
-/**
- * Provides status bar items for agent cells showing the block type indicator
- * and the AI model picker.
- */
+const AGENT_INDICATOR_PRIORITY = 100;
+const MODEL_PICKER_PRIORITY = 90;
+
 @injectable()
 export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProvider, IExtensionSyncActivationService {
     private readonly disposables: Disposable[] = [];
@@ -78,9 +77,7 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
     }
 
     public dispose(): void {
-        for (const disposable of this.disposables) {
-            disposable.dispose();
-        }
+        this.disposables.forEach((disposable) => disposable.dispose());
     }
 
     public provideCellStatusBarItems(
@@ -105,7 +102,7 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
         return {
             text: `$(hubot) ${l10n.t('Agent Block')}`,
             alignment: 1,
-            priority: 100,
+            priority: AGENT_INDICATOR_PRIORITY,
             tooltip: l10n.t('Deepnote Agent Block\nAI-powered block that autonomously generates code and analysis')
         };
     }
@@ -114,7 +111,7 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
         return {
             text: `$(symbol-enum) ${l10n.t('Model: {0}', model)}`,
             alignment: 1,
-            priority: 90,
+            priority: MODEL_PICKER_PRIORITY,
             tooltip: l10n.t('AI Model: {0}\nClick to change', model),
             command: {
                 title: l10n.t('Switch Model'),
@@ -163,16 +160,12 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
             return;
         }
 
-        // Write 'auto' rather than deleting the key: `convertCellToBlock` doesn't re-run the zod
-        // schema, so a missing key reaches runtime-core as `undefined` — which fails its
-        // `!== "auto"` check and gets passed to `openai()` as the model name.
         await this.updateCellMetadata(cell, { [AGENT_MODEL_METADATA_KEY]: selected.label });
     }
 
     private async updateCellMetadata(cell: NotebookCell, updates: Record<string, unknown>): Promise<void> {
         const updatedMetadata = { ...cell.metadata, ...updates };
 
-        // Remove keys set to undefined so they don't persist
         for (const [key, value] of Object.entries(updates)) {
             if (value === undefined) {
                 delete updatedMetadata[key];

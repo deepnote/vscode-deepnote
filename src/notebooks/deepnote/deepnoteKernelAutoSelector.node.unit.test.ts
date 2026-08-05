@@ -1069,8 +1069,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         } as unknown as NotebookCell;
         const codeCell = { index: 1, metadata: {} } as unknown as NotebookCell;
 
-        // This controller has no kernel, and configuring one disposes it mid-run — so it prompts and
-        // stops, rather than executing anything itself or handing the batch on.
         test('configures the environment and executes nothing', async () => {
             when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(true);
             const placeholder = createPlaceholder();
@@ -1088,8 +1086,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             verify(mockKernelProvider.getOrCreate(anything(), anything())).never();
         });
 
-        // Agent blocks spawn MCP servers declared by the workspace file, and setting up an environment
-        // runs a workspace-provided interpreter.
         test('does nothing at all in an untrusted workspace', async () => {
             when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(false);
             const placeholder = createPlaceholder();

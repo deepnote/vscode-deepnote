@@ -1091,9 +1091,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         controller.supportsExecutionOrder = true;
         controller.supportedLanguages = ['python', 'sql', 'markdown', 'plaintext'];
 
-        // Turns a Run gesture into the environment picker and nothing else. Executing here means
-        // executing without a kernel: configuring the environment disposes this controller mid-run
-        // (see ensureKernelSelectedWithConfiguration), orphaning any execution created from it.
+        // Run here only prompts for an environment; kernel execution uses the real controller afterward.
         controller.executeHandler = async (cells, doc) => {
             logger.info(
                 `Placeholder controller execute handler called for ${getDisplayPath(doc.uri)} with ${
@@ -1101,8 +1099,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 } cells`
             );
 
-            // Setting up an environment runs a workspace-provided Python interpreter and installs into
-            // it, so gate this path the same way VSCodeNotebookController gates its own execute handler.
             if (!workspace.isTrusted) {
                 logger.info(`Workspace is not trusted, skipping environment setup for ${getDisplayPath(doc.uri)}`);
 

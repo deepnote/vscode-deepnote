@@ -18,7 +18,7 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
-import { getBlockId } from './dataConversionUtils';
+import { getBlockId, isEphemeralCell } from './dataConversionUtils';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
@@ -164,7 +164,9 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * has fewer/no outputs), it's an auto-save of stripped content — skip reload.
      */
     private contentActuallyChanged(notebook: NotebookDocument, newCells: NotebookCellData[]): boolean {
-        const liveCells = notebook.getCells();
+        // Compare against what the serializer persists: ephemeral cells are never written, so
+        // counting them reads our own save back as an external edit that deletes them.
+        const liveCells = notebook.getCells().filter((cell) => !isEphemeralCell(cell));
         if (liveCells.length !== newCells.length) {
             return true;
         }

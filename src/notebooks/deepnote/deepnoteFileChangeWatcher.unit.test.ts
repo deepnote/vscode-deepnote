@@ -178,6 +178,40 @@ project:
         assert.strictEqual(applyEditCount, 0, 'applyEdit should not be called when cells match');
     });
 
+    test('should skip reload when the live notebook only adds ephemeral cells', async () => {
+        const uri = Uri.file('/workspace/test.deepnote');
+        // The serializer never persists ephemeral cells, so a plain save produces a file with
+        // fewer cells than the live document. That difference must not read as an external edit.
+        const notebook = createMockNotebook({
+            uri,
+            cells: [
+                {
+                    metadata: { id: 'block-1' },
+                    outputs: [],
+                    kind: NotebookCellKind.Code,
+                    document: { getText: () => 'print("hello")', languageId: 'python' }
+                },
+                {
+                    metadata: { id: 'eph-1', is_ephemeral: true, agent_source_block_id: 'agent-1' },
+                    outputs: [],
+                    kind: NotebookCellKind.Code,
+                    document: { getText: () => 'print("agent generated")', languageId: 'python' }
+                }
+            ]
+        });
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        setupMockFs(validYaml);
+
+        onDidChangeFile.fire(uri);
+
+        await waitFor(() => readFileCalls > 0);
+        await new Promise((resolve) => setTimeout(resolve, autoSaveGraceMs));
+
+        assert.strictEqual(applyEditCount, 0, 'ephemeral-only difference should not trigger a reload');
+        assert.strictEqual(saveCount, 0, 'ephemeral-only difference should not trigger a save');
+    });
+
     test('should reload on external change', async () => {
         const uri = Uri.file('/workspace/test.deepnote');
         const notebook = createMockNotebook({ uri, cellCount: 0 });

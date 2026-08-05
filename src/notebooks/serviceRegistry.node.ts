@@ -95,6 +95,7 @@ import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environme
 import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookCommandListener';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
 import { AgentCellStatusBarProvider } from './deepnote/agentCellStatusBarProvider';
+import { AgentOpenAiApiKeyCommandHandler } from './deepnote/agentOpenAiApiKeyCommandHandler';
 import { DeepnoteBigNumberCellStatusBarProvider } from './deepnote/deepnoteBigNumberCellStatusBarProvider';
 import { EphemeralCellDecorationProvider } from './deepnote/ephemeralCellDecorationProvider';
 import { EphemeralCellStatusBarProvider } from './deepnote/ephemeralCellStatusBarProvider';
@@ -263,6 +264,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteBigNumberCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        AgentOpenAiApiKeyCommandHandler
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

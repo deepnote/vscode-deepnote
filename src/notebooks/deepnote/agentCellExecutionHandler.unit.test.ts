@@ -15,7 +15,6 @@ import {
     NotebookDocument,
     SecretStorage,
     SecretStorageChangeEvent,
-    Uri,
     WorkspaceEdit
 } from 'vscode';
 
@@ -74,7 +73,7 @@ function stubSecretStorage(secretStorage: Map<string, string>): ServiceContainer
  * tests, so its own call counts are useless here.
  */
 function applyNotebookEditsTo(cells: NotebookCell[], notebook: NotebookDocument) {
-    type RecordedEdit = { range: { start: number; end: number }; newCells: NotebookCellData[] };
+    type RecordedEdit = { range: { start: number; end: number }; newCells?: NotebookCellData[] };
     let recordedEdits: RecordedEdit[] = [];
     let appliedEdits = 0;
 
@@ -87,7 +86,17 @@ function applyNotebookEditsTo(cells: NotebookCell[], notebook: NotebookDocument)
 
         for (const notebookEdit of recordedEdits) {
             const { start, end } = notebookEdit.range;
-            const inserted = notebookEdit.newCells.map((cellData) => {
+            const deleteCount = end - start;
+            const newCellData = notebookEdit.newCells;
+
+            if (!newCellData || newCellData.length === 0) {
+                if (deleteCount > 0) {
+                    cells.splice(start, deleteCount);
+                }
+                continue;
+            }
+
+            const inserted = newCellData.map((cellData) => {
                 const created = createMockCell({
                     text: cellData.value,
                     metadata: cellData.metadata
@@ -97,7 +106,7 @@ function applyNotebookEditsTo(cells: NotebookCell[], notebook: NotebookDocument)
                 return created;
             });
 
-            cells.splice(start, end - start, ...inserted);
+            cells.splice(start, deleteCount, ...inserted);
         }
         cells.forEach((cell, index) => ((cell as { index: number }).index = index));
         recordedEdits = [];
@@ -685,20 +694,5 @@ suite('AgentCellExecutionHandler', () => {
                 clock.restore();
             }
         });
-    });
-});
-
-suite('createMockNotebook', () => {
-    test('reads through to the backing cell array', () => {
-        const cells: NotebookCell[] = [createMockCell({ text: 'first' })];
-        const notebook = createMockNotebook({ cells, uri: Uri.file('/test/mutable.deepnote') });
-
-        expect(notebook.cellCount).to.equal(1);
-
-        cells.push(createMockCell({ text: 'second', index: 1 }));
-
-        expect(notebook.cellCount).to.equal(2);
-        expect(notebook.cellAt(1).document.getText()).to.equal('second');
-        expect(notebook.getCells()).to.have.lengthOf(2);
     });
 });

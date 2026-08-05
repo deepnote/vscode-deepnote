@@ -17,7 +17,6 @@ import { injectable } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { isAgentCell } from './dataConversionUtils';
-import { clearOpenAiApiKey, promptForOpenAiApiKey } from './deepnoteSecretStore';
 
 /** The key `agentBlockSchema` defines and `executeAgentBlock` reads. */
 const AGENT_MODEL_METADATA_KEY = 'deepnote_agent_model';
@@ -54,22 +53,6 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
                 if (activeCell) {
                     await this.switchModel(activeCell);
                 }
-            })
-        );
-
-        this.disposables.push(
-            commands.registerCommand('deepnote.setOpenAiApiKey', async () => {
-                const key = await promptForOpenAiApiKey();
-                if (key) {
-                    void window.showInformationMessage(l10n.t('OpenAI API key has been saved.'));
-                }
-            })
-        );
-
-        this.disposables.push(
-            commands.registerCommand('deepnote.clearOpenAiApiKey', async () => {
-                await clearOpenAiApiKey();
-                void window.showInformationMessage(l10n.t('OpenAI API key has been cleared.'));
             })
         );
 

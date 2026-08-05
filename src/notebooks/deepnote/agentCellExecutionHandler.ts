@@ -196,7 +196,8 @@ export async function executeAgentCell(
         // transcript: `NotebookCellOutputItem.text` re-encodes the full buffer on every token, which
         // is O(n²) bytes across the extension-host boundary — and since runtime-core awaits
         // `onAgentEvent` inside its stream loop, that cost is added to the run's wall clock.
-        // The stdout mime is the one the renderer concatenates, matching how kernel output streams.
+        // Appended stdout items render as one continuous block, the same way kernel output streams;
+        // agentBlock.e2e.test.ts pins that, since only a real renderer can show it.
         const output = new NotebookCellOutput([NotebookCellOutputItem.stdout(`[Agent] Planning next steps...`)]);
         await execution.replaceOutput([output]);
 

@@ -40,7 +40,9 @@ const AGENT_RUN_TIMEOUT = 60_000;
 const PYTHON_OUTPUT_MARKER = 'agent-generated-python-ran';
 const GENERATED_PYTHON = `print("${PYTHON_OUTPUT_MARKER}")`;
 const EPHEMERAL_MARKDOWN_TEXT = 'Ephemeral markdown written by the E2E agent run';
-const FINAL_AGENT_TEXT = 'Summary added as a markdown block.';
+// aimock streams content in 20-character chunks, so an answer this long reaches the agent cell as
+// several text_delta events — one appended output item each.
+const FINAL_AGENT_TEXT = 'Summary added as a markdown block, streamed across several deltas.';
 const MOCK_API_KEY = 'sk-e2e-mock-key';
 const SET_API_KEY_COMMAND = 'Deepnote: Set OpenAI API Key';
 const CLEAR_API_KEY_COMMAND = 'Deepnote: Clear OpenAI API Key';
@@ -67,6 +69,17 @@ async function awaitWebviewMarkers(markers: string[], timeout: number, context: 
     throw new Error(
         `Timed out after ${timeout}ms waiting for notebook webview (${context}). Missing: ${JSON.stringify(missing)}. ` +
             `Last text: ${JSON.stringify(text)}`
+    );
+}
+
+function assertRenderedContiguously(transcript: string, expected: string): void {
+    if (transcript.includes(expected)) {
+        return;
+    }
+
+    throw new Error(
+        `Agent transcript does not contain ${JSON.stringify(expected)} as one unbroken run — appended stdout ` +
+            `items are not rendering as a single block. Full transcript: ${JSON.stringify(transcript)}`
     );
 }
 
@@ -150,7 +163,7 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
         });
     });
 
-    it('executes the code block the agent generates, then inserts its markdown block', async function () {
+    it('executes the generated code block, inserts its markdown block, and streams one transcript', async function () {
         mockServer = await startMockOpenAiServer([
             {
                 match: { hasToolResult: false },
@@ -183,7 +196,7 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
 
         await awaitWebviewMarkers([PYTHON_OUTPUT_MARKER], FIRST_RUN_OUTPUT_TIMEOUT, 'generated code cell stdout');
 
-        await awaitWebviewMarkers(
+        const transcript = await awaitWebviewMarkers(
             [
                 `[Agent] Tool called: ${CODE_TOOL_NAME}`,
                 `[Agent] Tool called: ${MARKDOWN_TOOL_NAME}`,
@@ -195,5 +208,15 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
         );
 
         await screenshot('agent-run');
+
+        // agentCellExecutionHandler appends one stdout item per agent event instead of re-sending the
+        // transcript, which only pays off if the renderer joins those items back into one block —
+        // something only a real renderer can show: a section boundary keeps its blank line, and an
+        // answer split across several deltas arrives unbroken.
+        assertRenderedContiguously(
+            transcript,
+            `[Agent] Tool called: ${MARKDOWN_TOOL_NAME}\n\n[Agent] Tool output: ${MARKDOWN_TOOL_NAME}`
+        );
+        assertRenderedContiguously(transcript, `[Agent] Text:\n${FINAL_AGENT_TEXT}`);
     });
 });

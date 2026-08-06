@@ -57,10 +57,10 @@ export class EphemeralCellStatusBarProvider
 
         const agentSourceBlockId = cell.metadata?.agent_source_block_id as string | undefined;
 
-        return this.createEphemeralIndicatorItem(agentSourceBlockId);
+        return this.createEphemeralIndicatorItem(agentSourceBlockId ?? null);
     }
 
-    private createEphemeralIndicatorItem(agentSourceBlockId?: string): NotebookCellStatusBarItem {
+    private createEphemeralIndicatorItem(agentSourceBlockId: string | null): NotebookCellStatusBarItem {
         const tooltipLines = [l10n.t('Auto-generated ephemeral block')];
         if (agentSourceBlockId) {
             tooltipLines.push(l10n.t('Source agent block: {0}', agentSourceBlockId));

@@ -403,11 +403,11 @@ export interface EphemeralCellExecutionResult {
 
 export async function executeEphemeralCell(
     cell: NotebookCell,
-    token?: CancellationToken
+    token: CancellationToken
 ): Promise<EphemeralCellExecutionResult> {
     // Bail before dispatching: rejecting the deferred alone would abandon the wait but still hand the
     // generated code to the kernel.
-    if (token?.isCancellationRequested) {
+    if (token.isCancellationRequested) {
         throw new CancellationError();
     }
 
@@ -422,9 +422,7 @@ export async function executeEphemeralCell(
         })
     );
 
-    if (token) {
-        disposables.push(token.onCancellationRequested(() => completionDeferred.reject(new CancellationError())));
-    }
+    disposables.push(token.onCancellationRequested(() => completionDeferred.reject(new CancellationError())));
 
     const timeout = setTimeout(() => {
         completionDeferred.reject(new Error('Ephemeral cell execution timed out'));

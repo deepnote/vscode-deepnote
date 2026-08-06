@@ -608,7 +608,14 @@ suite('AgentCellExecutionHandler', () => {
     });
 
     suite('executeEphemeralCell', () => {
+        let tokenSource: CancellationTokenSource;
+
+        setup(() => {
+            tokenSource = new CancellationTokenSource();
+        });
+
         teardown(() => {
+            tokenSource.dispose();
             reset(mockedVSCodeNamespaces.commands);
         });
 
@@ -625,7 +632,7 @@ suite('AgentCellExecutionHandler', () => {
                 notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Idle);
             });
 
-            await executeEphemeralCell(cell);
+            await executeEphemeralCell(cell, tokenSource.token);
 
             const [commandName, commandArg] = capture(
                 mockedVSCodeNamespaces.commands.executeCommand as (cmd: string, arg: unknown) => Thenable<unknown>
@@ -666,7 +673,7 @@ suite('AgentCellExecutionHandler', () => {
                 new Error('kernel is dead')
             );
 
-            const result = await executeEphemeralCell(cell);
+            const result = await executeEphemeralCell(cell, tokenSource.token);
 
             expect(result.success).to.be.false;
             expect(result.error).to.equal('kernel is dead');
@@ -683,7 +690,7 @@ suite('AgentCellExecutionHandler', () => {
                     () => new Promise(() => undefined)
                 );
 
-                const resultPromise = executeEphemeralCell(cell);
+                const resultPromise = executeEphemeralCell(cell, tokenSource.token);
                 await clock.tickAsync(EPHEMERAL_CELL_EXECUTION_TIMEOUT_MS);
 
                 const result = await resultPromise;

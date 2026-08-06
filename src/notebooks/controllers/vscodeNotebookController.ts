@@ -627,7 +627,7 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
             return;
         }
         const queuedCells = this.cellQueue.get(doc) || [];
-        // Clear before await so agent-driven re-entrant runs start with an empty queue.
+        // Clear before await — agent runs can re-enter with an empty queue.
         this.cellQueue.delete(doc);
 
         const cellsToExecute = await removeEphemeralCellsForAgentBlocks(doc, queuedCells);
@@ -655,7 +655,7 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         // Creating these execution objects marks the cell as queued for execution (vscode will update cell UI).
         type CellExec = { cell: NotebookCell; exec: NotebookCellExecution };
 
-        // Stale cell handles report index -1; createNotebookCellExecution would abort the batch.
+        // Stale handles use index -1 and abort the whole batch in createNotebookCellExecution.
         const kernelCells = cells.filter((cell) => cell.index >= 0);
 
         if (kernelCells.length === 0) {

@@ -231,7 +231,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error(`Notebook with ID ${notebookId} not found in project`);
             }
 
-            // Exclude ephemeral cells (agent-generated) from persistence
             const nonEphemeralCells = data.cells.filter((cell) => !isEphemeralCell(cell));
 
             logger.debug(

@@ -1,8 +1,4 @@
-/**
- * Agent block E2E: three-leg tool loop against a local aimock server (no live OpenAI calls).
- * Legs 2–3 match on tool results, so the mock only advances after real kernel stdout and
- * markdown tool replies. First kernel run can take minutes (venv + toolkit).
- */
+/** Agent block E2E vs local aimock; legs 2–3 advance on real tool results (no live OpenAI). */
 
 import { EditorView, InputBox, VSBrowser, WebView, Workbench } from 'vscode-extension-tester';
 
@@ -33,21 +29,21 @@ pointExtensionHostAtMockServer();
 const AGENT_FILE = 'agent-block.deepnote';
 const CODE_TOOL_NAME = 'add_code_block';
 const MARKDOWN_TOOL_NAME = 'add_markdown_block';
-// Coupled to agentCellExecutionHandler tool result for add_markdown_block (leg 3 match).
+// Leg 3 match: agentCellExecutionHandler add_markdown_block tool result.
 const MARKDOWN_BLOCK_ADDED_TEXT = 'Markdown block added.';
 const ENVIRONMENT_NAME = 'E2E Agent Env';
 const AGENT_RUN_TIMEOUT = 60_000;
 const PYTHON_OUTPUT_MARKER = 'agent-generated-python-ran';
 const GENERATED_PYTHON = `print("${PYTHON_OUTPUT_MARKER}")`;
 const EPHEMERAL_MARKDOWN_TEXT = 'Ephemeral markdown written by the E2E agent run';
-// aimock chunks content at 20 characters, so this length arrives as several text_delta events.
+// aimock emits 20-char chunks (multiple text_delta).
 const FINAL_AGENT_TEXT = 'Summary added as a markdown block, streamed across several deltas.';
-// Not substrings of the first run's markers; the counts below depend on that.
+// Disjoint from first-run markers (assertOccurrences below).
 const RERUN_PYTHON_OUTPUT_MARKER = 'rerun-python-ran';
 const RERUN_GENERATED_PYTHON = `print("${RERUN_PYTHON_OUTPUT_MARKER}")`;
 const RERUN_MARKDOWN_TEXT = 'Second-run markdown from the E2E agent';
 const RERUN_FINAL_AGENT_TEXT = 'Re-run summary added as a markdown block.';
-// Coupled to executeAgentCell's uncleared-previous-run error.
+// executeAgentCell stale-run error substring.
 const STALE_CELLS_ERROR_TEXT = 'from its previous run';
 const MOCK_API_KEY = 'sk-e2e-mock-key';
 const SET_API_KEY_COMMAND = 'Deepnote: Set OpenAI API Key';
@@ -235,7 +231,7 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
         assertRenderedContiguously(transcript, `[Agent] Text:\n${FINAL_AGENT_TEXT}`);
     });
 
-    // Depends on the previous spec: the block starts this run owning the cells it generated there.
+    // Serial with prior it — block still owns first-run cells.
     it('clears the cells its previous run generated instead of stacking a second copy', async function () {
         mockServer = await startMockOpenAiServer([
             {
@@ -275,7 +271,7 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
 
         await screenshot('agent-rerun');
 
-        // Counts, not presence: a Mocha retry repeats the markers.
+        // assertOccurrences — retries would duplicate markers.
         assertOccurrences(rendered, PYTHON_OUTPUT_MARKER, 0);
         assertOccurrences(rendered, EPHEMERAL_MARKDOWN_TEXT, 0);
         assertOccurrences(rendered, RERUN_PYTHON_OUTPUT_MARKER, 1);

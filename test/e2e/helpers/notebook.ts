@@ -41,7 +41,7 @@ export async function clickRunAll(notebookFileName: string): Promise<void> {
     );
 }
 
-/** Runs `read` inside the notebook output webview; returns '' when the frame is missing or not ready. */
+/** Run `read` in the notebook output webview; '' if the frame is missing. */
 async function readInsideNotebookWebview(read: (webView: WebView) => Promise<string>): Promise<string> {
     const driver = VSBrowser.instance.driver;
     const webView = new WebView();
@@ -73,12 +73,12 @@ async function readInsideNotebookWebview(read: (webView: WebView) => Promise<str
     }
 }
 
-/** Full notebook webview body text (markdown previews and outputs). */
+/** Notebook webview body (markdown previews and outputs). */
 export async function readNotebookWebviewText(): Promise<string> {
     return readInsideNotebookWebview(async (webView) => (await webView.findWebElement(By.css('body'))).getText());
 }
 
-/** Reads the notebook cell output once, falling back to the whole frame if the renderer used unexpected classes. */
+/** Cell output once; falls back to frame body if output selectors miss. */
 export async function readRenderedOutput(): Promise<string> {
     return readInsideNotebookWebview(async (webView) => {
         const elements = await webView.findWebElements(By.css(OUTPUT_SELECTOR));

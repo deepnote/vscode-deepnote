@@ -5,17 +5,14 @@ import * as os from 'os';
 import * as path from 'path';
 import { setTimeout as delay } from 'timers/promises';
 
-// aimock is npx-only so its peer deps (jest/vitest) never enter this repo's lockfile.
+// npx aimock — keep jest/vitest peers out of the lockfile.
 const AIMOCK_VERSION = '1.37.4';
 const AIMOCK_BIN = 'llmock';
 
-// Below typical ephemeral port range so a stray outbound source port cannot fake the pre-flight check.
+// Fixed port below ephemeral range (connect pre-flight).
 const MOCK_OPENAI_PORT = 18_937;
 
-/**
- * Set `OPENAI_BASE_URL` for the extension host. Call at spec module scope — ExTester spawns VS Code
- * before Mocha `before` hooks, and the host inherits env at spawn time.
- */
+/** Set OPENAI_BASE_URL at module scope — ExTester spawns the host before `before` hooks. */
 export function pointExtensionHostAtMockServer(): void {
     process.env.OPENAI_BASE_URL = `http://127.0.0.1:${MOCK_OPENAI_PORT}/v1`;
 }
@@ -34,7 +31,7 @@ export interface MockToolCall {
     name: string;
 }
 
-/** Predicate per scripted leg (not sequence index — safe across Mocha retries). */
+/** Per-leg match predicate (not call order); Mocha-retry-safe. */
 export type MockAgentMatch = { hasToolResult: false } | { toolResultContains: string };
 
 export type MockAgentResponse = { content: string } | { toolCall: MockToolCall };

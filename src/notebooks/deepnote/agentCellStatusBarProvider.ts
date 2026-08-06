@@ -18,10 +18,10 @@ import { injectable } from 'inversify';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { isAgentCell } from './dataConversionUtils';
 
-/** The key `agentBlockSchema` defines and `executeAgentBlock` reads. */
+/** Same key as `agentBlockSchema` / `executeAgentBlock`. */
 const AGENT_MODEL_METADATA_KEY = 'deepnote_agent_model';
 
-/** Must be stored explicitly; a missing key becomes `undefined` in runtime-core and is passed to openai() as the model name. */
+/** Persisted default — absent key becomes `undefined` and breaks openai() model selection. */
 const AGENT_MODEL_AUTO = 'auto';
 
 const AGENT_MODEL_OPTIONS = [AGENT_MODEL_AUTO, 'gpt-4o', 'gpt-5'];

@@ -49,8 +49,7 @@ suite('DataConversionUtils', () => {
             expect(getBlockId(cell)).to.equal('block-id');
         });
 
-        // The fallback-cell path writes this third name. Reading it beats minting a fresh id, which
-        // would reassign the block on save.
+        // Fallback-cell metadata; minting a new id would reassign the block on save.
         test('falls back to the legacy deepnoteBlockId when both are absent', () => {
             const cell = createMockCell({ metadata: { deepnoteBlockId: 'legacy-id' } });
 
@@ -77,7 +76,7 @@ suite('DataConversionUtils', () => {
             expect(getEphemeralCellAgentSourceBlockId(cell)).to.equal('agent-block-1');
         });
 
-        // An ordinary cell that happens to carry the metadata is not the agent's to delete.
+        // agent_source_block_id alone does not mark a cell for agent cleanup.
         test('returns undefined when the cell is not marked ephemeral', () => {
             const cell = createMockCell({ metadata: { agent_source_block_id: 'agent-block-1' } });
 

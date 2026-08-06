@@ -180,8 +180,7 @@ project:
 
     test('should skip reload when the live notebook only adds ephemeral cells', async () => {
         const uri = Uri.file('/workspace/test.deepnote');
-        // The serializer never persists ephemeral cells, so a plain save produces a file with
-        // fewer cells than the live document. That difference must not read as an external edit.
+        // Ephemeral cells are not serialized — extra live cells must not look like an external edit.
         const notebook = createMockNotebook({
             uri,
             cells: [

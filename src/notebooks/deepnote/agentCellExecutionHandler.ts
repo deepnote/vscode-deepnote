@@ -41,16 +41,7 @@ import {
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { getOrPromptOpenAiApiKey } from './deepnoteSecretStore';
 
-/**
- * Project-level MCP servers and database integrations declared in the `.deepnote` file, matching what
- * the CLI's ExecutionEngine passes. `executeAgentBlock` merges the servers with any block-level
- * `deepnote_mcp_servers` (block wins on name), and only names the integrations — along with the
- * `dntk.execute_sql` instructions — in its system prompt when that list is non-empty, so leaving
- * either empty silently drops the project-level half of that contract.
- *
- * Spawning MCP servers is arbitrary local command execution declared by a workspace file, so every
- * caller must already be behind a `workspace.isTrusted` check.
- */
+/** Project MCP servers and integrations from the `.deepnote` file (CLI ExecutionEngine parity). Callers must gate on `workspace.isTrusted` — MCP spawn is arbitrary command execution. */
 function getProjectAgentContext(notebook: NotebookDocument): Pick<AgentBlockContext, 'mcpServers' | 'integrations'> {
     const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
     const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
@@ -81,9 +72,7 @@ function getProjectAgentContext(notebook: NotebookDocument): Pick<AgentBlockCont
     return { mcpServers, integrations };
 }
 
-// Tool results reported back to the agent. These mirror the wording @deepnote/runtime-core uses in
-// its own ExecutionEngine implementation of the same tools, so the agent sees identical phrasing
-// whether a block runs in the extension or on the backend.
+// Wording matches @deepnote/runtime-core ExecutionEngine so backend and extension runs look the same to the agent.
 const MARKDOWN_BLOCK_ADDED_TEXT = 'Markdown block added.';
 const NO_OUTPUT_TEXT = '(no output)';
 
@@ -127,14 +116,7 @@ function joinMultilineString(value: unknown): unknown {
     return Array.isArray(value) && value.every((entry) => typeof entry === 'string') ? value.join('') : value;
 }
 
-/**
- * `translateCellDisplayOutput` follows nbformat's multiline convention and emits text as an array of
- * lines — both for stream `text` and for the `text/*` entries of `execute_result`/`display_data`
- * `data`. `extractOutputsText` reads stream text only when it is a string, and stringifies
- * `data['text/plain']` with `String(...)`, which joins an array with commas. Join the lines first so
- * `print()` output isn't dropped and a `df.head()` string representation doesn't reach the agent with a
- * comma glued to the start of every line.
- */
+/** Join nbformat line arrays before `extractOutputsText` — `String(array)` inserts commas between lines. */
 function normalizeOutputsForTextExtraction(outputs: unknown[]): unknown[] {
     return outputs.map((output) => {
         const candidate = output as { output_type?: unknown; text?: unknown; data?: unknown } | null;
@@ -171,12 +153,8 @@ export interface ExecuteAgentCellOptions {
 }
 
 /**
- * Runs an agent block, streaming its progress into the cell's output and inserting the cells it
- * generates below itself.
- *
- * Requires the cell's previous run to have been cleared first — call
- * `removeEphemeralCellsForAgentBlocks` on the batch. Never rejects: failures, including an uncleared
- * previous run, are reported on the cell as stderr output and end the execution unsuccessfully.
+ * Runs an agent block into the cell output and inserts generated cells below.
+ * Call `removeEphemeralCellsForAgentBlocks` on the batch first. Never rejects — errors become stderr on the cell.
  */
 export async function executeAgentCell(
     cell: NotebookCell,
@@ -192,8 +170,7 @@ export async function executeAgentCell(
 
         const prompt = cell.document.getText();
 
-        // Per-event appends keep this O(n) bytes across the extension-host boundary, on the run's wall
-        // clock: runtime-core awaits `onAgentEvent`. The renderer concatenates appended stdout items.
+        // runtime-core awaits each event; append deltas only (O(n) over the EH boundary).
         const output = new NotebookCellOutput([NotebookCellOutputItem.stdout(`[Agent] Planning next steps...`)]);
         await execution.replaceOutput([output]);
 
@@ -205,7 +182,6 @@ export async function executeAgentCell(
             throw new Error('Cell is not an agent cell');
         }
 
-        // The caller clears the previous run per batch.
         const staleCellCount = cell.notebook
             .getCells()
             .filter((c) => getEphemeralCellAgentSourceBlockId(c) === agentBlock.id).length;
@@ -220,8 +196,7 @@ export async function executeAgentCell(
 
         let lastAgentEventType: AgentStreamEvent['type'] | undefined;
 
-        // serializeNotebookContextFromBlocks does no ephemeral filtering, so this is safe only
-        // because of the precondition checked above.
+        // Caller must clear scratch cells before the batch; context serialization does not filter them.
         const notebookContext = serializeNotebookContext({
             cells: cell.notebook.getCells().filter((c) => c.index !== cell.index),
             notebookName: (cell.notebook.metadata?.deepnoteNotebookName as string | undefined) ?? ''
@@ -300,8 +275,7 @@ export async function executeAgentCell(
 
         execution.end(true, Date.now());
     } catch (error) {
-        // `logger.error(msg, error)` only renders `Error.prototype.toString()` unless the error is
-        // branded with `isJupyterError`, so the stack has to be logged explicitly.
+        // logger.error does not print stacks unless isJupyterError — log stack explicitly.
         logger.error('Agent cell execution failed', error);
         if (error instanceof Error) {
             if (error.cause) {
@@ -337,13 +311,7 @@ function getInsertIndexAfterAgentCell(
     return index;
 }
 
-/**
- * Inserts an ephemeral cell after the agent cell and returns the cell that was actually created.
- *
- * Resolving by block id rather than by index matters: `cellAt` clamps out-of-range indices instead of
- * throwing, so a rejected edit or a concurrent structural change would otherwise hand the caller a
- * pre-existing user cell — which `addAndExecuteCodeBlock` would then run.
- */
+/** Inserts an ephemeral cell after the agent; returns the created cell resolved by block id (`cellAt` clamps bad indices). */
 async function insertEphemeralCell(
     notebook: NotebookDocument,
     agentCellIndex: number,
@@ -398,8 +366,7 @@ export async function executeEphemeralCell(
     cell: NotebookCell,
     token: CancellationToken
 ): Promise<EphemeralCellExecutionResult> {
-    // Bail before dispatching: rejecting the deferred alone would abandon the wait but still hand the
-    // generated code to the kernel.
+    // Cancel before dispatch — a rejected wait alone still runs the cell in the kernel.
     if (token.isCancellationRequested) {
         throw new CancellationError();
     }
@@ -424,9 +391,7 @@ export async function executeEphemeralCell(
     try {
         const cellIndex = cell.index;
 
-        // The dispatch settles independently of the cell reaching Idle, so both waits have to start
-        // together — otherwise the timeout cannot end a run whose command never resolves, and a
-        // rejection arriving before the second await is reported as unhandled.
+        // Race dispatch with Idle wait — command can hang while the cell is still running.
         await Promise.all([
             commands.executeCommand('notebook.cell.execute', {
                 ranges: [{ start: cellIndex, end: cellIndex + 1 }],
@@ -445,8 +410,7 @@ export async function executeEphemeralCell(
             throw error;
         }
 
-        // Report the reason rather than collapsing everything into "(no output)" — a timed-out cell
-        // is still running, and telling the agent it produced nothing invites an immediate retry.
+        // Surface timeout/cancel reason — "(no output)" makes the agent retry while the cell still runs.
         return {
             success: false,
             outputs: [],
@@ -460,20 +424,9 @@ export async function executeEphemeralCell(
 }
 
 /**
- * Deletes the scratch cells the agent cells in `cells` generated on their previous run, and returns
- * the batch without them. Call this before executing a batch of cells; `executeAgentCell` requires it.
- *
- * Ephemeral cells are agent-owned: the agent regenerates them on every run and the serializer never
- * persists them. Left in the batch they would run the previous run's generated code against the
- * kernel — so they are dropped up front, whether or not the agent that owns them gets far enough to
- * replace them.
- *
- * Scoped to the agents present in the batch, because two callers legitimately run an ephemeral cell
- * on its own: the user selecting one, and the agent executing the code cell it just generated via
- * `notebook.cell.execute`. Neither carries its agent, so neither is touched.
- *
- * A rejected edit is logged rather than thrown: the agent cells re-check the notebook themselves and
- * report it on the cell, and a failed edit is no reason to hold back the batch's ordinary code cells.
+ * Removes prior-run scratch cells owned by agents in `cells` and returns the batch without them.
+ * Required before `executeAgentCell` — otherwise stale generated code would run. Only agents in
+ * `cells` are scoped so standalone ephemeral runs stay untouched. Edit failures are logged, not thrown.
  */
 export async function removeEphemeralCellsForAgentBlocks(
     notebook: NotebookDocument,

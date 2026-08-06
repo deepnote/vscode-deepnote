@@ -1,6 +1,6 @@
 import type { ActivationFunction } from 'vscode-notebook-renderer';
 
-// Minimal markdown-it surface (no package types; transitive dependency only).
+// Local markdown-it shape — transitive dep, no types.
 interface MarkdownItToken {
     content: string;
 }

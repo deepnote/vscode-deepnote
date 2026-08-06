@@ -1091,7 +1091,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         controller.supportsExecutionOrder = true;
         controller.supportedLanguages = ['python', 'sql', 'markdown', 'plaintext'];
 
-        // Run here only prompts for an environment; kernel execution uses the real controller afterward.
+        // Environment picker only; execution goes through the real controller on retry.
         controller.executeHandler = async (cells, doc) => {
             logger.info(
                 `Placeholder controller execute handler called for ${getDisplayPath(doc.uri)} with ${

@@ -3,7 +3,7 @@
 // tests are the real guard rails; this is a generous suite-level safety net.
 const path = require('path');
 
-// ExTester uses `new Mocha(config)` and ignores `require`; load rootHooks here as `rootHooks`.
+// ExTester ignores Mocha `require`; wire rootHooks from compiled output.
 const { mochaHooks } = require(path.resolve(__dirname, '..', '..', 'out', 'e2e', 'rootHooks.js'));
 
 module.exports = {

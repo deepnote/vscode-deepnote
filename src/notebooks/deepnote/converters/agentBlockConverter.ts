@@ -3,7 +3,7 @@ import { NotebookCellData, NotebookCellKind } from 'vscode';
 
 import type { BlockConverter } from './blockConverter';
 
-/** Agent prompts render as plaintext code cells; metadata passes through in DeepnoteDataConverter. */
+/** Agent blocks as plaintext code cells; pocket metadata from DeepnoteDataConverter. */
 export class AgentBlockConverter implements BlockConverter {
     applyChangesToBlock(block: DeepnoteBlock, cell: NotebookCellData): void {
         block.content = cell.value;

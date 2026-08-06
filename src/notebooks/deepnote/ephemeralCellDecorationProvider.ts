@@ -17,7 +17,7 @@ import { isEphemeralCell } from './dataConversionUtils';
 
 const NOTEBOOK_CELL_SCHEME = 'vscode-notebook-cell';
 
-/** Code cell editor decorations for `is_ephemeral` blocks; markup uses `src/renderers/client/markdown.ts`. */
+/** Ephemeral styling in code-cell editors; markdown cells use `src/renderers/client/markdown.ts`. */
 @injectable()
 export class EphemeralCellDecorationProvider implements IExtensionSyncActivationService {
     private readonly disposables: Disposable[] = [];

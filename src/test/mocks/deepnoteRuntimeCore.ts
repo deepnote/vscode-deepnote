@@ -3,13 +3,8 @@ import type { AgentBlockContext, ServerInfo, ServerOptions } from '@deepnote/run
 import type { ChildProcess } from 'child_process';
 
 /**
- * Mock of @deepnote/runtime-core for unit tests: the real startServer/stopServer spawn and
- * kill Python processes, and the real executeAgentBlock calls the OpenAI API, so this records
- * calls and returns fake results instead.
- *
- * build/mocha-esm-loader.js resolves the '@deepnote/runtime-core' specifier to this module,
- * so code under test and tests importing the __ helpers below share one module instance.
- * The exports are typed against the real package so the mock cannot drift from its API.
+ * Mock @deepnote/runtime-core: no Python spawns or live agent API; records calls, returns stubs.
+ * build/mocha-esm-loader.js aliases the package here for one shared instance; exports match real types.
  */
 
 type RuntimeCore = typeof import('@deepnote/runtime-core');

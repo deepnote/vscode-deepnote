@@ -37,10 +37,7 @@ import {
 import { IDeepnoteNotebookManager } from '../types';
 import { createDeepnoteFile, createDeepnoteProject, createMockCell, createMockNotebook } from './deepnoteTestHelpers';
 
-/**
- * Wires up a ServiceContainer whose IExtensionContext exposes an in-memory SecretStorage, so the
- * secret-store helpers take their real code paths instead of the ExtensionMode.Test no-op branch.
- */
+// ExtensionMode.Test skips secrets; Production + in-memory store exercises real paths.
 function stubSecretStorage(secretStorage: Map<string, string>): ServiceContainer {
     const context = mock<IExtensionContext>();
     const secrets = mock<SecretStorage>();
@@ -62,16 +59,8 @@ function stubSecretStorage(secretStorage: Map<string, string>): ServiceContainer
     return serviceContainer;
 }
 
-/**
- * Makes `workspace.applyEdit` apply the notebook edits it is given to `cells`, so the code under test
- * observes its own inserts and deletes.
- *
- * The mocked `WorkspaceEdit.set` discards the edits it is given, so record them off the prototype
- * rather than reading them back off the edit object.
- *
- * Returns the number of edits applied so far — the shared `workspace` mock is never reset between
- * tests, so its own call counts are useless here.
- */
+// Mocked WorkspaceEdit.set drops edits — capture on prototype and apply to `cells`.
+// `appliedEdits` is local because the shared workspace mock is never reset between tests.
 function applyNotebookEditsTo(cells: NotebookCell[], notebook: NotebookDocument) {
     type RecordedEdit = { range: { start: number; end: number }; newCells?: NotebookCellData[] };
     let recordedEdits: RecordedEdit[] = [];
@@ -132,9 +121,7 @@ suite('AgentCellExecutionHandler', () => {
             expect(describeExecutionOutputs([output])).to.equal('hello\nworld\n');
         });
 
-        // translateCellDisplayOutput splits `text/plain` into a line array, and @deepnote/blocks
-        // stringifies it with String(...) — which joins with commas. Without the fix the agent reads
-        // its own DataFrame output with a comma glued to the start of every line but the first.
+        // String(line[]) joins with commas — breaks DataFrame text/plain for the agent.
         test('joins nbformat line arrays in execute_result text/plain', () => {
             const output = {
                 output_type: 'execute_result',
@@ -210,8 +197,7 @@ suite('AgentCellExecutionHandler', () => {
         teardown(() => {
             disposables = dispose(disposables);
             reset(mockedVSCodeNamespaces.commands);
-            // Restore the default from vscode-mock rather than reset()ing the whole workspace
-            // namespace, which other suites rely on.
+            // Restore applyEdit default; don't reset() the shared workspace mock.
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(true));
         });
 
@@ -222,10 +208,6 @@ suite('AgentCellExecutionHandler', () => {
             });
         }
 
-        /**
-         * Builds an agent cell inside a notebook whose cell list the test can mutate, and applies
-         * insert/delete notebook edits to that list so the handler observes its own mutations.
-         */
         function createAgentCellInMutableNotebook(cells: NotebookCell[] = [], agentBlockId = 'agent-block-1') {
             const notebook = createMockNotebook({ cells });
             const agentCell = createMockCell({
@@ -299,8 +281,7 @@ suite('AgentCellExecutionHandler', () => {
             expect(item.mime).to.equal('application/vnd.code.notebook.stdout');
         });
 
-        // Each event must ship only its own delta: re-sending the whole transcript per token is
-        // O(n²) bytes over the extension-host boundary, and runtime-core awaits this callback.
+        // Incremental deltas only — full transcript per event is O(n²) over the EH boundary.
         test('streaming sends only the incremental text per event', async () => {
             executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
                 await context.onAgentEvent?.({ type: 'text_delta', text: 'first' });
@@ -403,9 +384,7 @@ suite('AgentCellExecutionHandler', () => {
             expect(text).to.include('OpenAI API key is not set');
         });
 
-        // Clearing the previous run belongs to the caller. Running against a dirty notebook fails
-        // silently — the agent gets its own old output as context and appends a second copy below it
-        // — so the precondition is checked rather than assumed.
+        // Caller clears prior ephemeral output; dirty notebook would duplicate agent context.
         test('refuses to run rather than clearing the previous run itself', async () => {
             const previousResult = createMockCell({
                 text: 'print("previous run")',
@@ -457,8 +436,7 @@ suite('AgentCellExecutionHandler', () => {
             expect(cells.map((cell) => cell.document.getText())).to.deep.equal(['Test prompt', 'first', 'second']);
         });
 
-        // cellAt clamps rather than throwing, so resolving the inserted cell by index would hand the
-        // agent a pre-existing user cell and execute it.
+        // cellAt clamps — failed insert must not run an existing cell at that index.
         test('fails the tool call without executing anything when the insert edit is rejected', async () => {
             const { agentCell } = createAgentCellInMutableNotebook();
             let toolResult: string | undefined;
@@ -525,7 +503,6 @@ suite('AgentCellExecutionHandler', () => {
             });
         }
 
-        /** Wires the cells into a notebook whose list the applied edits actually mutate. */
         function createMutableNotebook(cells: NotebookCell[]) {
             const notebook = createMockNotebook({ cells });
 
@@ -563,8 +540,7 @@ suite('AgentCellExecutionHandler', () => {
             expect(cells).to.deep.equal([agentCell, otherAgentResult, userCell]);
         });
 
-        // An agent runs the code cell it just generated through `notebook.cell.execute`, which arrives
-        // here as a batch of that cell alone. Dropping it would hang the agent until its timeout.
+        // Generated cell may execute alone via notebook.cell.execute — must stay in batch.
         test('leaves an ephemeral cell whose agent is not in the batch', async () => {
             const agentCell = createAgentCell('agent-block-1');
             const generatedCell = createEphemeralCell('agent-block-1', 'print("just generated")');
@@ -589,8 +565,7 @@ suite('AgentCellExecutionHandler', () => {
             expect(appliedEdits()).to.equal(0);
         });
 
-        // The agent cells re-check the notebook and report it on the cell, so a rejected edit must not
-        // hold back the batch's ordinary code cells.
+        // Rejected delete edit must not block running ordinary cells in the batch.
         test('still drops the previous run from the batch when the edit is rejected', async () => {
             const agentCell = createAgentCell('agent-block-1');
             const previousResult = createEphemeralCell('agent-block-1', 'print("previous run")');
@@ -625,7 +600,6 @@ suite('AgentCellExecutionHandler', () => {
 
             const cell = createMockCell({ index: staleIndex });
 
-            // Simulate a concurrent insertion shifting the cell's index
             (cell as { index: number }).index = currentIndex;
 
             when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenCall(async () => {
@@ -645,8 +619,7 @@ suite('AgentCellExecutionHandler', () => {
             });
         });
 
-        // Rejecting the deferred alone abandons only the wait — the generated code would still reach
-        // the kernel after the user cancelled.
+        // Pre-cancelled token must skip executeCommand, not only the idle wait.
         test('throws without dispatching to the kernel when the token is pre-cancelled', async () => {
             const cell = createMockCell({ index: 0 });
             const tokenSource = new CancellationTokenSource();
@@ -679,8 +652,7 @@ suite('AgentCellExecutionHandler', () => {
             expect(result.error).to.equal('kernel is dead');
         });
 
-        // The dispatch settles independently of the cell reaching Idle, so waiting on it first would
-        // leave the timeout unable to end a run whose command never resolves.
+        // Timeout must fire even when executeCommand never resolves.
         test('times out while the dispatch is still pending', async () => {
             const cell = createMockCell({ index: 0 });
             const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

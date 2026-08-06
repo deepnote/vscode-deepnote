@@ -13,6 +13,7 @@ import {
 import { injectable } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { logger } from '../../platform/logging';
 import { isEphemeralCell } from './dataConversionUtils';
 
 const NOTEBOOK_CELL_SCHEME = 'vscode-notebook-cell';
@@ -113,8 +114,11 @@ export class EphemeralCellDecorationProvider implements IExtensionSyncActivation
                 }
 
                 editor.setDecorations(this.ephemeralDecorationType, lineRanges);
-            } catch {
-                continue;
+            } catch (error) {
+                logger.warn(
+                    `EphemeralCellDecorationProvider: Failed to update decorations for ${editor.document.uri.path}`,
+                    error
+                );
             }
         }
     }

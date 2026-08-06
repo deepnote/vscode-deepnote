@@ -33,6 +33,7 @@ export interface CreateMockCellOptions {
     notebookMetadata?: Record<string, unknown>;
     index?: number;
     mime?: string;
+    notebook?: NotebookDocument;
 }
 
 /**
@@ -87,6 +88,22 @@ export function createMockNotebook(options?: CreateMockNotebookOptions): Noteboo
 }
 
 /**
+ * Builds one mock notebook and cells that share it (correct `index` and `notebook` references).
+ */
+export function createMockNotebookWithCells(
+    cellOptions: Omit<CreateMockCellOptions, 'index' | 'notebook' | 'notebookUri'>[]
+): { cells: NotebookCell[]; notebook: NotebookDocument } {
+    const cells: NotebookCell[] = [];
+    const notebook = createMockNotebook({ cells });
+
+    for (let index = 0; index < cellOptions.length; index++) {
+        cells.push(createMockCell({ ...cellOptions[index], index, notebook }));
+    }
+
+    return { cells, notebook };
+}
+
+/**
  * Creates a mock NotebookCellOutput for testing.
  *
  * @param options - Configuration options for the mock output
@@ -132,13 +149,16 @@ export function createMockCell(options?: CreateMockCellOptions): NotebookCell {
         ? opts.notebookMetadata
         : {};
 
-    const notebook = createMockNotebook({
-        notebookType,
-        uri: notebookUri,
-        metadata: notebookMetadata
-    });
+    const notebook =
+        opts.notebook ??
+        createMockNotebook({
+            notebookType,
+            uri: notebookUri,
+            metadata: notebookMetadata
+        });
+    const resolvedUri = notebook.uri;
 
-    const cellPath = `${notebookUri.path}#cell${index}`;
+    const cellPath = `${resolvedUri.path}#cell${index}`;
 
     const document: TextDocument = {
         uri: Uri.file(cellPath),

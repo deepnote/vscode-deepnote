@@ -7,7 +7,17 @@
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
-import { NotebookDocument, EventEmitter, NotebookController, Uri, Disposable } from 'vscode';
+import * as sinon from 'sinon';
+import {
+    Disposable,
+    EventEmitter,
+    ExtensionMode,
+    NotebookController,
+    NotebookDocument,
+    SecretStorage,
+    SecretStorageChangeEvent,
+    Uri
+} from 'vscode';
 import { VSCodeNotebookController, warnWhenUsingOutdatedPython } from './vscodeNotebookController';
 import {
     IKernel,
@@ -26,6 +36,7 @@ import {
     IWatchableJupyterSettings
 } from '../../platform/common/types';
 import { dispose } from '../../platform/common/utils/lifecycle';
+import { ServiceContainer } from '../../platform/ioc/container';
 import { NotebookCellLanguageService } from '../languages/cellLanguageService';
 import { IServiceContainer } from '../../platform/ioc/types';
 import { IJupyterServerProviderRegistry } from '../../kernels/jupyter/types';
@@ -43,6 +54,64 @@ import { mockedVSCode, mockedVSCodeNamespaces, resetVSCodeMocks } from '../../te
 import { Environment, PythonExtension } from '@vscode/python-extension';
 import { crateMockedPythonApi, whenResolveEnvironment } from '../../kernels/helpers.unit.test';
 import { IJupyterVariablesProvider } from '../../kernels/variables/types';
+import { notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+import { createMockNotebookWithCells } from '../deepnote/deepnoteTestHelpers';
+
+function stubSecretStorageForAgentTests(secretStorage: Map<string, string>): void {
+    const context = mock<IExtensionContext>();
+    const secrets = mock<SecretStorage>();
+    const onDidChangeSecrets = new EventEmitter<SecretStorageChangeEvent>();
+    const serviceContainer = mock<ServiceContainer>();
+
+    sinon.stub(ServiceContainer, 'instance').get(() => instance(serviceContainer));
+    when(serviceContainer.get<IExtensionContext>(IExtensionContext)).thenReturn(instance(context));
+    when(context.extensionMode).thenReturn(ExtensionMode.Production);
+    when(context.secrets).thenReturn(instance(secrets));
+    when(secrets.onDidChange).thenReturn(onDidChangeSecrets.event);
+    when(secrets.get(anything())).thenCall((key: string) => Promise.resolve(secretStorage.get(key)));
+    when(secrets.store(anything(), anything())).thenCall((key: string, value: string) => {
+        secretStorage.set(key, value);
+
+        return Promise.resolve();
+    });
+}
+
+function installMockedCreateNotebookController(
+    onDidChangeSelectedNotebooksEvent: EventEmitter<{
+        readonly notebook: NotebookDocument;
+        readonly selected: boolean;
+    }>['event'],
+    createNotebookCellExecution: NotebookController['createNotebookCellExecution'] = () => ({}) as any
+): void {
+    (mockedVSCode as any).notebooks.createNotebookController = (
+        _id: string,
+        _view: string,
+        _label: string,
+        executeHandler: any,
+        _rendererScripts: any
+    ) => {
+        return {
+            id: _id,
+            label: _label,
+            description: '',
+            detail: '',
+            supportedLanguages: [],
+            supportsExecutionOrder: false,
+            interruptHandler: undefined,
+            executeHandler,
+            onDidChangeSelectedNotebooks: onDidChangeSelectedNotebooksEvent,
+            onDidReceiveMessage: new EventEmitter<any>().event,
+            dispose: () => {},
+            asWebviewUri: (uri: Uri) => uri,
+            postMessage: () => Promise.resolve(true),
+            updateNotebookAffinity: () => {},
+            createNotebookCellExecution,
+            createNotebookExecution: () => ({}) as any,
+            notebookType: _view,
+            rendererScripts: _rendererScripts || []
+        } as NotebookController;
+    };
+}
 
 suite(`Notebook Controller`, function () {
     let controller: NotebookController;
@@ -103,42 +172,7 @@ suite(`Notebook Controller`, function () {
         when(controller.label).thenReturn('Test Controller');
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
         when(mockedVSCodeNamespaces.workspace.onDidCloseNotebookDocument).thenReturn(onDidCloseNotebookDocument.event);
-        // Override just the createNotebookController method on the existing notebooks object
-        (mockedVSCode as any).notebooks.createNotebookController = (
-            _id: string,
-            _view: string,
-            _label: string,
-            _handler: any,
-            _rendererScripts: any
-        ) => {
-            console.log('MOCK createNotebookController CALLED with id:', _id);
-            const mockControllerObject: any = {
-                id: _id,
-                label: _label,
-                description: '',
-                detail: '',
-                supportedLanguages: [],
-                supportsExecutionOrder: false,
-                interruptHandler: undefined,
-                executeHandler: _handler,
-                onDidChangeSelectedNotebooks: onDidChangeSelectedNotebooks.event,
-                onDidReceiveMessage: new EventEmitter<any>().event,
-                dispose: () => {},
-                asWebviewUri: (uri: Uri) => uri,
-                postMessage: () => Promise.resolve(true),
-                updateNotebookAffinity: () => {},
-                createNotebookCellExecution: () => ({}) as any,
-                createNotebookExecution: () => ({}) as any,
-                notebookType: _view,
-                rendererScripts: _rendererScripts || []
-            };
-            console.log('MOCK createNotebookController RETURNING controller with id:', mockControllerObject.id);
-            return mockControllerObject;
-        };
-        console.log(
-            'mockedVSCode.notebooks.createNotebookController:',
-            typeof (mockedVSCode as any).notebooks.createNotebookController
-        );
+        installMockedCreateNotebookController(onDidChangeSelectedNotebooks.event);
         when(languageService.getSupportedLanguages(anything())).thenReturn([PYTHON_LANGUAGE]);
         when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(true);
         when(mockedVSCodeNamespaces.workspace.onDidCloseNotebookDocument).thenReturn(onDidCloseNotebookDocument.event);
@@ -824,6 +858,163 @@ suite(`Notebook Controller`, function () {
 
             // Assert
             assert.isDefined(result);
+        });
+    });
+
+    suite('executeQueuedCells', function () {
+        const secretStorage = new Map<string, string>();
+
+        let vscodeController: VSCodeNotebookController;
+        let notifyQueueCompleteSpy: sinon.SinonSpy;
+        let createNotebookCellExecutionStub: sinon.SinonStub;
+        let mockExecution: {
+            appendOutput: sinon.SinonStub;
+            clearOutput: sinon.SinonStub;
+            end: sinon.SinonStub;
+            replaceOutput: sinon.SinonStub;
+            appendOutputItems: sinon.SinonStub;
+            start: sinon.SinonStub;
+            token: { isCancellationRequested: boolean };
+        };
+
+        setup(function () {
+            crateMockedPythonApi(disposables);
+            secretStorage.clear();
+            secretStorage.set('openAiApiKey', 'test-key');
+            stubSecretStorageForAgentTests(secretStorage);
+            when(serviceContainer.tryGet(anything())).thenReturn(undefined);
+
+            mockExecution = {
+                appendOutput: sinon.stub().resolves(),
+                clearOutput: sinon.stub().resolves(),
+                end: sinon.stub(),
+                replaceOutput: sinon.stub().resolves(),
+                appendOutputItems: sinon.stub().resolves(),
+                start: sinon.stub(),
+                token: { isCancellationRequested: false }
+            };
+            createNotebookCellExecutionStub = sinon.stub().callsFake(() => {
+                mockExecution.end = sinon.stub();
+
+                return mockExecution;
+            });
+
+            installMockedCreateNotebookController(onDidChangeSelectedNotebooks.event, createNotebookCellExecutionStub);
+
+            notifyQueueCompleteSpy = sinon.spy(notebookCellExecutions, 'notifyQueueComplete');
+
+            vscodeController = new VSCodeNotebookController(
+                instance(kernelConnection),
+                'test-controller-id',
+                'jupyter-notebook',
+                instance(kernelProvider),
+                instance(context),
+                disposables,
+                instance(languageService),
+                instance(configService),
+                instance(extensionChecker),
+                instance(serviceContainer),
+                displayDataProvider
+            );
+        });
+
+        teardown(function () {
+            notifyQueueCompleteSpy.restore();
+            sinon.restore();
+        });
+
+        test('agent-only batch fires notifyQueueComplete (arms deferred snapshot save)', async function () {
+            // Catches: agent-only runs never reach CellExecutionQueue, so snapshot save never arms.
+            const {
+                notebook: agentNotebook,
+                cells: [agentCell]
+            } = createMockNotebookWithCells([
+                {
+                    metadata: { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' },
+                    text: 'Test prompt'
+                }
+            ]);
+
+            const notebookUri = agentNotebook.uri.toString();
+
+            let queueCompletionUri: string | undefined;
+            const queueListener = notebookCellExecutions.onDidCompleteQueueExecution((event) => {
+                queueCompletionUri = event.notebookUri;
+            });
+            disposables.push(new Disposable(() => queueListener.dispose()));
+
+            const executeHandler = vscodeController.controller.executeHandler;
+            assert.isDefined(executeHandler);
+
+            await executeHandler([agentCell], agentNotebook, vscodeController.controller);
+
+            assert.isTrue(notifyQueueCompleteSpy.calledOnce, 'notifyQueueComplete must run after agent-only execution');
+            assert.strictEqual(notifyQueueCompleteSpy.firstCall.args[0], notebookUri);
+            assert.strictEqual(queueCompletionUri, notebookUri);
+            assert.isTrue(createNotebookCellExecutionStub.calledOnce, 'agent cell should run through executeAgentCell');
+        });
+
+        test('kernel-only batch after agent batch does not fire a second explicit queue completion notify', async function () {
+            // Catches: explicit notify on kernel-only executeQueuedCells (e.g. reentrant ephemeral runs) when ranAgentCell is false.
+            const {
+                notebook: agentNotebook,
+                cells: [agentCell, codeCell]
+            } = createMockNotebookWithCells([
+                {
+                    metadata: { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' },
+                    text: 'Test prompt'
+                },
+                {
+                    metadata: { id: 'ephemeral-code-1' },
+                    text: 'print(1)'
+                }
+            ]);
+
+            const executeHandler = vscodeController.controller.executeHandler;
+            assert.isDefined(executeHandler);
+
+            notifyQueueCompleteSpy.resetHistory();
+
+            await executeHandler([agentCell], agentNotebook, vscodeController.controller);
+
+            try {
+                await executeHandler([codeCell], agentNotebook, vscodeController.controller);
+            } catch {
+                // Kernel harness may not fully mock cell execution startup.
+            }
+
+            assert.strictEqual(
+                notifyQueueCompleteSpy.callCount,
+                1,
+                'only the agent batch should fire explicit queue completion'
+            );
+        });
+
+        test('kernel-only batch does not fire explicit queue completion notify', async function () {
+            // Catches: explicit notify on pure kernel batches that already signal via CellExecutionQueue.
+            const {
+                notebook: codeNotebook,
+                cells: [codeCell]
+            } = createMockNotebookWithCells([
+                {
+                    metadata: { id: 'code-block-1' },
+                    text: 'x = 1'
+                }
+            ]);
+
+            const executeHandler = vscodeController.controller.executeHandler;
+            assert.isDefined(executeHandler);
+
+            try {
+                await executeHandler([codeCell], codeNotebook, vscodeController.controller);
+            } catch {
+                // Kernel harness may not fully mock cell execution startup.
+            }
+
+            assert.isFalse(
+                notifyQueueCompleteSpy.called,
+                'batches without agent cells must rely on CellExecutionQueue for completion notify'
+            );
         });
     });
 });

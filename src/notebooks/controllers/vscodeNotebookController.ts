@@ -75,6 +75,7 @@ import {
     IExtensionContext
 } from '../../platform/common/types';
 import { getNotebookMetadata, isJupyterNotebook, updateNotebookMetadata } from '../../platform/common/utils';
+import { notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { createDeferred } from '../../platform/common/utils/async';
 import { DisposableStore, dispose } from '../../platform/common/utils/lifecycle';
 import { Common, DataScience } from '../../platform/common/utils/localize';
@@ -633,21 +634,31 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         const cellsToExecute = await removeEphemeralCellsForAgentBlocks(doc, queuedCells);
 
         let pendingKernelCells: NotebookCell[] = [];
+        let ranAgentCell = false;
 
-        for (const cell of cellsToExecute) {
-            if (!isAgentCell(cell)) {
-                pendingKernelCells.push(cell);
-                continue;
+        try {
+            for (const cell of cellsToExecute) {
+                if (!isAgentCell(cell)) {
+                    pendingKernelCells.push(cell);
+                    continue;
+                }
+
+                ranAgentCell = true;
+                await this.executeKernelCells(doc, pendingKernelCells);
+                pendingKernelCells = [];
+
+                logger.trace(`Executing agent cell ${cell.index} for ${getDisplayPath(doc.uri)} without kernel`);
+                await executeAgentCell(cell, this.controller).catch(noop);
             }
 
             await this.executeKernelCells(doc, pendingKernelCells);
-            pendingKernelCells = [];
-
-            logger.trace(`Executing agent cell ${cell.index} for ${getDisplayPath(doc.uri)} without kernel`);
-            await executeAgentCell(cell, this.controller).catch(noop);
+        } finally {
+            // Batches without an agent cell (including reentrant ephemeral-cell runs) already notify via
+            // CellExecutionQueue. Explicit notify covers agent-only and agent-then-kernel batches.
+            if (ranAgentCell) {
+                notebookCellExecutions.notifyQueueComplete(doc.uri.toString());
+            }
         }
-
-        await this.executeKernelCells(doc, pendingKernelCells);
     }
 
     private async executeKernelCells(doc: NotebookDocument, cells: NotebookCell[]) {

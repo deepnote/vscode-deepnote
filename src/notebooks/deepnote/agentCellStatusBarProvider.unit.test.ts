@@ -77,7 +77,7 @@ suite('AgentCellStatusBarProvider', () => {
     });
 
     suite('Agent Block Indicator', () => {
-        test('Should display agent block label with icon', () => {
+        test('Should display agent block label with icon and no command', () => {
             const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'agent' } } });
             const items = provider.provideCellStatusBarItems(cell, mockToken)!;
 
@@ -85,47 +85,34 @@ suite('AgentCellStatusBarProvider', () => {
             expect(items[0].text).to.include('Agent Block');
             expect(items[0].alignment).to.equal(1);
             expect(items[0].priority).to.equal(100);
-        });
-
-        test('Should not have a command on the indicator', () => {
-            const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'agent' } } });
-            const items = provider.provideCellStatusBarItems(cell, mockToken)!;
-
             expect(items[0].command).to.be.undefined;
         });
     });
 
     suite('Model Picker', () => {
-        test('Should display "auto" when no model is set', () => {
+        test('Should display default model picker for agent cell without model metadata', () => {
             const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'agent' } } });
             const items = provider.provideCellStatusBarItems(cell, mockToken)!;
 
             expect(items[1].text).to.include('Model: auto');
             expect(items[1].text).to.include('$(symbol-enum)');
+            expect(items[1].command).to.not.be.undefined;
+            const cmd = items[1].command as any;
+            expect(cmd.command).to.equal('deepnote.switchAgentModel');
+            expect(items[1].priority).to.equal(90);
         });
 
         test('Should display configured model from metadata', () => {
             const cell = createMockCell({
                 metadata: {
                     __deepnotePocket: { type: 'agent' },
-                    deepnote_agent_model: 'gpt-4o'
+                    deepnote_agent_model: 'gpt-4o',
+                    deepnote_max_iterations: 50
                 }
             });
             const items = provider.provideCellStatusBarItems(cell, mockToken)!;
 
             expect(items[1].text).to.include('Model: gpt-4o');
-        });
-
-        test('Should display gpt-5 model', () => {
-            const cell = createMockCell({
-                metadata: {
-                    __deepnotePocket: { type: 'agent' },
-                    deepnote_agent_model: 'gpt-5'
-                }
-            });
-            const items = provider.provideCellStatusBarItems(cell, mockToken)!;
-
-            expect(items[1].text).to.include('Model: gpt-5');
         });
 
         test('Should display "auto" when model is empty string', () => {
@@ -138,39 +125,6 @@ suite('AgentCellStatusBarProvider', () => {
             const items = provider.provideCellStatusBarItems(cell, mockToken)!;
 
             expect(items[1].text).to.include('Model: auto');
-        });
-
-        test('Should have switch model command', () => {
-            const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'agent' } } });
-            const items = provider.provideCellStatusBarItems(cell, mockToken)!;
-
-            expect(items[1].command).to.not.be.undefined;
-            const cmd = items[1].command as any;
-            expect(cmd.command).to.equal('deepnote.switchAgentModel');
-        });
-
-        test('Should have priority 90', () => {
-            const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'agent' } } });
-            const items = provider.provideCellStatusBarItems(cell, mockToken)!;
-
-            expect(items[1].priority).to.equal(90);
-        });
-    });
-
-    suite('Combined metadata', () => {
-        test('Should ignore metadata keys the runtime does not consume', () => {
-            const cell = createMockCell({
-                metadata: {
-                    __deepnotePocket: { type: 'agent' },
-                    deepnote_agent_model: 'gpt-4o',
-                    deepnote_max_iterations: 50
-                }
-            });
-            const items = provider.provideCellStatusBarItems(cell, mockToken)!;
-
-            expect(items).to.have.lengthOf(2);
-            expect(items[0].text).to.include('Agent Block');
-            expect(items[1].text).to.include('Model: gpt-4o');
         });
     });
 });

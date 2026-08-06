@@ -121,7 +121,8 @@ suite('Pocket', () => {
                     sortingKey: 'a0',
                     executionCount: 5
                 },
-                id: 'block-123',
+                __deepnoteBlockId: 'block-123',
+                id: 'rewritten-by-vscode',
                 custom: 'value'
             };
 
@@ -133,20 +134,6 @@ suite('Pocket', () => {
             assert.strictEqual((block as any).executionCount, 5);
             assert.strictEqual(block.content, 'print("hello")');
             assert.strictEqual((block as any).outputs, undefined);
-        });
-
-        test('takes the id from the backup rather than a rewritten id', () => {
-            const cell = new NotebookCellData(NotebookCellKind.Code, 'print("hello")', 'python');
-
-            cell.metadata = {
-                __deepnotePocket: { type: 'code', sortingKey: 'a0' },
-                __deepnoteBlockId: 'block-123',
-                id: 'rewritten-by-vscode'
-            };
-
-            const block = createBlockFromPocket(cell, 0);
-
-            assert.strictEqual(block.id, 'block-123');
         });
 
         test('creates block with generated ID and sortingKey when no pocket exists', () => {

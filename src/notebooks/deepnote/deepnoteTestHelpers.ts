@@ -4,7 +4,10 @@ import {
     NotebookCellKind,
     NotebookCellOutput,
     NotebookDocument,
+    Position,
     TextDocument,
+    Range,
+    TextLine,
     Uri,
     WorkspaceFolder
 } from 'vscode';
@@ -29,6 +32,7 @@ export interface CreateMockCellOptions {
     notebookUri?: Uri;
     notebookMetadata?: Record<string, unknown>;
     index?: number;
+    mime?: string;
 }
 
 /**
@@ -118,11 +122,12 @@ export function createMockCell(options?: CreateMockCellOptions): NotebookCell {
         outputs = [],
         notebookType = 'deepnote',
         notebookUri = Uri.file('/test/notebook.deepnote'),
-        index = 0
+        index = 0,
+        mime = 'text/plain'
     } = opts;
 
     // Preserve explicit undefined for metadata fields
-    const metadata = Object.prototype.hasOwnProperty.call(opts, 'metadata') ? opts.metadata : {};
+    const metadata = 'metadata' in opts ? opts.metadata ?? {} : {};
     const notebookMetadata = Object.prototype.hasOwnProperty.call(opts, 'notebookMetadata')
         ? opts.notebookMetadata
         : {};
@@ -135,7 +140,7 @@ export function createMockCell(options?: CreateMockCellOptions): NotebookCell {
 
     const cellPath = `${notebookUri.path}#cell${index}`;
 
-    const document = {
+    const document: TextDocument = {
         uri: Uri.file(cellPath),
         fileName: cellPath,
         isUntitled: false,
@@ -147,24 +152,25 @@ export function createMockCell(options?: CreateMockCellOptions): NotebookCell {
         save: async () => true,
         eol: 1,
         lineCount: 1,
-        lineAt: () => ({ text: '' }) as unknown,
+        lineAt: () => ({ text: '' }) as unknown as TextLine,
         offsetAt: () => 0,
-        positionAt: () => ({}) as unknown,
-        validateRange: () => ({}) as unknown,
-        validatePosition: () => ({}) as unknown,
+        positionAt: () => new Position(0, 0),
+        validateRange: () => new Range(new Position(0, 0), new Position(0, 0)),
+        validatePosition: () => new Position(0, 0),
         getWordRangeAtPosition: () => undefined,
         encoding: 'utf-8'
-    } as unknown as TextDocument;
+    };
 
     return {
         index,
+        mime,
         notebook,
         kind,
         document,
         metadata,
         outputs,
         executionSummary: undefined
-    } as unknown as NotebookCell;
+    };
 }
 
 /** A Deepnote code block (whole-file YAML shape); override any field. */

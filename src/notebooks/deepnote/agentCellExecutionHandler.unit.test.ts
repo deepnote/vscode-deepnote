@@ -19,7 +19,7 @@ import {
 } from 'vscode';
 
 import type { AgentBlock } from '@deepnote/blocks';
-import type { AgentBlockContext, AgentBlockResult } from '@deepnote/runtime-core';
+import type { AgentBlockContext } from '@deepnote/runtime-core';
 
 import type { IDisposable } from '../../platform/common/types';
 import { IExtensionContext } from '../../platform/common/types';
@@ -122,25 +122,21 @@ suite('AgentCellExecutionHandler', () => {
         });
 
         // String(line[]) joins with commas — breaks DataFrame text/plain for the agent.
-        test('joins nbformat line arrays in execute_result text/plain', () => {
-            const output = {
+        test('joins nbformat line arrays in execute_result and display_data text/plain', () => {
+            const executeResult = {
                 output_type: 'execute_result',
                 data: { 'text/plain': ['   a  b\n', '0  1  4\n', '1  2  5'] },
                 metadata: {},
                 execution_count: 1
             };
-
-            expect(describeExecutionOutputs([output])).to.equal('   a  b\n0  1  4\n1  2  5');
-        });
-
-        test('joins nbformat line arrays in display_data text/plain', () => {
-            const output = {
+            const displayData = {
                 output_type: 'display_data',
                 data: { 'text/plain': ['line one\n', 'line two'] },
                 metadata: {}
             };
 
-            expect(describeExecutionOutputs([output])).to.equal('line one\nline two');
+            expect(describeExecutionOutputs([executeResult])).to.equal('   a  b\n0  1  4\n1  2  5');
+            expect(describeExecutionOutputs([displayData])).to.equal('line one\nline two');
         });
 
         test('leaves single-line text/plain untouched', () => {
@@ -191,7 +187,7 @@ suite('AgentCellExecutionHandler', () => {
                 createNotebookCellExecution: sinon.stub().returns(mockExecution)
             } as unknown as NotebookController;
 
-            executeAgentBlockStub = sinon.stub().resolves({ finalOutput: 'done' } as AgentBlockResult);
+            executeAgentBlockStub = sinon.stub().resolves({ finalOutput: 'done' });
         });
 
         teardown(() => {
@@ -199,6 +195,7 @@ suite('AgentCellExecutionHandler', () => {
             reset(mockedVSCodeNamespaces.commands);
             // Restore applyEdit default; don't reset() the shared workspace mock.
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(true));
+            secretStorage.clear();
         });
 
         function createAgentCell(text: string = 'Test prompt') {
@@ -230,29 +227,15 @@ suite('AgentCellExecutionHandler', () => {
             return Buffer.from(item.data).toString('utf-8');
         }
 
-        test('creates execution and starts it', async () => {
+        test('creates execution, clears output, sets planning output, and ends successfully', async () => {
             const cell = createAgentCell('Analyze data');
 
             await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
             expect((mockController.createNotebookCellExecution as sinon.SinonStub).calledOnceWith(cell)).to.be.true;
             expect(mockExecution.start.calledOnce).to.be.true;
-        });
-
-        test('clears output before streaming', async () => {
-            const cell = createAgentCell('Analyze data');
-
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
-
             expect(mockExecution.clearOutput.calledOnce).to.be.true;
             expect(mockExecution.clearOutput.calledBefore(mockExecution.replaceOutput)).to.be.true;
-        });
-
-        test('sets initial output via replaceOutput', async () => {
-            const cell = createAgentCell('Hello world');
-
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
-
             expect(mockExecution.replaceOutput.calledOnce).to.be.true;
 
             const outputs = mockExecution.replaceOutput.firstCall.args[0] as NotebookCellOutput[];
@@ -261,14 +244,17 @@ suite('AgentCellExecutionHandler', () => {
 
             const text = Buffer.from(outputs[0].items[0].data).toString('utf-8');
             expect(text).to.include('[Agent] Planning next steps...');
+            expect(mockExecution.end.calledOnce).to.be.true;
+            expect(mockExecution.end.firstCall.args[0]).to.be.true;
         });
 
-        test('streams events via appendOutputItems using onAgentEvent callback', async () => {
+        // Incremental deltas only — full transcript per event is O(n²) over the EH boundary.
+        test('streams text_delta events via appendOutputItems with incremental stdout chunks', async () => {
             executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
-                await context.onAgentEvent?.({ type: 'text_delta', text: 'Hello ' });
-                await context.onAgentEvent?.({ type: 'text_delta', text: 'world' });
+                await context.onAgentEvent?.({ type: 'text_delta', text: 'first' });
+                await context.onAgentEvent?.({ type: 'text_delta', text: ' second' });
 
-                return { finalOutput: 'Hello world' } as AgentBlockResult;
+                return { finalOutput: 'first second' };
             });
 
             const cell = createAgentCell();
@@ -279,21 +265,6 @@ suite('AgentCellExecutionHandler', () => {
 
             const item = mockExecution.appendOutputItems.firstCall.args[0] as NotebookCellOutputItem;
             expect(item.mime).to.equal('application/vnd.code.notebook.stdout');
-        });
-
-        // Incremental deltas only — full transcript per event is O(n²) over the EH boundary.
-        test('streaming sends only the incremental text per event', async () => {
-            executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
-                await context.onAgentEvent?.({ type: 'text_delta', text: 'first' });
-                await context.onAgentEvent?.({ type: 'text_delta', text: ' second' });
-
-                return { finalOutput: 'first second' } as AgentBlockResult;
-            });
-
-            const cell = createAgentCell();
-
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
-
             expect(getStdoutChunkText(0)).to.equal('[Agent] Text:\nfirst');
             expect(getStdoutChunkText(1)).to.equal(' second');
         });
@@ -303,7 +274,7 @@ suite('AgentCellExecutionHandler', () => {
                 await context.onAgentEvent?.({ type: 'text_delta', text: 'thinking...' });
                 await context.onAgentEvent?.({ type: 'tool_called', toolName: 'search' });
 
-                return { finalOutput: '' } as AgentBlockResult;
+                return { finalOutput: '' };
             });
 
             const cell = createAgentCell();
@@ -315,17 +286,8 @@ suite('AgentCellExecutionHandler', () => {
             expect(chunk2).to.include('[Agent] Tool called: search');
         });
 
-        test('ends execution with success', async () => {
-            const cell = createAgentCell();
-
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
-
-            expect(mockExecution.end.calledOnce).to.be.true;
-            expect(mockExecution.end.firstCall.args[0]).to.be.true;
-        });
-
-        test('ends execution with failure when error occurs', async () => {
-            mockExecution.clearOutput.rejects(new Error('Test error'));
+        test('fails execution and writes clearOutput error to stderr', async () => {
+            mockExecution.clearOutput.rejects(new Error('Something went wrong'));
 
             const cell = createAgentCell();
 
@@ -333,15 +295,6 @@ suite('AgentCellExecutionHandler', () => {
 
             expect(mockExecution.end.calledOnce).to.be.true;
             expect(mockExecution.end.firstCall.args[0]).to.be.false;
-        });
-
-        test('writes error message to stderr output on failure', async () => {
-            mockExecution.clearOutput.rejects(new Error('Something went wrong'));
-
-            const cell = createAgentCell();
-
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
-
             expect(mockExecution.appendOutput.calledOnce).to.be.true;
 
             const outputs = mockExecution.appendOutput.firstCall.args[0] as NotebookCellOutput[];
@@ -404,36 +357,23 @@ suite('AgentCellExecutionHandler', () => {
             expect(text).to.include('previous run');
         });
 
-        test('inserts a markdown cell after the agent cell with ephemeral metadata', async () => {
-            const { agentCell, cells } = createAgentCellInMutableNotebook();
-
-            executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
-                await context.addMarkdownBlock({ content: '## Findings' });
-
-                return { finalOutput: '' } as AgentBlockResult;
-            });
-
-            await executeAgentCell(agentCell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
-
-            expect(cells).to.have.lengthOf(2);
-            expect(cells[1].document.getText()).to.equal('## Findings');
-            expect(cells[1].metadata?.is_ephemeral).to.be.true;
-            expect(cells[1].metadata?.agent_source_block_id).to.equal(agentCell.metadata?.id);
-        });
-
-        test('inserts successive cells after the ones it already added', async () => {
+        test('inserts ephemeral markdown cells after the agent cell in order', async () => {
             const { agentCell, cells } = createAgentCellInMutableNotebook();
 
             executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
                 await context.addMarkdownBlock({ content: 'first' });
                 await context.addMarkdownBlock({ content: 'second' });
 
-                return { finalOutput: '' } as AgentBlockResult;
+                return { finalOutput: '' };
             });
 
             await executeAgentCell(agentCell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
 
             expect(cells.map((cell) => cell.document.getText())).to.deep.equal(['Test prompt', 'first', 'second']);
+            expect(cells[1].metadata?.is_ephemeral).to.be.true;
+            expect(cells[1].metadata?.agent_source_block_id).to.equal(agentCell.metadata?.id);
+            expect(cells[2].metadata?.is_ephemeral).to.be.true;
+            expect(cells[2].metadata?.agent_source_block_id).to.equal(agentCell.metadata?.id);
         });
 
         // cellAt clamps — failed insert must not run an existing cell at that index.
@@ -447,7 +387,7 @@ suite('AgentCellExecutionHandler', () => {
             executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
                 toolResult = await context.addAndExecuteCodeBlock({ code: 'print(1)' });
 
-                return { finalOutput: '' } as AgentBlockResult;
+                return { finalOutput: '' };
             });
 
             await executeAgentCell(agentCell, mockController, { executeAgentBlockFn: executeAgentBlockStub });

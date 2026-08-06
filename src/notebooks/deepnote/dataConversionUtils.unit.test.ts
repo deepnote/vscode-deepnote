@@ -11,28 +11,20 @@ suite('DataConversionUtils', () => {
             expect(isAgentCell(cell)).to.be.true;
         });
 
-        test('returns false for cell with code pocket type', () => {
-            const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'code' } } });
+        test('returns false for non-agent pocket types', () => {
+            const codeCell = createMockCell({ metadata: { __deepnotePocket: { type: 'code' } } });
+            const markdownCell = createMockCell({ metadata: { __deepnotePocket: { type: 'markdown' } } });
 
-            expect(isAgentCell(cell)).to.be.false;
+            expect(isAgentCell(codeCell)).to.be.false;
+            expect(isAgentCell(markdownCell)).to.be.false;
         });
 
-        test('returns false for cell with markdown pocket type', () => {
-            const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'markdown' } } });
+        test('returns false when pocket type is not agent', () => {
+            const noPocketCell = createMockCell({ metadata: {} });
+            const noMetadataCell = createMockCell({ metadata: undefined });
 
-            expect(isAgentCell(cell)).to.be.false;
-        });
-
-        test('returns false for cell without pocket', () => {
-            const cell = createMockCell({ metadata: {} });
-
-            expect(isAgentCell(cell)).to.be.false;
-        });
-
-        test('returns false for cell without metadata', () => {
-            const cell = createMockCell({ metadata: undefined });
-
-            expect(isAgentCell(cell)).to.be.false;
+            expect(isAgentCell(noPocketCell)).to.be.false;
+            expect(isAgentCell(noMetadataCell)).to.be.false;
         });
     });
 
@@ -77,16 +69,12 @@ suite('DataConversionUtils', () => {
         });
 
         // agent_source_block_id alone does not mark a cell for agent cleanup.
-        test('returns undefined when the cell is not marked ephemeral', () => {
-            const cell = createMockCell({ metadata: { agent_source_block_id: 'agent-block-1' } });
+        test('returns undefined when the cell is not ephemeral or ordinary', () => {
+            const withSourceOnly = createMockCell({ metadata: { agent_source_block_id: 'agent-block-1' } });
+            const ordinaryCell = createMockCell({ metadata: {} });
 
-            expect(getEphemeralCellAgentSourceBlockId(cell)).to.be.undefined;
-        });
-
-        test('returns undefined for an ordinary cell', () => {
-            const cell = createMockCell({ metadata: {} });
-
-            expect(getEphemeralCellAgentSourceBlockId(cell)).to.be.undefined;
+            expect(getEphemeralCellAgentSourceBlockId(withSourceOnly)).to.be.undefined;
+            expect(getEphemeralCellAgentSourceBlockId(ordinaryCell)).to.be.undefined;
         });
     });
 });

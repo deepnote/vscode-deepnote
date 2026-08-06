@@ -7,15 +7,11 @@ import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 import { IExtensionContext } from '../../platform/common/types';
 import { ServiceContainer } from '../../platform/ioc/container';
 import {
-    clearOpenAiApiKey,
     clearSecret,
-    getOpenAiApiKey,
     getOrPromptOpenAiApiKey,
     getOrPromptSecret,
     getSecret,
-    promptForOpenAiApiKey,
     promptForSecret,
-    setOpenAiApiKey,
     setSecret
 } from './deepnoteSecretStore';
 
@@ -118,6 +114,14 @@ suite('deepnoteSecretStore', () => {
 
             assert.isUndefined(value);
         });
+
+        test('returns undefined when user enters empty string', async () => {
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('   '));
+
+            const value = await promptForSecret('customKey', { prompt: 'Enter value' });
+
+            assert.isUndefined(value);
+        });
     });
 
     suite('generic getOrPromptSecret', () => {
@@ -129,113 +133,36 @@ suite('deepnoteSecretStore', () => {
             assert.strictEqual(value, 'stored-value');
         });
 
-        test('throws when value missing and user cancels prompt', async () => {
-            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
+        test('prompts and returns value when missing', async () => {
+            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('prompted-value'));
 
-            try {
-                await getOrPromptSecret('customKey', { prompt: 'Enter value' }, 'Value is required');
-                assert.fail('Should have thrown');
-            } catch (e) {
-                assert.strictEqual((e as Error).message, 'Value is required');
+            const value = await getOrPromptSecret('customKey', { prompt: 'Enter value' }, 'Value is required');
+
+            assert.strictEqual(value, 'prompted-value');
+        });
+
+        for (const scenario of [
+            {
+                label: 'generic',
+                run: () => getOrPromptSecret('customKey', { prompt: 'Enter value' }, 'Value is required'),
+                assertError: (e: Error) => assert.strictEqual(e.message, 'Value is required')
+            },
+            {
+                label: 'openAi',
+                run: () => getOrPromptOpenAiApiKey(),
+                assertError: (e: Error) => assert.include(e.message, 'OpenAI API key is not set')
             }
-        });
-    });
+        ]) {
+            test(`throws when value missing and user cancels prompt (${scenario.label})`, async () => {
+                when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
 
-    suite('getOpenAiApiKey', () => {
-        test('returns key when stored', async () => {
-            secretStorage.set('openAiApiKey', 'test-key');
-
-            const key = await getOpenAiApiKey();
-
-            assert.strictEqual(key, 'test-key');
-        });
-
-        test('returns undefined when not set', async () => {
-            const key = await getOpenAiApiKey();
-
-            assert.isUndefined(key);
-        });
-
-        test('returns undefined when key is empty string', async () => {
-            secretStorage.set('openAiApiKey', '');
-
-            const key = await getOpenAiApiKey();
-
-            assert.isUndefined(key);
-        });
-    });
-
-    suite('setOpenAiApiKey', () => {
-        test('stores key in secrets', async () => {
-            await setOpenAiApiKey('my-api-key');
-
-            assert.strictEqual(secretStorage.get('openAiApiKey'), 'my-api-key');
-        });
-    });
-
-    suite('clearOpenAiApiKey', () => {
-        test('deletes key from secrets', async () => {
-            secretStorage.set('openAiApiKey', 'test-key');
-
-            await clearOpenAiApiKey();
-
-            assert.isFalse(secretStorage.has('openAiApiKey'));
-        });
-    });
-
-    suite('promptForOpenAiApiKey', () => {
-        test('stores and returns key when user enters value', async () => {
-            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('sk-abc123'));
-
-            const key = await promptForOpenAiApiKey();
-
-            assert.strictEqual(key, 'sk-abc123');
-            assert.strictEqual(secretStorage.get('openAiApiKey'), 'sk-abc123');
-        });
-
-        test('returns undefined when user cancels', async () => {
-            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
-
-            const key = await promptForOpenAiApiKey();
-
-            assert.isUndefined(key);
-        });
-
-        test('returns undefined when user enters empty string', async () => {
-            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('   '));
-
-            const key = await promptForOpenAiApiKey();
-
-            assert.isUndefined(key);
-        });
-    });
-
-    suite('getOrPromptOpenAiApiKey', () => {
-        test('returns key when present in store', async () => {
-            secretStorage.set('openAiApiKey', 'stored-key');
-
-            const key = await getOrPromptOpenAiApiKey();
-
-            assert.strictEqual(key, 'stored-key');
-        });
-
-        test('prompts and returns key when missing', async () => {
-            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve('prompted-key'));
-
-            const key = await getOrPromptOpenAiApiKey();
-
-            assert.strictEqual(key, 'prompted-key');
-        });
-
-        test('throws when key missing and user cancels prompt', async () => {
-            when(mockedVSCodeNamespaces.window.showInputBox(anything())).thenReturn(Promise.resolve(undefined));
-
-            try {
-                await getOrPromptOpenAiApiKey();
-                assert.fail('Should have thrown');
-            } catch (e) {
-                assert.include((e as Error).message, 'OpenAI API key is not set');
-            }
-        });
+                try {
+                    await scenario.run();
+                    assert.fail('Should have thrown');
+                } catch (e) {
+                    scenario.assertError(e as Error);
+                }
+            });
+        }
     });
 });

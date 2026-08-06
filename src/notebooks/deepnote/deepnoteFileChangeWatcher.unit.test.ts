@@ -2,7 +2,15 @@ import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { Disposable, EventEmitter, FileSystemWatcher, NotebookCellKind, NotebookDocument, Uri } from 'vscode';
+import {
+    Disposable,
+    EventEmitter,
+    FileSystemWatcher,
+    NotebookCellKind,
+    NotebookDocument,
+    NotebookEdit,
+    Uri
+} from 'vscode';
 
 import type { IControllerRegistration } from '../controllers/types';
 import type { IDisposableRegistry } from '../../platform/common/types';
@@ -1167,6 +1175,148 @@ project:
             }
             fallbackOnDidChange.dispose();
             fallbackOnDidCreate.dispose();
+        });
+
+        test('should resolve the block for a metadata-less cell that sits below an ephemeral cell', async () => {
+            // Catches: indexing the main file's block list by live cell index. Ephemeral agent cells
+            // exist in the document but are stripped from the file, so every cell below one is offset —
+            // the metadata-less cell would adopt the wrong block's id and outputs, and that id gets
+            // written back, leaving two cells claiming one block.
+            const mockedManager = mock<IDeepnoteNotebookManager>();
+            when(mockedManager.getProjectForNotebook('e132b172-b114-410e-8331-011517db664f', 'notebook-1')).thenReturn({
+                version: '1.0',
+                metadata: { createdAt: '2025-01-01T00:00:00Z' },
+                project: {
+                    id: 'e132b172-b114-410e-8331-011517db664f',
+                    name: 'Test Project',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Notebook 1',
+                            blocks: [
+                                { id: 'block-1', type: 'code', sortingKey: 'a0' },
+                                { id: 'block-2', type: 'code', sortingKey: 'a1' }
+                            ]
+                        }
+                    ]
+                }
+            } as DeepnoteFile);
+
+            const offsetDisposables: IDisposableRegistry = [];
+            const offsetOnDidChange = new EventEmitter<Uri>();
+            const offsetOnDidCreate = new EventEmitter<Uri>();
+            const offsetFsWatcher = mock<FileSystemWatcher>();
+            when(offsetFsWatcher.onDidChange).thenReturn(offsetOnDidChange.event);
+            when(offsetFsWatcher.onDidCreate).thenReturn(offsetOnDidCreate.event);
+            when(offsetFsWatcher.dispose()).thenReturn();
+            when(mockedVSCodeNamespaces.workspace.createFileSystemWatcher(anything())).thenReturn(
+                instance(offsetFsWatcher)
+            );
+
+            let offsetApplyEditCount = 0;
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
+                offsetApplyEditCount++;
+                return Promise.resolve(true);
+            });
+
+            // The vscode mock's NotebookEdit.updateCellMetadata drops its metadata argument, so the
+            // WorkspaceEdit cannot reveal which block id was written. Stub the static to capture it.
+            const metadataWrites: Array<{ index: number; metadata: Record<string, unknown> }> = [];
+            sinon.stub(NotebookEdit, 'updateCellMetadata').callsFake((index: number, metadata) => {
+                metadataWrites.push({ index, metadata: metadata as Record<string, unknown> });
+
+                return {} as NotebookEdit;
+            });
+
+            const offsetWatcher = new DeepnoteFileChangeWatcher(
+                offsetDisposables,
+                instance(mockedManager),
+                instance(mockSnapshotService)
+            );
+            offsetWatcher.activate();
+
+            const notebook = createMockNotebook({
+                uri: Uri.file('/workspace/test.deepnote'),
+                metadata: {
+                    deepnoteProjectId: 'e132b172-b114-410e-8331-011517db664f',
+                    deepnoteNotebookId: 'notebook-1'
+                },
+                cells: [
+                    {
+                        metadata: { id: 'block-1', type: 'code' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("first")' }
+                    },
+                    {
+                        // Agent scratch cell: lives in the document, never persisted to the file
+                        metadata: { id: 'eph-1', type: 'code', is_ephemeral: true, agent_source_block_id: 'agent-1' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("scratch")' }
+                    },
+                    {
+                        metadata: { type: 'code' }, // No id — VS Code lost it
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("second")' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+            const newOutputs = new Map<string, DeepnoteOutput[]>([
+                [
+                    'block-1',
+                    [
+                        {
+                            output_type: 'execute_result',
+                            data: { 'text/plain': 'First Output' },
+                            execution_count: 1
+                        } as DeepnoteOutput
+                    ]
+                ],
+                [
+                    'block-2',
+                    [
+                        {
+                            output_type: 'execute_result',
+                            data: { 'text/plain': 'Second Output' },
+                            execution_count: 2
+                        } as DeepnoteOutput
+                    ]
+                ]
+            ]);
+            when(mockSnapshotService.readSnapshot(anything(), anything())).thenReturn(Promise.resolve(newOutputs));
+
+            offsetOnDidChange.fire(
+                Uri.file(
+                    '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+                )
+            );
+
+            await waitFor(() => offsetApplyEditCount > 0);
+            await waitFor(() => metadataWrites.length > 0);
+
+            const writeForLastCell = metadataWrites.find((w) => w.index === 2);
+            assert.isDefined(writeForLastCell, 'the metadata-less cell at live index 2 should receive a block id');
+            assert.strictEqual(
+                writeForLastCell!.metadata.__deepnoteBlockId,
+                'block-2',
+                'live index 2 is the second *persisted* cell, so it must resolve to block-2'
+            );
+            assert.notStrictEqual(
+                writeForLastCell!.metadata.__deepnoteBlockId,
+                'block-1',
+                'block-1 already belongs to live index 0 — two cells must never claim one block'
+            );
+
+            for (const d of offsetDisposables) {
+                d.dispose();
+            }
+            offsetOnDidChange.dispose();
+            offsetOnDidCreate.dispose();
         });
 
         test('should only update cells whose outputs changed (per-cell updates)', async () => {

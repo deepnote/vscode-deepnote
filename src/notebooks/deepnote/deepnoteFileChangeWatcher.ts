@@ -375,15 +375,20 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             blockIdFromFallback: boolean;
         }> = [];
 
+        // Ephemeral cells live in the document but are stripped from the file, so a live index cannot
+        // address originalBlocks. Track the file's own cursor, advanced only by persisted cells.
+        let fileBlockIndex = 0;
+
         for (let i = 0; i < liveCells.length; i++) {
             try {
                 const cell = liveCells[i];
+                const originalBlock = isEphemeralCell(cell) ? undefined : originalBlocks?.[fileBlockIndex++];
                 let blockId = getBlockId(cell);
                 let blockIdFromFallback = false;
 
                 // Fallback to original project blocks when metadata was lost
-                if (!blockId && originalBlocks) {
-                    blockId = originalBlocks[i]?.id;
+                if (!blockId && originalBlock) {
+                    blockId = originalBlock.id;
                     blockIdFromFallback = true;
                 }
 
@@ -391,7 +396,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                     continue;
                 }
 
-                const fallbackType = originalBlocks?.[i]?.type;
+                const fallbackType = originalBlock?.type;
                 const blockType = ((cell.metadata?.type as string) ?? fallbackType ?? 'code') as DeepnoteBlock['type'];
                 const newOutputs = this.converter.transformOutputsForVsCode(
                     snapshotOutputs.get(blockId)!,

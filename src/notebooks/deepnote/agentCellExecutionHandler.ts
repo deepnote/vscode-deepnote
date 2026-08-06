@@ -192,12 +192,8 @@ export async function executeAgentCell(
 
         const prompt = cell.document.getText();
 
-        // Streamed as stdout items so each event can be appended rather than re-sending the whole
-        // transcript: `NotebookCellOutputItem.text` re-encodes the full buffer on every token, which
-        // is O(n²) bytes across the extension-host boundary — and since runtime-core awaits
-        // `onAgentEvent` inside its stream loop, that cost is added to the run's wall clock.
-        // Appended stdout items render as one continuous block, the same way kernel output streams;
-        // agentBlock.e2e.test.ts pins that, since only a real renderer can show it.
+        // Per-event appends keep this O(n) bytes across the extension-host boundary, on the run's wall
+        // clock: runtime-core awaits `onAgentEvent`. The renderer concatenates appended stdout items.
         const output = new NotebookCellOutput([NotebookCellOutputItem.stdout(`[Agent] Planning next steps...`)]);
         await execution.replaceOutput([output]);
 
@@ -209,10 +205,7 @@ export async function executeAgentCell(
             throw new Error('Cell is not an agent cell');
         }
 
-        // Verify rather than assume the caller cleared them: nothing enforces the precondition across
-        // the three call sites, and running dirty fails silently — the agent would be handed its own
-        // previous output as context, and insertEphemeralCell appends below the stale cells rather
-        // than replacing them, so every run would leave another copy behind.
+        // The caller clears the previous run per batch.
         const staleCellCount = cell.notebook
             .getCells()
             .filter((c) => getEphemeralCellAgentSourceBlockId(c) === agentBlock.id).length;

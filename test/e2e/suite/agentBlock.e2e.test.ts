@@ -2,7 +2,6 @@
  * Agent block E2E: three-leg tool loop against a local aimock server (no live OpenAI calls).
  * Legs 2–3 match on tool results, so the mock only advances after real kernel stdout and
  * markdown tool replies. First kernel run can take minutes (venv + toolkit).
- * The specs run in order: the second re-runs the same block over the first one's generated cells.
  */
 
 import { EditorView, InputBox, VSBrowser, WebView, Workbench } from 'vscode-extension-tester';
@@ -41,15 +40,14 @@ const AGENT_RUN_TIMEOUT = 60_000;
 const PYTHON_OUTPUT_MARKER = 'agent-generated-python-ran';
 const GENERATED_PYTHON = `print("${PYTHON_OUTPUT_MARKER}")`;
 const EPHEMERAL_MARKDOWN_TEXT = 'Ephemeral markdown written by the E2E agent run';
-// aimock streams content in 20-character chunks, so an answer this long reaches the agent cell as
-// several text_delta events — one appended output item each.
+// aimock chunks content at 20 characters, so this length arrives as several text_delta events.
 const FINAL_AGENT_TEXT = 'Summary added as a markdown block, streamed across several deltas.';
-// The re-run's own markers, chosen so neither run's text is a substring of the other's.
+// Not substrings of the first run's markers; the counts below depend on that.
 const RERUN_PYTHON_OUTPUT_MARKER = 'rerun-python-ran';
 const RERUN_GENERATED_PYTHON = `print("${RERUN_PYTHON_OUTPUT_MARKER}")`;
 const RERUN_MARKDOWN_TEXT = 'Second-run markdown from the E2E agent';
 const RERUN_FINAL_AGENT_TEXT = 'Re-run summary added as a markdown block.';
-// Coupled to the precondition executeAgentCell reports when a previous run was left in place.
+// Coupled to executeAgentCell's uncleared-previous-run error.
 const STALE_CELLS_ERROR_TEXT = 'from its previous run';
 const MOCK_API_KEY = 'sk-e2e-mock-key';
 const SET_API_KEY_COMMAND = 'Deepnote: Set OpenAI API Key';
@@ -230,10 +228,6 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
 
         await screenshot('agent-run');
 
-        // agentCellExecutionHandler appends one stdout item per agent event instead of re-sending the
-        // transcript, which only pays off if the renderer joins those items back into one block —
-        // something only a real renderer can show: a section boundary keeps its blank line, and an
-        // answer split across several deltas arrives unbroken.
         assertRenderedContiguously(
             transcript,
             `[Agent] Tool called: ${MARKDOWN_TOOL_NAME}\n\n[Agent] Tool output: ${MARKDOWN_TOOL_NAME}`
@@ -241,9 +235,7 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
         assertRenderedContiguously(transcript, `[Agent] Text:\n${FINAL_AGENT_TEXT}`);
     });
 
-    // Runs against the notebook the previous test left behind, so the agent block starts this run
-    // owning a full set of generated cells — the only state in which the batch-level clearing and the
-    // precondition executeAgentCell verifies can be observed at all.
+    // Depends on the previous spec: the block starts this run owning the cells it generated there.
     it('clears the cells its previous run generated instead of stacking a second copy', async function () {
         mockServer = await startMockOpenAiServer([
             {
@@ -283,17 +275,11 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
 
         await screenshot('agent-rerun');
 
-        // The first run's cells are gone rather than pushed down by the second run's, which is also
-        // what keeps them out of the notebook context the agent is handed. Counting rather than
-        // asserting presence: on a Mocha retry the markers are the same, so only the count separates
-        // one copy from two.
+        // Counts, not presence: a Mocha retry repeats the markers.
         assertOccurrences(rendered, PYTHON_OUTPUT_MARKER, 0);
         assertOccurrences(rendered, EPHEMERAL_MARKDOWN_TEXT, 0);
         assertOccurrences(rendered, RERUN_PYTHON_OUTPUT_MARKER, 1);
         assertOccurrences(rendered, RERUN_MARKDOWN_TEXT, 1);
-
-        // Clearing happens per batch, before anything runs, so the agent cell never reports the
-        // precondition — it would surface here as stderr on the agent cell.
         assertOccurrences(rendered, STALE_CELLS_ERROR_TEXT, 0);
     });
 });

@@ -2,6 +2,7 @@
  * Agent block E2E: three-leg tool loop against a local aimock server (no live OpenAI calls).
  * Legs 2–3 match on tool results, so the mock only advances after real kernel stdout and
  * markdown tool replies. First kernel run can take minutes (venv + toolkit).
+ * The specs run in order: the second re-runs the same block over the first one's generated cells.
  */
 
 import { EditorView, InputBox, VSBrowser, WebView, Workbench } from 'vscode-extension-tester';
@@ -43,6 +44,13 @@ const EPHEMERAL_MARKDOWN_TEXT = 'Ephemeral markdown written by the E2E agent run
 // aimock streams content in 20-character chunks, so an answer this long reaches the agent cell as
 // several text_delta events — one appended output item each.
 const FINAL_AGENT_TEXT = 'Summary added as a markdown block, streamed across several deltas.';
+// The re-run's own markers, chosen so neither run's text is a substring of the other's.
+const RERUN_PYTHON_OUTPUT_MARKER = 'rerun-python-ran';
+const RERUN_GENERATED_PYTHON = `print("${RERUN_PYTHON_OUTPUT_MARKER}")`;
+const RERUN_MARKDOWN_TEXT = 'Second-run markdown from the E2E agent';
+const RERUN_FINAL_AGENT_TEXT = 'Re-run summary added as a markdown block.';
+// Coupled to the precondition executeAgentCell reports when a previous run was left in place.
+const STALE_CELLS_ERROR_TEXT = 'from its previous run';
 const MOCK_API_KEY = 'sk-e2e-mock-key';
 const SET_API_KEY_COMMAND = 'Deepnote: Set OpenAI API Key';
 const CLEAR_API_KEY_COMMAND = 'Deepnote: Clear OpenAI API Key';
@@ -80,6 +88,19 @@ function assertRenderedContiguously(transcript: string, expected: string): void 
     throw new Error(
         `Agent transcript does not contain ${JSON.stringify(expected)} as one unbroken run — appended stdout ` +
             `items are not rendering as a single block. Full transcript: ${JSON.stringify(transcript)}`
+    );
+}
+
+function assertOccurrences(rendered: string, needle: string, expected: number): void {
+    const actual = rendered.split(needle).length - 1;
+
+    if (actual === expected) {
+        return;
+    }
+
+    throw new Error(
+        `Expected ${expected} occurrence(s) of ${JSON.stringify(needle)} in the notebook, found ${actual}. ` +
+            `Full text: ${JSON.stringify(rendered)}`
     );
 }
 
@@ -218,5 +239,61 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
             `[Agent] Tool called: ${MARKDOWN_TOOL_NAME}\n\n[Agent] Tool output: ${MARKDOWN_TOOL_NAME}`
         );
         assertRenderedContiguously(transcript, `[Agent] Text:\n${FINAL_AGENT_TEXT}`);
+    });
+
+    // Runs against the notebook the previous test left behind, so the agent block starts this run
+    // owning a full set of generated cells — the only state in which the batch-level clearing and the
+    // precondition executeAgentCell verifies can be observed at all.
+    it('clears the cells its previous run generated instead of stacking a second copy', async function () {
+        mockServer = await startMockOpenAiServer([
+            {
+                match: { hasToolResult: false },
+                response: {
+                    toolCall: {
+                        arguments: JSON.stringify({ code: RERUN_GENERATED_PYTHON }),
+                        id: 'call_e2e_rerun_code',
+                        name: CODE_TOOL_NAME
+                    }
+                }
+            },
+            {
+                match: { toolResultContains: RERUN_PYTHON_OUTPUT_MARKER },
+                response: {
+                    toolCall: {
+                        arguments: JSON.stringify({ content: RERUN_MARKDOWN_TEXT }),
+                        id: 'call_e2e_rerun_markdown',
+                        name: MARKDOWN_TOOL_NAME
+                    }
+                }
+            },
+            {
+                match: { toolResultContains: MARKDOWN_BLOCK_ADDED_TEXT },
+                response: { content: RERUN_FINAL_AGENT_TEXT }
+            }
+        ]);
+
+        await dismissAllNotifications();
+        await clickRunAll(AGENT_FILE);
+
+        const rendered = await awaitWebviewMarkers(
+            [RERUN_PYTHON_OUTPUT_MARKER, RERUN_MARKDOWN_TEXT, RERUN_FINAL_AGENT_TEXT],
+            AGENT_RUN_TIMEOUT,
+            'second agent run'
+        );
+
+        await screenshot('agent-rerun');
+
+        // The first run's cells are gone rather than pushed down by the second run's, which is also
+        // what keeps them out of the notebook context the agent is handed. Counting rather than
+        // asserting presence: on a Mocha retry the markers are the same, so only the count separates
+        // one copy from two.
+        assertOccurrences(rendered, PYTHON_OUTPUT_MARKER, 0);
+        assertOccurrences(rendered, EPHEMERAL_MARKDOWN_TEXT, 0);
+        assertOccurrences(rendered, RERUN_PYTHON_OUTPUT_MARKER, 1);
+        assertOccurrences(rendered, RERUN_MARKDOWN_TEXT, 1);
+
+        // Clearing happens per batch, before anything runs, so the agent cell never reports the
+        // precondition — it would surface here as stderr on the agent cell.
+        assertOccurrences(rendered, STALE_CELLS_ERROR_TEXT, 0);
     });
 });

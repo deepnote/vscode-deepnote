@@ -523,81 +523,106 @@ suite('AgentCellExecutionHandler', () => {
     });
 
     suite('executeEphemeralCell', () => {
-        let tokenSource: CancellationTokenSource;
+        suite('with active cancellation token', () => {
+            let tokenSource: CancellationTokenSource;
 
-        setup(() => {
-            tokenSource = new CancellationTokenSource();
-        });
-
-        teardown(() => {
-            tokenSource.dispose();
-            reset(mockedVSCodeNamespaces.commands);
-        });
-
-        test('uses current cell index, not stale index from insertion time', async () => {
-            const staleIndex = 5;
-            const currentIndex = 6;
-
-            const cell = createMockCell({ index: staleIndex });
-
-            (cell as { index: number }).index = currentIndex;
-
-            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenCall(async () => {
-                notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Idle);
+            setup(() => {
+                tokenSource = new CancellationTokenSource();
             });
 
-            await executeEphemeralCell(cell, tokenSource.token);
+            teardown(() => {
+                tokenSource.dispose();
+                reset(mockedVSCodeNamespaces.commands);
+            });
 
-            const [commandName, commandArg] = capture(
-                mockedVSCodeNamespaces.commands.executeCommand as (cmd: string, arg: unknown) => Thenable<unknown>
-            ).last();
+            test('uses current cell index, not stale index from insertion time', async () => {
+                const staleIndex = 5;
+                const currentIndex = 6;
 
-            expect(commandName).to.equal('notebook.cell.execute');
-            expect(commandArg).to.deep.equal({
-                ranges: [{ start: currentIndex, end: currentIndex + 1 }],
-                document: cell.notebook.uri
+                const cell = createMockCell({ index: staleIndex });
+
+                (cell as { index: number }).index = currentIndex;
+
+                when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenCall(async () => {
+                    notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Idle);
+                });
+
+                await executeEphemeralCell(cell, tokenSource.token);
+
+                const [commandName, commandArg] = capture(
+                    mockedVSCodeNamespaces.commands.executeCommand as (cmd: string, arg: unknown) => Thenable<unknown>
+                ).last();
+
+                expect(commandName).to.equal('notebook.cell.execute');
+                expect(commandArg).to.deep.equal({
+                    ranges: [{ start: currentIndex, end: currentIndex + 1 }],
+                    document: cell.notebook.uri
+                });
+            });
+
+            test('reports the failure reason instead of swallowing it', async () => {
+                const cell = createMockCell({ index: 0 });
+
+                when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenReject(
+                    new Error('kernel is dead')
+                );
+
+                const result = await executeEphemeralCell(cell, tokenSource.token);
+
+                expect(result.success).to.be.false;
+                expect(result.error).to.equal('kernel is dead');
             });
         });
 
         // Pre-cancelled token must skip executeCommand, not only the idle wait.
-        test('throws without dispatching to the kernel when the token is pre-cancelled', async () => {
-            const cell = createMockCell({ index: 0 });
-            const tokenSource = new CancellationTokenSource();
-            tokenSource.cancel();
+        suite('with pre-cancelled token', () => {
+            let tokenSource: CancellationTokenSource;
 
-            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve();
+            setup(() => {
+                tokenSource = new CancellationTokenSource();
+                tokenSource.cancel();
+            });
 
-            try {
-                await executeEphemeralCell(cell, tokenSource.token);
-                expect.fail('Should have thrown');
-            } catch (e) {
-                expect(e).to.be.instanceOf(CancellationError);
-            } finally {
+            teardown(() => {
                 tokenSource.dispose();
-            }
+                reset(mockedVSCodeNamespaces.commands);
+            });
 
-            verify(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).never();
-        });
+            test('throws without dispatching to the kernel when the token is pre-cancelled', async () => {
+                const cell = createMockCell({ index: 0 });
 
-        test('reports the failure reason instead of swallowing it', async () => {
-            const cell = createMockCell({ index: 0 });
+                when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve();
 
-            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenReject(
-                new Error('kernel is dead')
-            );
+                try {
+                    await executeEphemeralCell(cell, tokenSource.token);
+                    expect.fail('Should have thrown');
+                } catch (e) {
+                    expect(e).to.be.instanceOf(CancellationError);
+                }
 
-            const result = await executeEphemeralCell(cell, tokenSource.token);
-
-            expect(result.success).to.be.false;
-            expect(result.error).to.equal('kernel is dead');
+                verify(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).never();
+            });
         });
 
         // Timeout must fire even when executeCommand never resolves.
-        test('times out while the dispatch is still pending', async () => {
-            const cell = createMockCell({ index: 0 });
-            const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        suite('with fake timers', () => {
+            let clock: sinon.SinonFakeTimers;
+            let tokenSource: CancellationTokenSource;
 
-            try {
+            setup(() => {
+                clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+                tokenSource = new CancellationTokenSource();
+            });
+
+            teardown(() => {
+                clock.restore();
+                tokenSource.dispose();
+                reset(mockedVSCodeNamespaces.commands);
+            });
+
+            test('times out while the dispatch is still pending', async () => {
+                const cell = createMockCell({ index: 0 });
+
                 when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenCall(
                     () => new Promise(() => undefined)
                 );
@@ -609,9 +634,7 @@ suite('AgentCellExecutionHandler', () => {
 
                 expect(result.success).to.be.false;
                 expect(result.error).to.equal('Ephemeral cell execution timed out');
-            } finally {
-                clock.restore();
-            }
+            });
         });
     });
 });

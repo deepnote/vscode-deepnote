@@ -24,7 +24,7 @@ const AGENT_MODEL_METADATA_KEY = 'deepnote_agent_model';
 /** Persisted default — absent key becomes `undefined` and breaks openai() model selection. */
 const AGENT_MODEL_AUTO = 'auto';
 
-const AGENT_MODEL_OPTIONS = [AGENT_MODEL_AUTO, 'gpt-4o', 'gpt-5'];
+const AGENT_MODEL_OPTIONS = [AGENT_MODEL_AUTO, 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'];
 
 const AGENT_INDICATOR_PRIORITY = 100;
 const MODEL_PICKER_PRIORITY = 90;

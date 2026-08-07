@@ -105,7 +105,7 @@ suite('AgentBlockConverter', () => {
                 content: 'Old prompt',
                 id: 'agent-block-789',
                 metadata: {
-                    deepnote_agent_model: 'gpt-4o',
+                    deepnote_agent_model: 'gpt-5.6-sol',
                     custom: 'value'
                 },
                 sortingKey: 'a2',
@@ -120,7 +120,7 @@ suite('AgentBlockConverter', () => {
             assert.strictEqual(block.type, 'agent');
             assert.strictEqual(block.sortingKey, 'a2');
             assert.deepStrictEqual(block.metadata, {
-                deepnote_agent_model: 'gpt-4o',
+                deepnote_agent_model: 'gpt-5.6-sol',
                 custom: 'value'
             });
         });

@@ -16,7 +16,7 @@ project:
             Run some Python, then add a markdown block summarising this notebook.
           sortingKey: a0
           metadata:
-            deepnote_agent_model: gpt-5
+            deepnote_agent_model: 'gpt-5.6-sol'
       executionMode: block
       isModule: false
   settings: {}

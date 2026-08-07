@@ -109,13 +109,13 @@ suite('AgentCellStatusBarProvider', () => {
             const cell = createMockCell({
                 metadata: {
                     __deepnotePocket: { type: 'agent' },
-                    deepnote_agent_model: 'gpt-4o',
+                    deepnote_agent_model: 'gpt-5.6-sol',
                     deepnote_max_iterations: 50
                 }
             });
             const items = provider.provideCellStatusBarItems(cell, mockToken)!;
 
-            expect(items[1].text).to.include('Model: gpt-4o');
+            expect(items[1].text).to.include('Model: gpt-5.6-sol');
         });
 
         test('Should display "auto" when model is empty string', () => {
@@ -157,7 +157,7 @@ suite('AgentCellStatusBarProvider', () => {
                 metadata: {
                     __deepnotePocket: { type: 'agent', id: 'pocket-1' },
                     id: 'block-1',
-                    deepnote_agent_model: 'gpt-4o'
+                    deepnote_agent_model: 'gpt-5.6-sol'
                 },
                 index: 2
             });
@@ -176,7 +176,7 @@ suite('AgentCellStatusBarProvider', () => {
         test('Should write the picked model without dropping the cell’s other metadata', async () => {
             // Catches: an inverted spread in updateCellMetadata, which makes the switch a silent
             // no-op while still calling applyEdit — so a call-count assertion would not notice.
-            pick('gpt-5');
+            pick('gpt-5.6-terra');
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
 
             await switchModel(agentCell());
@@ -186,14 +186,14 @@ suite('AgentCellStatusBarProvider', () => {
             expect(capturedEdit!.metadata).to.deep.equal({
                 __deepnotePocket: { type: 'agent', id: 'pocket-1' },
                 id: 'block-1',
-                deepnote_agent_model: 'gpt-5'
+                deepnote_agent_model: 'gpt-5.6-terra'
             });
         });
 
         test('Should not edit the notebook when the current model is re-picked', async () => {
             // Catches: losing the `selected.label === currentModel` guard, which dirties the
             // document on a no-op selection.
-            pick('gpt-4o');
+            pick('gpt-5.6-sol');
 
             await switchModel(agentCell());
 
@@ -212,7 +212,7 @@ suite('AgentCellStatusBarProvider', () => {
 
         test('Should report an error when the workspace edit is rejected', async () => {
             // Catches: dropping the `if (!success)` branch, which loses the model change silently.
-            pick('gpt-5');
+            pick('gpt-5.6-luna');
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(false));
 
             let statusBarRefreshed = false;
@@ -228,7 +228,7 @@ suite('AgentCellStatusBarProvider', () => {
 
         test('Should ignore a non-agent cell', async () => {
             // Catches: dropping the isAgentCell guard, which would offer the model picker on any cell.
-            pick('gpt-5');
+            pick('gpt-5.6-luna');
 
             await switchModel(createMockCell({ metadata: { __deepnotePocket: { type: 'code' } } }));
 

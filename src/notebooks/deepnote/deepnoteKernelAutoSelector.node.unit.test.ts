@@ -3,6 +3,7 @@ import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import { createMockChildProcess } from '../../kernels/deepnote/deepnoteTestHelpers.node';
+import { createMockCell } from './deepnoteTestHelpers';
 import { ServerHandleRegistry } from '../../kernels/deepnote/deepnoteServerHandleRegistry.node';
 import {
     IDeepnoteEnvironmentManager,
@@ -20,7 +21,7 @@ import { IConfigurationService } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { EventEmitter, NotebookCell, NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
+import { EventEmitter, NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
@@ -1063,11 +1064,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             return placeholder;
         }
 
-        const agentCell = {
-            index: 0,
-            metadata: { __deepnotePocket: { type: 'agent' } }
-        } as unknown as NotebookCell;
-        const codeCell = { index: 1, metadata: {} } as unknown as NotebookCell;
+        const agentCell = createMockCell({ index: 0, metadata: { __deepnotePocket: { type: 'agent' } } });
+        const codeCell = createMockCell({ index: 1 });
 
         test('configures the environment and executes nothing', async () => {
             when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(true);

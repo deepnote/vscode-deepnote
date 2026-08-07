@@ -169,17 +169,13 @@ suite('AgentCellStatusBarProvider', () => {
             );
         }
 
-        function switchModel(cell: NotebookCell): Promise<void> {
-            return (provider as unknown as { switchModel(cell: NotebookCell): Promise<void> }).switchModel(cell);
-        }
-
         test('Should write the picked model without dropping the cell’s other metadata', async () => {
             // Catches: an inverted spread in updateCellMetadata, which makes the switch a silent
             // no-op while still calling applyEdit — so a call-count assertion would not notice.
             pick('gpt-5.6-terra');
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
 
-            await switchModel(agentCell());
+            await provider.switchModel(agentCell());
 
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
             expect(capturedEdit!.index).to.equal(2);
@@ -195,7 +191,7 @@ suite('AgentCellStatusBarProvider', () => {
             // document on a no-op selection.
             pick('gpt-5.6-sol');
 
-            await switchModel(agentCell());
+            await provider.switchModel(agentCell());
 
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
@@ -205,7 +201,7 @@ suite('AgentCellStatusBarProvider', () => {
             // user presses Escape.
             pick(undefined);
 
-            await switchModel(agentCell());
+            await provider.switchModel(agentCell());
 
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
@@ -220,7 +216,7 @@ suite('AgentCellStatusBarProvider', () => {
                 statusBarRefreshed = true;
             });
 
-            await switchModel(agentCell());
+            await provider.switchModel(agentCell());
 
             verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
             expect(statusBarRefreshed, 'a rejected edit must not refresh the status bar').to.be.false;
@@ -230,7 +226,7 @@ suite('AgentCellStatusBarProvider', () => {
             // Catches: dropping the isAgentCell guard, which would offer the model picker on any cell.
             pick('gpt-5.6-luna');
 
-            await switchModel(createMockCell({ metadata: { __deepnotePocket: { type: 'code' } } }));
+            await provider.switchModel(createMockCell({ metadata: { __deepnotePocket: { type: 'code' } } }));
 
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();

@@ -122,7 +122,7 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
         return AGENT_MODEL_AUTO;
     }
 
-    private async switchModel(cell: NotebookCell): Promise<void> {
+    public async switchModel(cell: NotebookCell): Promise<void> {
         if (!isAgentCell(cell)) {
             return;
         }

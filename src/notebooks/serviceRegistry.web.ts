@@ -53,7 +53,6 @@ import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnote
 import { AgentCellStatusBarProvider } from './deepnote/agentCellStatusBarProvider';
 import { AgentOpenAiApiKeyCommandHandler } from './deepnote/agentOpenAiApiKeyCommandHandler';
 import { DeepnoteBigNumberCellStatusBarProvider } from './deepnote/deepnoteBigNumberCellStatusBarProvider';
-import { EphemeralCellDecorationProvider } from './deepnote/ephemeralCellDecorationProvider';
 import { EphemeralCellStatusBarProvider } from './deepnote/ephemeralCellStatusBarProvider';
 import { DeepnoteNewCellLanguageService } from './deepnote/deepnoteNewCellLanguageService';
 import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
@@ -142,10 +141,6 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         EphemeralCellStatusBarProvider
-    );
-    serviceManager.addSingleton<IExtensionSyncActivationService>(
-        IExtensionSyncActivationService,
-        EphemeralCellDecorationProvider
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

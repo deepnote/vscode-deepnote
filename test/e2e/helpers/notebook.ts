@@ -41,6 +41,47 @@ export async function clickRunAll(notebookFileName: string): Promise<void> {
     );
 }
 
+/**
+ * Clicks the notebook cell status bar item whose text contains `label`. Cell chrome lives in the
+ * main window DOM (not the output iframe), so this switches out of the webview first and matches on
+ * `textContent` — Selenium's `getText()` is empty for items scrolled out of view.
+ */
+export async function clickCellStatusBarItem(label: string): Promise<void> {
+    const driver = VSBrowser.instance.driver;
+
+    await new WebView().switchBack().catch((error) => {
+        console.warn('[deepnote-e2e] switch back before clicking a cell status bar item:', error);
+    });
+
+    // Locate AND click in the same wait loop: the status bar re-renders as cells execute, which
+    // would otherwise surface as a StaleElementReferenceError between finding and clicking.
+    await driver.wait(
+        async () => {
+            try {
+                for (const item of await driver.findElements(By.css('.cell-statusbar-container .cell-status-item'))) {
+                    const text = (await item.getAttribute('textContent')) ?? '';
+                    if (!text.includes(label)) {
+                        continue;
+                    }
+
+                    await driver.executeScript('arguments[0].scrollIntoView({block: "center"})', item);
+                    await item.click();
+
+                    return true;
+                }
+
+                return false;
+            } catch (error) {
+                console.warn('[deepnote-e2e] locate/click cell status bar item (retrying):', error);
+
+                return false;
+            }
+        },
+        WORKBENCH_TIMEOUT,
+        `notebook cell status bar item "${label}" did not appear or could not be clicked`
+    );
+}
+
 /** Run `read` in the notebook output webview; '' if the frame is missing. */
 async function readInsideNotebookWebview(read: (webView: WebView) => Promise<string>): Promise<string> {
     const driver = VSBrowser.instance.driver;

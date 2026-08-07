@@ -9,6 +9,7 @@ import {
     QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    clickCellStatusBarItem,
     clickRunAll,
     confirmModalDialog,
     copyFixtureToTempDir,
@@ -45,6 +46,16 @@ const RERUN_MARKDOWN_TEXT = 'Second-run markdown from the E2E agent';
 const RERUN_FINAL_AGENT_TEXT = 'Re-run summary added as a markdown block.';
 // executeAgentCell stale-run error substring.
 const STALE_CELLS_ERROR_TEXT = 'from its previous run';
+// Third run, disjoint from both prior runs so the clear test stands on its own.
+const CLEAR_RUN_PYTHON_OUTPUT_MARKER = 'clear-run-python-ran';
+const CLEAR_RUN_GENERATED_PYTHON = `print("${CLEAR_RUN_PYTHON_OUTPUT_MARKER}")`;
+const CLEAR_RUN_MARKDOWN_TEXT = 'Third-run markdown from the E2E agent';
+const CLEAR_RUN_FINAL_AGENT_TEXT = 'Clear-run summary added as a markdown block.';
+// EphemeralCellStatusBarProvider button and its confirmation.
+const CLEAR_EPHEMERAL_BUTTON = 'Clear ephemeral blocks';
+const CLEAR_EPHEMERAL_CONFIRM = 'Clear';
+const CLEAR_EPHEMERAL_CONFIRM_TEXT = 'ephemeral block';
+const CLEAR_EPHEMERAL_TIMEOUT = 30_000;
 const MOCK_API_KEY = 'sk-e2e-mock-key';
 const SET_API_KEY_COMMAND = 'Deepnote: Set OpenAI API Key';
 const CLEAR_API_KEY_COMMAND = 'Deepnote: Clear OpenAI API Key';
@@ -52,7 +63,12 @@ const REVERT_FILE_COMMAND = 'File: Revert File';
 const DISCARD_CHANGES_BUTTON = "Don't Save";
 const API_KEY_SAVED_NOTIFICATION = /OpenAI API key has been saved/;
 
-async function awaitWebviewMarkers(markers: string[], timeout: number, context: string): Promise<string> {
+async function awaitWebviewMarkers(
+    markers: string[],
+    timeout: number,
+    context: string,
+    absentMarkers: string[] = []
+): Promise<string> {
     const driver = VSBrowser.instance.driver;
     const deadline = Date.now() + timeout;
     let text = '';
@@ -60,7 +76,8 @@ async function awaitWebviewMarkers(markers: string[], timeout: number, context: 
     while (Date.now() < deadline) {
         text = await readNotebookWebviewText();
         const missing = markers.filter((marker) => !text.includes(marker));
-        if (missing.length === 0) {
+        const lingering = absentMarkers.filter((marker) => text.includes(marker));
+        if (missing.length === 0 && lingering.length === 0) {
             return text;
         }
 
@@ -68,9 +85,10 @@ async function awaitWebviewMarkers(markers: string[], timeout: number, context: 
     }
 
     const missing = markers.filter((marker) => !text.includes(marker));
+    const lingering = absentMarkers.filter((marker) => text.includes(marker));
     throw new Error(
         `Timed out after ${timeout}ms waiting for notebook webview (${context}). Missing: ${JSON.stringify(missing)}. ` +
-            `Last text: ${JSON.stringify(text)}`
+            `Lingering: ${JSON.stringify(lingering)}. Last text: ${JSON.stringify(text)}`
     );
 }
 
@@ -277,5 +295,58 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
         assertOccurrences(rendered, RERUN_PYTHON_OUTPUT_MARKER, 1);
         assertOccurrences(rendered, RERUN_MARKDOWN_TEXT, 1);
         assertOccurrences(rendered, STALE_CELLS_ERROR_TEXT, 0);
+    });
+
+    // Self-contained: generates the run it clears, so it survives --grep and a Mocha retry (Run All
+    // drops any stale generated cells first).
+    it('clears the whole generated run from the ephemeral cell status bar button', async function () {
+        mockServer = await startMockOpenAiServer([
+            {
+                match: { hasToolResult: false },
+                response: {
+                    toolCall: {
+                        arguments: JSON.stringify({ code: CLEAR_RUN_GENERATED_PYTHON }),
+                        id: 'call_e2e_clear_code',
+                        name: CODE_TOOL_NAME
+                    }
+                }
+            },
+            {
+                match: { toolResultContains: CLEAR_RUN_PYTHON_OUTPUT_MARKER },
+                response: {
+                    toolCall: {
+                        arguments: JSON.stringify({ content: CLEAR_RUN_MARKDOWN_TEXT }),
+                        id: 'call_e2e_clear_markdown',
+                        name: MARKDOWN_TOOL_NAME
+                    }
+                }
+            },
+            {
+                match: { toolResultContains: MARKDOWN_BLOCK_ADDED_TEXT },
+                response: { content: CLEAR_RUN_FINAL_AGENT_TEXT }
+            }
+        ]);
+
+        await dismissAllNotifications();
+        await clickRunAll(AGENT_FILE);
+
+        await awaitWebviewMarkers(
+            [CLEAR_RUN_PYTHON_OUTPUT_MARKER, CLEAR_RUN_MARKDOWN_TEXT, CLEAR_RUN_FINAL_AGENT_TEXT],
+            AGENT_RUN_TIMEOUT,
+            'agent run whose cells the button clears'
+        );
+
+        await clickCellStatusBarItem(CLEAR_EPHEMERAL_BUTTON);
+        await confirmModalDialog(CLEAR_EPHEMERAL_CONFIRM, { messageIncludes: CLEAR_EPHEMERAL_CONFIRM_TEXT });
+
+        // The clicked cell is the generated code cell and the markdown cell of the same run goes with
+        // it. Requiring the agent's own transcript to survive keeps an unreadable webview (which reads
+        // as '') from passing this as "the generated cells are gone".
+        await awaitWebviewMarkers([CLEAR_RUN_FINAL_AGENT_TEXT], CLEAR_EPHEMERAL_TIMEOUT, 'ephemeral cells cleared', [
+            CLEAR_RUN_PYTHON_OUTPUT_MARKER,
+            CLEAR_RUN_MARKDOWN_TEXT
+        ]);
+
+        await screenshot('agent-ephemeral-cleared');
     });
 });

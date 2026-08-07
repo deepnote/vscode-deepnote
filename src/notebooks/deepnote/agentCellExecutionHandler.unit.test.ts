@@ -5,24 +5,20 @@ import {
     CancellationError,
     CancellationTokenSource,
     Disposable,
-    EventEmitter,
-    ExtensionMode,
     NotebookCell,
     NotebookCellData,
     NotebookCellOutput,
     NotebookCellOutputItem,
     NotebookController,
     NotebookDocument,
-    SecretStorage,
-    SecretStorageChangeEvent,
     WorkspaceEdit
 } from 'vscode';
 
 import type { AgentBlock } from '@deepnote/blocks';
 import type { AgentBlockContext } from '@deepnote/runtime-core';
 
+import { IEncryptedStorage } from '../../platform/common/application/types';
 import type { IDisposable } from '../../platform/common/types';
-import { IExtensionContext } from '../../platform/common/types';
 import { dispose } from '../../platform/common/utils/lifecycle';
 import { ServiceContainer } from '../../platform/ioc/container';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
@@ -37,24 +33,33 @@ import {
 import { IDeepnoteNotebookManager } from '../types';
 import { createDeepnoteFile, createDeepnoteProject, createMockCell, createMockNotebook } from './deepnoteTestHelpers';
 
-// ExtensionMode.Test skips secrets; Production + in-memory store exercises real paths.
-function stubSecretStorage(secretStorage: Map<string, string>): ServiceContainer {
-    const context = mock<IExtensionContext>();
-    const secrets = mock<SecretStorage>();
-    const onDidChangeSecrets = new EventEmitter<SecretStorageChangeEvent>();
+// Key namespacing is EncryptedStorage's job and is covered in deepnoteSecretStore.unit.test.ts.
+function createEncryptedStorageFake(secretStorage: Map<string, string>): IEncryptedStorage {
+    const encryptedStorage = mock<IEncryptedStorage>();
+
+    when(encryptedStorage.store(anything(), anything(), anything())).thenCall(
+        (_service: string, key: string, value: string | undefined) => {
+            if (value === undefined) {
+                secretStorage.delete(key);
+            } else {
+                secretStorage.set(key, value);
+            }
+
+            return Promise.resolve();
+        }
+    );
+    when(encryptedStorage.retrieve(anything(), anything())).thenCall((_service: string, key: string) =>
+        Promise.resolve(secretStorage.get(key))
+    );
+
+    return instance(encryptedStorage);
+}
+
+// getProjectAgentContext still resolves the notebook manager off the static container.
+function stubServiceContainerInstance(): ServiceContainer {
     const serviceContainer = mock<ServiceContainer>();
 
     sinon.stub(ServiceContainer, 'instance').get(() => instance(serviceContainer));
-    when(serviceContainer.get<IExtensionContext>(IExtensionContext)).thenReturn(instance(context));
-    when(context.extensionMode).thenReturn(ExtensionMode.Production);
-    when(context.secrets).thenReturn(instance(secrets));
-    when(secrets.onDidChange).thenReturn(onDidChangeSecrets.event);
-    when(secrets.get(anything())).thenCall((key: string) => Promise.resolve(secretStorage.get(key)));
-    when(secrets.store(anything(), anything())).thenCall((key: string, value: string) => {
-        secretStorage.set(key, value);
-
-        return Promise.resolve();
-    });
 
     return serviceContainer;
 }
@@ -167,11 +172,13 @@ suite('AgentCellExecutionHandler', () => {
         let mockController: NotebookController;
         let executeAgentBlockStub: sinon.SinonStub;
         let mockServiceContainer: ServiceContainer;
+        let encryptedStorage: IEncryptedStorage;
 
         setup(() => {
             secretStorage.clear();
             secretStorage.set('openAiApiKey', 'test-key');
-            mockServiceContainer = stubSecretStorage(secretStorage);
+            encryptedStorage = createEncryptedStorageFake(secretStorage);
+            mockServiceContainer = stubServiceContainerInstance();
             disposables.push(new Disposable(() => sinon.restore()));
 
             mockExecution = {
@@ -230,7 +237,9 @@ suite('AgentCellExecutionHandler', () => {
         test('creates execution, clears output, sets planning output, and ends successfully', async () => {
             const cell = createAgentCell('Analyze data');
 
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+            await executeAgentCell(cell, mockController, encryptedStorage, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
 
             expect((mockController.createNotebookCellExecution as sinon.SinonStub).calledOnceWith(cell)).to.be.true;
             expect(mockExecution.start.calledOnce).to.be.true;
@@ -259,7 +268,9 @@ suite('AgentCellExecutionHandler', () => {
 
             const cell = createAgentCell();
 
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+            await executeAgentCell(cell, mockController, encryptedStorage, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
 
             expect(mockExecution.appendOutputItems.callCount).to.equal(2);
 
@@ -279,7 +290,9 @@ suite('AgentCellExecutionHandler', () => {
 
             const cell = createAgentCell();
 
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+            await executeAgentCell(cell, mockController, encryptedStorage, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
 
             const chunk2 = getStdoutChunkText(1);
             expect(chunk2).to.include('\n\n');
@@ -291,7 +304,9 @@ suite('AgentCellExecutionHandler', () => {
 
             const cell = createAgentCell();
 
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+            await executeAgentCell(cell, mockController, encryptedStorage, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
 
             expect(mockExecution.end.calledOnce).to.be.true;
             expect(mockExecution.end.firstCall.args[0]).to.be.false;
@@ -310,7 +325,9 @@ suite('AgentCellExecutionHandler', () => {
         test('handles empty prompt', async () => {
             const cell = createAgentCell('');
 
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+            await executeAgentCell(cell, mockController, encryptedStorage, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
 
             expect(mockExecution.end.calledOnce).to.be.true;
             expect(mockExecution.end.firstCall.args[0]).to.be.true;
@@ -326,7 +343,9 @@ suite('AgentCellExecutionHandler', () => {
 
             const cell = createAgentCell();
 
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+            await executeAgentCell(cell, mockController, encryptedStorage, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
 
             expect(mockExecution.end.calledOnce).to.be.true;
             expect(mockExecution.end.firstCall.args[0]).to.be.false;
@@ -346,7 +365,9 @@ suite('AgentCellExecutionHandler', () => {
             });
             const { agentCell, cells } = createAgentCellInMutableNotebook([previousResult]);
 
-            await executeAgentCell(agentCell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+            await executeAgentCell(agentCell, mockController, encryptedStorage, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
 
             expect(executeAgentBlockStub.called).to.be.false;
             expect(mockExecution.end.firstCall.args[0]).to.be.false;
@@ -367,7 +388,9 @@ suite('AgentCellExecutionHandler', () => {
                 return { finalOutput: '' };
             });
 
-            await executeAgentCell(agentCell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+            await executeAgentCell(agentCell, mockController, encryptedStorage, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
 
             expect(cells.map((cell) => cell.document.getText())).to.deep.equal(['Test prompt', 'first', 'second']);
             expect(cells[1].metadata?.is_ephemeral).to.be.true;
@@ -390,7 +413,9 @@ suite('AgentCellExecutionHandler', () => {
                 return { finalOutput: '' };
             });
 
-            await executeAgentCell(agentCell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+            await executeAgentCell(agentCell, mockController, encryptedStorage, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
 
             expect(toolResult).to.include('Execution error');
             expect(toolResult).to.include('Failed to insert ephemeral code cell');
@@ -415,7 +440,9 @@ suite('AgentCellExecutionHandler', () => {
                 notebookMetadata: { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' }
             });
 
-            await executeAgentCell(cell, mockController, { executeAgentBlockFn: executeAgentBlockStub });
+            await executeAgentCell(cell, mockController, encryptedStorage, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
 
             const context = executeAgentBlockStub.firstCall.args[1] as AgentBlockContext;
             expect(context.mcpServers).to.deep.equal(mcpServers);

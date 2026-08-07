@@ -57,6 +57,7 @@ import {
 import { IJupyterVariablesProvider } from '../../kernels/variables/types';
 import { IPyWidgetMessages } from '../../messageTypes';
 import { IPythonExtensionChecker } from '../../platform/api/types';
+import { IEncryptedStorage } from '../../platform/common/application/types';
 import { isCancellationError } from '../../platform/common/cancellation';
 import {
     Commands,
@@ -648,7 +649,11 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                 pendingKernelCells = [];
 
                 logger.trace(`Executing agent cell ${cell.index} for ${getDisplayPath(doc.uri)} without kernel`);
-                await executeAgentCell(cell, this.controller).catch(noop);
+                await executeAgentCell(
+                    cell,
+                    this.controller,
+                    this.serviceContainer.get<IEncryptedStorage>(IEncryptedStorage)
+                ).catch(noop);
             }
 
             await this.executeKernelCells(doc, pendingKernelCells);

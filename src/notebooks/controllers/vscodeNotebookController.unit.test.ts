@@ -8,16 +8,7 @@
 import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
 import * as sinon from 'sinon';
-import {
-    Disposable,
-    EventEmitter,
-    ExtensionMode,
-    NotebookController,
-    NotebookDocument,
-    SecretStorage,
-    SecretStorageChangeEvent,
-    Uri
-} from 'vscode';
+import { Disposable, EventEmitter, NotebookController, NotebookDocument, Uri } from 'vscode';
 import { VSCodeNotebookController, warnWhenUsingOutdatedPython } from './vscodeNotebookController';
 import {
     IKernel,
@@ -29,6 +20,7 @@ import {
     RemoteKernelSpecConnectionMetadata
 } from '../../kernels/types';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { IEncryptedStorage } from '../../platform/common/application/types';
 import {
     IConfigurationService,
     IDisposable,
@@ -57,23 +49,15 @@ import { IJupyterVariablesProvider } from '../../kernels/variables/types';
 import { notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { createMockNotebookWithCells } from '../deepnote/deepnoteTestHelpers';
 
-function stubSecretStorageForAgentTests(secretStorage: Map<string, string>): void {
-    const context = mock<IExtensionContext>();
-    const secrets = mock<SecretStorage>();
-    const onDidChangeSecrets = new EventEmitter<SecretStorageChangeEvent>();
-    const serviceContainer = mock<ServiceContainer>();
+// executeAgentCell takes IEncryptedStorage from the controller's container; getProjectAgentContext
+// still resolves the notebook manager off the static one.
+function stubAgentDependencies(serviceContainer: IServiceContainer, openAiApiKey: string): void {
+    const encryptedStorage = mock<IEncryptedStorage>();
+    const staticServiceContainer = instance(mock<ServiceContainer>());
 
-    sinon.stub(ServiceContainer, 'instance').get(() => instance(serviceContainer));
-    when(serviceContainer.get<IExtensionContext>(IExtensionContext)).thenReturn(instance(context));
-    when(context.extensionMode).thenReturn(ExtensionMode.Production);
-    when(context.secrets).thenReturn(instance(secrets));
-    when(secrets.onDidChange).thenReturn(onDidChangeSecrets.event);
-    when(secrets.get(anything())).thenCall((key: string) => Promise.resolve(secretStorage.get(key)));
-    when(secrets.store(anything(), anything())).thenCall((key: string, value: string) => {
-        secretStorage.set(key, value);
-
-        return Promise.resolve();
-    });
+    when(encryptedStorage.retrieve(anything(), anything())).thenResolve(openAiApiKey);
+    when(serviceContainer.get<IEncryptedStorage>(IEncryptedStorage)).thenReturn(instance(encryptedStorage));
+    sinon.stub(ServiceContainer, 'instance').get(() => staticServiceContainer);
 }
 
 function installMockedCreateNotebookController(
@@ -862,8 +846,6 @@ suite(`Notebook Controller`, function () {
     });
 
     suite('executeQueuedCells', function () {
-        const secretStorage = new Map<string, string>();
-
         let vscodeController: VSCodeNotebookController;
         let notifyQueueCompleteSpy: sinon.SinonSpy;
         let createNotebookCellExecutionStub: sinon.SinonStub;
@@ -879,9 +861,7 @@ suite(`Notebook Controller`, function () {
 
         setup(function () {
             crateMockedPythonApi(disposables);
-            secretStorage.clear();
-            secretStorage.set('openAiApiKey', 'test-key');
-            stubSecretStorageForAgentTests(secretStorage);
+            stubAgentDependencies(serviceContainer, 'test-key');
             when(serviceContainer.tryGet(anything())).thenReturn(undefined);
 
             mockExecution = {

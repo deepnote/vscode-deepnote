@@ -23,6 +23,7 @@ import {
 } from '@deepnote/runtime-core';
 
 import { translateCellDisplayOutput } from '../../kernels/execution/helpers';
+import { IEncryptedStorage } from '../../platform/common/application/types';
 import type { IDisposable } from '../../platform/common/types';
 import { createDeferred } from '../../platform/common/utils/async';
 import { dispose } from '../../platform/common/utils/lifecycle';
@@ -159,6 +160,7 @@ export interface ExecuteAgentCellOptions {
 export async function executeAgentCell(
     cell: NotebookCell,
     controller: NotebookController,
+    encryptedStorage: IEncryptedStorage,
     options?: ExecuteAgentCellOptions
 ): Promise<void> {
     const executeAgentBlockFn = options?.executeAgentBlockFn ?? executeAgentBlock;
@@ -192,7 +194,7 @@ export async function executeAgentCell(
             );
         }
 
-        const openAiToken = await getOrPromptOpenAiApiKey();
+        const openAiToken = await getOrPromptOpenAiApiKey(encryptedStorage);
 
         let lastAgentEventType: AgentStreamEvent['type'] | undefined;
 

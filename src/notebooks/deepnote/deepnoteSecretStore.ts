@@ -1,120 +1,47 @@
-import { ExtensionMode, l10n, window } from 'vscode';
+import { l10n, window } from 'vscode';
 
-import { ServiceContainer } from '../../platform/ioc/container';
-import { IExtensionContext } from '../../platform/common/types';
+import { IEncryptedStorage } from '../../platform/common/application/types';
 
-export interface SecretPromptOptions {
-    prompt: string;
-    placeHolder?: string;
-    password?: boolean;
-}
+const AGENT_SERVICE_NAME = 'deepnote-agent';
+const OPENAI_API_KEY = 'openAiApiKey';
 
-function getContext(): IExtensionContext | null {
-    const context = ServiceContainer.instance.get<IExtensionContext>(IExtensionContext);
-
-    if (context.extensionMode === ExtensionMode.Test) {
-        return null;
-    }
-
-    return context;
-}
-
-export async function getSecret(key: string): Promise<string | undefined> {
-    const context = getContext();
-
-    if (!context) {
-        return undefined;
-    }
-
-    const value = await context.secrets.get(key);
+async function retrieveOpenAiApiKey(storage: IEncryptedStorage): Promise<string | undefined> {
+    const value = await storage.retrieve(AGENT_SERVICE_NAME, OPENAI_API_KEY);
 
     return value && value.length > 0 ? value : undefined;
 }
 
-export async function setSecret(key: string, value: string): Promise<void> {
-    const context = getContext();
-
-    if (!context) {
-        return;
-    }
-
-    await context.secrets.store(key, value);
+export async function clearOpenAiApiKey(storage: IEncryptedStorage): Promise<void> {
+    await storage.store(AGENT_SERVICE_NAME, OPENAI_API_KEY, undefined);
 }
 
-export async function clearSecret(key: string): Promise<void> {
-    const context = getContext();
-
-    if (!context) {
-        return;
-    }
-
-    await context.secrets.delete(key);
-}
-
-export async function promptForSecret(key: string, options: SecretPromptOptions): Promise<string | undefined> {
-    const input = await window.showInputBox({
-        prompt: options.prompt,
-        placeHolder: options.placeHolder,
-        password: options.password ?? true,
-        ignoreFocusOut: true
-    });
-
-    if (!input || input.trim().length === 0) {
-        return undefined;
-    }
-
-    const trimmed = input.trim();
-    await setSecret(key, trimmed);
-
-    return trimmed;
-}
-
-export async function getOrPromptSecret(
-    key: string,
-    options: SecretPromptOptions,
-    errorMessage: string
-): Promise<string> {
-    let value = await getSecret(key);
+export async function getOrPromptOpenAiApiKey(storage: IEncryptedStorage): Promise<string> {
+    const value = (await retrieveOpenAiApiKey(storage)) ?? (await promptForOpenAiApiKey(storage));
 
     if (!value) {
-        value = await promptForSecret(key, options);
-    }
-
-    if (!value) {
-        throw new Error(errorMessage);
+        throw new Error(
+            l10n.t('OpenAI API key is not set. Use the command "Deepnote: Set OpenAI API Key" to configure it.')
+        );
     }
 
     return value;
 }
 
-const OPENAI_API_KEY = 'openAiApiKey';
+export async function promptForOpenAiApiKey(storage: IEncryptedStorage): Promise<string | undefined> {
+    const input = await window.showInputBox({
+        prompt: l10n.t('Enter your OpenAI API key'),
+        placeHolder: l10n.t('sk-...'),
+        password: true,
+        ignoreFocusOut: true
+    });
 
-const OPENAI_PROMPT_OPTIONS: SecretPromptOptions = {
-    prompt: l10n.t('Enter your OpenAI API key'),
-    placeHolder: l10n.t('sk-...'),
-    password: true
-};
+    const trimmed = input?.trim();
 
-export async function getOpenAiApiKey(): Promise<string | undefined> {
-    return getSecret(OPENAI_API_KEY);
-}
+    if (!trimmed) {
+        return undefined;
+    }
 
-export async function setOpenAiApiKey(key: string): Promise<void> {
-    return setSecret(OPENAI_API_KEY, key);
-}
+    await storage.store(AGENT_SERVICE_NAME, OPENAI_API_KEY, trimmed);
 
-export async function clearOpenAiApiKey(): Promise<void> {
-    return clearSecret(OPENAI_API_KEY);
-}
-
-export async function promptForOpenAiApiKey(): Promise<string | undefined> {
-    return promptForSecret(OPENAI_API_KEY, OPENAI_PROMPT_OPTIONS);
-}
-
-export async function getOrPromptOpenAiApiKey(): Promise<string> {
-    return getOrPromptSecret(
-        OPENAI_API_KEY,
-        OPENAI_PROMPT_OPTIONS,
-        l10n.t('OpenAI API key is not set. Use the command "Deepnote: Set OpenAI API Key" to configure it.')
-    );
+    return trimmed;
 }

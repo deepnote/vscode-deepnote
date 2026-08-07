@@ -1,4 +1,4 @@
-import type { DeepnoteFile } from '@deepnote/blocks';
+import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
@@ -1182,8 +1182,7 @@ project:
             // exist in the document but are stripped from the file, so every cell below one is offset —
             // the metadata-less cell would adopt the wrong block's id and outputs, and that id gets
             // written back, leaving two cells claiming one block.
-            const mockedManager = mock<IDeepnoteNotebookManager>();
-            when(mockedManager.getProjectForNotebook('e132b172-b114-410e-8331-011517db664f', 'notebook-1')).thenReturn({
+            const deepnoteFile: DeepnoteFile = {
                 version: '1.0',
                 metadata: { createdAt: '2025-01-01T00:00:00Z' },
                 project: {
@@ -1193,14 +1192,21 @@ project:
                         {
                             id: 'notebook-1',
                             name: 'Notebook 1',
-                            blocks: [
-                                { id: 'block-1', type: 'code', sortingKey: 'a0' },
-                                { id: 'block-2', type: 'code', sortingKey: 'a1' }
-                            ]
+                            blocks: []
                         }
                     ]
                 }
-            } as DeepnoteFile);
+            };
+            // Force casting wihtout metadata
+            deepnoteFile.project.notebooks[0].blocks = [
+                { id: 'block-1', type: 'code', sortingKey: 'a0' } as DeepnoteBlock,
+                { id: 'block-2', type: 'code', sortingKey: 'a1' } as DeepnoteBlock
+            ];
+
+            const mockedManager = mock<IDeepnoteNotebookManager>();
+            when(mockedManager.getProjectForNotebook('e132b172-b114-410e-8331-011517db664f', 'notebook-1')).thenReturn(
+                deepnoteFile
+            );
 
             const offsetDisposables: IDisposableRegistry = [];
             const offsetOnDidChange = new EventEmitter<Uri>();
@@ -1274,7 +1280,7 @@ project:
                             output_type: 'execute_result',
                             data: { 'text/plain': 'First Output' },
                             execution_count: 1
-                        } as DeepnoteOutput
+                        }
                     ]
                 ],
                 [
@@ -1284,7 +1290,7 @@ project:
                             output_type: 'execute_result',
                             data: { 'text/plain': 'Second Output' },
                             execution_count: 2
-                        } as DeepnoteOutput
+                        }
                     ]
                 ]
             ]);

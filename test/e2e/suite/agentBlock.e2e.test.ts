@@ -51,7 +51,7 @@ const CLEAR_RUN_PYTHON_OUTPUT_MARKER = 'clear-run-python-ran';
 const CLEAR_RUN_GENERATED_PYTHON = `print("${CLEAR_RUN_PYTHON_OUTPUT_MARKER}")`;
 const CLEAR_RUN_MARKDOWN_TEXT = 'Third-run markdown from the E2E agent';
 const CLEAR_RUN_FINAL_AGENT_TEXT = 'Clear-run summary added as a markdown block.';
-// EphemeralCellStatusBarProvider button and its confirmation.
+// AgentCellStatusBarProvider button and its confirmation.
 const CLEAR_EPHEMERAL_BUTTON = 'Clear ephemeral blocks';
 const CLEAR_EPHEMERAL_CONFIRM = 'Clear';
 const CLEAR_EPHEMERAL_CONFIRM_TEXT = 'ephemeral block';
@@ -299,7 +299,7 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
 
     // Self-contained: generates the run it clears, so it survives --grep and a Mocha retry (Run All
     // drops any stale generated cells first).
-    it('clears the whole generated run from the ephemeral cell status bar button', async function () {
+    it('clears the whole generated run from the agent block status bar button', async function () {
         mockServer = await startMockOpenAiServer([
             {
                 match: { hasToolResult: false },
@@ -339,9 +339,9 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
         await clickCellStatusBarItem(CLEAR_EPHEMERAL_BUTTON);
         await confirmModalDialog(CLEAR_EPHEMERAL_CONFIRM, { messageIncludes: CLEAR_EPHEMERAL_CONFIRM_TEXT });
 
-        // The clicked cell is the generated code cell and the markdown cell of the same run goes with
-        // it. Requiring the agent's own transcript to survive keeps an unreadable webview (which reads
-        // as '') from passing this as "the generated cells are gone".
+        // The button lives on the agent block and takes both cells its run generated. Requiring the
+        // agent's own transcript to survive keeps an unreadable webview (which reads as '') from
+        // passing this as "the generated cells are gone".
         await awaitWebviewMarkers([CLEAR_RUN_FINAL_AGENT_TEXT], CLEAR_EPHEMERAL_TIMEOUT, 'ephemeral cells cleared', [
             CLEAR_RUN_PYTHON_OUTPUT_MARKER,
             CLEAR_RUN_MARKDOWN_TEXT

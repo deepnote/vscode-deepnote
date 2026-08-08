@@ -1,11 +1,11 @@
-import { expect } from 'chai';
+import { assert, expect } from 'chai';
 import * as sinon from 'sinon';
 import { anything, verify, when } from 'ts-mockito';
-import { CancellationToken, NotebookCell, NotebookEdit } from 'vscode';
+import { CancellationToken, NotebookCell, NotebookEdit, WorkspaceEdit } from 'vscode';
 
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { AgentCellStatusBarProvider } from './agentCellStatusBarProvider';
-import { createMockCell } from './deepnoteTestHelpers';
+import { createMockCell, createMockNotebookWithCells } from './deepnoteTestHelpers';
 
 suite('AgentCellStatusBarProvider', () => {
     let provider: AgentCellStatusBarProvider;
@@ -230,6 +230,237 @@ suite('AgentCellStatusBarProvider', () => {
 
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+        });
+    });
+
+    suite('Clearing ephemeral blocks', () => {
+        setup(() => {
+            resetVSCodeMocks();
+        });
+
+        teardown(() => {
+            sinon.restore();
+            resetVSCodeMocks();
+        });
+
+        // Mocked WorkspaceEdit.set drops the edits, so capture them on the prototype and replay the
+        // deletions against `cells` — an ascending delete order corrupts the survivors, not the count.
+        function applyDeletionsTo(cells: NotebookCell[]): void {
+            let recordedEdits: { range: { start: number; end: number } }[] = [];
+
+            sinon.stub(WorkspaceEdit.prototype, 'set').callsFake((_uri, edits) => {
+                recordedEdits = edits as unknown as { range: { start: number; end: number } }[];
+            });
+
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => {
+                for (const { range } of recordedEdits) {
+                    cells.splice(range.start, range.end - range.start);
+                }
+
+                return Promise.resolve(true);
+            });
+        }
+
+        function confirmWith(label: string | undefined): void {
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve(label as any)
+            );
+        }
+
+        function agentBlock(text: string, blockId: string) {
+            return { text, metadata: { __deepnotePocket: { type: 'agent' }, id: blockId } };
+        }
+
+        function ephemeralCell(text: string, agentSourceBlockId?: string) {
+            return {
+                text,
+                metadata: {
+                    is_ephemeral: true,
+                    ...(agentSourceBlockId ? { agent_source_block_id: agentSourceBlockId } : {})
+                }
+            };
+        }
+
+        test('Should delete every cell this agent block generated and nothing else', async () => {
+            const { cells } = createMockNotebookWithCells([
+                agentBlock('agent A', 'agent-block-1'),
+                ephemeralCell('eph A1', 'agent-block-1'),
+                ephemeralCell('eph A2', 'agent-block-1'),
+                { text: 'user code', metadata: {} },
+                agentBlock('agent B', 'agent-block-2'),
+                ephemeralCell('eph B1', 'agent-block-2'),
+                ephemeralCell('orphan')
+            ]);
+            applyDeletionsTo(cells);
+            confirmWith('Clear');
+
+            await provider.clearEphemeralBlocks(cells[0]);
+
+            expect(cells.map((cell) => cell.document.getText())).to.deep.equal([
+                'agent A',
+                'user code',
+                'agent B',
+                'eph B1',
+                'orphan'
+            ]);
+        });
+
+        test('Should report how many blocks the clear removes', async () => {
+            const { cells } = createMockNotebookWithCells([
+                agentBlock('agent A', 'agent-block-1'),
+                ephemeralCell('eph A1', 'agent-block-1'),
+                ephemeralCell('eph A2', 'agent-block-1')
+            ]);
+            applyDeletionsTo(cells);
+            confirmWith('Clear');
+
+            await provider.clearEphemeralBlocks(cells[0]);
+
+            verify(
+                mockedVSCodeNamespaces.window.showWarningMessage(
+                    'Clear 2 ephemeral block(s) from this notebook?',
+                    anything(),
+                    anything()
+                )
+            ).once();
+        });
+
+        test('Should not edit the notebook when the confirmation is dismissed', async () => {
+            // Catches: applying the edit before the modal is answered, which deletes on a cancel.
+            const { cells } = createMockNotebookWithCells([
+                agentBlock('agent A', 'agent-block-1'),
+                ephemeralCell('eph A1', 'agent-block-1')
+            ]);
+            applyDeletionsTo(cells);
+            confirmWith(undefined);
+
+            await provider.clearEphemeralBlocks(cells[0]);
+
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            expect(cells).to.have.lengthOf(2);
+        });
+
+        test('Should not prompt for an agent block that generated nothing', async () => {
+            // Catches: prompting to clear 0 blocks when the agent has not run.
+            const { cells } = createMockNotebookWithCells([
+                agentBlock('agent A', 'agent-block-1'),
+                ephemeralCell('eph B1', 'agent-block-2')
+            ]);
+            applyDeletionsTo(cells);
+            confirmWith('Clear');
+
+            await provider.clearEphemeralBlocks(cells[0]);
+
+            verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).never();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+        });
+
+        test('Should ignore a cell that is not an agent block', async () => {
+            // Catches: dropping the isAgentCell guard, which would clear from any cell whose id
+            // happens to own ephemeral children.
+            const { cells } = createMockNotebookWithCells([
+                { text: 'user code', metadata: { id: 'agent-block-1' } },
+                ephemeralCell('eph A1', 'agent-block-1')
+            ]);
+            applyDeletionsTo(cells);
+            confirmWith('Clear');
+
+            await provider.clearEphemeralBlocks(cells[0]);
+
+            verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).never();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+        });
+
+        test('Should report an error when the workspace edit is rejected', async () => {
+            // Catches: dropping the `if (!applyEdit)` branch, which loses the clear silently.
+            const { cells } = createMockNotebookWithCells([
+                agentBlock('agent A', 'agent-block-1'),
+                ephemeralCell('eph A1', 'agent-block-1')
+            ]);
+            confirmWith('Clear');
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(false));
+
+            await provider.clearEphemeralBlocks(cells[0]);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+        });
+
+        suite('Clear button', () => {
+            test('Should offer the button on an agent block that generated ephemeral cells', () => {
+                const { cells } = createMockNotebookWithCells([
+                    agentBlock('agent A', 'agent-block-1'),
+                    ephemeralCell('eph A1', 'agent-block-1')
+                ]);
+                const items = provider.provideCellStatusBarItems(cells[0], mockToken)!;
+
+                expect(items).to.have.lengthOf(3);
+                expect(items[2].text).to.include('$(trash)');
+                expect(items[2].text).to.include('Clear ephemeral blocks');
+                expect(items[2].alignment).to.equal(1);
+                expect(items[2].priority).to.equal(80);
+
+                const command = items[2].command as { command: string; arguments: unknown[] };
+                expect(command.command).to.equal('deepnote.clearEphemeralBlocks');
+                expect(command.arguments).to.deep.equal([cells[0]]);
+            });
+
+            test('Should hide the button on an agent block that owns no ephemeral cells', () => {
+                // Catches: an always-visible button, which prompts to clear 0 blocks.
+                const { cells } = createMockNotebookWithCells([
+                    agentBlock('agent A', 'agent-block-1'),
+                    ephemeralCell('eph B1', 'agent-block-2')
+                ]);
+                const items = provider.provideCellStatusBarItems(cells[0], mockToken)!;
+
+                expect(items).to.have.lengthOf(2);
+            });
+        });
+
+        suite('Command handler', () => {
+            let invokeCommand: (cell?: NotebookCell) => Promise<void>;
+
+            setup(() => {
+                when(
+                    mockedVSCodeNamespaces.notebooks.registerNotebookCellStatusBarItemProvider(anything(), anything())
+                ).thenReturn({ dispose: () => undefined });
+                when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument).thenReturn(() => ({
+                    dispose: () => undefined
+                }));
+                when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenCall(
+                    (id: string, callback: (cell?: NotebookCell) => Promise<void>) => {
+                        if (id === 'deepnote.clearEphemeralBlocks') {
+                            invokeCommand = callback;
+                        }
+
+                        return { dispose: () => undefined };
+                    }
+                );
+
+                provider.activate();
+            });
+
+            test('Should clear the blocks of the cell the command is given', async () => {
+                const { cells } = createMockNotebookWithCells([
+                    agentBlock('agent A', 'agent-block-1'),
+                    ephemeralCell('eph A1', 'agent-block-1')
+                ]);
+                applyDeletionsTo(cells);
+                confirmWith('Clear');
+
+                await invokeCommand(cells[0]);
+
+                expect(cells.map((cell) => cell.document.getText())).to.deep.equal(['agent A']);
+            });
+
+            test('Should reject when invoked without a cell', async () => {
+                // Catches: falling back to the selected cell, which clears a run the user never clicked.
+                confirmWith('Clear');
+
+                await assert.isRejected(invokeCommand(undefined), /requires the cell it was invoked from/);
+
+                verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).never();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
         });
     });
 });

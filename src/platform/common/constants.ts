@@ -228,6 +228,7 @@ export namespace Commands {
     export const DisableSnapshots = 'deepnote.disableSnapshots';
     export const AuthenticateIntegration = 'deepnote.authenticateIntegration';
     export const ManageIntegrations = 'deepnote.manageIntegrations';
+    export const AddAgentBlock = 'deepnote.addAgentBlock';
     export const AddSqlBlock = 'deepnote.addSqlBlock';
     export const AddBigNumberChartBlock = 'deepnote.addBigNumberChartBlock';
     export const AddChartBlock = 'deepnote.addChartBlock';

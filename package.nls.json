@@ -259,6 +259,7 @@
     "deepnote.commands.newProject.title": "New Project",
     "deepnote.commands.importNotebook.title": "Import Notebook",
     "deepnote.commands.importJupyterNotebook.title": "Import Jupyter Notebook",
+    "deepnote.commands.addAgentBlock.title": "Add Agent Block",
     "deepnote.commands.addSqlBlock.title": "Add SQL Block",
     "deepnote.commands.addBigNumberChartBlock.title": "Add Big Number Block",
     "deepnote.commands.addChartBlock.title": "Add Chart Block",

@@ -838,6 +838,112 @@ suite('DeepnoteNotebookCommandListener', () => {
             });
         });
 
+        suite('addAgentBlock', () => {
+            function insertedCell(getCapturedNotebookEdits: () => any[] | null) {
+                const edits = getCapturedNotebookEdits()!;
+                assert.equal(edits.length, 1, 'Should have one notebook edit');
+
+                const notebookEdit = edits[0] as any;
+                assert.equal(notebookEdit.newCells.length, 1, 'Should insert one cell');
+
+                return notebookEdit.newCells[0];
+            }
+
+            test('should add an empty plaintext agent block at the end when no selection exists', async () => {
+                const { editor, document } = createMockEditor([], undefined);
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                assert.isTrue(chainStub.calledOnce, 'chainWithPendingUpdates should be called once');
+                assert.equal(chainStub.firstCall.args[0], document, 'Should be called with correct document');
+
+                const newCell = insertedCell(getCapturedNotebookEdits);
+                assert.equal(newCell.kind, NotebookCellKind.Code, 'Should be a code cell');
+                assert.equal(newCell.languageId, 'plaintext', 'Should have plaintext language');
+                assert.equal(newCell.value, '', 'Should have empty content');
+                assert.equal(newCell.metadata.__deepnotePocket.type, 'agent', 'Should have agent pocket type');
+
+                assert.isTrue((editor.revealRange as sinon.SinonStub).calledOnce, 'Should reveal the new cell range');
+                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
+                assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
+            });
+
+            test('should add the agent block after the selection when one exists', async () => {
+                const existingCells = [createMockCell('{}'), createMockCell('{}')];
+                const { editor, document } = createMockEditor(existingCells, new NotebookRange(1, 2));
+                const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                insertedCell(getCapturedNotebookEdits);
+                assert.equal(document.uri.fsPath, '/test/notebook.ipynb', 'Should edit the active document');
+
+                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                assert.equal(revealCall.args[0].start, 2, 'Should insert below the selection');
+                assert.equal(revealCall.args[0].end, 3, 'Should select only the new cell');
+            });
+
+            test('should mint a block id under both keys so runs keep a stable owner', async () => {
+                // Catches: an id-less agent block, which gets a fresh random id on every
+                // convertCellToBlock — its generated cells would never be matched back to it.
+                const { editor } = createMockEditor([], undefined);
+                const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                const { metadata } = insertedCell(getCapturedNotebookEdits);
+                assert.match(metadata.id, /^[0-9a-f]{32}$/, 'Should mint a 32-char hex block id');
+                assert.equal(metadata.__deepnoteBlockId, metadata.id, 'Backup id key must match id');
+            });
+
+            test('should give consecutive agent blocks distinct ids', async () => {
+                // Catches: a hoisted/constant id, which would make two agent blocks fight over the
+                // same generated cells.
+                const { editor } = createMockEditor([], undefined);
+                const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+                const first = insertedCell(getCapturedNotebookEdits).metadata.id;
+
+                await commandListener.addAgentBlock();
+                const second = insertedCell(getCapturedNotebookEdits).metadata.id;
+
+                assert.notEqual(first, second, 'Each agent block needs its own id');
+            });
+
+            test('should persist the default model rather than leaving the key absent', async () => {
+                // Catches: omitting deepnote_agent_model, which reaches openai() as undefined.
+                const { editor } = createMockEditor([], undefined);
+                const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                const { metadata } = insertedCell(getCapturedNotebookEdits);
+                assert.equal(metadata.deepnote_agent_model, 'auto', 'Should persist the auto default');
+            });
+
+            test('should throw error when no active editor exists', async () => {
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+
+                await assert.isRejected(commandListener.addAgentBlock(), Error, 'No active notebook editor found');
+            });
+
+            test('should throw error when chainWithPendingUpdates fails', async () => {
+                const { editor } = createMockEditor([], undefined);
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
+
+                sandbox.replace(
+                    notebookUpdater.notebookUpdaterUtils,
+                    'chainWithPendingUpdates',
+                    sinon.stub().resolves(false)
+                );
+
+                await assert.isRejected(commandListener.addAgentBlock(), Error, 'Failed to insert agent block');
+            });
+        });
+
         suite('addBigNumberChartBlock', () => {
             test('should add big number block at the end when no selection exists', async () => {
                 // Setup mocks

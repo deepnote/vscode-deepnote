@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { when, reset, anything } from 'ts-mockito';
+import { when, reset, anything, verify } from 'ts-mockito';
 import {
     NotebookCell,
     NotebookDocument,
@@ -24,7 +24,7 @@ import { createMockedNotebookDocument } from '../../test/datascience/editor-inte
 import { WrappedError } from '../../platform/errors/types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
-import { createMockCell } from './deepnoteTestHelpers';
+import { createMockCell, createMockNotebookWithCells } from './deepnoteTestHelpers';
 
 suite('DeepnoteNotebookCommandListener', () => {
     let commandListener: DeepnoteNotebookCommandListener;
@@ -839,6 +839,23 @@ suite('DeepnoteNotebookCommandListener', () => {
         });
 
         suite('addAgentBlock', () => {
+            // createMockedNotebookDocument drops NotebookCellData.metadata, so an existing agent
+            // block has to come from a notebook mock that keeps it.
+            function createMockEditorWithMetadata(
+                cellOptions: Parameters<typeof createMockNotebookWithCells>[0]
+            ): NotebookEditor {
+                const { notebook } = createMockNotebookWithCells(cellOptions);
+                const selection = new NotebookRange(0, cellOptions.length > 0 ? 1 : 0);
+
+                return {
+                    notebook,
+                    selection,
+                    selections: [selection],
+                    visibleRanges: [],
+                    revealRange: sandbox.stub()
+                };
+            }
+
             function insertedCell(getCapturedNotebookEdits: () => any[] | null) {
                 const edits = getCapturedNotebookEdits()!;
                 assert.equal(edits.length, 1, 'Should have one notebook edit');
@@ -922,6 +939,35 @@ suite('DeepnoteNotebookCommandListener', () => {
 
                 const { metadata } = insertedCell(getCapturedNotebookEdits);
                 assert.equal(metadata.deepnote_agent_model, 'auto', 'Should persist the auto default');
+            });
+
+            test('should refuse a second agent block and leave the notebook untouched', async () => {
+                const editor = createMockEditorWithMetadata([
+                    { text: 'existing agent', metadata: { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' } },
+                    { text: 'user code', metadata: {} }
+                ]);
+                const { chainStub } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                assert.isFalse(chainStub.called, 'Must not edit a notebook that already has an agent block');
+                verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+                assert.isFalse((editor.revealRange as sinon.SinonStub).called, 'Must not reveal anything');
+            });
+
+            test('should still add the block when other cells carry no agent pocket', async () => {
+                // Catches: a guard that trips on any cell, blocking the first agent block outright.
+                const editor = createMockEditorWithMetadata([
+                    { text: 'user code', metadata: { __deepnotePocket: { type: 'code' }, id: 'code-block-1' } },
+                    { text: 'scratch', metadata: { is_ephemeral: true, agent_source_block_id: 'agent-block-1' } }
+                ]);
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                assert.isTrue(chainStub.calledOnce, 'Should insert the first agent block');
+                assert.equal(insertedCell(getCapturedNotebookEdits).metadata.__deepnotePocket.type, 'agent');
+                verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).never();
             });
 
             test('should throw error when no active editor exists', async () => {

@@ -38,7 +38,7 @@ import {
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { Pocket } from '../../platform/deepnote/pocket';
 import { AGENT_MODEL_AUTO, AGENT_MODEL_METADATA_KEY } from './agentCellStatusBarProvider';
-import { generateBlockId } from './dataConversionUtils';
+import { generateBlockId, isAgentCell } from './dataConversionUtils';
 
 export const INPUT_BLOCK_TYPES = [
     'input-text',
@@ -231,7 +231,8 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     /**
-     * Inserts an empty agent block below the selection.
+     * Inserts an empty agent block below the selection. A notebook may hold at most one; a second
+     * request reports that and leaves the notebook untouched.
      *
      * Unlike the other block commands this mints the block id up front: an agent block without one
      * gets a fresh random id on every `convertCellToBlock`, so each run would stamp its generated
@@ -244,6 +245,12 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         }
         const document = editor.notebook;
         const selection = editor.selection;
+
+        if (document.getCells().some(isAgentCell)) {
+            void window.showInformationMessage(l10n.t('This notebook already contains an agent block.'));
+
+            return;
+        }
 
         const insertIndex = selection ? selection.end : document.cellCount;
         const blockId = generateBlockId();

@@ -2,6 +2,7 @@ import { inject, injectable } from 'inversify';
 import { commands, window } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../../../platform/activation/types';
+import type { CommandOutcome } from '../../../../platform/analytics/types';
 import { Commands } from '../../../../platform/common/constants';
 import { IExtensionContext } from '../../../../platform/common/types';
 import { Integrations } from '../../../../platform/common/utils/localize';
@@ -13,8 +14,10 @@ export class FederatedAuthCommandHandlerWeb implements IExtensionSyncActivationS
 
     public activate(): void {
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.AuthenticateIntegration, () => {
+            commands.registerCommand(Commands.AuthenticateIntegration, (): CommandOutcome => {
                 void window.showInformationMessage(Integrations.federatedAuthNotSupportedInWeb);
+
+                return 'failed';
             })
         );
     }

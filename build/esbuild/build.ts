@@ -84,7 +84,7 @@ const extensionFolder = path.join(__dirname, '..', '..');
 
 // Security pins copied from the root `overrides` into the generated sql-lsp-modules package.json,
 // which npm installs in isolation and would otherwise resolve to vulnerable versions.
-const sqlLspOverridesToPropagate = ['ssh2', 'tar'];
+const sqlLspOverridesToPropagate = ['ip-address', 'ssh2', 'tar'];
 
 interface StylePluginOptions {
     /**
@@ -235,6 +235,13 @@ function createConfig(
         } else {
             inject.push(path.join(__dirname, isDevbuild ? 'process.development.js' : 'process.production.js'));
         }
+    }
+    if (target === 'desktop') {
+        // Empty when unset locally; src/platform/analytics/constants.ts falls back to safe defaults.
+        define = {
+            POSTHOG_API_KEY_BUILD: JSON.stringify(process.env.POSTHOG_API_KEY ?? ''),
+            POSTHOG_CHANNEL_BUILD: JSON.stringify(process.env.POSTHOG_CHANNEL ?? '')
+        };
     }
     if (source.endsWith(path.join('data-explorer', 'index.tsx'))) {
         inject.push(path.join(__dirname, 'jquery.js'));

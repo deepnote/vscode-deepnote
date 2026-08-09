@@ -124,6 +124,7 @@
     "deepnote.debuggers.kernel": "Python Kernel Debug Adapter",
     "deepnote.debuggers.interactive": "Python Interactive Window",
     "deepnote.configuration.deepnote.experiments.enabled.description": "Enables/disables A/B tests.",
+    "deepnote.configuration.deepnote.telemetry.enabled.description": "Enable anonymous usage telemetry to help improve Deepnote for VS Code.",
     "deepnote.configuration.deepnote.showVariableViewWhenDebugging.description": "Bring up the Variable View when starting a Run by Line session.",
     "deepnote.configuration.deepnote.logging.level.off": "No messages are logged with this level.",
     "deepnote.configuration.deepnote.logging.level.trace": "All messages are logged with this level.",

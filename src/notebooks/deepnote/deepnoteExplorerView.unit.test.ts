@@ -2,7 +2,7 @@ import { deserializeDeepnoteFile, ExecutableBlock, serializeDeepnoteFile, type D
 import { assert, expect } from 'chai';
 import esmock from 'esmock';
 import * as sinon from 'sinon';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import {
     FileType,
     Uri,
@@ -19,6 +19,7 @@ import { DeepnoteExplorerView } from './deepnoteExplorerView';
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { createWorkspaceFolder } from './deepnoteTestHelpers';
 import { DeepnoteTreeItem, DeepnoteTreeItemType, type DeepnoteTreeItemContext } from './deepnoteTreeItem';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { Commands } from '../../platform/common/constants';
 import type { IExtensionContext } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
@@ -116,6 +117,7 @@ suite('DeepnoteExplorerView', () => {
     let explorerView: DeepnoteExplorerView;
     let mockExtensionContext: IExtensionContext;
     let mockLogger: ILogger;
+    let mockAnalytics: ITelemetryService;
 
     setup(() => {
         resetVSCodeMocks();
@@ -124,10 +126,12 @@ suite('DeepnoteExplorerView', () => {
         mockExtensionContext = makeExtensionContext();
 
         mockLogger = createMockLogger();
+        mockAnalytics = instance(mock<ITelemetryService>());
         explorerView = new DeepnoteExplorerView(
             mockExtensionContext,
             mockLogger,
-            new DeepnoteTreeDataProvider(mockLogger)
+            new DeepnoteTreeDataProvider(mockLogger),
+            mockAnalytics
         );
         explorerView.activate();
     });
@@ -244,6 +248,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
     let mockContext: IExtensionContext;
     let sandbox: sinon.SinonSandbox;
     let uuidStubs: sinon.SinonStub[] = [];
+    let mockAnalyticsMock: ITelemetryService;
+    let mockAnalytics: ITelemetryService;
 
     setup(() => {
         sandbox = sinon.createSandbox();
@@ -254,7 +260,14 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         mockContext = makeExtensionContext();
 
         const mockLogger = createMockLogger();
-        explorerView = new DeepnoteExplorerView(mockContext, mockLogger, new DeepnoteTreeDataProvider(mockLogger));
+        mockAnalyticsMock = mock<ITelemetryService>();
+        mockAnalytics = instance(mockAnalyticsMock);
+        explorerView = new DeepnoteExplorerView(
+            mockContext,
+            mockLogger,
+            new DeepnoteTreeDataProvider(mockLogger),
+            mockAnalytics
+        );
         explorerView.activate();
     });
 
@@ -263,6 +276,25 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
         uuidStubs.forEach((stub) => stub.restore());
         uuidStubs = [];
         resetVSCodeMocks();
+    });
+
+    suite('newNotebook', () => {
+        test('reports failed, not cancelled, when no Deepnote file is open', async () => {
+            // Reachable from the Command Palette, where the command is not gated on an active editor.
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            await handlerFor(Commands.NewNotebook)();
+
+            verify(
+                mockAnalyticsMock.trackEvent(
+                    deepEqual({
+                        eventName: 'create_notebook',
+                        properties: { outcome: 'failed', source: 'toolbar' }
+                    })
+                )
+            ).once();
+        });
     });
 
     suite('newProject', () => {
@@ -484,7 +516,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             explorerView = new importModule.DeepnoteExplorerView(
                 mockContext,
                 createMockLogger(),
-                new DeepnoteTreeDataProvider(createMockLogger())
+                new DeepnoteTreeDataProvider(createMockLogger()),
+                instance(mock<ITelemetryService>())
             );
             explorerView.activate();
         });
@@ -674,7 +707,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             explorerView = new importModule.DeepnoteExplorerView(
                 mockContext,
                 createMockLogger(),
-                new DeepnoteTreeDataProvider(createMockLogger())
+                new DeepnoteTreeDataProvider(createMockLogger()),
+                instance(mock<ITelemetryService>())
             );
             explorerView.activate();
         });
@@ -742,7 +776,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const partialExplorer = new failingModule.DeepnoteExplorerView(
                 mockContext,
                 createMockLogger(),
-                new DeepnoteTreeDataProvider(createMockLogger())
+                new DeepnoteTreeDataProvider(createMockLogger()),
+                instance(mock<ITelemetryService>())
             );
             partialExplorer.activate();
 
@@ -797,7 +832,8 @@ suite('DeepnoteExplorerView - Empty State Commands', () => {
             const failedExplorer = new failingModule.DeepnoteExplorerView(
                 mockContext,
                 createMockLogger(),
-                new DeepnoteTreeDataProvider(createMockLogger())
+                new DeepnoteTreeDataProvider(createMockLogger()),
+                instance(mock<ITelemetryService>())
             );
             failedExplorer.activate();
 
@@ -2383,7 +2419,8 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
         explorerView = new DeepnoteExplorerView(
             mockContext,
             createMockLogger(),
-            new DeepnoteTreeDataProvider(createMockLogger())
+            new DeepnoteTreeDataProvider(createMockLogger()),
+            instance(mock<ITelemetryService>())
         );
         explorerView.activate();
     });
@@ -2459,7 +2496,12 @@ suite('DeepnoteExplorerView - Sibling-file command semantics', () => {
             uuidStubs.push(createUuidMock(['new-nb', 'new-group', 'new-block']));
 
             const mockProvider = mock<DeepnoteTreeDataProvider>();
-            explorerView = new DeepnoteExplorerView(mockContext, createMockLogger(), instance(mockProvider));
+            explorerView = new DeepnoteExplorerView(
+                mockContext,
+                createMockLogger(),
+                instance(mockProvider),
+                instance(mock<ITelemetryService>())
+            );
             explorerView.activate();
 
             const treeItem: Partial<DeepnoteTreeItem> = {

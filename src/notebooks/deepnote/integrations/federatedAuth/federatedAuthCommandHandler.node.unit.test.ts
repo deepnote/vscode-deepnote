@@ -59,20 +59,22 @@ suite('FederatedAuthCommandHandlerNode', () => {
             const id = lookupId ?? FED_AUTH_FIXTURE.INTEGRATION_ID;
             when(integrationStorage.getIntegrationConfig(id)).thenResolve(config);
 
-            await handler.authenticate(id);
+            const outcome = await handler.authenticate(id);
 
+            assert.strictEqual(outcome, 'failed');
             assert.strictEqual(runOAuthFlowStub.callCount, 0);
             verify(tokenStorage.save(anything())).never();
         });
     });
 
-    test('happy path: saves the captured refresh token with a fresh fingerprint', async () => {
+    test('happy path: saves the captured refresh token with a fresh fingerprint and reports completed', async () => {
         when(integrationStorage.getIntegrationConfig(FED_AUTH_FIXTURE.INTEGRATION_ID)).thenResolve(
             buildGoogleOauthIntegration()
         );
 
-        await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
+        const outcome = await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
+        assert.strictEqual(outcome, 'completed');
         assert.strictEqual(runOAuthFlowStub.callCount, 1);
         verify(
             tokenStorage.save(
@@ -140,26 +142,28 @@ suite('FederatedAuthCommandHandlerNode', () => {
         assert.strictEqual(params.get('state'), callArg.state);
     });
 
-    test('silently returns when the user cancels the flow', async () => {
+    test('reports cancelled when the user cancels the flow', async () => {
         when(integrationStorage.getIntegrationConfig(FED_AUTH_FIXTURE.INTEGRATION_ID)).thenResolve(
             buildGoogleOauthIntegration()
         );
         runOAuthFlowStub.rejects(new CancellationError());
 
-        await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
+        const outcome = await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
+        assert.strictEqual(outcome, 'cancelled');
         assert.strictEqual(runOAuthFlowStub.callCount, 1);
         verify(tokenStorage.save(anything())).never();
     });
 
-    test('surfaces a generic OAuth error via the failure toast and does not save a token', async () => {
+    test('surfaces a generic OAuth error via the failure toast, reports failed, and does not save a token', async () => {
         when(integrationStorage.getIntegrationConfig(FED_AUTH_FIXTURE.INTEGRATION_ID)).thenResolve(
             buildGoogleOauthIntegration()
         );
         runOAuthFlowStub.rejects(new Error('boom'));
 
-        await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
+        const outcome = await handler.authenticate(FED_AUTH_FIXTURE.INTEGRATION_ID);
 
+        assert.strictEqual(outcome, 'failed');
         assert.strictEqual(runOAuthFlowStub.callCount, 1);
         verify(tokenStorage.save(anything())).never();
     });

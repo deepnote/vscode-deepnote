@@ -10,6 +10,7 @@ import {
     IDeepnoteServerStarter
 } from '../types';
 import { IPythonApiProvider } from '../../../platform/api/types';
+import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
 import { IKernelProvider } from '../../../kernels/types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';
@@ -30,6 +31,7 @@ suite('DeepnoteEnvironmentsView', () => {
     let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
     let mockKernelProvider: IKernelProvider;
     let mockOutputChannel: IOutputChannel;
+    let mockTelemetryService: ITelemetryService;
     let mockServerStarter: IDeepnoteServerStarter;
     let disposables: Disposable[] = [];
     let pythonEnvironments: PythonExtension['environments'];
@@ -49,6 +51,7 @@ suite('DeepnoteEnvironmentsView', () => {
         mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
         mockKernelProvider = mock<IKernelProvider>();
         mockOutputChannel = mock<IOutputChannel>();
+        mockTelemetryService = mock<ITelemetryService>();
         mockServerStarter = mock<IDeepnoteServerStarter>();
 
         // stopServer is a safe no-op when a notebook has no running server
@@ -72,7 +75,8 @@ suite('DeepnoteEnvironmentsView', () => {
             instance(mockNotebookEnvironmentMapper),
             instance(mockKernelProvider),
             instance(mockOutputChannel),
-            instance(mockServerStarter)
+            instance(mockServerStarter),
+            instance(mockTelemetryService)
         );
     });
 

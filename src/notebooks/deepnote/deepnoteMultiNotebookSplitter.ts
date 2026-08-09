@@ -2,6 +2,7 @@ import { l10n, TabInputNotebook, Uri, window, workspace, type Disposable, type N
 import { serializeDeepnoteFile } from '@deepnote/blocks';
 import { isSingleNotebookDeepnoteFile, splitByNotebooks } from '@deepnote/convert';
 
+import { ITelemetryService } from '../../platform/analytics/types';
 import { ILogger } from '../../platform/logging/types';
 import type { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
@@ -23,6 +24,8 @@ const MAX_LEGACY_ALLOCATION_ATTEMPTS = 10_000;
  * The environment mapper is undefined on the web target, where env migration is a desktop-only no-op.
  */
 export class DeepnoteMultiNotebookSplitter {
+    private readonly analytics: ITelemetryService;
+
     private readonly disposables: Disposable[] = [];
 
     private readonly envMapper: IDeepnoteNotebookEnvironmentMapper | undefined;
@@ -39,12 +42,14 @@ export class DeepnoteMultiNotebookSplitter {
         envMapper: IDeepnoteNotebookEnvironmentMapper | undefined,
         refreshTree: () => void,
         logger: ILogger,
-        exists: (uri: Uri) => Promise<boolean>
+        exists: (uri: Uri) => Promise<boolean>,
+        analytics: ITelemetryService
     ) {
         this.envMapper = envMapper;
         this.refreshTree = refreshTree;
         this.logger = logger;
         this.exists = exists;
+        this.analytics = analytics;
     }
 
     public activate(): Disposable[] {
@@ -102,14 +107,27 @@ export class DeepnoteMultiNotebookSplitter {
             );
 
             if (selection === SPLIT_ACTION) {
-                await this.splitFile(fileUri);
+                // splitFile reports 0 when the split failed and was rolled back.
+                const notebookCount = await this.splitFile(fileUri);
+                this.analytics.trackEvent({
+                    eventName: 'split_notebook',
+                    properties:
+                        notebookCount > 0
+                            ? { notebookCount, outcome: 'completed' }
+                            : { notebookCount: file.project.notebooks.length, outcome: 'failed' }
+                });
+            } else {
+                this.analytics.trackEvent({
+                    eventName: 'split_notebook',
+                    properties: { notebookCount: file.project.notebooks.length, outcome: 'cancelled' }
+                });
             }
         } catch (error) {
             this.logger.error(`Failed to inspect Deepnote file for multi-notebook split: ${fileUri.toString()}`, error);
         }
     }
 
-    private async splitFile(fileUri: Uri): Promise<void> {
+    private async splitFile(fileUri: Uri): Promise<number> {
         // Compensations for each applied step, unwound in reverse on any failure so the split is all-or-nothing.
         const rollbacks: Array<() => Thenable<void>> = [];
         let renamed = false;
@@ -134,7 +152,7 @@ export class DeepnoteMultiNotebookSplitter {
                         l10n.t('Could not save the file before splitting. The file was left unchanged.')
                     );
 
-                    return;
+                    return 0;
                 }
             }
 
@@ -145,6 +163,13 @@ export class DeepnoteMultiNotebookSplitter {
 
             // Write all children before retiring the original (see step below).
             const entries = splitByNotebooks(deepnoteFile, getFileStem(fileUri));
+
+            // Without this, the retire below would rename the original away with no replacement and
+            // still report success.
+            if (entries.length === 0) {
+                throw new Error(l10n.t('The file has no notebooks that can be split into separate files.'));
+            }
+
             const reserved = new Set<string>();
             const newUris: Uri[] = [];
             const encoder = new TextEncoder();
@@ -193,6 +218,8 @@ export class DeepnoteMultiNotebookSplitter {
             this.refreshTree();
 
             await window.showInformationMessage(l10n.t('Split into {0} files.', newUris.length));
+
+            return newUris.length;
         } catch (error) {
             // Unwind every applied step so the original is left as it was found (or an honest message if it can't be).
             this.logger.error(`Failed to split Deepnote file: ${fileUri.toString()}`, error);
@@ -201,6 +228,8 @@ export class DeepnoteMultiNotebookSplitter {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
             await window.showErrorMessage(this.describeSplitFailure({ errorMessage, renamed, restored }));
+
+            return 0;
         }
     }
 

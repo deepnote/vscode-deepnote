@@ -4,12 +4,44 @@ import { anything, verify, when } from 'ts-mockito';
 import { CancellationToken, NotebookCell, NotebookEdit, WorkspaceEdit } from 'vscode';
 
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
-import { AgentCellStatusBarProvider } from './agentCellStatusBarProvider';
+import { AGENT_MODEL_METADATA_KEY, AgentCellStatusBarProvider } from './agentCellStatusBarProvider';
 import { createMockCell, createMockNotebookWithCells } from './deepnoteTestHelpers';
 
 suite('AgentCellStatusBarProvider', () => {
     let provider: AgentCellStatusBarProvider;
     let mockToken: CancellationToken;
+
+    const commandHandlers = new Map<string, (cell?: NotebookCell) => Promise<void>>();
+
+    // Records every command registration. Call AFTER resetVSCodeMocks(), which regenerates the mocks.
+    function activateCapturingCommands(): void {
+        commandHandlers.clear();
+        when(
+            mockedVSCodeNamespaces.notebooks.registerNotebookCellStatusBarItemProvider(anything(), anything())
+        ).thenReturn({ dispose: () => undefined });
+        when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument).thenReturn(() => ({
+            dispose: () => undefined
+        }));
+        when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenCall(
+            (id: string, callback: (cell?: NotebookCell) => Promise<void>) => {
+                commandHandlers.set(id, callback);
+
+                return { dispose: () => undefined };
+            }
+        );
+
+        provider.activate();
+    }
+
+    function handlerFor(id: string): (cell?: NotebookCell) => Promise<void> {
+        const handler = commandHandlers.get(id);
+
+        if (!handler) {
+            throw new Error(`No handler captured for '${id}'; call activateCapturingCommands() first.`);
+        }
+
+        return handler;
+    }
 
     setup(() => {
         mockToken = {
@@ -231,6 +263,34 @@ suite('AgentCellStatusBarProvider', () => {
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
+
+        suite('Command handler', () => {
+            let invokeCommand: (cell?: NotebookCell) => Promise<void>;
+
+            setup(() => {
+                activateCapturingCommands();
+                invokeCommand = handlerFor('deepnote.switchAgentModel');
+            });
+
+            test('Should switch the model of the cell the command is given', async () => {
+                pick('gpt-5.6-terra');
+                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+                await invokeCommand(agentCell());
+
+                expect(capturedEdit!.metadata[AGENT_MODEL_METADATA_KEY]).to.equal('gpt-5.6-terra');
+            });
+
+            test('Should reject when invoked without a cell', async () => {
+                // Catches: falling back to the selected cell, which rewrites a block the user never clicked.
+                pick('gpt-5.6-terra');
+
+                await assert.isRejected(invokeCommand(undefined), /requires the cell it was invoked from/);
+
+                verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            });
+        });
     });
 
     suite('Clearing ephemeral blocks', () => {
@@ -420,23 +480,8 @@ suite('AgentCellStatusBarProvider', () => {
             let invokeCommand: (cell?: NotebookCell) => Promise<void>;
 
             setup(() => {
-                when(
-                    mockedVSCodeNamespaces.notebooks.registerNotebookCellStatusBarItemProvider(anything(), anything())
-                ).thenReturn({ dispose: () => undefined });
-                when(mockedVSCodeNamespaces.workspace.onDidChangeNotebookDocument).thenReturn(() => ({
-                    dispose: () => undefined
-                }));
-                when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenCall(
-                    (id: string, callback: (cell?: NotebookCell) => Promise<void>) => {
-                        if (id === 'deepnote.clearEphemeralBlocks') {
-                            invokeCommand = callback;
-                        }
-
-                        return { dispose: () => undefined };
-                    }
-                );
-
-                provider.activate();
+                activateCapturingCommands();
+                invokeCommand = handlerFor('deepnote.clearEphemeralBlocks');
             });
 
             test('Should clear the blocks of the cell the command is given', async () => {

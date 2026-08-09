@@ -28,6 +28,7 @@ export const AGENT_MODEL_AUTO = 'auto';
 const AGENT_MODEL_OPTIONS = [AGENT_MODEL_AUTO, 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'];
 
 const CLEAR_EPHEMERAL_BLOCKS_COMMAND = 'deepnote.clearEphemeralBlocks';
+const SWITCH_AGENT_MODEL_COMMAND = 'deepnote.switchAgentModel';
 
 const AGENT_INDICATOR_PRIORITY = 100;
 const MODEL_PICKER_PRIORITY = 90;
@@ -52,11 +53,12 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
         );
 
         this.disposables.push(
-            commands.registerCommand('deepnote.switchAgentModel', async (cell?: NotebookCell) => {
-                const activeCell = cell || this.getActiveCell();
-                if (activeCell) {
-                    await this.switchModel(activeCell);
+            commands.registerCommand(SWITCH_AGENT_MODEL_COMMAND, async (cell?: NotebookCell) => {
+                if (!cell) {
+                    throw new Error(`${SWITCH_AGENT_MODEL_COMMAND} requires the cell it was invoked from`);
                 }
+
+                await this.switchModel(cell);
             })
         );
 
@@ -167,19 +169,10 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
             tooltip: l10n.t('AI Model: {0}\nClick to change', model),
             command: {
                 title: l10n.t('Switch Model'),
-                command: 'deepnote.switchAgentModel',
+                command: SWITCH_AGENT_MODEL_COMMAND,
                 arguments: [cell]
             }
         };
-    }
-
-    private getActiveCell(): NotebookCell | undefined {
-        const activeEditor = window.activeNotebookEditor;
-        if (activeEditor && activeEditor.selection) {
-            return activeEditor.notebook.cellAt(activeEditor.selection.start);
-        }
-
-        return undefined;
     }
 
     /** Ephemeral cells this agent block generated; empty when it has no block id or has not run. */

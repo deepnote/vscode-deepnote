@@ -349,9 +349,9 @@ suite('DeepnoteNotebookCommandListener', () => {
         });
 
         /**
-         * Helper to create mock NotebookCell with metadata
+         * Helper to create NotebookCellData with metadata, for seeding createMockEditor.
          */
-        function createMockCell(content: string, metadata?: Record<string, any>): NotebookCellData {
+        function createMockCellData(content: string, metadata?: Record<string, any>): NotebookCellData {
             const cell = new NotebookCellData(NotebookCellKind.Code, content, 'json');
             if (metadata != null) {
                 cell.metadata = metadata;
@@ -450,7 +450,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should add input-text block after selection when selection exists',
                 blockType: 'input-text',
-                existingCells: [createMockCell('{}')],
+                existingCells: [createMockCellData('{}')],
                 selection: new NotebookRange(0, 1),
                 expectedInsertIndex: 1,
                 expectedVariableName: 'input_1',
@@ -559,8 +559,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                 description: 'should generate correct variable name when existing inputs exist',
                 blockType: 'input-text',
                 existingCells: [
-                    createMockCell('{ "deepnote_variable_name": "input_1" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_2" }')
+                    createMockCellData('{ "deepnote_variable_name": "input_1" }'),
+                    createMockCellData('{ "deepnote_variable_name": "input_2" }')
                 ],
                 selection: new NotebookRange(1, 2),
                 expectedInsertIndex: 2,
@@ -570,7 +570,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should insert at selection.end when selection is in the middle',
                 blockType: 'input-text',
-                existingCells: [createMockCell('{}'), createMockCell('{}'), createMockCell('{}')],
+                existingCells: [createMockCellData('{}'), createMockCellData('{}'), createMockCellData('{}')],
                 selection: new NotebookRange(1, 2),
                 expectedInsertIndex: 2,
                 expectedVariableName: 'input_1',
@@ -579,7 +579,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should handle large variable numbers correctly',
                 blockType: 'input-text',
-                existingCells: [createMockCell('{ "deepnote_variable_name": "input_99" }')],
+                existingCells: [createMockCellData('{ "deepnote_variable_name": "input_99" }')],
                 selection: undefined,
                 expectedInsertIndex: 1,
                 expectedVariableName: 'input_100',
@@ -760,7 +760,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should add SQL block after selection when selection exists', async () => {
                 // Setup mocks
-                const existingCells = [createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}')];
                 const selection = new NotebookRange(1, 2);
                 const { editor } = createMockEditor(existingCells, selection);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -783,8 +783,8 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should generate correct variable name when existing df variables exist', async () => {
                 // Setup mocks with existing df variables
                 const existingCells = [
-                    createMockCell('{ "deepnote_variable_name": "df_1" }'),
-                    createMockCell('{ "deepnote_variable_name": "df_2" }')
+                    createMockCellData('{ "deepnote_variable_name": "df_1" }'),
+                    createMockCellData('{ "deepnote_variable_name": "df_2" }')
                 ];
                 const { editor } = createMockEditor(existingCells, undefined);
                 const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -803,8 +803,8 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should ignore input variables when generating df variable name', async () => {
                 // Setup mocks with input variables (should not affect df numbering)
                 const existingCells = [
-                    createMockCell('{ "deepnote_variable_name": "input_10" }'),
-                    createMockCell('{ "deepnote_variable_name": "df_2" }')
+                    createMockCellData('{ "deepnote_variable_name": "input_10" }'),
+                    createMockCellData('{ "deepnote_variable_name": "df_2" }')
                 ];
                 const { editor } = createMockEditor(existingCells, undefined);
                 const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -878,7 +878,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             });
 
             test('should add the agent block after the selection when one exists', async () => {
-                const existingCells = [createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}')];
                 const { editor, document } = createMockEditor(existingCells, new NotebookRange(1, 2));
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
 
@@ -933,8 +933,8 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should refuse a second agent block and leave the notebook untouched', async () => {
                 const { editor } = createMockEditor([
-                    createMockCell('existing agent', { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' }),
-                    createMockCell('user code')
+                    createMockCellData('existing agent', { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' }),
+                    createMockCellData('user code')
                 ]);
                 const { chainStub } = mockNotebookUpdateAndExecute(editor);
 
@@ -948,8 +948,8 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should still add the block when other cells carry no agent pocket', async () => {
                 // Catches: a guard that trips on any cell, blocking the first agent block outright.
                 const { editor } = createMockEditor([
-                    createMockCell('user code', { __deepnotePocket: { type: 'code' }, id: 'code-block-1' }),
-                    createMockCell('scratch', { is_ephemeral: true, agent_source_block_id: 'agent-block-1' })
+                    createMockCellData('user code', { __deepnotePocket: { type: 'code' }, id: 'code-block-1' }),
+                    createMockCellData('scratch', { is_ephemeral: true, agent_source_block_id: 'agent-block-1' })
                 ]);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
 
@@ -1027,7 +1027,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should add big number block after selection when selection exists', async () => {
                 // Setup mocks
-                const existingCells = [createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}')];
                 const selection = new NotebookRange(0, 1);
                 const { editor } = createMockEditor(existingCells, selection);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -1049,7 +1049,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should insert at correct position in the middle of notebook', async () => {
                 // Setup mocks
-                const existingCells = [createMockCell('{}'), createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}'), createMockCellData('{}')];
                 const selection = new NotebookRange(1, 2);
                 const { editor } = createMockEditor(existingCells, selection);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -1163,7 +1163,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should add chart block after selection when selection exists', async () => {
                 // Setup mocks
-                const existingCells = [createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}')];
                 const selection = new NotebookRange(0, 1);
                 const { editor } = createMockEditor(existingCells, selection);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -1186,8 +1186,8 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should use hardcoded variable name df_1', async () => {
                 // Setup mocks with existing df variables
                 const existingCells = [
-                    createMockCell('{ "deepnote_variable_name": "df_1" }'),
-                    createMockCell('{ "variable": "df_2" }')
+                    createMockCellData('{ "deepnote_variable_name": "df_1" }'),
+                    createMockCellData('{ "variable": "df_2" }')
                 ];
                 const { editor } = createMockEditor(existingCells, undefined);
                 const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -1207,9 +1207,9 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should always use df_1 regardless of existing variables', async () => {
                 // Setup mocks with various existing variables
                 const existingCells = [
-                    createMockCell('{ "deepnote_variable_name": "input_10" }'),
-                    createMockCell('{ "deepnote_variable_name": "df_5" }'),
-                    createMockCell('{ "variable": "df_2" }')
+                    createMockCellData('{ "deepnote_variable_name": "input_10" }'),
+                    createMockCellData('{ "deepnote_variable_name": "df_5" }'),
+                    createMockCellData('{ "variable": "df_2" }')
                 ];
                 const { editor } = createMockEditor(existingCells, undefined);
                 const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -1228,7 +1228,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should insert at correct position in the middle of notebook', async () => {
                 // Setup mocks
-                const existingCells = [createMockCell('{}'), createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}'), createMockCellData('{}')];
                 const selection = new NotebookRange(1, 2);
                 const { editor } = createMockEditor(existingCells, selection);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);

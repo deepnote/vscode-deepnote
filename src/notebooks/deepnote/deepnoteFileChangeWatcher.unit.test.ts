@@ -1197,7 +1197,7 @@ project:
                     ]
                 }
             };
-            // Force casting wihtout metadata
+            // Force casting without metadata
             deepnoteFile.project.notebooks[0].blocks = [
                 { id: 'block-1', type: 'code', sortingKey: 'a0' } as DeepnoteBlock,
                 { id: 'block-2', type: 'code', sortingKey: 'a1' } as DeepnoteBlock

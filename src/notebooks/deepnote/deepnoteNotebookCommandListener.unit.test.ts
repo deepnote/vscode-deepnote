@@ -8,8 +8,7 @@ import {
     NotebookRange,
     NotebookCellKind,
     NotebookCellData,
-    WorkspaceEdit,
-    Uri
+    WorkspaceEdit
 } from 'vscode';
 
 import {
@@ -20,7 +19,6 @@ import {
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
 import { IConfigurationService, IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
-import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
 import { WrappedError } from '../../platform/errors/types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
@@ -362,7 +360,10 @@ suite('DeepnoteNotebookCommandListener', () => {
         }
 
         /**
-         * Helper to create mock NotebookEditor and NotebookDocument
+         * Helper to create mock NotebookEditor and NotebookDocument.
+         *
+         * Built on createMockNotebookWithCells rather than createMockedNotebookDocument because the
+         * latter drops NotebookCellData.metadata, which the block commands read.
          */
         function createMockEditor(
             cellDataArray: NotebookCellData[],
@@ -371,8 +372,14 @@ suite('DeepnoteNotebookCommandListener', () => {
             editor: NotebookEditor;
             document: NotebookDocument;
         } {
-            const uri = Uri.file('/test/notebook.ipynb');
-            const document = createMockedNotebookDocument(cellDataArray, {}, uri);
+            const { notebook: document } = createMockNotebookWithCells(
+                cellDataArray.map((data) => ({
+                    kind: data.kind,
+                    languageId: data.languageId,
+                    text: data.value,
+                    metadata: data.metadata
+                }))
+            );
 
             const editorSelection =
                 selection != null ? selection : new NotebookRange(0, cellDataArray.length > 0 ? 1 : 0);
@@ -839,23 +846,6 @@ suite('DeepnoteNotebookCommandListener', () => {
         });
 
         suite('addAgentBlock', () => {
-            // createMockedNotebookDocument drops NotebookCellData.metadata, so an existing agent
-            // block has to come from a notebook mock that keeps it.
-            function createMockEditorWithMetadata(
-                cellOptions: Parameters<typeof createMockNotebookWithCells>[0]
-            ): NotebookEditor {
-                const { notebook } = createMockNotebookWithCells(cellOptions);
-                const selection = new NotebookRange(0, cellOptions.length > 0 ? 1 : 0);
-
-                return {
-                    notebook,
-                    selection,
-                    selections: [selection],
-                    visibleRanges: [],
-                    revealRange: sandbox.stub()
-                };
-            }
-
             function insertedCell(getCapturedNotebookEdits: () => any[] | null) {
                 const edits = getCapturedNotebookEdits()!;
                 assert.equal(edits.length, 1, 'Should have one notebook edit');
@@ -890,12 +880,12 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should add the agent block after the selection when one exists', async () => {
                 const existingCells = [createMockCell('{}'), createMockCell('{}')];
                 const { editor, document } = createMockEditor(existingCells, new NotebookRange(1, 2));
-                const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
 
                 await commandListener.addAgentBlock();
 
                 insertedCell(getCapturedNotebookEdits);
-                assert.equal(document.uri.fsPath, '/test/notebook.ipynb', 'Should edit the active document');
+                assert.equal(chainStub.firstCall.args[0], document, 'Should edit the active document');
 
                 const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
                 assert.equal(revealCall.args[0].start, 2, 'Should insert below the selection');
@@ -942,9 +932,9 @@ suite('DeepnoteNotebookCommandListener', () => {
             });
 
             test('should refuse a second agent block and leave the notebook untouched', async () => {
-                const editor = createMockEditorWithMetadata([
-                    { text: 'existing agent', metadata: { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' } },
-                    { text: 'user code', metadata: {} }
+                const { editor } = createMockEditor([
+                    createMockCell('existing agent', { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' }),
+                    createMockCell('user code')
                 ]);
                 const { chainStub } = mockNotebookUpdateAndExecute(editor);
 
@@ -957,9 +947,9 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should still add the block when other cells carry no agent pocket', async () => {
                 // Catches: a guard that trips on any cell, blocking the first agent block outright.
-                const editor = createMockEditorWithMetadata([
-                    { text: 'user code', metadata: { __deepnotePocket: { type: 'code' }, id: 'code-block-1' } },
-                    { text: 'scratch', metadata: { is_ephemeral: true, agent_source_block_id: 'agent-block-1' } }
+                const { editor } = createMockEditor([
+                    createMockCell('user code', { __deepnotePocket: { type: 'code' }, id: 'code-block-1' }),
+                    createMockCell('scratch', { is_ephemeral: true, agent_source_block_id: 'agent-block-1' })
                 ]);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
 

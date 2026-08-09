@@ -380,7 +380,8 @@ suite('DeepnoteNotebookCommandListener', () => {
             cellDataArray: NotebookCellData[],
             selection?: NotebookRange
         ): {
-            editor: NotebookEditor;
+            // revealRange is narrowed to the stub it actually is, so assertions on it need no cast.
+            editor: NotebookEditor & { revealRange: sinon.SinonStub };
             document: NotebookDocument;
         } {
             const { notebook: document } = createMockNotebookWithCells(
@@ -395,7 +396,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             const editorSelection =
                 selection != null ? selection : new NotebookRange(0, cellDataArray.length > 0 ? 1 : 0);
 
-            const editor: NotebookEditor = {
+            const editor: NotebookEditor & { revealRange: sinon.SinonStub } = {
                 notebook: document,
                 selection: editorSelection,
                 selections: [editorSelection],
@@ -671,11 +672,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                     });
 
                     // Verify reveal and selection were set
-                    assert.isTrue(
-                        (editor.revealRange as sinon.SinonStub).calledOnce,
-                        'Should reveal the new cell range'
-                    );
-                    const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                    assert.isTrue(editor.revealRange.calledOnce, 'Should reveal the new cell range');
+                    const revealCall = editor.revealRange.firstCall;
                     assert.equal(revealCall.args[0].start, expectedInsertIndex, 'Should reveal correct range start');
                     assert.equal(revealCall.args[0].end, expectedInsertIndex + 1, 'Should reveal correct range end');
                 });
@@ -762,8 +760,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                 );
 
                 // Verify reveal and selection were set
-                assert.isTrue((editor.revealRange as sinon.SinonStub).calledOnce, 'Should reveal the new cell range');
-                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                assert.isTrue(editor.revealRange.calledOnce, 'Should reveal the new cell range');
+                const revealCall = editor.revealRange.firstCall;
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
@@ -882,8 +880,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(newCell.value, '', 'Should have empty content');
                 assert.equal(newCell.metadata.__deepnotePocket.type, 'agent', 'Should have agent pocket type');
 
-                assert.isTrue((editor.revealRange as sinon.SinonStub).calledOnce, 'Should reveal the new cell range');
-                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                assert.isTrue(editor.revealRange.calledOnce, 'Should reveal the new cell range');
+                const revealCall = editor.revealRange.firstCall;
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
             });
@@ -898,7 +896,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 insertedCell(getCapturedNotebookEdits);
                 assert.equal(chainStub.firstCall.args[0], document, 'Should edit the active document');
 
-                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                const revealCall = editor.revealRange.firstCall;
                 assert.equal(revealCall.args[0].start, 2, 'Should insert below the selection');
                 assert.equal(revealCall.args[0].end, 3, 'Should select only the new cell');
             });
@@ -953,7 +951,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
                 assert.isFalse(chainStub.called, 'Must not edit a notebook that already has an agent block');
                 verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
-                assert.isFalse((editor.revealRange as sinon.SinonStub).called, 'Must not reveal anything');
+                assert.isFalse(editor.revealRange.called, 'Must not reveal anything');
             });
 
             test('should still add the block when other cells carry no agent pocket', async () => {
@@ -1029,8 +1027,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(newCell.metadata.__deepnotePocket.type, 'big-number', 'Should have big-number type');
 
                 // Verify reveal and selection were set
-                assert.isTrue((editor.revealRange as sinon.SinonStub).calledOnce, 'Should reveal the new cell range');
-                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                assert.isTrue(editor.revealRange.calledOnce, 'Should reveal the new cell range');
+                const revealCall = editor.revealRange.firstCall;
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
@@ -1165,8 +1163,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(newCell.metadata.__deepnotePocket.type, 'visualization', 'Should have visualization type');
 
                 // Verify reveal and selection were set
-                assert.isTrue((editor.revealRange as sinon.SinonStub).calledOnce, 'Should reveal the new cell range');
-                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                assert.isTrue(editor.revealRange.calledOnce, 'Should reveal the new cell range');
+                const revealCall = editor.revealRange.firstCall;
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');

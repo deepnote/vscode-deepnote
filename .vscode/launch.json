@@ -17,7 +17,7 @@
                 "${workspaceFolder}/dist/**/*",
                 "!${workspaceFolder}/**/node_modules**/*"
             ],
-            "preLaunchTask": "Build",
+            // "preLaunchTask": "Build",
             "skipFiles": [
                 "<node_internals>/**"
             ],

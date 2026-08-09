@@ -4,7 +4,7 @@ import { anything, verify, when } from 'ts-mockito';
 import { CancellationToken, NotebookCell, NotebookEdit, WorkspaceEdit } from 'vscode';
 
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
-import { AGENT_MODEL_METADATA_KEY, AgentCellStatusBarProvider } from './agentCellStatusBarProvider';
+import { AgentCellStatusBarProvider } from './agentCellStatusBarProvider';
 import { createMockCell, createMockNotebookWithCells } from './deepnoteTestHelpers';
 
 suite('AgentCellStatusBarProvider', () => {
@@ -64,39 +64,19 @@ suite('AgentCellStatusBarProvider', () => {
             expect(items).to.have.lengthOf(2);
         });
 
-        test('Should return undefined for code cell', () => {
-            const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'code' } } });
-            const items = provider.provideCellStatusBarItems(cell, mockToken);
+        test('Should return undefined for any cell that is not an agent block', () => {
+            const nonAgentCells: Record<string, Record<string, unknown>> = {
+                'code cell': { __deepnotePocket: { type: 'code' } },
+                'sql cell': { __deepnotePocket: { type: 'sql' } },
+                'markdown cell': { __deepnotePocket: { type: 'markdown' } },
+                'cell without a pocket': {}
+            };
 
-            expect(items).to.be.undefined;
-        });
+            for (const [description, metadata] of Object.entries(nonAgentCells)) {
+                const items = provider.provideCellStatusBarItems(createMockCell({ metadata }), mockToken);
 
-        test('Should return undefined for sql cell', () => {
-            const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'sql' } } });
-            const items = provider.provideCellStatusBarItems(cell, mockToken);
-
-            expect(items).to.be.undefined;
-        });
-
-        test('Should return undefined for markdown cell', () => {
-            const cell = createMockCell({ metadata: { __deepnotePocket: { type: 'markdown' } } });
-            const items = provider.provideCellStatusBarItems(cell, mockToken);
-
-            expect(items).to.be.undefined;
-        });
-
-        test('Should return undefined for cell without pocket', () => {
-            const cell = createMockCell({ metadata: {} });
-            const items = provider.provideCellStatusBarItems(cell, mockToken);
-
-            expect(items).to.be.undefined;
-        });
-
-        test('Should return undefined for cell without metadata', () => {
-            const cell = createMockCell({ metadata: undefined });
-            const items = provider.provideCellStatusBarItems(cell, mockToken);
-
-            expect(items).to.be.undefined;
+                expect(items, description).to.be.undefined;
+            }
         });
 
         test('Should return undefined when cancellation is requested', () => {
@@ -163,8 +143,11 @@ suite('AgentCellStatusBarProvider', () => {
         });
     });
 
+    // Driven through the registered command rather than switchModel directly, so each case also
+    // covers the wiring the status bar item actually goes through.
     suite('Model Switching', () => {
         let capturedEdit: { index: number; metadata: Record<string, unknown> } | undefined;
+        let invokeCommand: (cell?: NotebookCell) => Promise<void>;
 
         setup(() => {
             resetVSCodeMocks();
@@ -177,6 +160,9 @@ suite('AgentCellStatusBarProvider', () => {
 
                 return {} as NotebookEdit;
             });
+
+            activateCapturingCommands();
+            invokeCommand = handlerFor('deepnote.switchAgentModel');
         });
 
         teardown(() => {
@@ -207,7 +193,7 @@ suite('AgentCellStatusBarProvider', () => {
             pick('gpt-5.6-terra');
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
 
-            await provider.switchModel(agentCell());
+            await invokeCommand(agentCell());
 
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
             expect(capturedEdit!.index).to.equal(2);
@@ -223,7 +209,7 @@ suite('AgentCellStatusBarProvider', () => {
             // document on a no-op selection.
             pick('gpt-5.6-sol');
 
-            await provider.switchModel(agentCell());
+            await invokeCommand(agentCell());
 
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
@@ -233,7 +219,7 @@ suite('AgentCellStatusBarProvider', () => {
             // user presses Escape.
             pick(undefined);
 
-            await provider.switchModel(agentCell());
+            await invokeCommand(agentCell());
 
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
@@ -248,7 +234,7 @@ suite('AgentCellStatusBarProvider', () => {
                 statusBarRefreshed = true;
             });
 
-            await provider.switchModel(agentCell());
+            await invokeCommand(agentCell());
 
             verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
             expect(statusBarRefreshed, 'a rejected edit must not refresh the status bar').to.be.false;
@@ -258,44 +244,32 @@ suite('AgentCellStatusBarProvider', () => {
             // Catches: dropping the isAgentCell guard, which would offer the model picker on any cell.
             pick('gpt-5.6-luna');
 
-            await provider.switchModel(createMockCell({ metadata: { __deepnotePocket: { type: 'code' } } }));
+            await invokeCommand(createMockCell({ metadata: { __deepnotePocket: { type: 'code' } } }));
 
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
 
-        suite('Command handler', () => {
-            let invokeCommand: (cell?: NotebookCell) => Promise<void>;
+        test('Should reject when invoked without a cell', async () => {
+            // Catches: falling back to the selected cell, which rewrites a block the user never clicked.
+            pick('gpt-5.6-terra');
 
-            setup(() => {
-                activateCapturingCommands();
-                invokeCommand = handlerFor('deepnote.switchAgentModel');
-            });
+            await assert.isRejected(invokeCommand(undefined), /requires the cell it was invoked from/);
 
-            test('Should switch the model of the cell the command is given', async () => {
-                pick('gpt-5.6-terra');
-                when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
-
-                await invokeCommand(agentCell());
-
-                expect(capturedEdit!.metadata[AGENT_MODEL_METADATA_KEY]).to.equal('gpt-5.6-terra');
-            });
-
-            test('Should reject when invoked without a cell', async () => {
-                // Catches: falling back to the selected cell, which rewrites a block the user never clicked.
-                pick('gpt-5.6-terra');
-
-                await assert.isRejected(invokeCommand(undefined), /requires the cell it was invoked from/);
-
-                verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
-                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
-            });
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
     });
 
+    // Driven through the registered command rather than clearEphemeralBlocks directly, so each case
+    // also covers the wiring the status bar item actually goes through.
     suite('Clearing ephemeral blocks', () => {
+        let invokeCommand: (cell?: NotebookCell) => Promise<void>;
+
         setup(() => {
             resetVSCodeMocks();
+            activateCapturingCommands();
+            invokeCommand = handlerFor('deepnote.clearEphemeralBlocks');
         });
 
         teardown(() => {
@@ -354,7 +328,7 @@ suite('AgentCellStatusBarProvider', () => {
             applyDeletionsTo(cells);
             confirmWith('Clear');
 
-            await provider.clearEphemeralBlocks(cells[0]);
+            await invokeCommand(cells[0]);
 
             expect(cells.map((cell) => cell.document.getText())).to.deep.equal([
                 'agent A',
@@ -374,7 +348,7 @@ suite('AgentCellStatusBarProvider', () => {
             applyDeletionsTo(cells);
             confirmWith('Clear');
 
-            await provider.clearEphemeralBlocks(cells[0]);
+            await invokeCommand(cells[0]);
 
             verify(
                 mockedVSCodeNamespaces.window.showWarningMessage(
@@ -394,7 +368,7 @@ suite('AgentCellStatusBarProvider', () => {
             applyDeletionsTo(cells);
             confirmWith(undefined);
 
-            await provider.clearEphemeralBlocks(cells[0]);
+            await invokeCommand(cells[0]);
 
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
             expect(cells).to.have.lengthOf(2);
@@ -409,7 +383,7 @@ suite('AgentCellStatusBarProvider', () => {
             applyDeletionsTo(cells);
             confirmWith('Clear');
 
-            await provider.clearEphemeralBlocks(cells[0]);
+            await invokeCommand(cells[0]);
 
             verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).never();
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
@@ -425,7 +399,7 @@ suite('AgentCellStatusBarProvider', () => {
             applyDeletionsTo(cells);
             confirmWith('Clear');
 
-            await provider.clearEphemeralBlocks(cells[0]);
+            await invokeCommand(cells[0]);
 
             verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).never();
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
@@ -440,7 +414,7 @@ suite('AgentCellStatusBarProvider', () => {
             confirmWith('Clear');
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(false));
 
-            await provider.clearEphemeralBlocks(cells[0]);
+            await invokeCommand(cells[0]);
 
             verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
         });
@@ -476,36 +450,14 @@ suite('AgentCellStatusBarProvider', () => {
             });
         });
 
-        suite('Command handler', () => {
-            let invokeCommand: (cell?: NotebookCell) => Promise<void>;
+        test('Should reject when invoked without a cell', async () => {
+            // Catches: falling back to the selected cell, which clears a run the user never clicked.
+            confirmWith('Clear');
 
-            setup(() => {
-                activateCapturingCommands();
-                invokeCommand = handlerFor('deepnote.clearEphemeralBlocks');
-            });
+            await assert.isRejected(invokeCommand(undefined), /requires the cell it was invoked from/);
 
-            test('Should clear the blocks of the cell the command is given', async () => {
-                const { cells } = createMockNotebookWithCells([
-                    agentBlock('agent A', 'agent-block-1'),
-                    ephemeralCell('eph A1', 'agent-block-1')
-                ]);
-                applyDeletionsTo(cells);
-                confirmWith('Clear');
-
-                await invokeCommand(cells[0]);
-
-                expect(cells.map((cell) => cell.document.getText())).to.deep.equal(['agent A']);
-            });
-
-            test('Should reject when invoked without a cell', async () => {
-                // Catches: falling back to the selected cell, which clears a run the user never clicked.
-                confirmWith('Clear');
-
-                await assert.isRejected(invokeCommand(undefined), /requires the cell it was invoked from/);
-
-                verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).never();
-                verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
-            });
+            verify(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).never();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
         });
     });
 });

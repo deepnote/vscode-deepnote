@@ -75,8 +75,36 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
         this.disposables.push(this._onDidChangeCellStatusBarItems);
     }
 
+    public dispose(): void {
+        this.disposables.forEach((disposable) => disposable.dispose());
+    }
+
+    public provideCellStatusBarItems(
+        cell: NotebookCell,
+        token: CancellationToken
+    ): NotebookCellStatusBarItem[] | undefined {
+        if (token.isCancellationRequested) {
+            return undefined;
+        }
+
+        if (!isAgentCell(cell)) {
+            return undefined;
+        }
+
+        const metadata = cell.metadata as Record<string, unknown> | undefined;
+        const model = this.getModel(metadata);
+
+        const items = [this.createAgentIndicatorItem(), this.createModelPickerItem(cell, model)];
+
+        if (this.getCellsToClear(cell).length > 0) {
+            items.push(this.createClearEphemeralItem(cell));
+        }
+
+        return items;
+    }
+
     /** Deletes the ephemeral cells this agent block generated, after a modal confirmation. */
-    public async clearEphemeralBlocks(cell: NotebookCell): Promise<void> {
+    private async clearEphemeralBlocks(cell: NotebookCell): Promise<void> {
         if (!isAgentCell(cell)) {
             return;
         }
@@ -108,34 +136,6 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
         if (!(await workspace.applyEdit(edit))) {
             void window.showErrorMessage(l10n.t('Failed to clear ephemeral blocks'));
         }
-    }
-
-    public dispose(): void {
-        this.disposables.forEach((disposable) => disposable.dispose());
-    }
-
-    public provideCellStatusBarItems(
-        cell: NotebookCell,
-        token: CancellationToken
-    ): NotebookCellStatusBarItem[] | undefined {
-        if (token.isCancellationRequested) {
-            return undefined;
-        }
-
-        if (!isAgentCell(cell)) {
-            return undefined;
-        }
-
-        const metadata = cell.metadata as Record<string, unknown> | undefined;
-        const model = this.getModel(metadata);
-
-        const items = [this.createAgentIndicatorItem(), this.createModelPickerItem(cell, model)];
-
-        if (this.getCellsToClear(cell).length > 0) {
-            items.push(this.createClearEphemeralItem(cell));
-        }
-
-        return items;
     }
 
     private createAgentIndicatorItem(): NotebookCellStatusBarItem {
@@ -197,7 +197,7 @@ export class AgentCellStatusBarProvider implements NotebookCellStatusBarItemProv
         return AGENT_MODEL_AUTO;
     }
 
-    public async switchModel(cell: NotebookCell): Promise<void> {
+    private async switchModel(cell: NotebookCell): Promise<void> {
         if (!isAgentCell(cell)) {
             return;
         }

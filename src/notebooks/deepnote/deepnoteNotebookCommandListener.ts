@@ -247,17 +247,30 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         }
         const document = editor.notebook;
         const selection = editor.selection;
+        const agentBlockExistsMessage = l10n.t('This notebook already contains an agent block.');
 
         if (document.getCells().some(isAgentCell)) {
-            void window.showInformationMessage(l10n.t('This notebook already contains an agent block.'));
+            void window.showInformationMessage(agentBlockExistsMessage);
 
             return;
         }
 
-        const insertIndex = selection ? selection.end : document.cellCount;
         const blockId = generateBlockId();
 
+        let alreadyHasAgentBlock = false;
+        let insertIndex = 0;
+
         const result = await notebookUpdaterUtils.chainWithPendingUpdates(document, (edit) => {
+            // Repeated inside the serialized callback: a concurrent invocation passes the check above
+            // while its edit is still queued, and only here has that edit already applied.
+            if (document.getCells().some(isAgentCell)) {
+                alreadyHasAgentBlock = true;
+
+                return;
+            }
+
+            insertIndex = selection ? selection.end : document.cellCount;
+
             const newCell = new NotebookCellData(NotebookCellKind.Code, '', 'plaintext');
             newCell.metadata = {
                 __deepnotePocket: {
@@ -270,6 +283,13 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
             edit.set(document.uri, [nbEdit]);
         });
+
+        if (alreadyHasAgentBlock) {
+            void window.showInformationMessage(agentBlockExistsMessage);
+
+            return;
+        }
+
         if (result !== true) {
             throw new Error(l10n.t('Failed to insert agent block'));
         }

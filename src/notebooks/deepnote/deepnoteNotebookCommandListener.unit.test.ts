@@ -914,14 +914,17 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(metadata.__deepnoteBlockId, metadata.id, 'Backup id key must match id');
             });
 
-            test('should give consecutive agent blocks distinct ids', async () => {
+            test('should give each notebook its own agent block id', async () => {
                 // Catches: a hoisted/constant id, which would make two agent blocks fight over the
-                // same generated cells.
+                // same generated cells. Two notebooks, because one notebook only ever gets one block.
                 const { editor } = createMockEditor([], undefined);
                 const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
 
                 await commandListener.addAgentBlock();
                 const first = insertedCell(getCapturedNotebookEdits).metadata.id;
+
+                const { editor: otherEditor } = createMockEditor([], undefined);
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(otherEditor);
 
                 await commandListener.addAgentBlock();
                 const second = insertedCell(getCapturedNotebookEdits).metadata.id;
@@ -952,6 +955,50 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.isFalse(chainStub.called, 'Must not edit a notebook that already has an agent block');
                 verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
                 assert.isFalse(editor.revealRange.called, 'Must not reveal anything');
+            });
+
+            test('should insert only one agent block when two invocations race', async () => {
+                // Catches: an existence check that runs before the queued update — both invocations
+                // pass it while neither edit has applied yet.
+                const { editor, document } = createMockEditor([], undefined);
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
+                when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenResolve(undefined as any);
+
+                const cells = document.getCells();
+                const insertedCells: NotebookCellData[] = [];
+                let pending: Promise<unknown> = Promise.resolve();
+
+                // Mirrors chainWithPendingUpdates: a callback runs only once the previous edit applied.
+                sandbox
+                    .stub(notebookUpdater.notebookUpdaterUtils, 'chainWithPendingUpdates')
+                    .callsFake((_doc: NotebookDocument, callback: (edit: WorkspaceEdit) => void) => {
+                        const applied = pending.then(() => {
+                            const edit = new WorkspaceEdit();
+                            sandbox.stub(edit, 'set').callsFake((_uri, edits) => {
+                                for (const newCell of (edits[0] as any).newCells as NotebookCellData[]) {
+                                    insertedCells.push(newCell);
+                                    cells.push(
+                                        createMockCell({
+                                            metadata: newCell.metadata,
+                                            index: cells.length,
+                                            notebook: document
+                                        })
+                                    );
+                                }
+                            });
+                            callback(edit);
+
+                            return true;
+                        });
+                        pending = applied;
+
+                        return applied;
+                    });
+
+                await Promise.all([commandListener.addAgentBlock(), commandListener.addAgentBlock()]);
+
+                assert.equal(insertedCells.length, 1, 'Should insert exactly one agent block');
+                assert.equal(cells.length, 1, 'Notebook should end up with a single cell');
             });
 
             test('should still add the block when other cells carry no agent pocket', async () => {

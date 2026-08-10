@@ -58,11 +58,12 @@ export class FederatedAuthKernelRestartBridge implements IExtensionSyncActivatio
             }
 
             const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
-            if (!projectId) {
+            const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+            if (!projectId || !notebookId) {
                 continue;
             }
 
-            const project = this.notebookManager.getOriginalProject(projectId);
+            const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
             if (!project) {
                 continue;
             }

@@ -38,8 +38,11 @@ export const OPTIONAL_PROMPT_TIMEOUT = 5_000;
 
 // The in-window simple file/folder dialog needs a beat to resolve a typed path before it accepts.
 export const DIALOG_RESOLVE_DELAY = 1_500;
-export const FOLDER_OPEN_ATTEMPTS = 5;
-export const FOLDER_RELOAD_TIMEOUT = 12_000;
+// "Open Folder" navigates one level toward the typed path per OK, so we re-click OK up to
+// FOLDER_OPEN_TIMEOUT, waiting RELOAD_POLL_TIMEOUT for the reload and pausing FOLDER_OK_RETRY_DELAY between.
+export const FOLDER_OPEN_TIMEOUT = 45_000;
+export const RELOAD_POLL_TIMEOUT = 2_500;
+export const FOLDER_OK_RETRY_DELAY = 400;
 
 // Selectors that only exist inside the notebook output iframe (`#active-frame`),
 // so reading them cannot accidentally match the cell's source in the editor.

@@ -57,7 +57,6 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.RestartKernelAndRunAllCells]: [{ notebookEditor: { notebookUri: Uri } } | undefined];
     [DSCommands.RestartKernelAndRunUpToSelectedCell]: [{ notebookEditor: { notebookUri: Uri } } | undefined];
     [DSCommands.NotebookEditorRemoveAllCells]: [];
-    [DSCommands.NotebookEditorRunAllCells]: [];
     [DSCommands.NotebookEditorRunFocusedCell]: [];
     [DSCommands.NotebookEditorAddCellBelow]: [];
     [DSCommands.ExpandAllCells]: [];
@@ -206,7 +205,6 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.ImportNotebook]: [];
     [DSCommands.ImportJupyterNotebook]: [];
     [DSCommands.RenameProject]: [];
-    [DSCommands.DeleteProject]: [];
     [DSCommands.RenameNotebook]: [];
     [DSCommands.DeleteNotebook]: [];
     [DSCommands.DuplicateNotebook]: [];

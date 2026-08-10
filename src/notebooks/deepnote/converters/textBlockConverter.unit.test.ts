@@ -575,9 +575,9 @@ suite('TextBlockConverter', () => {
             assertRoundTrip({ type: 'text-cell-todo', content: 'a_b * c', metadata: { checked: false } });
         });
 
-        test('text-cell-bullet round-trips with metadata.indent_level: 1 (renders flat on 4.3.0)', () => {
-            // indent_level travels through metadata, not content. On 4.3.0 the bullet
-            // renders flat (no leading indentation), and the content must still round-trip.
+        test('text-cell-bullet round-trips with metadata.indent_level: 1', () => {
+            // indent_level travels through metadata, not content. @deepnote/blocks@4.6.0+
+            // renders two leading spaces per indent level before the bullet marker.
             const cell = converter.convertToCell({
                 blockGroup: 'group-123',
                 content: 'a_b * c',
@@ -587,8 +587,7 @@ suite('TextBlockConverter', () => {
                 type: 'text-cell-bullet'
             });
 
-            // Documents the flat (un-indented) rendering on 4.3.0.
-            assert.strictEqual(cell.value, '- a\\_b \\* c');
+            assert.strictEqual(cell.value, '  - a\\_b \\* c');
 
             assertRoundTrip({ type: 'text-cell-bullet', content: 'a_b * c', metadata: { indent_level: 1 } });
         });

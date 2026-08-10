@@ -3,12 +3,14 @@ import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } fro
 
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
+import { type CommandOutcome, ITelemetryService } from '../../../platform/analytics/types';
 import { Commands } from '../../../platform/common/constants';
 import { IDisposableRegistry, IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { persistProjectIntegrations } from './projectIntegrationsWriter';
 import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
 import {
     ConfigurableDatabaseIntegrationConfig,
@@ -22,6 +24,8 @@ import {
  */
 @injectable()
 export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
+    private activeFileUri: Uri | undefined;
+
     private currentPanel: WebviewPanel | undefined;
 
     private readonly disposables: Disposable[] = [];
@@ -30,6 +34,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
     private projectId: string | undefined;
 
+    private projectName: string | undefined;
+
     /** Generation counter for `updateWebview()` ("latest call wins"; stale in-flight updates bail). */
     private updateGeneration = 0;
 
@@ -37,6 +43,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService,
         @inject(IDisposableRegistry) private readonly disposableRegistry: IDisposableRegistry,
         @inject(IFederatedAuthTokenStorage)
         @optional()
@@ -58,15 +65,21 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      * Show the integration management webview
      * @param projectId The Deepnote project ID
      * @param integrations Map of integration IDs to their status
+     * @param activeFileUri The `.deepnote` file being edited — always persisted to disk on save
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
+     * @param projectName Optional project display name (sourced from the active notebook's metadata)
      */
     public async show(
         projectId: string,
         integrations: Map<string, IntegrationWithStatus>,
-        selectedIntegrationId?: string
+        activeFileUri: Uri,
+        selectedIntegrationId?: string,
+        projectName?: string
     ): Promise<void> {
         // Update the stored integrations and project ID with the latest data
+        this.activeFileUri = activeFileUri;
         this.projectId = projectId;
+        this.projectName = projectName;
         this.integrations = integrations;
 
         const column = window.activeTextEditor ? window.activeTextEditor.viewColumn : ViewColumn.One;
@@ -477,16 +490,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
         logger.debug(`IntegrationWebviewProvider: Sending ${integrationsData.length} integrations to webview`);
 
-        // Get the project name from the notebook manager
-        let projectName: string | undefined;
-        if (this.projectId) {
-            const project = this.notebookManager.getOriginalProject(this.projectId);
-            projectName = project?.project.name;
-        }
-
         await this.currentPanel.webview.postMessage({
             integrations: integrationsData,
-            projectName,
+            projectName: this.projectName,
             type: 'update'
         });
     }
@@ -558,6 +564,15 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
     }
 
+    private trackIntegrationEvent(event: {
+        eventName: 'configure_integration' | 'delete_integration' | 'reset_integration';
+        integrationType: string | undefined;
+    }): void {
+        const properties = { integrationType: event.integrationType ?? 'unknown' };
+
+        this.analytics.trackEvent({ eventName: event.eventName, properties });
+    }
+
     /** Handle messages from the webview; mirrors the `WebviewOutboundMessage` union in `src/webviews/webview-side/integrations/types.ts`. */
     private async handleMessage(message: {
         type: string;
@@ -572,23 +587,56 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 break;
             case 'save':
                 if (message.integrationId && message.config) {
-                    await this.saveConfiguration(message.integrationId, message.config);
+                    const saved = await this.saveConfiguration(message.integrationId, message.config);
+
+                    if (saved) {
+                        // Legacy big-query configs may omit authMethod, which means service-account.
+                        const authMethod =
+                            message.config.type === 'big-query'
+                                ? message.config.metadata.authMethod ?? BigQueryAuthMethods.ServiceAccount
+                                : undefined;
+
+                        this.analytics.trackEvent({
+                            eventName: 'save_integration',
+                            properties: {
+                                integrationType: message.config.type,
+                                ...(authMethod ? { authMethod } : {})
+                            }
+                        });
+                    }
                 }
                 break;
             case 'reset':
                 if (message.integrationId) {
-                    await this.resetConfiguration(message.integrationId);
+                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
+                    const reset = await this.resetConfiguration(message.integrationId);
+
+                    if (reset) {
+                        this.trackIntegrationEvent({ eventName: 'reset_integration', integrationType });
+                    }
                 }
                 break;
             case 'delete':
                 if (message.integrationId) {
-                    await this.deleteConfiguration(message.integrationId);
+                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
+                    const deleted = await this.deleteConfiguration(message.integrationId);
+
+                    if (deleted) {
+                        this.trackIntegrationEvent({ eventName: 'delete_integration', integrationType });
+                    }
                 }
                 break;
             case 'authenticate':
                 if (message.integrationId) {
+                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
+                    let outcome: CommandOutcome = 'failed';
+
                     try {
-                        await commands.executeCommand(Commands.AuthenticateIntegration, message.integrationId);
+                        outcome =
+                            (await commands.executeCommand<CommandOutcome | undefined>(
+                                Commands.AuthenticateIntegration,
+                                message.integrationId
+                            )) ?? 'failed';
                     } catch (error) {
                         // Command handler shows its own toasts; log here to avoid an unhandled-rejection.
                         logger.error(
@@ -596,13 +644,19 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                             error
                         );
                     }
+
+                    this.analytics.trackEvent({
+                        eventName: 'authenticate_integration',
+                        properties: { integrationType: integrationType ?? 'unknown', outcome }
+                    });
                 }
                 break;
         }
     }
 
     /**
-     * Show the configuration form for an integration
+     * Tracked here rather than in the webview `configure` handler so the SQL status bar's
+     * "Configure current integration", which opens the form directly via `show()`, is counted too.
      */
     private async showConfigurationForm(integrationId: string): Promise<void> {
         const integration = this.integrations.get(integrationId);
@@ -617,6 +671,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationType: integration.integrationType,
             type: 'showForm'
         });
+
+        this.trackIntegrationEvent({
+            eventName: 'configure_integration',
+            integrationType: integration.integrationType
+        });
     }
 
     /**
@@ -625,7 +684,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async saveConfiguration(
         integrationId: string,
         config: ConfigurableDatabaseIntegrationConfig
-    ): Promise<void> {
+    ): Promise<boolean> {
         try {
             // Invalidate stale federated tokens before saving (fingerprint change or auth-method switch).
             await this.invalidateStaleFederatedToken(integrationId, config);
@@ -651,14 +710,19 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            // Update the project's integrations list
-            await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectIntegrationsList();
 
             await this.updateWebview();
-            await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Configuration saved successfully'),
-                type: 'success'
-            });
+
+            if (persisted) {
+                await this.currentPanel?.webview.postMessage({
+                    message: l10n.t('Configuration saved successfully'),
+                    type: 'success'
+                });
+            }
+
+            // The credential save above is the tracked operation; a skipped project-YAML sync is not a failure.
+            return true;
         } catch (error) {
             logger.error('Failed to save integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -668,13 +732,15 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 ),
                 type: 'error'
             });
+
+            return false;
         }
     }
 
     /**
      * Reset the configuration for an integration (clears credentials but keeps the integration entry)
      */
-    private async resetConfiguration(integrationId: string): Promise<void> {
+    private async resetConfiguration(integrationId: string): Promise<boolean> {
         try {
             await this.integrationStorage.delete(integrationId);
             await this.tokenStorage?.delete(integrationId).catch((error) => {
@@ -689,14 +755,19 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 this.integrations.set(integrationId, integration);
             }
 
-            // Update the project's integrations list
-            await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectIntegrationsList();
 
             await this.updateWebview();
-            await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Configuration reset successfully'),
-                type: 'success'
-            });
+
+            if (persisted) {
+                await this.currentPanel?.webview.postMessage({
+                    message: l10n.t('Configuration reset successfully'),
+                    type: 'success'
+                });
+            }
+
+            // The credential reset above is the tracked operation; a skipped project-YAML sync is not a failure.
+            return true;
         } catch (error) {
             logger.error('Failed to reset integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -706,13 +777,15 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 ),
                 type: 'error'
             });
+
+            return false;
         }
     }
 
     /**
      * Delete the integration completely (removes credentials and integration entry)
      */
-    private async deleteConfiguration(integrationId: string): Promise<void> {
+    private async deleteConfiguration(integrationId: string): Promise<boolean> {
         try {
             await this.integrationStorage.delete(integrationId);
             await this.tokenStorage?.delete(integrationId).catch((error) => {
@@ -722,14 +795,19 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             // Remove from local state
             this.integrations.delete(integrationId);
 
-            // Update the project's integrations list
-            await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectIntegrationsList();
 
             await this.updateWebview();
-            await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Integration deleted successfully'),
-                type: 'success'
-            });
+
+            if (persisted) {
+                await this.currentPanel?.webview.postMessage({
+                    message: l10n.t('Integration deleted successfully'),
+                    type: 'success'
+                });
+            }
+
+            // The credential delete above is the tracked operation; a skipped project-YAML sync is not a failure.
+            return true;
         } catch (error) {
             logger.error('Failed to delete integration', error);
             await this.currentPanel?.webview.postMessage({
@@ -739,16 +817,18 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 ),
                 type: 'error'
             });
+
+            return false;
         }
     }
 
     /**
      * Update the project's integrations list based on current integrations
      */
-    private async updateProjectIntegrationsList(): Promise<void> {
-        if (!this.projectId) {
-            logger.warn('IntegrationWebviewProvider: No project ID available, skipping project update');
-            return;
+    private async updateProjectIntegrationsList(): Promise<boolean> {
+        if (!this.projectId || !this.activeFileUri) {
+            logger.warn('IntegrationWebviewProvider: No project ID / active file available, skipping project update');
+            return false;
         }
 
         // Build the integrations list from current integrations
@@ -773,17 +853,29 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             `IntegrationWebviewProvider: Updating project ${this.projectId} with ${projectIntegrations.length} integrations`
         );
 
-        // Update the project in the notebook manager
-        const success = this.notebookManager.updateProjectIntegrations(this.projectId, projectIntegrations);
+        const { activePersisted, siblingsFailed } = await persistProjectIntegrations({
+            notebookManager: this.notebookManager,
+            projectId: this.projectId,
+            integrations: projectIntegrations,
+            activeFileUri: this.activeFileUri
+        });
 
-        if (!success) {
+        if (!activePersisted) {
             logger.error(
-                `IntegrationWebviewProvider: Failed to update integrations for project ${this.projectId} - project not found`
+                `IntegrationWebviewProvider: Failed to persist integrations for project ${this.projectId} to disk`
             );
-            void window.showErrorMessage(
-                l10n.t('Failed to update integrations: project not found. Please reopen the notebook and try again.')
+            void window.showErrorMessage(l10n.t('Failed to save integrations to the notebook file. Please try again.'));
+
+            return false;
+        }
+
+        if (siblingsFailed > 0) {
+            void window.showWarningMessage(
+                l10n.t('Integrations saved, but {0} related notebook file(s) could not be updated.', siblingsFailed)
             );
         }
+
+        return true;
     }
 
     /**

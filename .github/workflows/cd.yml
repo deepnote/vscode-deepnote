@@ -21,10 +21,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
@@ -58,6 +60,11 @@ jobs:
 
       - name: Package extension
         run: npm run package
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          # workflow_dispatch accepts any ref, so gate `stable` on the ref rather than the event to keep
+          # manually packaged feature branches out of stable analytics.
+          POSTHOG_CHANNEL: ${{ github.event_name == 'pull_request' && 'pr' || (github.ref == 'refs/heads/main' && 'stable' || 'development') }}
 
       - name: Rename VSIX file
         run: |

@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { when, reset, anything } from 'ts-mockito';
+import { when, reset, anything, mock, instance } from 'ts-mockito';
 import {
     NotebookCell,
     NotebookDocument,
@@ -18,6 +18,7 @@ import {
     InputBlockType
 } from './deepnoteNotebookCommandListener';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IConfigurationService, IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
@@ -31,6 +32,7 @@ suite('DeepnoteNotebookCommandListener', () => {
     let disposables: IDisposable[];
     let sandbox: sinon.SinonSandbox;
     let mockConfigService: IConfigurationService;
+    let mockTelemetryService: ITelemetryService;
 
     function createMockConfigService(): IConfigurationService {
         return {
@@ -44,7 +46,12 @@ suite('DeepnoteNotebookCommandListener', () => {
         sandbox = sinon.createSandbox();
         disposables = [];
         mockConfigService = createMockConfigService();
-        commandListener = new DeepnoteNotebookCommandListener(mockConfigService, disposables);
+        mockTelemetryService = mock<ITelemetryService>();
+        commandListener = new DeepnoteNotebookCommandListener(
+            instance(mockTelemetryService),
+            mockConfigService,
+            disposables
+        );
     });
 
     teardown(() => {
@@ -89,7 +96,11 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             // Create new instance and activate again
             const disposables2: IDisposable[] = [];
-            const commandListener2 = new DeepnoteNotebookCommandListener(createMockConfigService(), disposables2);
+            const commandListener2 = new DeepnoteNotebookCommandListener(
+                instance(mockTelemetryService),
+                createMockConfigService(),
+                disposables2
+            );
             commandListener2.activate();
 
             // Both should register the same number of commands

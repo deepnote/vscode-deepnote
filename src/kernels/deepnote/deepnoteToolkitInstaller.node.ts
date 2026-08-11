@@ -9,7 +9,7 @@ import { resolvePythonExecutable } from '@deepnote/runtime-core';
 import { Cancellation, isCancellationError } from '../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
-import { IProcessServiceFactory } from '../../platform/common/process/types.node';
+import { ExecutionResult, IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IExtensionContext, IOutputChannel } from '../../platform/common/types';
 import {
     DeepnoteToolkitInstallError,
@@ -120,17 +120,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             if (toolkitVersion != null) {
                 logger.info(`deepnote-toolkit venv already exists at ${venvPath.fsPath}`);
 
-                // Ensure kernel spec is installed (may have been deleted or never installed)
-                try {
-                    Cancellation.throwIfCanceled(token);
-                    await this.installKernelSpec(existingVenv, venvPath, token);
-                } catch (ex) {
-                    if (isCancellationError(ex as Error)) {
-                        throw ex;
-                    }
-                    logger.warn('Failed to ensure kernel spec installed', ex);
-                    // Don't fail - continue with existing venv
-                }
+                await this.tryInstallKernelSpec(existingVenv, venvPath, token);
 
                 logger.info(`Venv ready at ${venvPath.fsPath}`);
                 return { pythonInterpreter: existingVenv, toolkitVersion };
@@ -191,18 +181,11 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         this.outputChannel.appendLine(l10n.t('Installing packages: {0}...', packages.join(', ')));
 
         try {
-            Cancellation.throwIfCanceled(token);
-
-            const venvProcessService = await this.processServiceFactory.create(undefined);
-            const installResult = await venvProcessService.exec(
+            const installResult = await this.runPython(
                 venvInterpreter.uri.fsPath,
                 ['-m', 'pip', 'install', '--upgrade', ...packages],
-                { throwOnStdErr: false, token }
+                token
             );
-
-            // exec resolves with partial output when the token kills pip,
-            // so re-check before reporting success
-            Cancellation.throwIfCanceled(token);
 
             if (installResult.stdout) {
                 this.outputChannel.appendLine(installResult.stdout);
@@ -214,11 +197,13 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             logger.info('Additional packages installed successfully');
             this.outputChannel.appendLine(l10n.t('✓ Packages installed successfully'));
         } catch (ex) {
-            if (isCancellationError(ex as Error)) {
+            if (isCancellationError(ex)) {
                 logger.info('Package installation cancelled');
                 this.outputChannel.appendLine(l10n.t('Package installation cancelled'));
+
                 throw ex;
             }
+
             logger.error('Failed to install additional packages', ex);
             this.outputChannel.appendLine(l10n.t('✗ Failed to install packages: {0}', ex));
             throw ex;
@@ -289,20 +274,12 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 await workspace.fs.delete(venvPath, { recursive: true });
             }
 
-            // Create new venv
-            // Use undefined as resource to get full system environment
-            const processService = await this.processServiceFactory.create(undefined);
-            const venvResult = await processService.exec(baseInterpreter.uri.fsPath, ['-m', 'venv', venvPath.fsPath], {
-                throwOnStdErr: false,
-                token
-            });
+            const venvResult = await this.runPython(baseInterpreter.uri.fsPath, ['-m', 'venv', venvPath.fsPath], token);
 
             // Log any stderr output (warnings, etc.) but don't fail on it
             if (venvResult.stderr) {
                 logger.info('venv creation stderr', venvResult.stderr);
             }
-
-            Cancellation.throwIfCanceled(token);
 
             // Verify venv was created successfully by checking for the Python interpreter
             const venvInterpreter = await this.getVenvInterpreterByPath(venvPath);
@@ -323,9 +300,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             // Use the shared helper method to install toolkit packages
             return await this.installToolkitPackages(venvInterpreter, venvPath, token);
         } catch (ex) {
-            // Rethrow cancellation unwrapped so upstream isCancellationError checks
-            // can suppress the error UI instead of reporting an install failure
-            if (isCancellationError(ex as Error)) {
+            // Unwrapped, so the caller's isCancellationError check suppresses the error UI
+            if (isCancellationError(ex)) {
                 throw ex;
             }
 
@@ -358,16 +334,14 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         venvPath: Uri,
         token?: CancellationToken
     ): Promise<VenvAndToolkitInstallation> {
-        // Use undefined as resource to get full system environment (including git in PATH)
-        const venvProcessService = await this.processServiceFactory.create(undefined);
-
         // Upgrade pip in the venv to the latest version
         logger.info('Upgrading pip in venv to latest version...');
         this.outputChannel.appendLine(l10n.t('Upgrading pip...'));
-        const pipUpgradeResult = await venvProcessService.exec(
+
+        const pipUpgradeResult = await this.runPython(
             venvInterpreter.uri.fsPath,
             ['-m', 'pip', 'install', '--upgrade', 'pip'],
-            { throwOnStdErr: false, token }
+            token
         );
 
         if (pipUpgradeResult.stdout) {
@@ -377,8 +351,6 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             logger.info('pip upgrade stderr', pipUpgradeResult.stderr);
         }
 
-        Cancellation.throwIfCanceled(token);
-
         // Install deepnote-toolkit, ipykernel, python-lsp-server, and deepnote-cli in venv
         logger.info(
             `Installing deepnote-toolkit (${DEEPNOTE_TOOLKIT_VERSION}), ipykernel, python-lsp-server, and deepnote-cli in venv from PyPI`
@@ -387,7 +359,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             l10n.t('Installing deepnote-toolkit, ipykernel, python-lsp-server, and deepnote-cli...')
         );
 
-        const installResult = await venvProcessService.exec(
+        const installResult = await this.runPython(
             venvInterpreter.uri.fsPath,
             [
                 '-m',
@@ -399,10 +371,8 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 'python-lsp-server[all]',
                 'deepnote-cli'
             ],
-            { throwOnStdErr: false, token }
+            token
         );
-
-        Cancellation.throwIfCanceled(token);
 
         if (installResult.stdout) {
             this.outputChannel.appendLine(installResult.stdout);
@@ -417,16 +387,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
             logger.info('deepnote-toolkit installed successfully in venv');
 
             // Install kernel spec so the kernel uses this venv's Python
-            try {
-                Cancellation.throwIfCanceled(token);
-                await this.installKernelSpec(venvInterpreter, venvPath, token);
-            } catch (ex) {
-                if (isCancellationError(ex as Error)) {
-                    throw ex;
-                }
-                logger.warn('Failed to install kernel spec', ex);
-                // Don't fail the entire installation if kernel spec creation fails
-            }
+            await this.tryInstallKernelSpec(venvInterpreter, venvPath, token);
 
             this.outputChannel.appendLine(l10n.t('✓ Deepnote toolkit ready'));
             return { pythonInterpreter: venvInterpreter, toolkitVersion: installedToolkitVersion };
@@ -449,25 +410,65 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         token: CancellationToken | undefined
     ): Promise<string | undefined> {
         try {
-            // Use undefined as resource to get full system environment
-            const processService = await this.processServiceFactory.create(undefined);
-            const result = await processService.exec(
+            const result = await this.runPython(
                 interpreter.uri.fsPath,
                 ['-c', 'import deepnote_toolkit; print(deepnote_toolkit.__version__)'],
-                { token }
+                token
             );
-            // exec resolves with partial output when the token kills the process,
-            // so a cancelled probe must not be reported as "toolkit missing"
-            Cancellation.throwIfCanceled(token);
+
             logger.info(`isToolkitInstalled result: ${result.stdout}`);
             const version = result.stdout.trim();
+
             return version.length > 0 ? version : undefined;
         } catch (ex) {
-            if (isCancellationError(ex as Error)) {
+            if (isCancellationError(ex)) {
                 throw ex;
             }
+
             logger.debug('deepnote-toolkit not found', ex);
+
             return undefined;
+        }
+    }
+
+    /**
+     * `ProcessService.exec` kills the subprocess when the token fires but still *resolves*, with the
+     * output captured up to that point. Hence the trailing check: without it a killed `pip install`
+     * reads as a successful one and a killed version probe reads as "toolkit not installed".
+     */
+    private async runPython(
+        pythonPath: string,
+        args: string[],
+        token: CancellationToken | undefined
+    ): Promise<ExecutionResult<string>> {
+        Cancellation.throwIfCanceled(token);
+
+        // Resource `undefined` gives the full system environment, which pip needs (e.g. git on PATH).
+        const processService = await this.processServiceFactory.create(undefined);
+        const result = await processService.exec(pythonPath, args, { throwOnStdErr: false, token });
+
+        Cancellation.throwIfCanceled(token);
+
+        return result;
+    }
+
+    /**
+     * Failure is tolerated because a venv without a kernel spec still runs and the next
+     * `ensureVenvAndToolkit` retries. Cancellation is not a failure, so it unwinds the caller.
+     */
+    private async tryInstallKernelSpec(
+        venvInterpreter: PythonEnvironment,
+        venvPath: Uri,
+        token: CancellationToken | undefined
+    ): Promise<void> {
+        try {
+            await this.installKernelSpec(venvInterpreter, venvPath, token);
+        } catch (ex) {
+            if (isCancellationError(ex)) {
+                throw ex;
+            }
+
+            logger.warn('Failed to install kernel spec', ex);
         }
     }
 
@@ -512,24 +513,16 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         const kernelSpecName = this.getKernelSpecName(venvPath);
         const kernelSpecPath = Uri.joinPath(venvPath, 'share', 'jupyter', 'kernels', kernelSpecName);
 
-        // Check if kernel spec already exists. Check for kernel.json rather than the
-        // directory: a cancelled ipykernel install can leave a partially written
-        // directory, which must not short-circuit the reinstall.
+        // Keyed on kernel.json, not the directory: a cancelled ipykernel install leaves the
+        // directory behind, and that must not short-circuit the reinstall.
         if (await this.fs.exists(Uri.joinPath(kernelSpecPath, 'kernel.json'))) {
             logger.info(`Kernel spec already exists at ${kernelSpecPath.fsPath}`);
             return;
         }
 
-        Cancellation.throwIfCanceled(token);
-
         logger.info(`Installing kernel spec '${kernelSpecName}' for venv at ${venvPath.fsPath}...`);
-        const kernelDisplayName = this.getKernelDisplayName(venvPath);
 
-        const venvProcessService = await this.processServiceFactory.create(undefined);
-
-        Cancellation.throwIfCanceled(token);
-
-        await venvProcessService.exec(
+        await this.runPython(
             venvInterpreter.uri.fsPath,
             [
                 '-m',
@@ -540,14 +533,10 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 '--name',
                 kernelSpecName,
                 '--display-name',
-                kernelDisplayName
+                this.getKernelDisplayName(venvPath)
             ],
-            { throwOnStdErr: false, token }
+            token
         );
-
-        // exec resolves even when the token killed the process mid-write,
-        // so re-check before declaring the kernel spec installed
-        Cancellation.throwIfCanceled(token);
 
         logger.info(`Kernel spec installed successfully to ${kernelSpecPath.fsPath}`);
     }

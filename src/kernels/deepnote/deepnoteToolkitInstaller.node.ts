@@ -445,7 +445,13 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
         // Resource `undefined` gives the full system environment, which pip needs (e.g. git on PATH).
         const processService = await this.processServiceFactory.create(undefined);
-        const result = await processService.exec(pythonPath, args, { throwOnStdErr: false, token });
+        // Own process group: `python -m venv` runs ensurepip in a subprocess that would otherwise
+        // outlive cancellation and keep writing into the venv the retry is busy deleting.
+        const result = await processService.exec(pythonPath, args, {
+            throwOnStdErr: false,
+            token,
+            detached: true
+        });
 
         Cancellation.throwIfCanceled(token);
 

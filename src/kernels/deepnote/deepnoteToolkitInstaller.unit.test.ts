@@ -96,7 +96,7 @@ suite('DeepnoteToolkitInstaller - cancellation', () => {
             {
                 file: fakePython.fsPath,
                 args: ['-m', 'pip', 'install', '--upgrade', 'some-package'],
-                options: { throwOnStdErr: false, token: cts.token }
+                options: { throwOnStdErr: false, token: cts.token, detached: true }
             },
             'the token must reach exec so Stop can kill pip'
         );
@@ -146,7 +146,7 @@ suite('DeepnoteToolkitInstaller - cancellation', () => {
             {
                 file: fakePython.fsPath,
                 args: ['-c', 'import deepnote_toolkit; print(deepnote_toolkit.__version__)'],
-                options: { throwOnStdErr: false, token: cts.token }
+                options: { throwOnStdErr: false, token: cts.token, detached: true }
             },
             'the token must reach the isToolkitInstalled probe'
         );
@@ -251,6 +251,11 @@ suite('DeepnoteToolkitInstaller - cancellation', () => {
             execCalls.filter(({ options }) => options?.token !== cts.token),
             [],
             'a subprocess without the token cannot be killed by Stop'
+        );
+        assert.deepStrictEqual(
+            execCalls.filter(({ options }) => options?.detached !== true),
+            [],
+            'a subprocess outside its own group leaves its descendants running after Stop'
         );
     });
 });

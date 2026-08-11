@@ -152,7 +152,7 @@ suite('DeepnoteToolkitInstaller - cancellation', () => {
         );
     });
 
-    test('an existing kernel spec is recognised by kernel.json, not by its directory', async () => {
+    test('an existing kernel spec is recognized by kernel.json, not by its directory', async () => {
         seedInterpreterCache(venvPath);
         when(mockProcessService.exec(anything(), anything(), anything())).thenResolve({
             stdout: '1.2.3\n',

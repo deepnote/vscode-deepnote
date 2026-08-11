@@ -627,6 +627,73 @@ suite('DeepnoteDataConverter', () => {
             assert.deepStrictEqual(roundTripBlocks, originalBlocks);
         });
 
+        test('text-cell blocks with special characters round-trip without backslash accumulation', () => {
+            // These contents contain characters from the markdown escape class
+            // (_ * ( ) . ! ` #). Without the unescape inverse in TextBlockConverter,
+            // each round-trip would accumulate backslashes; the round-trip must be a no-op.
+            const originalBlocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'group-1',
+                    id: 'b1',
+                    type: 'text-cell-h1',
+                    content: 'Revenue grew 20% (great!).',
+                    sortingKey: 'a0',
+                    metadata: {}
+                },
+                {
+                    blockGroup: 'group-2',
+                    id: 'b2',
+                    type: 'text-cell-h2',
+                    content: 'has `code` and #hash',
+                    sortingKey: 'a1',
+                    metadata: {}
+                },
+                {
+                    blockGroup: 'group-3',
+                    id: 'b3',
+                    type: 'text-cell-p',
+                    content: 'a_b * c',
+                    sortingKey: 'a2',
+                    metadata: {}
+                },
+                {
+                    blockGroup: 'group-4',
+                    id: 'b4',
+                    type: 'text-cell-bullet',
+                    content: 'price: $5 (USD).',
+                    sortingKey: 'a3',
+                    metadata: {}
+                },
+                {
+                    blockGroup: 'group-5',
+                    id: 'b5',
+                    type: 'text-cell-todo',
+                    content: 'buy milk (2%) & eggs.',
+                    sortingKey: 'a4',
+                    metadata: { checked: true }
+                },
+                {
+                    blockGroup: 'group-6',
+                    id: 'b6',
+                    type: 'text-cell-callout',
+                    content: 'note: see [docs] for details.',
+                    sortingKey: 'a5',
+                    metadata: {}
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(originalBlocks);
+            const roundTripBlocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual(roundTripBlocks, originalBlocks);
+
+            // Applying the round-trip a second time must remain a no-op (fixed point).
+            const cellsAgain = converter.convertBlocksToCells(roundTripBlocks);
+            const roundTripBlocksAgain = converter.convertCellsToBlocks(cellsAgain);
+
+            assert.deepStrictEqual(roundTripBlocksAgain, originalBlocks);
+        });
+
         test('SQL metadata output round-trips correctly', () => {
             const sqlMetadata = {
                 status: 'read_from_cache_success',
@@ -736,8 +803,7 @@ suite('DeepnoteDataConverter', () => {
 
         test('real deepnote notebook round-trips without losing data', () => {
             // Inline test data representing a real Deepnote notebook with various block types
-            // blockGroup is an optional field not in the DeepnoteBlock interface, so we cast as any
-            const originalBlocks = [
+            const originalBlocks: DeepnoteBlock[] = [
                 {
                     blockGroup: '1a4224497bcd499ba180e5795990aaa8',
                     content: '# Data Exploration\n\nThis notebook demonstrates basic data exploration.',
@@ -801,7 +867,7 @@ suite('DeepnoteDataConverter', () => {
                     sortingKey: 'yj',
                     type: 'code'
                 }
-            ] as unknown as DeepnoteBlock[];
+            ];
 
             // Convert blocks -> cells -> blocks
             const cells = converter.convertBlocksToCells(originalBlocks);

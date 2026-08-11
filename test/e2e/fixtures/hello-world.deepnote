@@ -1,0 +1,21 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-hello-world-project
+  name: E2E Hello World
+  notebooks:
+    - id: e2e-hello-world-notebook
+      name: Hello World
+      blocks:
+        - id: e2e-hello-block
+          blockGroup: e2e-group
+          type: code
+          content: |-
+            print("hello world")
+          sortingKey: a0
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

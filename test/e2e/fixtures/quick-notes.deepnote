@@ -1,0 +1,32 @@
+environment: {}
+execution: {}
+metadata:
+  createdAt: 2026-06-01T09:00:00.000Z
+  modifiedAt: 2026-06-15T14:30:00.000Z
+project:
+  id: cccccccc-cccc-4ccc-8ccc-cccccccccccc
+  name: Quick Notes
+  notebooks:
+    - blocks:
+        - id: blk-0010
+          blockGroup: grp-0010
+          sortingKey: "000000"
+          type: text-cell-h1
+          content: Quick Notes
+          metadata: {}
+        - id: blk-0011
+          blockGroup: grp-0011
+          sortingKey: "000001"
+          type: text-cell-p
+          content: A plain single-notebook file. Opening it must NOT show the split prompt.
+          metadata: {}
+        - id: blk-0012
+          blockGroup: grp-0012
+          sortingKey: "000002"
+          type: code
+          content: print("hello from a single-notebook file")
+          metadata: {}
+      executionMode: block
+      id: c-nb-main
+      name: Quick Notes
+version: 1.0.0

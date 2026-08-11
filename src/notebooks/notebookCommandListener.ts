@@ -66,9 +66,6 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
             commands.registerCommand(Commands.NotebookEditorRemoveAllCells, () => this.removeAllCells())
         );
         this.disposableRegistry.push(
-            commands.registerCommand(Commands.NotebookEditorRunAllCells, () => this.runAllCells())
-        );
-        this.disposableRegistry.push(
             commands.registerCommand(Commands.NotebookEditorRunFocusedCell, () => this.runFocusedCell())
         );
         this.disposableRegistry.push(

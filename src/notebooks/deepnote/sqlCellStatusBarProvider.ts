@@ -19,12 +19,14 @@ import {
 import { inject, injectable } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
 import {
     ConfigurableDatabaseIntegrationType,
-    DATAFRAME_SQL_INTEGRATION_ID
+    DATAFRAME_SQL_INTEGRATION_ID,
+    toTelemetryIntegrationType
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
 import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
@@ -41,6 +43,7 @@ const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string>
     athena: l10n.t('Amazon Athena'),
     'big-query': l10n.t('Google BigQuery'),
     clickhouse: l10n.t('ClickHouse'),
+    'cloud-sql': l10n.t('Google Cloud SQL'),
     databricks: l10n.t('Databricks'),
     dremio: l10n.t('Dremio'),
     mariadb: l10n.t('MariaDB'),
@@ -68,7 +71,8 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {}
 
     public activate(): void {
@@ -229,7 +233,8 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             displayName = config.name;
         } else {
             // Integration is not configured, try to get the name from the project's integration list
-            const project = this.notebookManager.getOriginalProject(projectId);
+            const notebookId = cell.notebook.metadata?.deepnoteNotebookId;
+            const project = notebookId ? this.notebookManager.getProjectForNotebook(projectId, notebookId) : undefined;
             const projectIntegration = project?.project.integrations?.find((i) => i.id === integrationId);
             const baseName = projectIntegration?.name || l10n.t('Unknown integration');
             displayName = l10n.t('{0} (configure)', baseName);
@@ -325,13 +330,14 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Get the project ID from the notebook metadata
         const projectId = cell.notebook.metadata?.deepnoteProjectId;
-        if (!projectId) {
+        const notebookId = cell.notebook.metadata?.deepnoteNotebookId;
+        if (!projectId || !notebookId) {
             void window.showErrorMessage(l10n.t('Cannot determine project ID'));
             return;
         }
 
         // Get the project to access its integrations list
-        const project = this.notebookManager.getOriginalProject(projectId);
+        const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
         if (!project) {
             void window.showErrorMessage(l10n.t('Project not found'));
             return;
@@ -456,5 +462,16 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Trigger status bar update
         this._onDidChangeCellStatusBarItems.fire();
+
+        const selectedIntegration = projectIntegrations.find((i) => i.id === selectedId);
+        const integrationType =
+            selectedId === DATAFRAME_SQL_INTEGRATION_ID
+                ? 'duckdb'
+                : toTelemetryIntegrationType(selectedIntegration?.type);
+
+        this.analytics.trackEvent({
+            eventName: 'switch_sql_integration',
+            properties: { integrationType }
+        });
     }
 }

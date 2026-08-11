@@ -95,6 +95,11 @@ const DATABASE_INTEGRATION_TYPES: IntegrationTypeInfo[] = [
         icon: integrationTypeIcons['spanner']
     },
     {
+        type: 'cloud-sql',
+        label: integrationTypeLabels['cloud-sql'],
+        icon: integrationTypeIcons['cloud-sql']
+    },
+    {
         type: 'materialize',
         label: integrationTypeLabels['materialize'],
         icon: integrationTypeIcons['materialize']

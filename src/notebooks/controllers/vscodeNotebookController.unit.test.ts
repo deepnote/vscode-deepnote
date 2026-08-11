@@ -7,7 +7,15 @@
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
-import { NotebookDocument, EventEmitter, NotebookController, Uri, Disposable } from 'vscode';
+import {
+    NotebookDocument,
+    EventEmitter,
+    NotebookCell,
+    NotebookCellKind,
+    NotebookController,
+    Uri,
+    Disposable
+} from 'vscode';
 import { VSCodeNotebookController, warnWhenUsingOutdatedPython } from './vscodeNotebookController';
 import {
     IKernel,
@@ -18,7 +26,8 @@ import {
     LocalKernelSpecConnectionMetadata,
     RemoteKernelSpecConnectionMetadata
 } from '../../kernels/types';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
+import { ITelemetryService } from '../../platform/analytics/types';
 import {
     IConfigurationService,
     IDisposable,
@@ -37,7 +46,7 @@ import { KernelConnector } from './kernelConnector';
 import { ITrustedKernelPaths } from '../../kernels/raw/finder/types';
 import { IInterpreterService } from '../../platform/interpreter/contracts';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { IConnectionDisplayData, IConnectionDisplayDataProvider } from './types';
+import { IConnectionDisplayData, IConnectionDisplayDataProvider, IVSCodeNotebookController } from './types';
 import { ConnectionDisplayDataProvider } from './connectionDisplayData.node';
 import { mockedVSCode, mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { Environment, PythonExtension } from '@vscode/python-extension';
@@ -824,6 +833,74 @@ suite(`Notebook Controller`, function () {
 
             // Assert
             assert.isDefined(result);
+        });
+
+        suite('execute_notebook telemetry', () => {
+            let telemetry: ITelemetryService;
+
+            function createControllerForExecution(): IVSCodeNotebookController {
+                return VSCodeNotebookController.create(
+                    instance(kernelConnection),
+                    'test-id',
+                    'jupyter-notebook',
+                    instance(kernelProvider),
+                    instance(context),
+                    disposables,
+                    instance(languageService),
+                    instance(configService),
+                    instance(extensionChecker),
+                    instance(serviceContainer),
+                    instance(displayDataProvider),
+                    instance(jupyterVariablesProvider)
+                );
+            }
+
+            function codeCell(index: number): NotebookCell {
+                return { index, kind: NotebookCellKind.Code, document: { getText: () => '' } } as never;
+            }
+
+            function markdownCell(index: number): NotebookCell {
+                return { index, kind: NotebookCellKind.Markup, document: { getText: () => '' } } as never;
+            }
+
+            function deepnoteNotebook(cells: NotebookCell[]): NotebookDocument {
+                return { notebookType: 'deepnote', uri: Uri.file('/ws/exec.deepnote'), getCells: () => cells } as never;
+            }
+
+            setup(() => {
+                telemetry = mock<ITelemetryService>();
+                when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(true);
+                when(serviceContainer.get<ITelemetryService>(ITelemetryService)).thenReturn(instance(telemetry));
+            });
+
+            async function handleExecution(cells: NotebookCell[], notebook: NotebookDocument): Promise<void> {
+                // Kernel startup after the tracking point fails on these bare mocks; that failure is
+                // irrelevant to what these tests assert.
+                await (createControllerForExecution() as any).handleExecution(cells, notebook).catch(() => undefined);
+            }
+
+            test('a batch covering every code cell reports execute_notebook', async () => {
+                const cells = [codeCell(0), codeCell(1)];
+                const notebook = deepnoteNotebook([...cells, markdownCell(2)]);
+
+                await handleExecution(cells, notebook);
+
+                verify(telemetry.trackEvent(deepEqual({ eventName: 'execute_notebook' }))).once();
+                verify(telemetry.trackEvent(anything())).once();
+            });
+
+            test('a partial batch or a non-Deepnote notebook does not report execute_notebook', async () => {
+                const allCells = [codeCell(0), codeCell(1)];
+
+                await handleExecution([allCells[0]], deepnoteNotebook(allCells));
+                await handleExecution(allCells, {
+                    notebookType: 'jupyter-notebook',
+                    uri: Uri.file('/ws/n.ipynb'),
+                    getCells: () => allCells
+                } as never as NotebookDocument);
+
+                verify(telemetry.trackEvent(anything())).never();
+            });
         });
     });
 });

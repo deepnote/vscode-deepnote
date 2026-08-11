@@ -1,0 +1,21 @@
+{
+    // Standalone config for the ExTester E2E suite. It is intentionally independent of the
+    // extension's root tsconfig (which only compiles ./src) so these tests never enter the
+    // esbuild bundle or the unit/integration test globs. CommonJS + chai v4 keeps
+    // `import { expect } from 'chai'` working without ESM friction.
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "ES2022",
+        "lib": ["ES2022", "DOM"],
+        "moduleResolution": "node",
+        "outDir": "../../out/e2e",
+        "rootDir": ".",
+        "sourceMap": true,
+        "strict": true,
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "types": ["node", "mocha", "chai"]
+    },
+    "include": ["**/*.ts"]
+}

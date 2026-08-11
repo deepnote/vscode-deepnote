@@ -13,6 +13,7 @@ import {
 import { IPythonApiProvider } from '../../../platform/api/types';
 import { STANDARD_OUTPUT_CHANNEL } from '../../../platform/common/constants';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
+import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
 import { createDeepnoteServerConfigHandle } from '../../../platform/deepnote/deepnoteServerUtils.node';
 import { DeepnoteToolkitMissingError } from '../../../platform/errors/deepnoteKernelErrors';
@@ -27,7 +28,8 @@ import {
     DeepnoteKernelConnectionMetadata,
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,
-    IDeepnoteNotebookEnvironmentMapper
+    IDeepnoteNotebookEnvironmentMapper,
+    IDeepnoteServerStarter
 } from '../types';
 import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './deepnoteEnvironment';
 import { DeepnoteEnvironmentTreeDataProvider } from './deepnoteEnvironmentTreeDataProvider.node';
@@ -52,7 +54,9 @@ export class DeepnoteEnvironmentsView implements Disposable {
         @inject(IDeepnoteNotebookEnvironmentMapper)
         private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
-        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel
+        @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
+        @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {
         // Create tree data provider
 
@@ -193,6 +197,14 @@ export class DeepnoteEnvironmentsView implements Disposable {
                         const config = await this.environmentManager.createEnvironment(options, token);
                         logger.info(`Created environment: ${config.id} (${config.name})`);
 
+                        this.analytics.trackEvent({
+                            eventName: 'create_environment',
+                            properties: {
+                                hasDescription: !!options.description,
+                                packageCount: options.packages?.length ?? 0
+                            }
+                        });
+
                         void window.showInformationMessage(
                             l10n.t('Environment "{0}" created successfully!', config.name)
                         );
@@ -300,20 +312,33 @@ export class DeepnoteEnvironmentsView implements Disposable {
                     cancellable: true
                 },
                 async (_progress, token) => {
-                    // Clean up notebook mappings referencing this env
-                    const notebooks = this.notebookEnvironmentMapper.getNotebooksUsingEnvironment(environmentId);
-                    for (const nb of notebooks) {
-                        await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(nb);
+                    // Resolve every notebook that uses this environment from the persisted
+                    // mapper state BEFORE any entries are removed, so the list is complete.
+                    const uris = this.notebookEnvironmentMapper.getNotebooksUsingEnvironment(environmentId);
+
+                    // Stop each notebook's server (per-notebook keying reaches closed-but-running ones too).
+                    // stopServer is a safe no-op when a notebook has no running server.
+                    for (const uri of uris) {
+                        try {
+                            await this.serverStarter.stopServer(uri, token);
+                        } catch (error) {
+                            logger.error(`Failed to stop server for ${getDisplayPath(uri)}`, error);
+                        }
                     }
 
                     // Dispose kernels from any open notebooks using this environment
                     await this.disposeKernelsUsingEnvironment(environmentId);
+
+                    for (const uri of uris) {
+                        await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(uri);
+                    }
 
                     await this.environmentManager.deleteEnvironment(environmentId, token);
                     logger.info(`Deleted environment: ${environmentId}`);
                 }
             );
 
+            this.analytics.trackEvent({ eventName: 'delete_environment' });
             void window.showInformationMessage(l10n.t('Environment "{0}" deleted', config.name));
         } catch (error) {
             logger.error('Failed to delete environment', error);
@@ -370,11 +395,8 @@ export class DeepnoteEnvironmentsView implements Disposable {
     public async selectEnvironmentForNotebook({ notebook }: { notebook: NotebookDocument }): Promise<void> {
         logger.info('Selecting environment for notebook:', notebook);
 
-        // Get base file URI (without query/fragment)
-        const baseFileUri = notebook.uri.with({ query: '', fragment: '' });
-
         // Get current environment selection
-        const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(baseFileUri);
+        const currentEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
         const currentEnvironment = currentEnvironmentId
             ? this.environmentManager.getEnvironment(currentEnvironmentId)
             : undefined;
@@ -472,7 +494,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 },
                 async (progress, token) => {
                     // Update the notebook-to-environment mapping
-                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(baseFileUri, selectedEnvironmentId);
+                    await this.notebookEnvironmentMapper.setEnvironmentForNotebook(notebook.uri, selectedEnvironmentId);
 
                     // Force rebuild the controller with the new environment
                     // This clears cached metadata and creates a fresh controller.
@@ -483,6 +505,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
                 }
             );
 
+            this.analytics.trackEvent({ eventName: 'select_environment' });
             void window.showInformationMessage(l10n.t('Environment switched successfully'));
         } catch (error) {
             if (error instanceof DeepnoteToolkitMissingError) {
@@ -533,6 +556,7 @@ export class DeepnoteEnvironmentsView implements Disposable {
 
             logger.info(`Renamed environment ${environmentId} to "${newName}"`);
             void window.showInformationMessage(l10n.t('Environment renamed to "{0}"', newName));
+            this.analytics.trackEvent({ eventName: 'update_environment', properties: { field: 'name' } });
         } catch (error) {
             logger.error('Failed to rename environment', error);
             void window.showErrorMessage(l10n.t('Failed to rename environment. See output for details.'));
@@ -591,6 +615,10 @@ export class DeepnoteEnvironmentsView implements Disposable {
             );
 
             void window.showInformationMessage(l10n.t('Packages updated for "{0}"', config.name));
+            this.analytics.trackEvent({
+                eventName: 'update_environment',
+                properties: { field: 'packages', packageCount: packages.length }
+            });
         } catch (error) {
             logger.error('Failed to update packages', error);
             void window.showErrorMessage(l10n.t('Failed to update packages. See output for details.'));

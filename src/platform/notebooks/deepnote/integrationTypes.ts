@@ -74,7 +74,11 @@ export interface LegacyDuckDBIntegrationConfig extends BaseLegacyIntegrationConf
     type: LegacyIntegrationType.DuckDB;
 }
 
-import { DatabaseIntegrationConfig, DatabaseIntegrationType } from '@deepnote/database-integrations';
+import {
+    DatabaseIntegrationConfig,
+    DatabaseIntegrationType,
+    isDatabaseIntegrationType
+} from '@deepnote/database-integrations';
 // Import and re-export Snowflake auth constants from shared module
 import {
     type SnowflakeAuthMethod,
@@ -142,6 +146,14 @@ export type ConfigurableDatabaseIntegrationConfig = Extract<
 >;
 
 export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationType, 'pandas-dataframe'>;
+
+/**
+ * `integrations[].type` is free-form in the `.deepnote` schema; collapsing unrecognized values to
+ * `'unknown'` keeps analytics property cardinality bounded.
+ */
+export function toTelemetryIntegrationType(type: string | undefined): DatabaseIntegrationType | 'unknown' {
+    return type && isDatabaseIntegrationType(type) ? type : 'unknown';
+}
 
 /**
  * Integration connection status

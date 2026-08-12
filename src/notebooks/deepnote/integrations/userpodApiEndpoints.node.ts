@@ -6,6 +6,7 @@ import { commands, l10n, window, workspace } from 'vscode';
 
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
+import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { generateUuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
@@ -23,7 +24,8 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
     constructor(
         @inject(ISqlIntegrationEnvVarsProvider)
         private readonly sqlIntegrationEnvVarsProvider: ISqlIntegrationEnvVarsProvider,
-        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
+        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
     ) {}
 
     public get baseUrl(): string | undefined {
@@ -81,7 +83,8 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
         this.promptToRecover(
             l10n.t(
                 'The Deepnote integrations service stopped unexpectedly. SQL integrations will no longer receive their credentials. Reload the window to restore it.'
-            )
+            ),
+            'running'
         );
     }
 
@@ -90,7 +93,11 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
      * URL is baked into a toolkit server's env at spawn time, so already-running servers would keep pointing
      * at the dead port and stay silently broken.
      */
-    private promptToRecover(message: string): void {
+    private promptToRecover(message: string, phase: 'running' | 'startup'): void {
+        // Tracked before the prompt, not in its `then`: an unattended notification never resolves, which would
+        // drop exactly the failures this counts.
+        this.analytics.trackEvent({ eventName: 'integration_endpoint_failed', properties: { phase } });
+
         const reloadWindow = l10n.t('Reload Window');
 
         void window.showErrorMessage(message, reloadWindow).then((choice) => {
@@ -198,7 +205,8 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
             this.promptToRecover(
                 l10n.t(
                     'The Deepnote integrations service could not start. SQL integrations will not receive their credentials. Reload the window to try again.'
-                )
+                ),
+                'startup'
             );
         }
     }

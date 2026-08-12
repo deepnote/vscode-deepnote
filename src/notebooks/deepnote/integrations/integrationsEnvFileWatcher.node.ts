@@ -101,7 +101,7 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
             return;
         }
 
-        await this.liveRefresher.refresh(affected);
+        await this.liveRefresher.refresh(affected, 'env_file');
     }
 
     /** True when a `.deepnote.env.yaml` exists in any candidate dir (dir-then-root), mirroring the config provider's probe. */

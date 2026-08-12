@@ -543,7 +543,10 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Picking a file-declared integration is the one place the roster drifts, so reconcile it here.
         const selectedIntegration = projectIntegrations.find((integration) => integration.id === selectedId);
-        if (selectedIntegration && !roster.some((integration) => integration.id === selectedId)) {
+        // Shared with the telemetry below so the reconciliation and what it reports cannot drift apart.
+        const fromEnvFile =
+            selectedIntegration !== undefined && !roster.some((integration) => integration.id === selectedId);
+        if (selectedIntegration && fromEnvFile) {
             await this.addToProjectIntegrations(cell, projectId, roster, selectedIntegration);
         }
 
@@ -557,7 +560,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         this.analytics.trackEvent({
             eventName: 'switch_sql_integration',
-            properties: { integrationType }
+            properties: { fromEnvFile, integrationType }
         });
     }
 }

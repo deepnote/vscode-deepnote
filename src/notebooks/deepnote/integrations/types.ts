@@ -54,9 +54,15 @@ export interface IIntegrationManager {
 
 export const IIntegrationEnvLiveRefresher = Symbol('IIntegrationEnvLiveRefresher');
 export interface IIntegrationEnvLiveRefresher {
-    /** Re-runs the toolkit's `set_integration_env()` in each notebook's running kernel (no restart); notifies once. */
-    refresh(notebooks: readonly NotebookDocument[]): Promise<void>;
+    /**
+     * Re-runs the toolkit's `set_integration_env()` in each notebook's running kernel (no restart); notifies once.
+     * `trigger` is what changed, and is reported as-is to telemetry.
+     */
+    refresh(notebooks: readonly NotebookDocument[], trigger: IntegrationEnvRefreshTrigger): Promise<void>;
 }
+
+/** What prompted a live refresh: an edited `.deepnote.env.yaml`/`.env`, or a SecretStorage integration change. */
+export type IntegrationEnvRefreshTrigger = 'env_file' | 'integration_config';
 
 /** Persisted federated-auth token entry; fingerprints `${clientId}|${clientSecret}|${project}` to detect stale tokens. Only the refresh token is persisted. */
 export interface FederatedAuthTokenEntry {

@@ -27,7 +27,7 @@ suite('IntegrationEnvRefreshHandler', () => {
         disposables.push(onDidChangeIntegrations);
 
         when(integrationStorage.onDidChangeIntegrations).thenReturn(onDidChangeIntegrations.event);
-        when(liveRefresher.refresh(anything())).thenResolve();
+        when(liveRefresher.refresh(anything(), anything())).thenResolve();
 
         handler = new IntegrationEnvRefreshHandler(instance(integrationStorage), instance(liveRefresher), disposables);
     });
@@ -48,9 +48,10 @@ suite('IntegrationEnvRefreshHandler', () => {
 
         await new Promise((resolve) => setTimeout(resolve, 10));
 
-        verify(liveRefresher.refresh(anything())).once();
-        const [refreshed] = capture(liveRefresher.refresh).last();
+        verify(liveRefresher.refresh(anything(), anything())).once();
+        const [refreshed, trigger] = capture(liveRefresher.refresh).last();
         assert.deepStrictEqual([...refreshed], [deepnote]);
+        assert.strictEqual(trigger, 'integration_config', 'a SecretStorage change is not an env-file change');
     });
 
     test('refreshes multiple Deepnote notebooks in a single call', async () => {
@@ -64,7 +65,7 @@ suite('IntegrationEnvRefreshHandler', () => {
 
         await new Promise((resolve) => setTimeout(resolve, 10));
 
-        verify(liveRefresher.refresh(anything())).once();
+        verify(liveRefresher.refresh(anything(), anything())).once();
         const [refreshed] = capture(liveRefresher.refresh).last();
         assert.deepStrictEqual([...refreshed], [notebook1, notebook2]);
     });
@@ -73,7 +74,7 @@ suite('IntegrationEnvRefreshHandler', () => {
         const notebook = createMockNotebook({ uri: Uri.file('/test.deepnote') });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-        when(liveRefresher.refresh(anything())).thenReject(new Error('refresh boom'));
+        when(liveRefresher.refresh(anything(), anything())).thenReject(new Error('refresh boom'));
         const errorStub = sinon.stub(logger, 'error');
 
         handler.activate();
@@ -81,7 +82,7 @@ suite('IntegrationEnvRefreshHandler', () => {
 
         await new Promise((resolve) => setTimeout(resolve, 10));
 
-        verify(liveRefresher.refresh(anything())).once();
+        verify(liveRefresher.refresh(anything(), anything())).once();
         assert.strictEqual(errorStub.callCount, 1, 'the fire-and-forget rejection must be caught and logged');
     });
 });

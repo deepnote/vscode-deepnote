@@ -100,7 +100,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         } as never);
 
         liveRefresher = mock<IIntegrationEnvLiveRefresher>();
-        when(liveRefresher.refresh(anything())).thenResolve();
+        when(liveRefresher.refresh(anything(), anything())).thenResolve();
 
         // Default: a `.deepnote.env.yaml` exists, so a dir change refreshes; individual tests override this.
         fileSystem = mock<IFileSystem>();
@@ -126,9 +126,10 @@ suite('IntegrationsEnvFileWatcher', () => {
 
         await fireEnvFileChange(deepnoteDirOf(uriA));
 
-        verify(liveRefresher.refresh(anything())).once();
-        const [refreshed] = capture(liveRefresher.refresh).last();
+        verify(liveRefresher.refresh(anything(), anything())).once();
+        const [refreshed, trigger] = capture(liveRefresher.refresh).last();
         assert.deepStrictEqual([...refreshed], [notebookA, notebookB]);
+        assert.strictEqual(trigger, 'env_file', 'a watched file change is not a SecretStorage change');
     });
 
     test('resolves affected notebooks via the workspace-folder root (dir-then-root fallback)', async () => {
@@ -143,7 +144,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         // The changed dir is the workspace root, NOT the .deepnote dir (/ws/nested/deep).
         await fireEnvFileChange(workspaceFolder.uri);
 
-        verify(liveRefresher.refresh(anything())).once();
+        verify(liveRefresher.refresh(anything(), anything())).once();
         const [refreshed] = capture(liveRefresher.refresh).last();
         assert.deepStrictEqual([...refreshed], [notebook]);
     });
@@ -160,7 +161,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         fireEnvFileEvent(deepnoteDirOf(uri), DEFAULT_ENV_FILE);
         await clock.tickAsync(debounceTimeInMilliseconds);
 
-        verify(liveRefresher.refresh(anything())).once();
+        verify(liveRefresher.refresh(anything(), anything())).once();
     });
 
     test('watches the dir of a notebook opened after activation', async () => {
@@ -175,7 +176,7 @@ suite('IntegrationsEnvFileWatcher', () => {
 
         await fireEnvFileChange(deepnoteDirOf(uri));
 
-        verify(liveRefresher.refresh(anything())).once();
+        verify(liveRefresher.refresh(anything(), anything())).once();
     });
 
     test('does not refresh when the changed dir matches no open Deepnote notebook', async () => {
@@ -190,7 +191,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         // An unrelated workspace folder changed — the notebook's dir and its workspace root are untouched.
         await fireEnvFileChange(otherFolder.uri);
 
-        verify(liveRefresher.refresh(anything())).never();
+        verify(liveRefresher.refresh(anything(), anything())).never();
     });
 
     test('ignores non-Deepnote notebooks even when their dir changed', async () => {
@@ -203,7 +204,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         // The dir is watched as a workspace folder, so the event lands — the notebook type must rule it out.
         await fireEnvFileChange(deepnoteDirOf(uri));
 
-        verify(liveRefresher.refresh(anything())).never();
+        verify(liveRefresher.refresh(anything(), anything())).never();
     });
 
     test('does not refresh when the env-file feature is disabled for the notebook', async () => {
@@ -218,7 +219,7 @@ suite('IntegrationsEnvFileWatcher', () => {
 
         await fireEnvFileChange(deepnoteDirOf(uri));
 
-        verify(liveRefresher.refresh(anything())).never();
+        verify(liveRefresher.refresh(anything(), anything())).never();
     });
 
     test('does not refresh when no .deepnote.env.yaml exists for the notebook (an unrelated .env change)', async () => {
@@ -232,6 +233,6 @@ suite('IntegrationsEnvFileWatcher', () => {
 
         await fireEnvFileChange(deepnoteDirOf(uri), DEFAULT_ENV_FILE);
 
-        verify(liveRefresher.refresh(anything())).never();
+        verify(liveRefresher.refresh(anything(), anything())).never();
     });
 });

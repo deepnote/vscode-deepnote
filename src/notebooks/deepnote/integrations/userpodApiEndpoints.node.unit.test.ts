@@ -1,10 +1,11 @@
 import * as http from 'http';
 
 import { assert } from 'chai';
-import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
+import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { Disposable, NotebookDocument, Uri } from 'vscode';
 
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
+import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposable } from '../../../platform/common/types';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
@@ -15,14 +16,16 @@ import { UserpodApiEndpoints } from './userpodApiEndpoints.node';
 suite('UserpodApiEndpoints', () => {
     let endpoint: UserpodApiEndpoints;
     let provider: ISqlIntegrationEnvVarsProvider;
+    let telemetry: ITelemetryService;
     let disposables: IDisposable[];
 
     setup(() => {
         resetVSCodeMocks();
         disposables = [new Disposable(() => resetVSCodeMocks())];
         provider = mock<ISqlIntegrationEnvVarsProvider>();
+        telemetry = mock<ITelemetryService>();
 
-        endpoint = new UserpodApiEndpoints(instance(provider), disposables);
+        endpoint = new UserpodApiEndpoints(instance(provider), disposables, instance(telemetry));
     });
 
     teardown(() => {
@@ -196,6 +199,11 @@ suite('UserpodApiEndpoints', () => {
 
         assert.strictEqual(endpoint.baseUrl, undefined, 'a failed bind must not advertise a base URL');
         verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).once();
+        verify(
+            telemetry.trackEvent(
+                deepEqual({ eventName: 'integration_endpoint_failed', properties: { phase: 'startup' } })
+            )
+        ).once();
     });
 
     test('logs and prompts the user to recover when the server errors after startup, without crashing', async () => {
@@ -209,5 +217,11 @@ suite('UserpodApiEndpoints', () => {
 
         assert.strictEqual(endpoint.baseUrl, undefined, 'a crashed endpoint must stop advertising its base URL');
         verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).once();
+        // Tracked even though nobody clicked the notification: the emit must not hang off its `then`.
+        verify(
+            telemetry.trackEvent(
+                deepEqual({ eventName: 'integration_endpoint_failed', properties: { phase: 'running' } })
+            )
+        ).once();
     });
 });

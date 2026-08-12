@@ -35,6 +35,6 @@ export class IntegrationEnvRefreshHandler implements IExtensionSyncActivationSer
             (notebook) => notebook.notebookType === DEEPNOTE_NOTEBOOK_TYPE
         );
 
-        await this.liveRefresher.refresh(notebooks);
+        await this.liveRefresher.refresh(notebooks, 'integration_config');
     }
 }

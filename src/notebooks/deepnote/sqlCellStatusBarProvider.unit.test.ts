@@ -938,7 +938,10 @@ suite('SqlCellStatusBarProvider', () => {
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
             verify(
                 commandTelemetry.trackEvent(
-                    deepEqual({ eventName: 'switch_sql_integration', properties: { integrationType: 'pgsql' } })
+                    deepEqual({
+                        eventName: 'switch_sql_integration',
+                        properties: { fromEnvFile: false, integrationType: 'pgsql' }
+                    })
                 )
             ).once();
         });
@@ -976,7 +979,10 @@ suite('SqlCellStatusBarProvider', () => {
 
             verify(
                 commandTelemetry.trackEvent(
-                    deepEqual({ eventName: 'switch_sql_integration', properties: { integrationType: 'unknown' } })
+                    deepEqual({
+                        eventName: 'switch_sql_integration',
+                        properties: { fromEnvFile: false, integrationType: 'unknown' }
+                    })
                 )
             ).once();
         });
@@ -991,11 +997,12 @@ suite('SqlCellStatusBarProvider', () => {
             when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
                 { id: fileOnlyId, name: 'BigQuery from file', type: 'big-query', metadata: {} } as any
             ]);
+            const fileTelemetry = mock<ITelemetryService>();
             new SqlCellStatusBarProvider(
                 [],
                 instance(commandIntegrationStorage),
                 instance(commandNotebookManager),
-                instance(mock<ITelemetryService>()),
+                instance(fileTelemetry),
                 instance(envVars)
             ).activate();
 
@@ -1012,6 +1019,14 @@ suite('SqlCellStatusBarProvider', () => {
             const [projectId, integrations] = capture(commandNotebookManager.updateProjectIntegrations).last();
             assert.strictEqual(projectId, 'project-1');
             assert.deepStrictEqual(integrations, [{ id: fileOnlyId, name: 'BigQuery from file', type: 'big-query' }]);
+            verify(
+                fileTelemetry.trackEvent(
+                    deepEqual({
+                        eventName: 'switch_sql_integration',
+                        properties: { fromEnvFile: true, integrationType: 'big-query' }
+                    })
+                )
+            ).once();
         });
 
         test('does not update if user cancels quick pick', async () => {

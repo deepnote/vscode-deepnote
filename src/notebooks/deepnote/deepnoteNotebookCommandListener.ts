@@ -294,6 +294,8 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             throw new Error(l10n.t('Failed to insert agent block'));
         }
 
+        this.trackAddBlock('agent');
+
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
         editor.selection = notebookRange;
@@ -661,6 +663,8 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     private trackAddBlock(blockType: string): void {
-        this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType } });
+        // Commands only ever insert blocks the user asked for; agent scratch cells are counted
+        // in DeepnoteCellExecutionAnalytics, which is the only observer that sees them.
+        this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType, isEphemeral: false } });
     }
 }

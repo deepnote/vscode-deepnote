@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { when, reset, anything, mock, instance, verify } from 'ts-mockito';
+import { when, reset, anything, deepEqual, mock, instance, verify } from 'ts-mockito';
 import {
     NotebookCell,
     NotebookDocument,
@@ -955,6 +955,20 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.isFalse(chainStub.called, 'Must not edit a notebook that already has an agent block');
                 verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
                 assert.isFalse(editor.revealRange.called, 'Must not reveal anything');
+                verify(mockTelemetryService.trackEvent(anything())).never();
+            });
+
+            test('should report the added agent block to analytics', async () => {
+                const { editor } = createMockEditor([], undefined);
+                mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                verify(
+                    mockTelemetryService.trackEvent(
+                        deepEqual({ eventName: 'add_block', properties: { blockType: 'agent', isEphemeral: false } })
+                    )
+                ).once();
             });
 
             test('should insert only one agent block when two invocations race', async () => {

@@ -1095,7 +1095,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     });
 
     /**
-     * Every exec in the installer is killable now, so cancellation surfaces here immediately
+     * Every exec in the installer can now be killed, so cancellation surfaces here immediately
      * instead of after pip has finished anyway. A user-initiated Stop is not a failure and
      * must not raise the error UI - but a genuine failure still has to.
      */

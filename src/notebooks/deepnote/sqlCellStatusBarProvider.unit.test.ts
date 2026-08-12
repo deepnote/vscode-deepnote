@@ -1,9 +1,10 @@
 import { assert } from 'chai';
-import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
+import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { CancellationToken, CancellationTokenSource, EventEmitter, NotebookCell } from 'vscode';
 
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { SqlCellStatusBarProvider } from './sqlCellStatusBarProvider';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
@@ -39,6 +40,7 @@ suite('SqlCellStatusBarProvider', () => {
             disposables,
             instance(integrationStorage),
             instance(notebookManager),
+            instance(mock<ITelemetryService>()),
             emptySqlIntegrationEnvVars()
         );
 
@@ -322,6 +324,7 @@ suite('SqlCellStatusBarProvider', () => {
                 activateDisposables,
                 instance(activateIntegrationStorage),
                 instance(activateNotebookManager),
+                instance(mock<ITelemetryService>()),
                 emptySqlIntegrationEnvVars()
             );
         });
@@ -484,6 +487,7 @@ suite('SqlCellStatusBarProvider', () => {
                 [],
                 instance(activateIntegrationStorage),
                 instance(activateNotebookManager),
+                instance(mock<ITelemetryService>()),
                 instance(envVars)
             );
 
@@ -603,6 +607,7 @@ suite('SqlCellStatusBarProvider', () => {
                 eventDisposables,
                 instance(eventIntegrationStorage),
                 instance(eventNotebookManager),
+                instance(mock<ITelemetryService>()),
                 emptySqlIntegrationEnvVars()
             );
         });
@@ -732,6 +737,7 @@ suite('SqlCellStatusBarProvider', () => {
                 commandDisposables,
                 instance(commandIntegrationStorage),
                 instance(commandNotebookManager),
+                instance(mock<ITelemetryService>()),
                 emptySqlIntegrationEnvVars()
             );
 
@@ -863,6 +869,7 @@ suite('SqlCellStatusBarProvider', () => {
         let commandProvider: SqlCellStatusBarProvider;
         let commandIntegrationStorage: IIntegrationStorage;
         let commandNotebookManager: IDeepnoteNotebookManager;
+        let commandTelemetry: ITelemetryService;
         let switchIntegrationHandler: Function;
 
         setup(() => {
@@ -870,10 +877,12 @@ suite('SqlCellStatusBarProvider', () => {
             commandDisposables = [];
             commandIntegrationStorage = mock<IIntegrationStorage>();
             commandNotebookManager = mock<IDeepnoteNotebookManager>();
+            commandTelemetry = mock<ITelemetryService>();
             commandProvider = new SqlCellStatusBarProvider(
                 commandDisposables,
                 instance(commandIntegrationStorage),
                 instance(commandNotebookManager),
+                instance(commandTelemetry),
                 emptySqlIntegrationEnvVars()
             );
 
@@ -927,6 +936,49 @@ suite('SqlCellStatusBarProvider', () => {
 
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            verify(
+                commandTelemetry.trackEvent(
+                    deepEqual({ eventName: 'switch_sql_integration', properties: { integrationType: 'pgsql' } })
+                )
+            ).once();
+        });
+
+        test('reports an unrecognized integration type as unknown', async () => {
+            // integrations[].type is a free-form string in the .deepnote schema; unbounded values must not
+            // reach analytics verbatim.
+            const notebookMetadata = { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' };
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: 'old-integration' },
+                notebookMetadata
+            });
+            const newIntegrationId = 'new-integration';
+
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
+                project: {
+                    integrations: [
+                        {
+                            id: newIntegrationId,
+                            name: 'New Integration',
+                            type: 'not-a-real-integration-type'
+                        }
+                    ]
+                }
+            } as any);
+
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)
+            );
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            await switchIntegrationHandler(cell);
+
+            verify(
+                commandTelemetry.trackEvent(
+                    deepEqual({ eventName: 'switch_sql_integration', properties: { integrationType: 'unknown' } })
+                )
+            ).once();
         });
 
         test('picking a `.deepnote.env.yaml` integration adds it to the project integrations list', async () => {
@@ -943,6 +995,7 @@ suite('SqlCellStatusBarProvider', () => {
                 [],
                 instance(commandIntegrationStorage),
                 instance(commandNotebookManager),
+                instance(mock<ITelemetryService>()),
                 instance(envVars)
             ).activate();
 

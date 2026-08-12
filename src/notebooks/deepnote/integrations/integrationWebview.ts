@@ -3,6 +3,7 @@ import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } fro
 
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
+import { type CommandOutcome, ITelemetryService } from '../../../platform/analytics/types';
 import { Commands } from '../../../platform/common/constants';
 import { IDisposableRegistry, IExtensionContext } from '../../../platform/common/types';
 import * as localize from '../../../platform/common/utils/localize';
@@ -42,6 +43,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService,
         @inject(IDisposableRegistry) private readonly disposableRegistry: IDisposableRegistry,
         @inject(ISqlIntegrationEnvVarsProvider) private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider,
         @inject(IFederatedAuthTokenStorage)
@@ -627,6 +629,15 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
     }
 
+    private trackIntegrationEvent(event: {
+        eventName: 'configure_integration' | 'delete_integration' | 'reset_integration';
+        integrationType: string | undefined;
+    }): void {
+        const properties = { integrationType: event.integrationType ?? 'unknown' };
+
+        this.analytics.trackEvent({ eventName: event.eventName, properties });
+    }
+
     /** Handle messages from the webview; mirrors the `WebviewOutboundMessage` union in `src/webviews/webview-side/integrations/types.ts`. */
     private async handleMessage(message: {
         type: string;
@@ -641,29 +652,59 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 break;
             case 'save':
                 if (message.integrationId && message.config) {
-                    await this.saveConfiguration(message.integrationId, message.config);
+                    const saved = await this.saveConfiguration(message.integrationId, message.config);
+
+                    if (saved) {
+                        // Legacy big-query configs may omit authMethod, which means service-account.
+                        const authMethod =
+                            message.config.type === 'big-query'
+                                ? message.config.metadata.authMethod ?? BigQueryAuthMethods.ServiceAccount
+                                : undefined;
+
+                        this.analytics.trackEvent({
+                            eventName: 'save_integration',
+                            properties: {
+                                integrationType: message.config.type,
+                                ...(authMethod ? { authMethod } : {})
+                            }
+                        });
+                    }
                 }
                 break;
             case 'reset':
                 if (message.integrationId) {
-                    await this.resetConfiguration(message.integrationId);
+                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
+                    const reset = await this.resetConfiguration(message.integrationId);
+
+                    if (reset) {
+                        this.trackIntegrationEvent({ eventName: 'reset_integration', integrationType });
+                    }
                 }
                 break;
             case 'delete':
                 if (message.integrationId) {
-                    await this.deleteConfiguration(message.integrationId);
+                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
+                    const deleted = await this.deleteConfiguration(message.integrationId);
+
+                    if (deleted) {
+                        this.trackIntegrationEvent({ eventName: 'delete_integration', integrationType });
+                    }
                 }
                 break;
             case 'authenticate':
                 if (message.integrationId) {
+                    const integrationType = this.integrations.get(message.integrationId)?.integrationType;
+                    let outcome: CommandOutcome = 'failed';
+
                     try {
                         // Same URI the candidate set was derived from, so the button's eligibility and the
                         // command's config lookup cannot disagree about which notebook they mean.
-                        await commands.executeCommand(
-                            Commands.AuthenticateIntegration,
-                            message.integrationId,
-                            this.activeFileUri
-                        );
+                        outcome =
+                            (await commands.executeCommand<CommandOutcome | undefined>(
+                                Commands.AuthenticateIntegration,
+                                message.integrationId,
+                                this.activeFileUri
+                            )) ?? 'failed';
                     } catch (error) {
                         // Command handler shows its own toasts; log here to avoid an unhandled-rejection.
                         logger.error(
@@ -671,13 +712,19 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                             error
                         );
                     }
+
+                    this.analytics.trackEvent({
+                        eventName: 'authenticate_integration',
+                        properties: { integrationType: integrationType ?? 'unknown', outcome }
+                    });
                 }
                 break;
         }
     }
 
     /**
-     * Show the configuration form for an integration
+     * Tracked here rather than in the webview `configure` handler so the SQL status bar's
+     * "Configure current integration", which opens the form directly via `show()`, is counted too.
      */
     private async showConfigurationForm(integrationId: string): Promise<void> {
         const integration = this.integrations.get(integrationId);
@@ -696,6 +743,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationType: integration.integrationType,
             type: 'showForm'
         });
+
+        this.trackIntegrationEvent({
+            eventName: 'configure_integration',
+            integrationType: integration.integrationType
+        });
     }
 
     /**
@@ -704,9 +756,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     private async saveConfiguration(
         integrationId: string,
         config: ConfigurableDatabaseIntegrationConfig
-    ): Promise<void> {
+    ): Promise<boolean> {
         if (await this.refuseEditIfFileConfigured(integrationId)) {
-            return;
+            return false;
         }
 
         try {
@@ -742,6 +794,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     type: 'success'
                 });
             }
+
+            // The credential save above is the tracked operation; a skipped project-YAML sync is not a failure.
+            return true;
         } catch (error) {
             logger.error('Failed to save integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -751,15 +806,17 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 ),
                 type: 'error'
             });
+
+            return false;
         }
     }
 
     /**
      * Reset the configuration for an integration (clears credentials but keeps the integration entry)
      */
-    private async resetConfiguration(integrationId: string): Promise<void> {
+    private async resetConfiguration(integrationId: string): Promise<boolean> {
         if (await this.refuseEditIfFileConfigured(integrationId)) {
-            return;
+            return false;
         }
 
         try {
@@ -785,6 +842,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     type: 'success'
                 });
             }
+
+            // The credential reset above is the tracked operation; a skipped project-YAML sync is not a failure.
+            return true;
         } catch (error) {
             logger.error('Failed to reset integration configuration', error);
             await this.currentPanel?.webview.postMessage({
@@ -794,15 +854,17 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 ),
                 type: 'error'
             });
+
+            return false;
         }
     }
 
     /**
      * Delete the integration completely (removes credentials and integration entry)
      */
-    private async deleteConfiguration(integrationId: string): Promise<void> {
+    private async deleteConfiguration(integrationId: string): Promise<boolean> {
         if (await this.refuseEditIfFileConfigured(integrationId)) {
-            return;
+            return false;
         }
 
         try {
@@ -824,6 +886,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     type: 'success'
                 });
             }
+
+            // The credential delete above is the tracked operation; a skipped project-YAML sync is not a failure.
+            return true;
         } catch (error) {
             logger.error('Failed to delete integration', error);
             await this.currentPanel?.webview.postMessage({
@@ -833,6 +898,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 ),
                 type: 'error'
             });
+
+            return false;
         }
     }
 

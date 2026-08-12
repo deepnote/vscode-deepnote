@@ -19,13 +19,15 @@ import {
 import { inject, injectable } from 'inversify';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { Commands } from '../../platform/common/constants';
 import {
     ConfigurableDatabaseIntegrationType,
     DATAFRAME_SQL_INTEGRATION_ID,
-    isConfigurableDatabaseIntegrationType
+    isConfigurableDatabaseIntegrationType,
+    toTelemetryIntegrationType
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { persistProjectIntegrations } from './integrations/projectIntegrationsWriter';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
@@ -78,6 +80,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService,
         @inject(ISqlIntegrationEnvVarsProvider)
         private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider
     ) {}
@@ -546,5 +549,15 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Trigger status bar update
         this._onDidChangeCellStatusBarItems.fire();
+
+        const integrationType =
+            selectedId === DATAFRAME_SQL_INTEGRATION_ID
+                ? 'duckdb'
+                : toTelemetryIntegrationType(selectedIntegration?.type);
+
+        this.analytics.trackEvent({
+            eventName: 'switch_sql_integration',
+            properties: { integrationType }
+        });
     }
 }

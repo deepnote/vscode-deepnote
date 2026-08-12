@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import { createMockChildProcess } from '../../kernels/deepnote/deepnoteTestHelpers.node';
 import { ServerHandleRegistry } from '../../kernels/deepnote/deepnoteServerHandleRegistry.node';
@@ -13,6 +13,7 @@ import {
     IDeepnoteToolkitInstaller
 } from '../../kernels/deepnote/types';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
 import { IJupyterRequestCreator } from '../../kernels/jupyter/types';
@@ -45,6 +46,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
     let mockOutputChannel: IOutputChannel;
     let mockToolkitInstaller: IDeepnoteToolkitInstaller;
+    let mockTelemetryService: ITelemetryService;
 
     let mockProgress: { report(value: { message?: string; increment?: number }): void };
     let mockCancellationToken: CancellationToken;
@@ -74,6 +76,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
         mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
         mockOutputChannel = mock<IOutputChannel>();
+        mockTelemetryService = mock<ITelemetryService>();
 
         mockProgress = { report: sandbox.stub() };
         mockCancellationToken = mock<CancellationToken>();
@@ -141,7 +144,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockNotebookEnvironmentMapper),
             instance(mockOutputChannel),
             instance(mockToolkitInstaller),
-            registry
+            registry,
+            instance(mockTelemetryService)
         );
     });
 
@@ -373,6 +377,60 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             // Assert
             assert.strictEqual(result, mockEnv1, 'Should return the selected environment');
+        });
+    });
+
+    suite('ensureEnvironmentConfiguredBeforeExecution', () => {
+        // The first-run picker is a second environment-selection path alongside the environments view;
+        // both must report select_environment or the metric only counts users who switch.
+        function arrangeFirstRunPicker(picked: DeepnoteEnvironment | undefined) {
+            when(mockCancellationToken.isCancellationRequested).thenReturn(false);
+            when(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).thenReturn(undefined);
+            when(mockNotebookEnvironmentMapper.setEnvironmentForNotebook(anything(), anything())).thenResolve();
+            when(mockEnvironmentManager.waitForInitialization()).thenResolve();
+            when(mockEnvironmentManager.listEnvironments()).thenReturn(picked ? [picked] : []);
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenResolve(
+                picked ? ({ label: picked.name, environment: picked } as any) : undefined
+            );
+        }
+
+        test('should track select_environment after the execution picker configures an environment', async () => {
+            const mockEnvironment = createMockEnvironment('env-1', 'Environment 1');
+            arrangeFirstRunPicker(mockEnvironment);
+            const setupStub = sandbox.stub(selector as any, 'setupKernelForEnvironment').resolves(true);
+
+            const result = await selector.ensureEnvironmentConfiguredBeforeExecution(
+                mockNotebook,
+                instance(mockCancellationToken)
+            );
+
+            assert.isTrue(result, 'Environment should be reported as configured');
+            assert.isTrue(setupStub.calledOnce, 'Kernel setup should have run');
+            verify(mockTelemetryService.trackEvent(deepEqual({ eventName: 'select_environment' }))).once();
+        });
+
+        test('should not track select_environment when the picker is cancelled or setup fails', async () => {
+            arrangeFirstRunPicker(undefined);
+
+            assert.isFalse(
+                await selector.ensureEnvironmentConfiguredBeforeExecution(
+                    mockNotebook,
+                    instance(mockCancellationToken)
+                ),
+                'Cancelling the picker should not configure an environment'
+            );
+
+            arrangeFirstRunPicker(createMockEnvironment('env-1', 'Environment 1'));
+            sandbox.stub(selector as any, 'setupKernelForEnvironment').resolves(false);
+
+            assert.isFalse(
+                await selector.ensureEnvironmentConfiguredBeforeExecution(
+                    mockNotebook,
+                    instance(mockCancellationToken)
+                ),
+                'Failed setup should not report success'
+            );
+            verify(mockTelemetryService.trackEvent(anything())).never();
         });
     });
 

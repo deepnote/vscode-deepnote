@@ -80,6 +80,7 @@ import {
     DatabaseIntegrationType,
     databaseIntegrationTypes,
     FederatedAuthMethod,
+    isDatabaseIntegrationType,
     isFederatedAuthMethod
 } from '@deepnote/database-integrations';
 // Import and re-export Snowflake auth constants from shared module
@@ -159,6 +160,14 @@ export function isConfigurableDatabaseIntegrationType(
         type !== 'pandas-dataframe' &&
         (databaseIntegrationTypes as readonly string[]).includes(type)
     );
+}
+
+/**
+ * `integrations[].type` is free-form in the `.deepnote` schema; collapsing unrecognized values to
+ * `'unknown'` keeps analytics property cardinality bounded.
+ */
+export function toTelemetryIntegrationType(type: string | undefined): DatabaseIntegrationType | 'unknown' {
+    return type && isDatabaseIntegrationType(type) ? type : 'unknown';
 }
 
 /** Federated-auth token status: `'authenticated'`, `'disconnected'` (federated but no token), or `'unsupported'` (non-federated or web/remote). */

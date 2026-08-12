@@ -186,7 +186,6 @@ export namespace Commands {
     export const RestartKernelAndRunAllCells = 'deepnote.restartkernelandrunallcells';
     export const RestartKernelAndRunUpToSelectedCell = 'deepnote.restartkernelandrunuptoselectedcell';
     export const NotebookEditorRemoveAllCells = 'deepnote.notebookeditor.removeallcells';
-    export const NotebookEditorRunAllCells = 'deepnote.notebookeditor.runallcells';
     export const NotebookEditorRunSelectedCell = 'deepnote.notebookeditor.runselectedcell';
     export const NotebookEditorRunFocusedCell = 'deepnote.notebookeditor.runfocusedcell';
     export const NotebookEditorAddCellBelow = 'deepnote.notebookeditor.addcellbelow';

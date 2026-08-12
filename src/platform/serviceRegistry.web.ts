@@ -24,9 +24,12 @@ import { KernelProgressReporter } from './progress/kernelProgressReporter';
 import { WebviewPanelProvider } from './webviews/webviewPanelProvider';
 import { WebviewViewProvider } from './webviews/webviewViewProvider';
 import { WorkspaceInterpreterTracker } from './interpreter/workspaceInterpreterTracker';
+import { ITelemetryService } from './analytics/types';
+import { TelemetryWebService } from './analytics/telemetryWebService';
 import { ApplicationEnvironment } from './common/application/applicationEnvironment';
 
 export function registerTypes(serviceManager: IServiceManager) {
+    serviceManager.addSingleton<ITelemetryService>(ITelemetryService, TelemetryWebService);
     serviceManager.addSingleton<IFileSystem>(IFileSystem, FileSystem);
     serviceManager.addSingleton<IWorkspaceService>(IWorkspaceService, WorkspaceService);
     serviceManager.addSingleton<IApplicationEnvironment>(IApplicationEnvironment, ApplicationEnvironment);

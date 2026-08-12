@@ -1,26 +1,22 @@
-// Based this logic on this file here: https://github.com/import-js/eslint-plugin-import/blob/main/src/rules/no-nodejs-modules.js
-// Also this is a useful reference for creating new rules (describes API of stuff like MemberReference)
-// https://btmills.github.io/parserapi/
-const importType = require('eslint-plugin-import/lib/core/importType');
-const moduleVisitor = require('eslint-module-utils/moduleVisitor');
+const { isBuiltin } = require('node:module');
 const path = require('path');
 
 const testFolder = path.join('src', 'test');
 
 function reportIfMissing(context, node, allowed, name) {
-    const fileName = context.getFilename();
+    const fileName = context.filename;
     if (
         allowed.indexOf(name) === -1 &&
-        importType.default(name, context) === 'builtin' &&
+        isBuiltin(name) &&
         !fileName.endsWith('.node.ts') &&
         !fileName.endsWith('.test.ts') &&
         !fileName.includes(testFolder)
     ) {
-        context.report(node, `Do not import Node.js builtin module "${name}"`);
+        context.report({ node, message: `Do not import Node.js builtin module "${name}"` });
     }
     // Special case 'path'. Force everything to use the custom path
-    if (importType.default(name, context) === 'builtin' && name === 'path') {
-        context.report(node, `Do not import path builtin module. Use the custom vscode-path instead.`);
+    if (isBuiltin(name) && name === 'path') {
+        context.report({ node, message: `Do not import path builtin module. Use the custom vscode-path instead.` });
     }
 }
 
@@ -53,12 +49,22 @@ module.exports = {
                 const options = context.options[0] || {};
                 const allowed = options.allow || [];
 
-                return moduleVisitor.default(
-                    (source, node) => {
-                        reportIfMissing(context, node, allowed, source.value);
+                return {
+                    ImportDeclaration(node) {
+                        reportIfMissing(context, node, allowed, node.source.value);
                     },
-                    { commonjs: true }
-                );
+                    CallExpression(node) {
+                        if (
+                            node.callee.type === 'Identifier' &&
+                            node.callee.name === 'require' &&
+                            node.arguments.length === 1 &&
+                            node.arguments[0].type === 'Literal' &&
+                            typeof node.arguments[0].value === 'string'
+                        ) {
+                            reportIfMissing(context, node, allowed, node.arguments[0].value);
+                        }
+                    }
+                };
             }
         },
         'dont-use-process': {
@@ -74,7 +80,7 @@ module.exports = {
                     MemberExpression(node) {
                         const objectName = node.object.name;
                         const propertyName = node.property.name;
-                        const fileName = context.getFilename();
+                        const fileName = context.filename;
 
                         if (
                             !fileName.endsWith('.node.ts') &&
@@ -83,7 +89,7 @@ module.exports = {
                             propertyName &&
                             propertyName === 'env'
                         ) {
-                            context.report(node, `process.env is not allowed in anything but .node files`);
+                            context.report({ node, message: `process.env is not allowed in anything but .node files` });
                         }
                     }
                 };
@@ -102,7 +108,7 @@ module.exports = {
                     MemberExpression(node) {
                         const objectName = node.object.name;
                         const propertyName = node.property.name;
-                        const fileName = context.getFilename();
+                        const fileName = context.filename;
 
                         if (
                             !fileName.endsWith('.node.ts') &&
@@ -111,7 +117,7 @@ module.exports = {
                             propertyName &&
                             propertyName === 'fsPath'
                         ) {
-                            context.report(node, `fsPath is not allowed in anything but .node files`);
+                            context.report({ node, message: `fsPath is not allowed in anything but .node files` });
                         }
                     }
                 };
@@ -129,7 +135,7 @@ module.exports = {
                 return {
                     Identifier(node) {
                         const objectName = node.name;
-                        const fileName = context.getFilename();
+                        const fileName = context.filename;
 
                         if (
                             !fileName.endsWith('.node.ts') &&
@@ -138,8 +144,31 @@ module.exports = {
                             objectName &&
                             (objectName === '__dirname' || objectName === '__filename')
                         ) {
-                            context.report(node, `${objectName} is not allowed in anything but .node files`);
+                            context.report({
+                                node,
+                                message: `${objectName} is not allowed in anything but .node files`
+                            });
                         }
+                    }
+                };
+            }
+        },
+        'no-for-in': {
+            meta: {
+                type: 'problem',
+                docs: {
+                    description: 'Disallow for..in loops',
+                    category: 'best-practices'
+                }
+            },
+            create: function (context) {
+                return {
+                    ForInStatement(node) {
+                        context.report({
+                            node,
+                            message:
+                                'for..in loops iterate over the entire prototype chain, which is virtually never what you want. Use Object.{keys,values,entries}, and iterate over the resulting array.'
+                        });
                     }
                 };
             }

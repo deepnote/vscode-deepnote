@@ -16,7 +16,7 @@ import {
 } from 'vscode';
 import { IContributedKernelFinder } from '../../../kernels/internalTypes';
 // eslint-disable-next-line import/no-restricted-paths
-import { CodespacesJupyterServerSelector } from '../../../codespaces/codeSpacesServerSelector';
+import { CodespacesJupyterServerSelector } from '../../../codespaces/codeSpacesServerSelector'; // oxlint-disable-line import-plugin/no-restricted-paths
 import {
     IJupyterServerUriStorage,
     IRemoteKernelFinder,

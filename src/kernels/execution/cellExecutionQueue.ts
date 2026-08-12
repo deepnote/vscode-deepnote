@@ -15,7 +15,7 @@ import { once } from '../../platform/common/utils/events';
 import { getCellMetadata } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 // eslint-disable-next-line import/no-restricted-paths
-import { ISnapshotMetadataService } from '../../notebooks/deepnote/snapshots/snapshotService';
+import { ISnapshotMetadataService } from '../../notebooks/deepnote/snapshots/snapshotService'; // oxlint-disable-line import-plugin/no-restricted-paths
 
 /**
  * A queue responsible for execution of cells.

@@ -1,12 +1,9 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
 import { assert } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
-import * as path from '../../vscode-path/path';
 import { CancellationTokenSource } from 'vscode';
 
+import * as path from '../../vscode-path/path';
 import { ProcessService } from './proc.node';
 
 /**

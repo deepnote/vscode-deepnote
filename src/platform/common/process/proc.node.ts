@@ -53,7 +53,7 @@ export class ProcessService implements IProcessService {
             return false;
         }
     }
-    public static kill(pid?: number): void {
+    public static kill(pid?: number, killGroup = false): void {
         try {
             if (!pid) {
                 return;
@@ -62,7 +62,7 @@ export class ProcessService implements IProcessService {
                 // Windows doesn't support SIGTERM, so execute taskkill to kill the process
                 execSync(`taskkill /pid ${pid} /T /F`);
             } else {
-                process.kill(pid);
+                process.kill(killGroup ? -pid : pid);
             }
         } catch {
             // Ignore.
@@ -155,12 +155,17 @@ export class ProcessService implements IProcessService {
     }
     public exec(file: string, args: string[], options: SpawnOptions = {}): Promise<ExecutionResult<string>> {
         const spawnOptions = this.getDefaultOptions(options);
+        // setsid() is what makes the negative-pid kill below legal: without its own group the child
+        // shares the extension host's, and kill(-pid) would signal the host. Windows has no
+        // equivalent - taskkill /T already reaps the tree there, and `detached` pops a console window.
+        const killGroup = spawnOptions.detached === true && process.platform !== 'win32';
+        spawnOptions.detached = killGroup;
         const proc = spawn(file, args, spawnOptions);
         const deferred = createDeferred<ExecutionResult<string>>();
         const disposable: IDisposable = {
             dispose: () => {
                 if (!proc.killed && !deferred.completed) {
-                    ProcessService.kill(proc.pid);
+                    ProcessService.kill(proc.pid, killGroup);
                 }
             }
         };

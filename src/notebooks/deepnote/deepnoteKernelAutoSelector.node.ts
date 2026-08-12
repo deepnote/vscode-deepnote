@@ -930,6 +930,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * Handle kernel selection errors with user-friendly messages and actions
      */
     public async handleKernelSelectionError(error: unknown, notebook: NotebookDocument): Promise<void> {
+        // A user-initiated Stop is not a failure, so it must not raise the error UI.
+        if (error instanceof Error && isCancellationError(error)) {
+            logger.info(`Kernel selection cancelled for ${getDisplayPath(notebook.uri)}`);
+
+            return;
+        }
+
         if (error instanceof DeepnoteToolkitMissingError) {
             const installAction = l10n.t('Install');
             const changeEnvironmentAction = l10n.t('Change Environment');
@@ -1027,6 +1034,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
             void window.showInformationMessage(l10n.t('deepnote-toolkit installed successfully'));
         } catch (installError) {
+            if (installError instanceof Error && isCancellationError(installError)) {
+                logger.info('deepnote-toolkit installation cancelled');
+
+                return;
+            }
+
             logger.error('Failed to install deepnote-toolkit', installError);
             const errorMessage = installError instanceof Error ? installError.message : String(installError);
 

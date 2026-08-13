@@ -72,8 +72,7 @@ const commonExternals = [
 const webExternals = [
     ...commonExternals,
     'canvas', // Native module used by vega for server-side rendering, not needed in browser
-    'mathjax-electron', // Uses Node.js path module, MathJax rendering handled differently in browser
-    '@deepnote/runtime-core' // Node built-ins (net, child_process); agent blocks run on desktop only
+    'mathjax-electron' // Uses Node.js path module, MathJax rendering handled differently in browser
 ];
 const desktopExternals = [...commonExternals, ...deskTopNodeModulesToExternalize];
 const bundleConfig = getBundleConfiguration();
@@ -274,6 +273,17 @@ function createConfig(
     // Use ESM entry for jsonc-parser to avoid UMD internal require() issues when bundling
     if (target === 'desktop') {
         alias['jsonc-parser'] = path.join(extensionFolder, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js');
+    }
+    // @deepnote/runtime-core needs Node built-ins (net, child_process) and is excluded from the VSIX;
+    // externalizing it (like desktop) would leave an unresolvable bare import in the web bundle.
+    if (target === 'web') {
+        alias['@deepnote/runtime-core'] = path.join(
+            extensionFolder,
+            'src',
+            'notebooks',
+            'deepnote',
+            'runtimeCore.web.ts'
+        );
     }
     // Desktop builds use CommonJS for VS Code/Cursor compatibility
     // Web builds use ESM for browser compatibility

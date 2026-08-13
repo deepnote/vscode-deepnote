@@ -663,8 +663,6 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     private trackAddBlock(blockType: string): void {
-        // Commands only ever insert blocks the user asked for; agent scratch cells are counted
-        // in DeepnoteCellExecutionAnalytics, which is the only observer that sees them.
         this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType, isEphemeral: false } });
     }
 }

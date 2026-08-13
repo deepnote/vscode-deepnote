@@ -30,6 +30,7 @@ import { dispose } from '../../platform/common/utils/lifecycle';
 import { uuidUtils } from '../../platform/common/uuid';
 import { ServiceContainer } from '../../platform/ioc/container';
 import { logger } from '../../platform/logging';
+import { Cancellation } from '../../platform/common/cancellation';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
 import { IDeepnoteNotebookManager } from '../types';
 import {
@@ -154,13 +155,27 @@ export interface ExecuteAgentCellOptions {
 }
 
 /**
+ * True for both the host's own cancellation and the `AbortError` that runtime-core raises from
+ * `signal.throwIfAborted()`. `isCancellationError` covers only the former.
+ */
+function isStopped(error: unknown): boolean {
+    return error instanceof CancellationError || (error instanceof Error && error.name === 'AbortError');
+}
+
+/**
  * Runs an agent block into the cell output and inserts generated cells below.
  * Call `removeEphemeralCellsForAgentBlocks` on the batch first. Never rejects — errors become stderr on the cell.
+ *
+ * `token` stops the run. It reaches the model only indirectly: the host refuses tool calls and throws
+ * from the event callback, so an in-flight model turn still finishes. Once `AgentBlockContext` carries
+ * an `AbortSignal` (present in runtime-core's `main`, unreleased), bridge the token to one and pass it
+ * as `signal` — runtime-core forwards it to `agent.stream`, which aborts the request itself.
  */
 export async function executeAgentCell(
     cell: NotebookCell,
     controller: NotebookController,
     encryptedStorage: IEncryptedStorage,
+    token: CancellationToken,
     options?: ExecuteAgentCellOptions
 ): Promise<void> {
     const executeAgentBlockFn = options?.executeAgentBlockFn ?? executeAgentBlock;
@@ -208,7 +223,11 @@ export async function executeAgentCell(
             openAiToken,
             ...getProjectAgentContext(cell.notebook),
             notebookContext,
+            // The guards sit outside the `try`s: those turn every throw into a string the model reads
+            // as a retryable tool failure, which is how a stop used to make the agent do more work.
             addMarkdownBlock: async ({ content }: { content: string }) => {
+                Cancellation.throwIfCanceled(token);
+
                 try {
                     await insertEphemeralCell(cell.notebook, cell.index, agentBlock.id, 'markdown', content);
 
@@ -218,6 +237,8 @@ export async function executeAgentCell(
                 }
             },
             addAndExecuteCodeBlock: async ({ code }: { code: string }) => {
+                Cancellation.throwIfCanceled(token);
+
                 try {
                     const insertedCell = await insertEphemeralCell(
                         cell.notebook,
@@ -227,15 +248,23 @@ export async function executeAgentCell(
                         code
                     );
 
-                    const { success, outputs, error } = await executeEphemeralCell(insertedCell, execution.token);
+                    const { success, outputs, error } = await executeEphemeralCell(insertedCell, token);
                     const outputText = error ?? describeExecutionOutputs(outputs);
 
                     return success ? `Output:\n${outputText}` : `Execution failed:\n${outputText}`;
                 } catch (error) {
+                    if (isStopped(error)) {
+                        throw error;
+                    }
+
                     return `Execution error: ${toError(error).message}`;
                 }
             },
             onAgentEvent: async (event: AgentStreamEvent) => {
+                // Runs in runtime-core's own stream loop, which has no catch — the one place the host
+                // can end the run rather than merely refuse it.
+                Cancellation.throwIfCanceled(token);
+
                 logger.trace(`Agent event: ${event.type}`);
 
                 let delta = lastAgentEventType != null && lastAgentEventType !== event.type ? `\n\n` : '';
@@ -277,6 +306,17 @@ export async function executeAgentCell(
 
         execution.end(true, Date.now());
     } catch (error) {
+        if (isStopped(error)) {
+            logger.info('Agent cell execution stopped');
+
+            const stoppedOutput = new NotebookCellOutput([NotebookCellOutputItem.stderr('[Agent] Stopped')]);
+
+            await execution.appendOutput([stoppedOutput]).then(undefined, () => undefined);
+            execution.end(false, Date.now());
+
+            return;
+        }
+
         // logger.error does not print stacks unless isJupyterError — log stack explicitly.
         logger.error('Agent cell execution failed', error);
         if (error instanceof Error) {

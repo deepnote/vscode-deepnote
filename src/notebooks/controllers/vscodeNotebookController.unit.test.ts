@@ -21,12 +21,15 @@ import { VSCodeNotebookController, warnWhenUsingOutdatedPython } from './vscodeN
 import {
     IKernel,
     IKernelProvider,
+    INotebookKernelExecution,
     KernelConnectionMetadata,
     LiveRemoteKernelConnectionMetadata,
     LocalKernelConnectionMetadata,
     LocalKernelSpecConnectionMetadata,
     RemoteKernelSpecConnectionMetadata
 } from '../../kernels/types';
+import { KernelError } from '../../kernels/errors/kernelError';
+import { LastCellExecutionTracker } from '../../kernels/execution/lastCellExecutionTracker';
 import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { ITelemetryService } from '../../platform/analytics/types';
 import { IEncryptedStorage } from '../../platform/common/application/types';
@@ -985,6 +988,130 @@ suite(`Notebook Controller`, function () {
             sinon.restore();
         });
 
+        // The connected kernel is a plain object, not `instance(mock<IKernel>())`: a ts-mockito proxy
+        // answers `then` with a function, so awaiting the connect promise would never settle.
+        // Anything left unstubbed throws inside the per-cell try and would abort the batch for the wrong reason.
+        function stubKernelForExecution(kernelExecution: Partial<INotebookKernelExecution>): void {
+            const neverFires = () => new Disposable(() => undefined);
+            const connectedKernel = {
+                controller: {
+                    id: 'test-controller-id',
+                    createNotebookCellExecution: (cell: NotebookCell) =>
+                        vscodeController.controller.createNotebookCellExecution(cell)
+                },
+                disposing: false,
+                onDisposed: neverFires,
+                onStatusChanged: neverFires
+            } as unknown as IKernel;
+
+            const oldConnectToNotebook = KernelConnector.connectToNotebookKernel;
+            KernelConnector.connectToNotebookKernel = async () => connectedKernel;
+            disposables.push(new Disposable(() => (KernelConnector.connectToNotebookKernel = oldConnectToNotebook)));
+
+            when(serviceContainer.get<LastCellExecutionTracker>(LastCellExecutionTracker)).thenReturn(
+                instance(mock<LastCellExecutionTracker>())
+            );
+            when(kernelProvider.getKernelExecution(anything())).thenReturn(kernelExecution as INotebookKernelExecution);
+        }
+
+        test('a failed kernel segment stops the agent cell and the trailing segment', async function () {
+            // Catches: executeKernelCells swallowing a KernelError, so Run All continues past a failed cell.
+            const {
+                notebook,
+                cells: [failingCell, agentCell, trailingCell]
+            } = createMockNotebookWithCells([
+                { metadata: { id: 'code-1' }, text: 'raise ValueError()' },
+                { metadata: { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' }, text: 'Test prompt' },
+                { metadata: { id: 'code-2' }, text: 'print(2)' }
+            ]);
+
+            const executedIndexes: number[] = [];
+            stubKernelForExecution({
+                failed: false,
+                executeCell: async (cell: NotebookCell) => {
+                    executedIndexes.push(cell.index);
+                    throw new KernelError({ ename: 'ValueError', evalue: 'boom', traceback: [] });
+                }
+            });
+
+            await vscodeController.controller.executeHandler(
+                [failingCell, agentCell, trailingCell],
+                notebook,
+                vscodeController.controller
+            );
+
+            assert.deepStrictEqual(executedIndexes, [0], 'the trailing segment must not run after a failure');
+            assert.isFalse(
+                createNotebookCellExecutionStub.getCalls().some((call) => call.args[0] === agentCell),
+                'the agent cell must not start after a failed segment'
+            );
+        });
+
+        test('an interrupted kernel segment stops the agent cell even though its cells resolve', async function () {
+            // Catches: relying on a rejection alone - cancelled cell executions resolve
+            // (CellExecution.completedDueToCancellation), so only the queue's verdict shows the interrupt.
+            const {
+                notebook,
+                cells: [interruptedCell, agentCell, trailingCell]
+            } = createMockNotebookWithCells([
+                { metadata: { id: 'code-1' }, text: 'time.sleep(30)' },
+                { metadata: { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' }, text: 'Test prompt' },
+                { metadata: { id: 'code-2' }, text: 'print(2)' }
+            ]);
+
+            const executedIndexes: number[] = [];
+            stubKernelForExecution({
+                failed: true,
+                executeCell: async (cell: NotebookCell) => {
+                    executedIndexes.push(cell.index);
+                }
+            });
+
+            await vscodeController.controller.executeHandler(
+                [interruptedCell, agentCell, trailingCell],
+                notebook,
+                vscodeController.controller
+            );
+
+            assert.deepStrictEqual(executedIndexes, [0], 'the trailing segment must not run after an interrupt');
+            assert.isFalse(
+                createNotebookCellExecutionStub.getCalls().some((call) => call.args[0] === agentCell),
+                'the agent cell must not start after an interrupt'
+            );
+        });
+
+        test('a clean kernel segment still runs the agent cell and the trailing segment', async function () {
+            // Catches: aborting the batch when nothing failed (e.g. consulting the queue verdict too early).
+            const {
+                notebook,
+                cells: [firstCell, agentCell, trailingCell]
+            } = createMockNotebookWithCells([
+                { metadata: { id: 'code-1' }, text: 'x = 1' },
+                { metadata: { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' }, text: 'Test prompt' },
+                { metadata: { id: 'code-2' }, text: 'print(2)' }
+            ]);
+
+            const executedIndexes: number[] = [];
+            stubKernelForExecution({
+                failed: false,
+                executeCell: async (cell: NotebookCell) => {
+                    executedIndexes.push(cell.index);
+                }
+            });
+
+            await vscodeController.controller.executeHandler(
+                [firstCell, agentCell, trailingCell],
+                notebook,
+                vscodeController.controller
+            );
+
+            assert.deepStrictEqual(executedIndexes, [0, 2], 'both kernel segments must run when nothing failed');
+            assert.isTrue(
+                createNotebookCellExecutionStub.getCalls().some((call) => call.args[0] === agentCell),
+                'the agent cell must run between the segments'
+            );
+        });
+
         test('agent-only batch fires notifyQueueComplete (arms deferred snapshot save)', async function () {
             // Catches: agent-only runs never reach CellExecutionQueue, so snapshot save never arms.
             const {
@@ -1016,8 +1143,9 @@ suite(`Notebook Controller`, function () {
             assert.isTrue(createNotebookCellExecutionStub.calledOnce, 'agent cell should run through executeAgentCell');
         });
 
-        test('kernel-only batch after agent batch does not fire a second explicit queue completion notify', async function () {
-            // Catches: explicit notify on kernel-only executeQueuedCells (e.g. reentrant ephemeral runs) when ranAgentCell is false.
+        test('an agent batch and a later kernel-only batch each fire exactly one completion', async function () {
+            // Catches: tying completion to an "this batch ran an agent cell" flag — CellExecutionQueue no
+            // longer notifies, so a plain Run would arm no deferred snapshot save.
             const {
                 notebook: agentNotebook,
                 cells: [agentCell, codeCell]
@@ -1027,33 +1155,26 @@ suite(`Notebook Controller`, function () {
                     text: 'Test prompt'
                 },
                 {
-                    metadata: { id: 'ephemeral-code-1' },
+                    metadata: { id: 'code-1' },
                     text: 'print(1)'
                 }
             ]);
 
-            const executeHandler = vscodeController.controller.executeHandler;
-            assert.isDefined(executeHandler);
+            stubKernelForExecution({ failed: false, executeCell: async () => undefined });
 
-            notifyQueueCompleteSpy.resetHistory();
+            await vscodeController.controller.executeHandler([agentCell], agentNotebook, vscodeController.controller);
+            await vscodeController.controller.executeHandler([codeCell], agentNotebook, vscodeController.controller);
 
-            await executeHandler([agentCell], agentNotebook, vscodeController.controller);
-
-            try {
-                await executeHandler([codeCell], agentNotebook, vscodeController.controller);
-            } catch {
-                // Kernel harness may not fully mock cell execution startup.
-            }
-
-            assert.strictEqual(
-                notifyQueueCompleteSpy.callCount,
-                1,
-                'only the agent batch should fire explicit queue completion'
+            assert.deepStrictEqual(
+                notifyQueueCompleteSpy.getCalls().map((call) => call.args[0]),
+                [agentNotebook.uri.toString(), agentNotebook.uri.toString()],
+                'each gesture fires one completion for its own notebook'
             );
         });
 
-        test('kernel-only batch does not fire explicit queue completion notify', async function () {
-            // Catches: explicit notify on pure kernel batches that already signal via CellExecutionQueue.
+        test('a kernel-only batch fires the completion itself', async function () {
+            // Catches: leaving completion to CellExecutionQueue, which no longer announces it — the
+            // deferred snapshot save would never arm for an ordinary run.
             const {
                 notebook: codeNotebook,
                 cells: [codeCell]
@@ -1064,19 +1185,121 @@ suite(`Notebook Controller`, function () {
                 }
             ]);
 
-            const executeHandler = vscodeController.controller.executeHandler;
-            assert.isDefined(executeHandler);
+            stubKernelForExecution({ failed: false, executeCell: async () => undefined });
+
+            await vscodeController.controller.executeHandler([codeCell], codeNotebook, vscodeController.controller);
+
+            assert.isTrue(notifyQueueCompleteSpy.calledOnce, 'a kernel-only batch must fire one completion');
+            assert.strictEqual(notifyQueueCompleteSpy.firstCall.args[0], codeNotebook.uri.toString());
+        });
+
+        test('a run that re-enters once per generated cell fires exactly one completion', async function () {
+            // Catches the N+1 snapshot saves an agent run produced: each generated cell is dispatched
+            // through `notebook.cell.execute`, which lands back in this handler while the outer batch is
+            // still in flight. Completion belongs to the gesture, not to every nested run.
+            const {
+                notebook,
+                cells: [runCell, generatedFirst, generatedSecond]
+            } = createMockNotebookWithCells([
+                { metadata: { id: 'code-1' }, text: 'x = 1' },
+                { metadata: { id: 'generated-1' }, text: 'print(1)' },
+                { metadata: { id: 'generated-2' }, text: 'print(2)' }
+            ]);
+
+            const executedIds: string[] = [];
+            stubKernelForExecution({
+                failed: false,
+                executeCell: async (cell: NotebookCell) => {
+                    executedIds.push(cell.metadata.id as string);
+
+                    if (cell !== runCell) {
+                        return;
+                    }
+
+                    await vscodeController.controller.executeHandler(
+                        [generatedFirst],
+                        notebook,
+                        vscodeController.controller
+                    );
+                    await vscodeController.controller.executeHandler(
+                        [generatedSecond],
+                        notebook,
+                        vscodeController.controller
+                    );
+                }
+            });
+
+            await vscodeController.controller.executeHandler([runCell], notebook, vscodeController.controller);
+
+            assert.deepStrictEqual(
+                executedIds,
+                ['code-1', 'generated-1', 'generated-2'],
+                'both re-entrant runs must have executed'
+            );
+            assert.strictEqual(
+                notifyQueueCompleteSpy.callCount,
+                1,
+                'the gesture owns the completion; the runs nested inside it must not fire their own'
+            );
+        });
+
+        test('a batch that fails still fires its own completion and does not silence the next one', async function () {
+            // Catches: skipping the completion when the batch unwinds — an interrupted run must still
+            // snapshot what it produced, and must not leave the re-entrancy depth above zero.
+            const {
+                notebook,
+                cells: [failingCell, laterCell]
+            } = createMockNotebookWithCells([
+                { metadata: { id: 'code-1' }, text: 'raise ValueError()' },
+                { metadata: { id: 'code-2' }, text: 'x = 1' }
+            ]);
+
+            stubKernelForExecution({
+                failed: false,
+                executeCell: async (cell: NotebookCell) => {
+                    if (cell === failingCell) {
+                        throw new KernelError({ ename: 'ValueError', evalue: 'boom', traceback: [] });
+                    }
+                }
+            });
+
+            await vscodeController.controller.executeHandler([failingCell], notebook, vscodeController.controller);
+            await vscodeController.controller.executeHandler([laterCell], notebook, vscodeController.controller);
+
+            assert.strictEqual(notifyQueueCompleteSpy.callCount, 2, 'a failed batch must not silence later runs');
+        });
+
+        test('a rejected scratch-cell cleanup neither escapes nor strands the completion', async function () {
+            // Catches: clearing prior scratch cells outside the frame that owns the re-entrancy depth —
+            // a rejected workspace edit would escape before the depth is handed back, silencing every
+            // completion for the rest of the session.
+            const {
+                notebook,
+                cells: [agentCell, , laterCell]
+            } = createMockNotebookWithCells([
+                { metadata: { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' }, text: 'Test prompt' },
+                {
+                    metadata: { agent_source_block_id: 'agent-block-1', id: 'scratch-1', is_ephemeral: true },
+                    text: 'print(1)'
+                },
+                { metadata: { id: 'code-1' }, text: 'x = 1' }
+            ]);
+
+            stubKernelForExecution({ failed: false, executeCell: async () => undefined });
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReject(new Error('edit failed'));
+
+            let escaped: unknown;
 
             try {
-                await executeHandler([codeCell], codeNotebook, vscodeController.controller);
-            } catch {
-                // Kernel harness may not fully mock cell execution startup.
+                await vscodeController.controller.executeHandler([agentCell], notebook, vscodeController.controller);
+            } catch (ex) {
+                escaped = ex;
             }
 
-            assert.isFalse(
-                notifyQueueCompleteSpy.called,
-                'batches without agent cells must rely on CellExecutionQueue for completion notify'
-            );
+            await vscodeController.controller.executeHandler([laterCell], notebook, vscodeController.controller);
+
+            assert.isUndefined(escaped, 'a rejected cleanup edit must not escape the execute handler');
+            assert.strictEqual(notifyQueueCompleteSpy.callCount, 2, 'a cleanup failure must not strand the depth');
         });
     });
 });

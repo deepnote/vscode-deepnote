@@ -1148,6 +1148,7 @@ project:
     suite('deferred snapshot save timing', () => {
         const notebookUri = activatedServiceNotebookUri;
         let clock: fakeTimers.InstalledClock;
+        let activatedService: SnapshotService;
         let changeEmitter: EventEmitter<NotebookDocumentChangeEvent>;
         let closeEmitter: EventEmitter<NotebookDocument>;
         let flush: sinon.SinonStub;
@@ -1158,6 +1159,7 @@ project:
             clock = fakeTimers.install();
 
             const built = buildActivatedSnapshotService();
+            activatedService = built.service;
             changeEmitter = built.changeEmitter;
             closeEmitter = built.closeEmitter;
 
@@ -1277,6 +1279,90 @@ project:
             // Well past the max-wait bound: had the change armed a save, it would have flushed by now.
             await clock.tickAsync(3000);
             assert.isFalse(flush.called, 'an output change with no pending save must not arm a deferred save');
+        });
+
+        test('keeps the run metadata readable after the deferred save flushes (catches wiping the state the next file save serializes)', async () => {
+            await arm();
+            await clock.tickAsync(150);
+
+            assert.isTrue(flush.calledOnce, 'the deferred save must have flushed');
+            // deepnoteSerializer reads this on every save; wiping it at flush time meant a Ctrl+S a
+            // moment later wrote the .deepnote file with no execution metadata at all.
+            assert.isDefined(activatedService.getExecutionMetadata(notebookUri));
+        });
+
+        test('a run that opens no kernel queue still clears the finished run (an agent run generating no cells)', async () => {
+            await arm();
+            await clock.tickAsync(150);
+
+            // Nothing calls captureEnvironmentBeforeExecution here: an agent cell runs off the kernel,
+            // so without the run-start signal the finished run's counters would be what gets saved.
+            notebookCellExecutions.notifyQueueStart(notebookUri);
+
+            assert.isUndefined(
+                activatedService.getExecutionMetadata(notebookUri),
+                "a run that executes nothing must not report the previous run's counters"
+            );
+        });
+
+        test('a run start with no completion before it keeps the run alive', async () => {
+            notebookCellExecutions.notifyQueueStart(notebookUri);
+
+            assert.strictEqual(
+                activatedService.getExecutionMetadata(notebookUri)?.summary?.blocksExecuted,
+                1,
+                'only a finished run may be retired'
+            );
+        });
+
+        test("the next run's first queue clears the finished run (catches counters accumulating across runs)", async () => {
+            await arm();
+            await clock.tickAsync(150);
+
+            // A queue opening after the completion belongs to the next run.
+            await activatedService.captureEnvironmentBeforeExecution(notebookUri);
+
+            assert.isUndefined(
+                activatedService.getExecutionMetadata(notebookUri),
+                "a new run must not inherit the previous run's counters"
+            );
+        });
+
+        test('a second queue inside the same run keeps the run alive (catches clearing per queue, which an agent run opens one of per generated cell)', async () => {
+            // No completion since the fixture recorded its executed cell: still the same run.
+            await activatedService.captureEnvironmentBeforeExecution(notebookUri);
+
+            assert.strictEqual(
+                activatedService.getExecutionMetadata(notebookUri)?.summary?.blocksExecuted,
+                1,
+                'a mid-run queue must not reset the session'
+            );
+        });
+
+        test("the run's own captured environment survives its first executing cell (catches clearing on Executing, which lands after capture)", async () => {
+            const capturedEnvironment: Environment = {
+                hash: 'sha256:abc',
+                packages: {},
+                platform: 'linux-x64',
+                python: { environment: 'venv', version: '3.12.0' }
+            };
+            when(mockEnvironmentCapture.captureEnvironment(anything())).thenResolve(capturedEnvironment);
+
+            await arm();
+            await clock.tickAsync(150);
+
+            await activatedService.captureEnvironmentBeforeExecution(notebookUri);
+
+            const cellNotebook = mock<NotebookDocument>();
+            when(cellNotebook.uri).thenReturn(Uri.parse(notebookUri));
+
+            const cell = mock<NotebookCell>();
+            when(cell.notebook).thenReturn(instance(cellNotebook));
+            when(cell.metadata).thenReturn({ id: 'cell-1' });
+
+            notebookCellExecutions.changeCellState(instance(cell), NotebookCellExecutionState.Executing);
+
+            assert.deepStrictEqual(await activatedService.getEnvironmentMetadata(notebookUri), capturedEnvironment);
         });
     });
 

@@ -3,6 +3,7 @@ import * as sinon from 'sinon';
 import { anything, capture, instance, mock, reset, verify, when } from 'ts-mockito';
 import {
     CancellationError,
+    CancellationToken,
     CancellationTokenSource,
     Disposable,
     NotebookCell,
@@ -173,11 +174,17 @@ suite('AgentCellExecutionHandler', () => {
         let executeAgentBlockStub: sinon.SinonStub;
         let mockServiceContainer: ServiceContainer;
         let encryptedStorage: IEncryptedStorage;
+        let neverCancelled: CancellationToken;
 
         setup(() => {
             secretStorage.clear();
             secretStorage.set('openAiApiKey', 'test-key');
             encryptedStorage = createEncryptedStorageFake(secretStorage);
+
+            const neverCancelledSource = new CancellationTokenSource();
+
+            neverCancelled = neverCancelledSource.token;
+            disposables.push(neverCancelledSource);
             mockServiceContainer = stubServiceContainerInstance();
             disposables.push(new Disposable(() => sinon.restore()));
 
@@ -237,7 +244,7 @@ suite('AgentCellExecutionHandler', () => {
         test('creates execution, clears output, sets planning output, and ends successfully', async () => {
             const cell = createAgentCell('Analyze data');
 
-            await executeAgentCell(cell, mockController, encryptedStorage, {
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
                 executeAgentBlockFn: executeAgentBlockStub
             });
 
@@ -268,7 +275,7 @@ suite('AgentCellExecutionHandler', () => {
 
             const cell = createAgentCell();
 
-            await executeAgentCell(cell, mockController, encryptedStorage, {
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
                 executeAgentBlockFn: executeAgentBlockStub
             });
 
@@ -290,7 +297,7 @@ suite('AgentCellExecutionHandler', () => {
 
             const cell = createAgentCell();
 
-            await executeAgentCell(cell, mockController, encryptedStorage, {
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
                 executeAgentBlockFn: executeAgentBlockStub
             });
 
@@ -304,7 +311,7 @@ suite('AgentCellExecutionHandler', () => {
 
             const cell = createAgentCell();
 
-            await executeAgentCell(cell, mockController, encryptedStorage, {
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
                 executeAgentBlockFn: executeAgentBlockStub
             });
 
@@ -325,7 +332,7 @@ suite('AgentCellExecutionHandler', () => {
         test('handles empty prompt', async () => {
             const cell = createAgentCell('');
 
-            await executeAgentCell(cell, mockController, encryptedStorage, {
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
                 executeAgentBlockFn: executeAgentBlockStub
             });
 
@@ -343,7 +350,7 @@ suite('AgentCellExecutionHandler', () => {
 
             const cell = createAgentCell();
 
-            await executeAgentCell(cell, mockController, encryptedStorage, {
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
                 executeAgentBlockFn: executeAgentBlockStub
             });
 
@@ -365,7 +372,7 @@ suite('AgentCellExecutionHandler', () => {
             });
             const { agentCell, cells } = createAgentCellInMutableNotebook([previousResult]);
 
-            await executeAgentCell(agentCell, mockController, encryptedStorage, {
+            await executeAgentCell(agentCell, mockController, encryptedStorage, neverCancelled, {
                 executeAgentBlockFn: executeAgentBlockStub
             });
 
@@ -388,7 +395,7 @@ suite('AgentCellExecutionHandler', () => {
                 return { finalOutput: '' };
             });
 
-            await executeAgentCell(agentCell, mockController, encryptedStorage, {
+            await executeAgentCell(agentCell, mockController, encryptedStorage, neverCancelled, {
                 executeAgentBlockFn: executeAgentBlockStub
             });
 
@@ -413,7 +420,7 @@ suite('AgentCellExecutionHandler', () => {
                 return { finalOutput: '' };
             });
 
-            await executeAgentCell(agentCell, mockController, encryptedStorage, {
+            await executeAgentCell(agentCell, mockController, encryptedStorage, neverCancelled, {
                 executeAgentBlockFn: executeAgentBlockStub
             });
 
@@ -440,13 +447,91 @@ suite('AgentCellExecutionHandler', () => {
                 notebookMetadata: { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' }
             });
 
-            await executeAgentCell(cell, mockController, encryptedStorage, {
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
                 executeAgentBlockFn: executeAgentBlockStub
             });
 
             const context = executeAgentBlockStub.firstCall.args[1] as AgentBlockContext;
             expect(context.mcpServers).to.deep.equal(mcpServers);
             expect(context.integrations).to.deep.equal(integrations);
+        });
+
+        suite('cancellation', () => {
+            let runTokenSource: CancellationTokenSource;
+
+            setup(() => {
+                runTokenSource = new CancellationTokenSource();
+                disposables.push(runTokenSource);
+            });
+
+            test('refuses to add a generated cell once stopped', async () => {
+                const { agentCell, cells } = createAgentCellInMutableNotebook();
+
+                executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
+                    runTokenSource.cancel();
+                    await context.addMarkdownBlock({ content: 'after the stop' });
+
+                    return { finalOutput: '' };
+                });
+
+                await executeAgentCell(agentCell, mockController, encryptedStorage, runTokenSource.token, {
+                    executeAgentBlockFn: executeAgentBlockStub
+                });
+
+                expect(cells.map((cell) => cell.document.getText())).to.deep.equal(['Test prompt']);
+            });
+
+            test('stops at the next stream event rather than running to completion', async () => {
+                const cell = createAgentCell();
+                let eventsAfterStop = 0;
+
+                executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
+                    runTokenSource.cancel();
+                    await context.onAgentEvent?.({ type: 'text_delta', text: 'first' });
+                    eventsAfterStop += 1;
+                    await context.onAgentEvent?.({ type: 'text_delta', text: 'second' });
+
+                    return { finalOutput: '' };
+                });
+
+                await executeAgentCell(cell, mockController, encryptedStorage, runTokenSource.token, {
+                    executeAgentBlockFn: executeAgentBlockStub
+                });
+
+                expect(eventsAfterStop).to.equal(0);
+            });
+
+            test('reports a stop as stopped rather than as a failed run', async () => {
+                const cell = createAgentCell();
+
+                executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
+                    runTokenSource.cancel();
+                    await context.onAgentEvent?.({ type: 'text_delta', text: 'first' });
+
+                    return { finalOutput: '' };
+                });
+
+                await executeAgentCell(cell, mockController, encryptedStorage, runTokenSource.token, {
+                    executeAgentBlockFn: executeAgentBlockStub
+                });
+
+                expect(mockExecution.end.firstCall.args[0]).to.be.false;
+
+                const [outputs] = mockExecution.appendOutput.firstCall.args as [NotebookCellOutput[]];
+                const text = Buffer.from(outputs[0].items[0].data).toString('utf-8');
+                expect(text).to.include('Stopped');
+                expect(text).to.not.include('Canceled');
+            });
+
+            test('a run that is never stopped still completes', async () => {
+                const cell = createAgentCell();
+
+                await executeAgentCell(cell, mockController, encryptedStorage, runTokenSource.token, {
+                    executeAgentBlockFn: executeAgentBlockStub
+                });
+
+                expect(mockExecution.end.firstCall.args[0]).to.be.true;
+            });
         });
     });
 

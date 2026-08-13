@@ -611,6 +611,11 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
     private handleInterrupt(notebook: NotebookDocument) {
         logger.debug(`VS Code interrupted kernel for ${getDisplayPath(notebook.uri)}`);
         notebook.getCells().forEach((cell) => traceCellMessage(cell, 'Cell cancellation requested'));
+        // Before the kernel interrupt: that interrupt ends the generated cell the agent is waiting on,
+        // and an agent that has not yet seen the stop reads the ended cell as a failure worth retrying.
+        // Setting an interruptHandler leaves NotebookCellExecution.token inert, so this is the agent's
+        // only stop signal.
+        this.agentCancellations.get(notebook)?.cancel();
         commands
             .executeCommand(Commands.InterruptKernel, { notebookEditor: { notebookUri: notebook.uri } })
             .then(noop, (ex) => logger.error('Failed to interrupt', ex));
@@ -634,7 +639,15 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         return currentExecution;
     }
 
+    /** Stop signal for the agent cell currently running in a notebook, read by `handleInterrupt`. */
+    private readonly agentCancellations = new WeakMap<NotebookDocument, CancellationTokenSource>();
     private cellQueue = new WeakMap<NotebookDocument, NotebookCell[]>();
+    /**
+     * Frames of `executeQueuedCells` in flight per notebook. An agent cell dispatches each cell it
+     * generates through `notebook.cell.execute`, which lands back here while the outer batch is still
+     * running; completion belongs to the gesture, so only the frame unwinding to zero announces it.
+     */
+    private readonly executionDepth = new WeakMap<NotebookDocument, number>();
     private async executeQueuedCells(doc: NotebookDocument) {
         if (!this.cellQueue.has(doc)) {
             return;
@@ -642,36 +655,63 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         const queuedCells = this.cellQueue.get(doc) || [];
         // Clear before await — agent runs can re-enter with an empty queue.
         this.cellQueue.delete(doc);
+        // Nothing may run between here and the `try`: a throw in between would strand the depth above
+        // zero and silence completion — and with it the snapshot save — for the rest of the session.
+        const depthOnEntry = this.executionDepth.get(doc) ?? 0;
 
-        const cellsToExecute = await removeEphemeralCellsForAgentBlocks(doc, queuedCells);
+        this.executionDepth.set(doc, depthOnEntry + 1);
 
-        let pendingKernelCells: NotebookCell[] = [];
-        let ranAgentCell = false;
+        if (depthOnEntry === 0) {
+            // Paired with the notify below so a run that opens no kernel queue — an agent cell that
+            // generates nothing — still marks a boundary the previous run's metadata is retired at.
+            notebookCellExecutions.notifyQueueStart(doc.uri.toString());
+        }
 
         try {
+            const cellsToExecute = await removeEphemeralCellsForAgentBlocks(doc, queuedCells);
+
+            let pendingKernelCells: NotebookCell[] = [];
+
             for (const cell of cellsToExecute) {
                 if (!isAgentCell(cell)) {
                     pendingKernelCells.push(cell);
                     continue;
                 }
 
-                ranAgentCell = true;
                 await this.executeKernelCells(doc, pendingKernelCells);
                 pendingKernelCells = [];
 
                 logger.trace(`Executing agent cell ${cell.index} for ${getDisplayPath(doc.uri)} without kernel`);
-                await executeAgentCell(
-                    cell,
-                    this.controller,
-                    this.serviceContainer.get<IEncryptedStorage>(IEncryptedStorage)
-                ).catch(noop);
+
+                const agentCancellation = new CancellationTokenSource();
+
+                this.agentCancellations.set(doc, agentCancellation);
+
+                try {
+                    await executeAgentCell(
+                        cell,
+                        this.controller,
+                        this.serviceContainer.get<IEncryptedStorage>(IEncryptedStorage),
+                        agentCancellation.token
+                    ).catch(noop);
+                } finally {
+                    this.agentCancellations.delete(doc);
+                    agentCancellation.dispose();
+                }
             }
 
             await this.executeKernelCells(doc, pendingKernelCells);
+        } catch (ex) {
+            // The failing cell already carries the error; unwinding here only stops the agent cell and the
+            // segments after it, the way CellExecutionQueue stops a run once a cell fails.
+            logger.debug(`Stopped the rest of the batch for ${getDisplayPath(doc.uri)}`, ex);
         } finally {
-            // Batches without an agent cell (including reentrant ephemeral-cell runs) already notify via
-            // CellExecutionQueue. Explicit notify covers agent-only and agent-then-kernel batches.
-            if (ranAgentCell) {
+            // Re-read rather than reuse a captured local: nested frames decrement the shared value.
+            const depth = (this.executionDepth.get(doc) ?? 1) - 1;
+
+            this.executionDepth.set(doc, depth);
+
+            if (depth === 0) {
                 notebookCellExecutions.notifyQueueComplete(doc.uri.toString());
             }
         }
@@ -724,12 +764,12 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         } catch (ex) {
             if (ex instanceof KernelError) {
                 // Kernel errors would have been handled and displayed
-                return;
+                throw ex;
             }
             ex = WrappedError.unwrap(ex);
             if (ex instanceof CellExecutionOutputError) {
                 // CellExecution already wrote this message to the cell output.
-                return;
+                throw ex;
             }
             if (!isCancellationError(ex)) {
                 logger.error(`Error in notebook cell execution`, ex);
@@ -748,10 +788,8 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                 await errorHandler.getErrorMessageForDisplayInCellOutput(ex, currentContext, doc.uri),
                 isCancelled
             );
-        }
 
-        if (!kernel) {
-            return;
+            throw ex;
         }
 
         const kernelExecution = this.kernelProvider.getKernelExecution(kernel);
@@ -777,11 +815,11 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                 } catch (ex) {
                     if (ex instanceof KernelError) {
                         // Kernel errors would have been handled and displayed
-                        return;
+                        throw ex;
                     }
                     ex = WrappedError.unwrap(ex);
                     if (ex instanceof CellExecutionOutputError) {
-                        return;
+                        throw ex;
                     }
                     if (!isCancellationError(ex)) {
                         logger.error(`Error in cell execution`, ex);
@@ -795,9 +833,17 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                         await errorHandler.getErrorMessageForDisplayInCellOutput(ex, currentContext, doc.uri),
                         isCancelled
                     );
+
+                    throw ex;
                 }
             })
-        ).catch(noop);
+        );
+
+        if (kernelExecution.failed) {
+            // An interrupt resolves the cells it cancelled, so the awaits above stay clean; the queue's
+            // own verdict is the only thing that separates a stopped run from a successful one.
+            throw new CancellationError();
+        }
     }
 
     public async startKernel(notebook: NotebookDocument) {

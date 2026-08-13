@@ -180,7 +180,16 @@ export async function executeAgentCell(
 ): Promise<void> {
     const executeAgentBlockFn = options?.executeAgentBlockFn ?? executeAgentBlock;
     const execution = controller.createNotebookCellExecution(cell);
+
+    // The agent runs off the kernel, so nothing announces it on the internal shim — the only source
+    // SnapshotService and the execute_cell analytics read. Without this the run is invisible to both.
+    const endExecution = (success: boolean) => {
+        execution.end(success, Date.now());
+        notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Idle);
+    };
+
     execution.start(Date.now());
+    notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Executing);
 
     try {
         await execution.clearOutput();
@@ -304,7 +313,7 @@ export async function executeAgentCell(
         const result = await executeAgentBlockFn(agentBlock, context);
         logger.info(`Agent cell: executeAgentBlock completed, finalOutput length=${result.finalOutput.length}`);
 
-        execution.end(true, Date.now());
+        endExecution(true);
     } catch (error) {
         if (isStopped(error)) {
             logger.info('Agent cell execution stopped');
@@ -312,7 +321,7 @@ export async function executeAgentCell(
             const stoppedOutput = new NotebookCellOutput([NotebookCellOutputItem.stderr('[Agent] Stopped')]);
 
             await execution.appendOutput([stoppedOutput]).then(undefined, () => undefined);
-            execution.end(false, Date.now());
+            endExecution(false);
 
             return;
         }
@@ -331,7 +340,7 @@ export async function executeAgentCell(
         const message = error instanceof Error ? error.message : String(error);
         const stderrOutput = new NotebookCellOutput([NotebookCellOutputItem.stderr(message)]);
         await execution.appendOutput([stderrOutput]).then(undefined, () => undefined);
-        execution.end(false, Date.now());
+        endExecution(false);
     }
 }
 

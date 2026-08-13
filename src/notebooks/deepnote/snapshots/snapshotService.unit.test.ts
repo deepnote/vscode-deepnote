@@ -1934,6 +1934,64 @@ project:
                 );
             });
 
+            // An agent block is a Code-kind cell (agentBlockConverter) that runs off the kernel, so the
+            // tracker never sees it — this is the shape executeAgentCell left behind before it started
+            // reporting to the execution-state shim.
+            test('an untracked Code cell (an agent block) blocks Run-All even though every kernel cell executed', async () => {
+                const mockConfig = mock<WorkspaceConfiguration>();
+                when(mockConfig.get<boolean>('snapshots.enabled', true)).thenReturn(true);
+                when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+
+                const projectId = 'test-project-id';
+                const notebookId = 'test-notebook-id';
+
+                const mockNotebook = mockNotebookDoc({
+                    uri: Uri.parse(notebookUri),
+                    projectId,
+                    notebookId,
+                    cells: [mockCell({ id: 'cell-1', source: 'print(1)' }), mockCell({ id: 'agent-cell' })]
+                });
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([mockNotebook]);
+
+                const originalProject: DeepnoteFile = {
+                    metadata: { createdAt: '2025-01-01T00:00:00Z' },
+                    version: '1.0.0',
+                    project: {
+                        id: projectId,
+                        name: 'Test Project',
+                        notebooks: [{ id: notebookId, name: 'Test Notebook', blocks: [] }]
+                    }
+                };
+                const mockNotebookManager = mock<IDeepnoteNotebookManager>();
+                when(mockNotebookManager.getProjectForNotebook(projectId, notebookId)).thenReturn(originalProject);
+
+                const testService = new SnapshotService(
+                    instance(mockEnvironmentCapture),
+                    mockDisposables,
+                    instance(mockNotebookManager),
+                    tracker
+                );
+
+                // Only cell-1 is tracked as executed — agent-cell never reaches recordCellExecutionStart/End.
+                const startTime = Date.now();
+                tracker.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                tracker.recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
+
+                const writtenUris = captureSnapshotWrites();
+
+                testService.activate();
+                await flushDeferredSave(notebookUri);
+
+                assert.isFalse(
+                    wroteTimestampedSnapshot(writtenUris),
+                    'a Code-kind cell the tracker never saw must keep the run off the Run-All branch'
+                );
+                assert.isTrue(
+                    wroteLatestSnapshot(writtenUris),
+                    'the run instead falls back to the partial-run (latest-only) path'
+                );
+            });
+
             test('writes the snapshot next to the saved notebook, not a sibling that shares the project id', async () => {
                 const mockConfig = mock<WorkspaceConfiguration>();
                 when(mockConfig.get<boolean>('snapshots.enabled', true)).thenReturn(true);

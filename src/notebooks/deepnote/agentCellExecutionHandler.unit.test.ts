@@ -264,6 +264,48 @@ suite('AgentCellExecutionHandler', () => {
             expect(mockExecution.end.firstCall.args[0]).to.be.true;
         });
 
+        // SnapshotService and execute_cell analytics read this shim, not the raw NotebookCellExecution —
+        // without these events a Run All containing an agent block never matches its own code-cell count.
+        test('reports the run on the execution-state shim so SnapshotService can see it', async () => {
+            const cell = createAgentCell('Analyze data');
+            const seenStates: NotebookCellExecutionState[] = [];
+
+            disposables.push(
+                notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
+                    if (e.cell === cell) {
+                        seenStates.push(e.state);
+                    }
+                })
+            );
+
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
+
+            expect(seenStates).to.deep.equal([NotebookCellExecutionState.Executing, NotebookCellExecutionState.Idle]);
+        });
+
+        test('reports Idle on the shim even when the run fails', async () => {
+            mockExecution.clearOutput.rejects(new Error('Something went wrong'));
+
+            const cell = createAgentCell();
+            const seenStates: NotebookCellExecutionState[] = [];
+
+            disposables.push(
+                notebookCellExecutions.onDidChangeNotebookCellExecutionState((e) => {
+                    if (e.cell === cell) {
+                        seenStates.push(e.state);
+                    }
+                })
+            );
+
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
+
+            expect(seenStates).to.deep.equal([NotebookCellExecutionState.Executing, NotebookCellExecutionState.Idle]);
+        });
+
         // Incremental deltas only — full transcript per event is O(n²) over the EH boundary.
         test('streams text_delta events via appendOutputItems with incremental stdout chunks', async () => {
             executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {

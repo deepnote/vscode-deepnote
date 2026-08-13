@@ -496,19 +496,22 @@ export class DeepnoteDataConverter {
                 }
             }
 
-            // Check if this is a stream output
-            const stdoutItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.stdout');
-            const stderrItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.stderr');
+            // Streamed deltas are appended as new items on one output, so every item must be joined.
+            const streamItems = output.items.filter(
+                (item) =>
+                    item.mime === 'application/vnd.code.notebook.stdout' ||
+                    item.mime === 'application/vnd.code.notebook.stderr'
+            );
 
-            if (stdoutItem || stderrItem) {
-                const item = stdoutItem || stderrItem;
-                const text = new TextDecoder().decode(item!.data);
-
-                return {
-                    name: stderrItem ? 'stderr' : 'stdout',
+            if (streamItems.length > 0) {
+                const decoder = new TextDecoder();
+                const streamOutput: DeepnoteOutput = {
+                    name: streamItems[0].mime === 'application/vnd.code.notebook.stderr' ? 'stderr' : 'stdout',
                     output_type: 'stream',
-                    text
-                } as DeepnoteOutput;
+                    text: streamItems.map((item) => decoder.decode(item.data)).join('')
+                };
+
+                return streamOutput;
             }
 
             // Rich output (execute_result or display_data)

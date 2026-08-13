@@ -49,9 +49,21 @@ module.exports = {
                 const options = context.options[0] || {};
                 const allowed = options.allow || [];
 
-                return {
-                    ImportDeclaration(node) {
+                // `export { x }` and `export const x = 1` carry no source to check.
+                function checkSource(node) {
+                    if (node.source) {
                         reportIfMissing(context, node, allowed, node.source.value);
+                    }
+                }
+
+                return {
+                    ImportDeclaration: checkSource,
+                    ExportNamedDeclaration: checkSource,
+                    ExportAllDeclaration: checkSource,
+                    ImportExpression(node) {
+                        if (node.source.type === 'Literal' && typeof node.source.value === 'string') {
+                            reportIfMissing(context, node, allowed, node.source.value);
+                        }
                     },
                     CallExpression(node) {
                         if (

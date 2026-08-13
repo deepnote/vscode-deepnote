@@ -161,6 +161,8 @@ export class NotebookKernelExecution implements INotebookKernelExecution {
             .then(() => true)
             .catch(() => false);
 
+        notebookCellExecutions.notifyQueueComplete(cell.notebook.uri.toString());
+
         traceCellMessage(
             cell,
             `NotebookKernelExecution.resumeCellExecution (completed), ${getDisplayPath(cell.notebook.uri)}`

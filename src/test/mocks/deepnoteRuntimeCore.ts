@@ -41,6 +41,11 @@ export const serializeNotebookContextFromBlocks: RuntimeCore['serializeNotebookC
     return `notebook:${notebookName} blocks:${blocks.length}`;
 };
 
+/** The real one probes the filesystem; unit tests have no venv on disk, so it always fails there. */
+export const resolvePythonExecutable: RuntimeCore['resolvePythonExecutable'] = async (pythonPath) => {
+    throw new Error(`No Python executable found under ${pythonPath}`);
+};
+
 export const startServer: RuntimeCore['startServer'] = async (options) => {
     startServerCalls.push(options);
 

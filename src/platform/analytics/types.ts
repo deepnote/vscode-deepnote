@@ -33,7 +33,6 @@ export type CommandOutcome = 'completed' | 'cancelled' | 'failed';
 
 /** Caller-supplied properties per event; `undefined` means none beyond the common properties the service attaches. */
 export interface TelemetryEventProperties {
-    /** `isEphemeral` marks agent scratch blocks, which no add-block command reports. */
     add_block: { blockType: string; isEphemeral: boolean };
     authenticate_integration: { integrationType: string; outcome: CommandOutcome };
     configure_integration: { integrationType: string };
@@ -45,7 +44,6 @@ export interface TelemetryEventProperties {
     delete_integration: { integrationType: string };
     delete_notebook: { outcome: CommandOutcome };
     duplicate_notebook: { outcome: CommandOutcome };
-    /** `isEphemeral` is true for agent-generated cells, which the agent runs itself via `notebook.cell.execute`. */
     execute_cell: { cellType: 'sql' | 'markdown' | 'code'; isEphemeral: boolean; integrationType?: string };
     execute_notebook: undefined;
     export_notebook: { outcome: CommandOutcome; format?: string };

@@ -728,6 +728,282 @@ project:
                 'Block ID should be newly generated when content differs'
             );
         });
+
+        test('should keep a minted agent block ID when a deleted block had the same content', async () => {
+            const projectData: DeepnoteFile = {
+                version: '1.0.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-agent-id',
+                    name: 'Agent ID Test',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Test Notebook',
+                            blocks: [
+                                {
+                                    blockGroup: 'deleted-group',
+                                    id: 'deleted-block-id',
+                                    content: '',
+                                    sortingKey: 'a0',
+                                    metadata: {},
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
+
+            manager.storeOriginalProject('project-agent-id', 'notebook-1', projectData);
+
+            // The empty code block was deleted and an empty agent block added in the same save
+            const notebookData = {
+                cells: [
+                    {
+                        kind: 2,
+                        value: '',
+                        languageId: 'plaintext',
+                        metadata: {
+                            id: 'minted-agent-id',
+                            __deepnoteBlockId: 'minted-agent-id',
+                            __deepnotePocket: { type: 'agent' }
+                        }
+                    }
+                ],
+                metadata: {
+                    deepnoteProjectId: 'project-agent-id',
+                    deepnoteNotebookId: 'notebook-1'
+                }
+            };
+
+            const result = await serializer.serializeNotebook(notebookData as any, {} as any);
+            const yamlString = new TextDecoder().decode(result);
+            const parsedResult = deserializeDeepnoteFile(yamlString);
+
+            const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
+            assert.isDefined(notebook);
+            assert.strictEqual(notebook!.blocks[0].id, 'minted-agent-id', 'Agent block should keep its minted ID');
+            assert.notStrictEqual(
+                notebook!.blocks[0].blockGroup,
+                'deleted-group',
+                'Agent block should not inherit the deleted block blockGroup'
+            );
+        });
+
+        test('should keep an ID the cell carried even when the deleted block has the same type', async () => {
+            const projectData: DeepnoteFile = {
+                version: '1.0.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-same-type',
+                    name: 'Same Type Test',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Test Notebook',
+                            blocks: [
+                                {
+                                    blockGroup: 'deleted-group',
+                                    id: 'deleted-code-id',
+                                    content: '',
+                                    sortingKey: 'a0',
+                                    metadata: {},
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
+
+            manager.storeOriginalProject('project-same-type', 'notebook-1', projectData);
+
+            const notebookData = {
+                cells: [
+                    {
+                        kind: 2,
+                        value: '',
+                        languageId: 'python',
+                        metadata: {
+                            id: 'minted-code-id',
+                            __deepnoteBlockId: 'minted-code-id'
+                        }
+                    }
+                ],
+                metadata: {
+                    deepnoteProjectId: 'project-same-type',
+                    deepnoteNotebookId: 'notebook-1'
+                }
+            };
+
+            const result = await serializer.serializeNotebook(notebookData as any, {} as any);
+            const yamlString = new TextDecoder().decode(result);
+            const parsedResult = deserializeDeepnoteFile(yamlString);
+
+            const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
+            assert.isDefined(notebook);
+            assert.strictEqual(notebook!.blocks[0].id, 'minted-code-id', 'Block should keep the ID its cell carried');
+        });
+
+        test('should not recover an ID that another cell still carries', async () => {
+            const projectData: DeepnoteFile = {
+                version: '1.0.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-claimed-id',
+                    name: 'Claimed ID Test',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Test Notebook',
+                            blocks: [
+                                {
+                                    blockGroup: 'group-kept',
+                                    id: 'kept-id',
+                                    content: '',
+                                    sortingKey: 'a0',
+                                    metadata: {},
+                                    type: 'code'
+                                },
+                                {
+                                    blockGroup: 'group-stripped',
+                                    id: 'stripped-id',
+                                    content: '',
+                                    sortingKey: 'a1',
+                                    metadata: {},
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
+
+            manager.storeOriginalProject('project-claimed-id', 'notebook-1', projectData);
+
+            // Both blocks are empty, so content matching alone cannot tell them apart
+            const notebookData = {
+                cells: [
+                    {
+                        kind: 2,
+                        value: '',
+                        languageId: 'python',
+                        metadata: {
+                            id: 'kept-id',
+                            __deepnoteBlockId: 'kept-id',
+                            __deepnotePocket: { type: 'code', sortingKey: 'a0', blockGroup: 'group-kept' }
+                        }
+                    },
+                    {
+                        kind: 2,
+                        value: '',
+                        languageId: 'python',
+                        metadata: {}
+                    }
+                ],
+                metadata: {
+                    deepnoteProjectId: 'project-claimed-id',
+                    deepnoteNotebookId: 'notebook-1'
+                }
+            };
+
+            const result = await serializer.serializeNotebook(notebookData as any, {} as any);
+            const yamlString = new TextDecoder().decode(result);
+            const parsedResult = deserializeDeepnoteFile(yamlString);
+
+            const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
+            assert.isDefined(notebook);
+            assert.strictEqual(notebook!.blocks[0].id, 'kept-id', 'Cell that carried an ID should keep it');
+            assert.strictEqual(notebook!.blocks[1].id, 'stripped-id', 'Stripped cell should take the remaining ID');
+        });
+
+        test('should recover IDs by cell position after ephemeral cells are dropped', async () => {
+            const projectData: DeepnoteFile = {
+                version: '1.0.0',
+                metadata: {
+                    createdAt: '2023-01-01T00:00:00Z',
+                    modifiedAt: '2023-01-02T00:00:00Z'
+                },
+                project: {
+                    id: 'project-ephemeral-offset',
+                    name: 'Ephemeral Offset Test',
+                    notebooks: [
+                        {
+                            id: 'notebook-1',
+                            name: 'Test Notebook',
+                            blocks: [
+                                {
+                                    blockGroup: 'group-1',
+                                    id: 'real-block-id',
+                                    content: 'print("kept")',
+                                    sortingKey: 'a0',
+                                    metadata: {},
+                                    type: 'code'
+                                }
+                            ],
+                            executionMode: 'block',
+                            isModule: false
+                        }
+                    ],
+                    settings: {}
+                }
+            };
+
+            manager.storeOriginalProject('project-ephemeral-offset', 'notebook-1', projectData);
+
+            const notebookData = {
+                cells: [
+                    {
+                        kind: 2,
+                        value: 'print("scratch")',
+                        languageId: 'python',
+                        metadata: {
+                            id: 'ephemeral-block-id',
+                            is_ephemeral: true,
+                            agent_source_block_id: 'agent-1'
+                        }
+                    },
+                    {
+                        kind: 2,
+                        value: 'print("kept")',
+                        languageId: 'python',
+                        metadata: {}
+                    }
+                ],
+                metadata: {
+                    deepnoteProjectId: 'project-ephemeral-offset',
+                    deepnoteNotebookId: 'notebook-1'
+                }
+            };
+
+            const result = await serializer.serializeNotebook(notebookData as any, {} as any);
+            const yamlString = new TextDecoder().decode(result);
+            const parsedResult = deserializeDeepnoteFile(yamlString);
+
+            const notebook = parsedResult.project.notebooks.find((nb) => nb.id === 'notebook-1');
+            assert.isDefined(notebook);
+            assert.strictEqual(notebook!.blocks.length, 1, 'Ephemeral cell should be excluded');
+            assert.strictEqual(notebook!.blocks[0].id, 'real-block-id', 'Stripped cell should recover its ID');
+        });
     });
 
     suite('integration scenarios', () => {

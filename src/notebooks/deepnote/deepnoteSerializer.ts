@@ -7,7 +7,7 @@ import { workspace, type CancellationToken, type NotebookData, type NotebookSeri
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
-import { isEphemeralCell } from './dataConversionUtils';
+import { getBlockId, isEphemeralCell } from './dataConversionUtils';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { SnapshotService } from './snapshots/snapshotService';
 import { computeHash } from '../../platform/common/crypto';
@@ -254,9 +254,13 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug(`SerializeNotebook: Converted to ${blocks.length} blocks`);
 
+            // An id the cell still carries is its real identity, so only cells that arrived without one may be
+            // re-identified. convertCellsToBlocks maps 1:1 in order, so index i lines up with nonEphemeralCells[i].
+            const recoverableBlocks = new Set(blocks.filter((_, index) => !getBlockId(nonEphemeralCells[index])));
+
             // Try to recover block IDs from original blocks when VS Code fails to preserve metadata
             // This uses content-based matching as a fallback when metadata.id is missing
-            this.recoverBlockIdsFromOriginal(blocks, notebook.blocks ?? []);
+            this.recoverBlockIdsFromOriginal(blocks, notebook.blocks ?? [], recoverableBlocks);
 
             // Log block IDs after conversion and recovery
             for (let i = 0; i < blocks.length; i++) {
@@ -504,8 +508,13 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * Uses content-based matching as a fallback strategy to recover id, sortingKey, and blockGroup.
      * @param blocks Blocks converted from cells (may have generated values if metadata was lost)
      * @param originalBlocks Original blocks from the stored project
+     * @param recoverableBlocks Blocks whose cell carried no id; only these may take an original's identity
      */
-    private recoverBlockIdsFromOriginal(blocks: DeepnoteBlock[], originalBlocks: DeepnoteBlock[]): void {
+    private recoverBlockIdsFromOriginal(
+        blocks: DeepnoteBlock[],
+        originalBlocks: DeepnoteBlock[],
+        recoverableBlocks: Set<DeepnoteBlock>
+    ): void {
         // Build a map of original blocks by content for quick lookup
         // Key: content (trimmed), Value: array of blocks with that content (in case of duplicates)
         const contentToOriginalBlocks = new Map<string, DeepnoteBlock[]>();
@@ -533,6 +542,12 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         let recoveredCount = 0;
 
         for (const block of blocks) {
+            // A cell that carried an id already owns its identity - an agent block mints one when it is inserted -
+            // so it must never adopt the id of a block deleted in the same save.
+            if (!recoverableBlocks.has(block)) {
+                continue;
+            }
+
             // Skip if this block already has an original ID
             if (claimedIds.has(block.id)) {
                 continue;

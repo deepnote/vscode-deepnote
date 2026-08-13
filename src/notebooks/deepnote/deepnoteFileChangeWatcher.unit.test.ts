@@ -158,6 +158,65 @@ project:
           content: print("hello")
 `;
 
+    // The same block after our own save: the serializer recomputes contentHash and the package
+    // normalizes sortingKey (generateSortingKey -> String(index).padStart(6, '0')).
+    const rewrittenBySaveYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: e132b172-b114-410e-8331-011517db664f
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: code
+          sortingKey: '000000'
+          blockGroup: '1'
+          contentHash: 'sha256:beefbeef'
+          content: print("hello")
+`;
+
+    const agentYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: e132b172-b114-410e-8331-011517db664f
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: agent
+          sortingKey: '000000'
+          blockGroup: '1'
+          content: summarise the dataframe
+          metadata:
+            deepnote_agent_model: gpt-5
+`;
+
+    const renamedBlockYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: e132b172-b114-410e-8331-011517db664f
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-9
+          type: code
+          sortingKey: '000000'
+          blockGroup: '1'
+          content: print("hello")
+`;
+
     test('should skip reload when content matches notebook cells', async () => {
         const uri = Uri.file('/workspace/test.deepnote');
         // Create a notebook whose cell content already matches validYaml
@@ -439,6 +498,109 @@ project:
 
         assert.isAtLeast(readFileCalls, 1, 'readFile should be called');
         assert.strictEqual(applyEditCount, 0, 'applyEdit should NOT be called for auto-save (same source)');
+    });
+
+    test('should skip reload when only save-rewritten block fields differ', async function () {
+        this.timeout(8000);
+        const uri = Uri.file('/workspace/test.deepnote');
+        // State right after our own save: contentHash recomputed, sortingKey normalized, outputs
+        // stripped from the main file. None of that is an edit, and reloading would drop the
+        // agent's ephemeral cells.
+        const notebook = createMockNotebook({
+            uri,
+            cells: [
+                {
+                    metadata: {
+                        id: 'block-1',
+                        __deepnoteBlockId: 'block-1',
+                        __hadOutputs: true,
+                        __deepnotePocket: {
+                            blockGroup: '1',
+                            contentHash: 'sha256:deadbeef',
+                            sortingKey: 'a0',
+                            type: 'code'
+                        }
+                    },
+                    outputs: [],
+                    kind: NotebookCellKind.Code,
+                    document: { getText: () => 'print("hello")', languageId: 'python' }
+                }
+            ]
+        });
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        setupMockFs(rewrittenBySaveYaml);
+
+        onDidChangeFile.fire(uri);
+
+        await waitFor(() => readFileCalls > 0);
+        await new Promise((resolve) => setTimeout(resolve, autoSaveGraceMs));
+
+        assert.strictEqual(applyEditCount, 0, 'a no-op save must not reload');
+        assert.strictEqual(saveCount, 0, 'a no-op save must not trigger another save');
+    });
+
+    test('should reload when only block metadata changed on disk', async function () {
+        this.timeout(8000);
+        const uri = Uri.file('/workspace/test.deepnote');
+        // Live cell holds the model the file carried before an external editor rewrote it;
+        // source, kind and language are identical on both sides.
+        const notebook = createMockNotebook({
+            uri,
+            cells: [
+                {
+                    metadata: {
+                        deepnote_agent_model: 'gpt-4o',
+                        id: 'block-1',
+                        __deepnoteBlockId: 'block-1',
+                        __hadOutputs: false,
+                        __deepnotePocket: { blockGroup: '1', sortingKey: '000000', type: 'agent' }
+                    },
+                    outputs: [],
+                    kind: NotebookCellKind.Code,
+                    document: { getText: () => 'summarise the dataframe', languageId: 'plaintext' }
+                }
+            ]
+        });
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        setupMockFs(agentYaml);
+
+        onDidChangeFile.fire(uri);
+
+        await waitFor(() => applyEditCount > 0);
+
+        assert.isAtLeast(applyEditCount, 1, 'a metadata-only external edit must reload');
+    });
+
+    test('should reload when a block id changed on disk', async function () {
+        this.timeout(8000);
+        const uri = Uri.file('/workspace/test.deepnote');
+        const notebook = createMockNotebook({
+            uri,
+            cells: [
+                {
+                    metadata: {
+                        id: 'block-1',
+                        __deepnoteBlockId: 'block-1',
+                        __hadOutputs: false,
+                        __deepnotePocket: { blockGroup: '1', sortingKey: '000000', type: 'code' }
+                    },
+                    outputs: [],
+                    kind: NotebookCellKind.Code,
+                    document: { getText: () => 'print("hello")', languageId: 'python' }
+                }
+            ]
+        });
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        setupMockFs(renamedBlockYaml);
+
+        onDidChangeFile.fire(uri);
+
+        await waitFor(() => applyEditCount > 0);
+
+        assert.isAtLeast(applyEditCount, 1, 'an external block-id change must reload');
     });
 
     suite('normalized one-shot self-write markers', () => {

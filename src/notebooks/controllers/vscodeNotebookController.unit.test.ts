@@ -59,6 +59,7 @@ import { Environment, PythonExtension } from '@vscode/python-extension';
 import { crateMockedPythonApi, whenResolveEnvironment } from '../../kernels/helpers.unit.test';
 import { IJupyterVariablesProvider } from '../../kernels/variables/types';
 import { notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
+import { logger } from '../../platform/logging';
 import { createMockNotebookWithCells } from '../deepnote/deepnoteTestHelpers';
 
 // executeAgentCell takes IEncryptedStorage from the controller's container; getProjectAgentContext
@@ -1100,10 +1101,18 @@ suite(`Notebook Controller`, function () {
             });
             when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve(undefined);
 
+            const { interruptHandler } = vscodeController.controller;
+
+            if (!interruptHandler) {
+                assert.fail('the controller must install an interrupt handler for Stop to reach the agent');
+            }
+
             // The agent's execution object is created as its run starts, which is where Stop lands.
             createNotebookCellExecutionStub.callsFake((cell: NotebookCell) => {
                 if (cell === agentCell) {
-                    vscodeController.controller.interruptHandler!(notebook);
+                    Promise.resolve(interruptHandler(notebook)).catch((ex) =>
+                        logger.error('Failed to interrupt the notebook', ex)
+                    );
                 }
                 mockExecution.end = sinon.stub();
 

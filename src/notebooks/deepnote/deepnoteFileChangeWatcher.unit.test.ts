@@ -175,7 +175,7 @@ project:
           type: code
           sortingKey: '000000'
           blockGroup: '1'
-          contentHash: 'sha256:beefbeef'
+          contentHash: 'sha256:0badc0de1'
           content: print("hello")
 `;
 
@@ -194,7 +194,7 @@ project:
           type: agent
           sortingKey: '000000'
           blockGroup: '1'
-          content: summarise the dataframe
+          content: summarize the dataframe
           metadata:
             deepnote_agent_model: gpt-5
 `;
@@ -558,7 +558,7 @@ project:
                     },
                     outputs: [],
                     kind: NotebookCellKind.Code,
-                    document: { getText: () => 'summarise the dataframe', languageId: 'plaintext' }
+                    document: { getText: () => 'summarize the dataframe', languageId: 'plaintext' }
                 }
             ]
         });

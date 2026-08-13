@@ -224,7 +224,7 @@ export async function executeAgentCell(
             ...getProjectAgentContext(cell.notebook),
             notebookContext,
             // The guards sit outside the `try`s: those turn every throw into a string the model reads
-            // as a retryable tool failure, which is how a stop used to make the agent do more work.
+            // as a tool failure worth retrying, which is how a stop used to make the agent do more work.
             addMarkdownBlock: async ({ content }: { content: string }) => {
                 Cancellation.throwIfCanceled(token);
 

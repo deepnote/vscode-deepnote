@@ -1080,6 +1080,45 @@ suite(`Notebook Controller`, function () {
             );
         });
 
+        test('an interrupt during the agent cell stops the trailing segment', async function () {
+            // Catches: reading the stop from a rejection - executeAgentCell reports one by ending its
+            // cell and returning, so the batch sees a run that finished normally.
+            const {
+                notebook,
+                cells: [agentCell, trailingCell]
+            } = createMockNotebookWithCells([
+                { metadata: { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' }, text: 'Test prompt' },
+                { metadata: { id: 'code-1' }, text: 'print(1)' }
+            ]);
+
+            const executedIndexes: number[] = [];
+            stubKernelForExecution({
+                failed: false,
+                executeCell: async (cell: NotebookCell) => {
+                    executedIndexes.push(cell.index);
+                }
+            });
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything(), anything())).thenResolve(undefined);
+
+            // The agent's execution object is created as its run starts, which is where Stop lands.
+            createNotebookCellExecutionStub.callsFake((cell: NotebookCell) => {
+                if (cell === agentCell) {
+                    vscodeController.controller.interruptHandler!(notebook);
+                }
+                mockExecution.end = sinon.stub();
+
+                return mockExecution;
+            });
+
+            await vscodeController.controller.executeHandler(
+                [agentCell, trailingCell],
+                notebook,
+                vscodeController.controller
+            );
+
+            assert.deepStrictEqual(executedIndexes, [], 'the trailing segment must not run after an interrupt');
+        });
+
         test('a clean kernel segment still runs the agent cell and the trailing segment', async function () {
             // Catches: aborting the batch when nothing failed (e.g. consulting the queue verdict too early).
             const {

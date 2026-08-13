@@ -694,6 +694,12 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                         this.serviceContainer.get<IEncryptedStorage>(IEncryptedStorage),
                         agentCancellation.token
                     ).catch(noop);
+
+                    // A stopped agent ends its own cell and returns, so it arrives here looking like a
+                    // run that finished. Without this the cells after it would still execute.
+                    if (agentCancellation.token.isCancellationRequested) {
+                        throw new CancellationError();
+                    }
                 } finally {
                     this.agentCancellations.delete(doc);
                     agentCancellation.dispose();

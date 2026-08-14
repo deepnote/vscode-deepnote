@@ -27,6 +27,11 @@ function makeFakeProcess(id: number): ChildProcess {
     } as unknown as ChildProcess;
 }
 
+/** The real one probes the filesystem; unit tests have no venv on disk, so it always fails there. */
+export const resolvePythonExecutable: RuntimeCore['resolvePythonExecutable'] = async (pythonPath) => {
+    throw new Error(`No Python executable found under ${pythonPath}`);
+};
+
 export const startServer: RuntimeCore['startServer'] = async (options) => {
     startServerCalls.push(options);
 

@@ -45,6 +45,7 @@
         "Dremio",
         "duckdb",
         "ename",
+        "ensurepip",
         "esmock",
         "evalue",
         "findstr",

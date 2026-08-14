@@ -21,7 +21,8 @@ import { IConfigurationService } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
+import { CancellationError, NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
+import { DeepnoteToolkitMissingError } from '../../platform/errors/deepnoteKernelErrors';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
@@ -1090,6 +1091,55 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 // Should have filtered and sorted correctly
                 assert.strictEqual(hash, 'numpy|pandas|scipy');
             });
+        });
+    });
+
+    /**
+     * Every exec in the installer can now be killed, so cancellation surfaces here immediately
+     * instead of after pip has finished anyway. A user-initiated Stop is not a failure and
+     * must not raise the error UI - but a genuine failure still has to.
+     */
+    suite('cancellation is not reported as a failure', () => {
+        const toolkitMissing = () => new DeepnoteToolkitMissingError('/usr/bin/python3', '/fake/venv');
+
+        function chooseInstall(): void {
+            when(
+                mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything(), anything())
+            ).thenResolve('Install' as never);
+        }
+
+        test('cancelling the toolkit install does not show an error message', async () => {
+            chooseInstall();
+            when(mockToolkitInstaller.installToolkitInExistingVenv(anything(), anything())).thenReject(
+                new CancellationError()
+            );
+
+            await selector.handleKernelSelectionError(toolkitMissing(), mockNotebook);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).never();
+        });
+
+        test('a failed toolkit install still shows an error message', async () => {
+            chooseInstall();
+            when(mockToolkitInstaller.installToolkitInExistingVenv(anything(), anything())).thenReject(
+                new Error('pip exited with code 1')
+            );
+
+            await selector.handleKernelSelectionError(toolkitMissing(), mockNotebook);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+        });
+
+        test('a cancelled kernel selection does not show an error message', async () => {
+            await selector.handleKernelSelectionError(new CancellationError(), mockNotebook);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).never();
+        });
+
+        test('a generic kernel selection failure still shows an error message', async () => {
+            await selector.handleKernelSelectionError(new Error('kernel did not start'), mockNotebook);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).once();
         });
     });
 });

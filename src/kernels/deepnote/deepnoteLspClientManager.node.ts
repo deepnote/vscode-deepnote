@@ -242,17 +242,7 @@ export class DeepnoteLspClientManager
             sharedSqlClientRefCount++;
             logger.trace(`Reusing shared SQL LSP client, ref count: ${sharedSqlClientRefCount}`);
 
-            // The server holds one active connection globally, so a reused client is still pointed at whichever
-            // notebook started it — without this, this notebook gets the other one's schema completions.
-            // Best-effort: a failed reconfigure leaves stale completions, which must not fail the reuse itself.
-            try {
-                await this.applySqlConnections(sharedSqlClient, await this.getSqlConnections(notebookUri));
-            } catch (error) {
-                logger.warn(
-                    `SQL LSP: failed to reconfigure the shared client for ${notebookUri.toString()}; completions may reflect another notebook.`,
-                    error
-                );
-            }
+            await this.reconfigureSharedSqlClient(sharedSqlClient, notebookUri);
 
             return;
         }
@@ -270,6 +260,9 @@ export class DeepnoteLspClientManager
             }
             if (sharedSqlClient) {
                 sharedSqlClientRefCount++;
+
+                await this.reconfigureSharedSqlClient(sharedSqlClient, notebookUri);
+
                 return;
             }
             throw new Error('Shared SQL LSP client failed to start');
@@ -283,6 +276,25 @@ export class DeepnoteLspClientManager
             logger.info('Shared SQL LSP client created successfully');
         } finally {
             sharedSqlClientStarting = false;
+        }
+    }
+
+    /**
+     * Points the shared client at this notebook's connections. The server holds one active connection globally, so a
+     * client this notebook did not start is still aimed at whichever notebook did — without this, this notebook gets
+     * the other one's schema completions. Called from both reuse paths, since a notebook that waited out someone
+     * else's startup is in exactly the same position as one that arrived after it.
+     *
+     * Best-effort: a failed reconfigure leaves stale completions, which must not fail the reuse itself.
+     */
+    private async reconfigureSharedSqlClient(client: LanguageClientType, notebookUri: vscode.Uri): Promise<void> {
+        try {
+            await this.applySqlConnections(client, await this.getSqlConnections(notebookUri));
+        } catch (error) {
+            logger.warn(
+                `SQL LSP: failed to reconfigure the shared client for ${notebookUri.toString()}; completions may reflect another notebook.`,
+                error
+            );
         }
     }
 

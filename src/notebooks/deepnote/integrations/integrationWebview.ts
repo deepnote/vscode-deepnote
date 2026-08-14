@@ -546,10 +546,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Ids eligible for federated auth in the active notebook — derived state only, so no `.deepnote.env.yaml`
-     * credentials enter the panel. A failed lookup degrades to "none eligible" rather than blocking the render.
-     */
-    /**
      * OAuth metadata fingerprints for the active notebook's merged configs, so a token minted against a client the
      * user has since edited in `.deepnote.env.yaml` stops reading as authenticated. Empty on failure, which
      * `deriveTokenStatus` treats as "cannot tell" rather than "stale".
@@ -582,6 +578,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         return fingerprints;
     }
 
+    /**
+     * Ids eligible for federated auth in the active notebook — derived state only, so no `.deepnote.env.yaml`
+     * credentials enter the panel. A failed lookup degrades to "none eligible" rather than blocking the render.
+     */
     private async resolveFederatedAuthCandidates(): Promise<ReadonlySet<string>> {
         if (!this.activeFileUri) {
             return new Set<string>();
@@ -867,9 +867,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Reset the configuration for an integration (clears credentials but keeps the integration entry)
-     */
-    /**
      * Clears only the federated token. Unlike reset/delete this is permitted for a file-configured integration:
      * `refuseEditIfFileConfigured` exists because the panel writes SecretStorage and `.deepnote.env.yaml` wins the
      * merge, and the token store has no file layer to be overridden by. Without this there is no supported way to
@@ -888,6 +885,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
     }
 
+    /**
+     * Reset the configuration for an integration (clears credentials but keeps the integration entry)
+     */
     private async resetConfiguration(integrationId: string): Promise<boolean> {
         if (await this.refuseEditIfFileConfigured(integrationId)) {
             return false;

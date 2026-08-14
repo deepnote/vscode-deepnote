@@ -17,6 +17,7 @@ import { DEFAULT_ENV_FILE, DEFAULT_INTEGRATIONS_FILE } from '@deepnote/database-
 import { IDisposable } from '../../../platform/common/types';
 import { IFileSystem } from '../../../platform/common/platform/types';
 import { IIntegrationEnvLiveRefresher } from './types';
+import { INTEGRATIONS_ENV_FILE_SETTING } from '../../../platform/notebooks/deepnote/integrationsEnvFileSettings';
 import { createMockNotebook } from '../deepnoteTestHelpers';
 import { debounceTimeInMilliseconds, IntegrationsEnvFileWatcher } from './integrationsEnvFileWatcher.node';
 import { dispose } from '../../../platform/common/utils/lifecycle';
@@ -257,7 +258,9 @@ suite('IntegrationsEnvFileWatcher', () => {
         } as never);
         watcher.activate();
 
-        onDidChangeConfiguration.fire({ affectsConfiguration: () => true });
+        onDidChangeConfiguration.fire({
+            affectsConfiguration: (section: string) => section === INTEGRATIONS_ENV_FILE_SETTING
+        });
         await clock.tickAsync(0);
 
         verify(liveRefresher.refresh(anything(), anything())).once();

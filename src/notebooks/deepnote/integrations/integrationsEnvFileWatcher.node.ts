@@ -6,7 +6,10 @@ import { IExtensionSyncActivationService } from '../../../platform/activation/ty
 import { IFileSystem } from '../../../platform/common/platform/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { notebookPathToDeepnoteProjectFilePath } from '../../../platform/deepnote/deepnoteProjectUtils';
-import { isIntegrationsEnvFileEnabled } from '../../../platform/notebooks/deepnote/integrationsEnvFileSettings';
+import {
+    INTEGRATIONS_ENV_FILE_SETTING,
+    isIntegrationsEnvFileEnabled
+} from '../../../platform/notebooks/deepnote/integrationsEnvFileSettings';
 import { logger } from '../../../platform/logging';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IIntegrationEnvLiveRefresher } from './types';
@@ -19,7 +22,8 @@ const watchedEnvFileNames = [DEFAULT_INTEGRATIONS_FILE, DEFAULT_ENV_FILE];
 /** Watches `.deepnote.env.yaml` / `.env` and live-refreshes affected notebooks' kernels on change (no restart). */
 @injectable()
 export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationService {
-    private readonly changedDirs = new Set<string>();
+    /** Changed file names per directory: the YAML's own events must not be gated on the file still existing. */
+    private readonly changedFilesByDir = new Map<string, Set<string>>();
     private debounceTimer: ReturnType<typeof setTimeout> | undefined;
     private readonly watchedDirs = new Set<string>();
 
@@ -45,6 +49,11 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
                     this.watchDir(folder.uri);
                 }
             }),
+            workspace.onDidChangeConfiguration((event) => {
+                if (event.affectsConfiguration(INTEGRATIONS_ENV_FILE_SETTING)) {
+                    this.refreshAllDeepnoteNotebooks();
+                }
+            }),
             {
                 dispose: () => {
                     if (this.debounceTimer) {
@@ -56,7 +65,7 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         );
     }
 
-    private async findAffectedNotebooks(changedDirs: Set<string>): Promise<NotebookDocument[]> {
+    private async findAffectedNotebooks(changedFilesByDir: Map<string, Set<string>>): Promise<NotebookDocument[]> {
         const affected: NotebookDocument[] = [];
 
         for (const notebook of workspace.notebookDocuments) {
@@ -73,21 +82,22 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
 
             const deepnoteDir = Uri.joinPath(deepnoteFileUri, '..');
             const workspaceRoot = workspace.getWorkspaceFolder(notebook.uri)?.uri;
-
-            const changedInScope =
-                changedDirs.has(deepnoteDir.fsPath) || (workspaceRoot != null && changedDirs.has(workspaceRoot.fsPath));
-            if (!changedInScope) {
-                continue;
-            }
-
-            // A `.env` change only affects integration env when a `.deepnote.env.yaml` actually exists for this
-            // notebook; without one the refresh is a no-op and its status message misleading, so an unrelated
-            // `.env` (a very common non-Deepnote file) must not trigger hidden kernel executions.
             const candidateDirs =
                 workspaceRoot != null && workspaceRoot.fsPath !== deepnoteDir.fsPath
                     ? [deepnoteDir, workspaceRoot]
                     : [deepnoteDir];
-            if (await this.hasIntegrationsFile(candidateDirs)) {
+
+            const changedFiles = new Set(
+                candidateDirs.flatMap((dir) => [...(changedFilesByDir.get(dir.fsPath) ?? [])])
+            );
+            if (changedFiles.size === 0) {
+                continue;
+            }
+
+            // The YAML's own events are Deepnote-specific by construction, and its deletion is precisely when the
+            // kernel must drop the variables it set — so it must not be gated on the file still existing. Only an
+            // unrelated `.env` (a very common non-Deepnote file) needs the probe before hidden kernel executions.
+            if (changedFiles.has(DEFAULT_INTEGRATIONS_FILE) || (await this.hasIntegrationsFile(candidateDirs))) {
                 affected.push(notebook);
             }
         }
@@ -95,8 +105,8 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         return affected;
     }
 
-    private async handleChangedDirs(changedDirs: Set<string>): Promise<void> {
-        const affected = await this.findAffectedNotebooks(changedDirs);
+    private async handleChangedDirs(changedFilesByDir: Map<string, Set<string>>): Promise<void> {
+        const affected = await this.findAffectedNotebooks(changedFilesByDir);
         if (affected.length === 0) {
             return;
         }
@@ -116,8 +126,10 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
         return false;
     }
 
-    private onFileEvent(dir: Uri): void {
-        this.changedDirs.add(dir.fsPath);
+    private onFileEvent(dir: Uri, fileName: string): void {
+        const changed = this.changedFilesByDir.get(dir.fsPath) ?? new Set<string>();
+        changed.add(fileName);
+        this.changedFilesByDir.set(dir.fsPath, changed);
 
         if (this.debounceTimer) {
             clearTimeout(this.debounceTimer);
@@ -125,12 +137,31 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
 
         this.debounceTimer = setTimeout(() => {
             this.debounceTimer = undefined;
-            const dirs = new Set(this.changedDirs);
-            this.changedDirs.clear();
-            this.handleChangedDirs(dirs).catch((error) =>
+            const changes = new Map(this.changedFilesByDir);
+            this.changedFilesByDir.clear();
+            this.handleChangedDirs(changes).catch((error) =>
                 logger.error('IntegrationsEnvFileWatcher: Failed to handle env file change', error)
             );
         }, debounceTimeInMilliseconds);
+    }
+
+    /**
+     * The gate itself changed, so findAffectedNotebooks cannot be reused: on disable its per-notebook check would
+     * filter out exactly the kernels still holding file-sourced credentials.
+     */
+    private refreshAllDeepnoteNotebooks(): void {
+        const notebooks = workspace.notebookDocuments.filter(
+            (notebook) => notebook.notebookType === DEEPNOTE_NOTEBOOK_TYPE
+        );
+        if (notebooks.length === 0) {
+            return;
+        }
+
+        this.liveRefresher
+            .refresh(notebooks, 'env_file')
+            .catch((error) =>
+                logger.error('IntegrationsEnvFileWatcher: Failed to refresh after envFile setting change', error)
+            );
     }
 
     private watchDir(dir: Uri): void {
@@ -146,9 +177,9 @@ export class IntegrationsEnvFileWatcher implements IExtensionSyncActivationServi
 
             this.disposables.push(
                 watcher,
-                watcher.onDidChange(() => this.onFileEvent(dir)),
-                watcher.onDidCreate(() => this.onFileEvent(dir)),
-                watcher.onDidDelete(() => this.onFileEvent(dir))
+                watcher.onDidChange(() => this.onFileEvent(dir, fileName)),
+                watcher.onDidCreate(() => this.onFileEvent(dir, fileName)),
+                watcher.onDidDelete(() => this.onFileEvent(dir, fileName))
             );
         }
     }

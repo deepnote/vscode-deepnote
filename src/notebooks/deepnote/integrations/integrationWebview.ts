@@ -16,7 +16,8 @@ import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewPro
 import {
     ConfigurableDatabaseIntegrationConfig,
     FederatedAuthTokenStatus,
-    DetectedIntegration
+    DetectedIntegration,
+    isFederatedAuthMetadata
 } from '../../../platform/notebooks/deepnote/integrationTypes';
 
 /**
@@ -160,6 +161,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsConfigure: localize.Integrations.configure,
             integrationsReconfigure: localize.Integrations.reconfigure,
             integrationsReset: localize.Integrations.reset,
+            integrationsSignOut: localize.Integrations.signOut,
             integrationsDelete: localize.Integrations.deleteIntegration,
             integrationsConfirmResetTitle: localize.Integrations.confirmResetTitle,
             integrationsConfirmResetMessage: localize.Integrations.confirmResetMessage,
@@ -467,9 +469,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         this.updateGeneration += 1;
         const generation = this.updateGeneration;
 
-        const [candidates, fileConfiguredIds] = await Promise.all([
+        const [candidates, fileConfiguredIds, fingerprints] = await Promise.all([
             this.resolveFederatedAuthCandidates(),
-            this.resolveFileConfiguredIds()
+            this.resolveFileConfiguredIds(),
+            this.resolveFederatedAuthFingerprints()
         ]);
 
         const integrationsData = await Promise.all(
@@ -481,7 +484,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 integrationName: integration.integrationName,
                 integrationType: integration.integrationType,
                 isFileConfigured: fileConfiguredIds.has(id),
-                tokenStatus: candidates.has(id) ? await this.deriveTokenStatus(id) : 'unsupported'
+                tokenStatus: candidates.has(id) ? await this.deriveTokenStatus(id, fingerprints.get(id)) : 'unsupported'
             }))
         );
 
@@ -546,6 +549,39 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      * Ids eligible for federated auth in the active notebook — derived state only, so no `.deepnote.env.yaml`
      * credentials enter the panel. A failed lookup degrades to "none eligible" rather than blocking the render.
      */
+    /**
+     * OAuth metadata fingerprints for the active notebook's merged configs, so a token minted against a client the
+     * user has since edited in `.deepnote.env.yaml` stops reading as authenticated. Empty on failure, which
+     * `deriveTokenStatus` treats as "cannot tell" rather than "stale".
+     */
+    private async resolveFederatedAuthFingerprints(): Promise<ReadonlyMap<string, string>> {
+        const fingerprints = new Map<string, string>();
+        if (!this.activeFileUri || !this.tokenStorage) {
+            return fingerprints;
+        }
+
+        try {
+            const configs = await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(this.activeFileUri);
+            for (const config of configs) {
+                const metadata = config.metadata;
+                // google-oauth is the only federated method carrying an OAuth client to fingerprint.
+                if (!isFederatedAuthMetadata(metadata) || metadata.authMethod !== BigQueryAuthMethods.GoogleOauth) {
+                    continue;
+                }
+
+                const { clientId, clientSecret, project } = metadata;
+                fingerprints.set(
+                    config.id,
+                    this.tokenStorage.computeMetadataFingerprint({ clientId, clientSecret, project })
+                );
+            }
+        } catch (err) {
+            logger.warn('IntegrationWebviewProvider: failed to resolve federated auth fingerprints.', err);
+        }
+
+        return fingerprints;
+    }
+
     private async resolveFederatedAuthCandidates(): Promise<ReadonlySet<string>> {
         if (!this.activeFileUri) {
             return new Set<string>();
@@ -611,14 +647,28 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         return true;
     }
 
-    /** Whether a federated-auth-eligible integration currently holds a token. Eligibility is the caller's call. */
-    private async deriveTokenStatus(integrationId: string): Promise<FederatedAuthTokenStatus> {
+    /**
+     * Whether a federated-auth-eligible integration currently holds a token issued against its *current* OAuth
+     * client. Eligibility is the caller's call. An undefined `expectedFingerprint` means the config could not be
+     * read, so existence alone decides rather than pushing the user into a needless re-auth.
+     */
+    private async deriveTokenStatus(
+        integrationId: string,
+        expectedFingerprint: string | undefined
+    ): Promise<FederatedAuthTokenStatus> {
         if (!this.tokenStorage) {
             return 'unsupported';
         }
 
         try {
-            return (await this.tokenStorage.has(integrationId)) ? 'authenticated' : 'disconnected';
+            const entry = await this.tokenStorage.get(integrationId);
+            if (!entry) {
+                return 'disconnected';
+            }
+
+            return expectedFingerprint === undefined || entry.metadataFingerprint === expectedFingerprint
+                ? 'authenticated'
+                : 'disconnected';
         } catch (err) {
             logger.warn(
                 `IntegrationWebviewProvider: failed to check token for ${integrationId}; reporting disconnected.`,
@@ -689,6 +739,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     if (deleted) {
                         this.trackIntegrationEvent({ eventName: 'delete_integration', integrationType });
                     }
+                }
+                break;
+            case 'signOut':
+                if (message.integrationId) {
+                    await this.signOutIntegration(message.integrationId);
                 }
                 break;
             case 'authenticate':
@@ -814,6 +869,25 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     /**
      * Reset the configuration for an integration (clears credentials but keeps the integration entry)
      */
+    /**
+     * Clears only the federated token. Unlike reset/delete this is permitted for a file-configured integration:
+     * `refuseEditIfFileConfigured` exists because the panel writes SecretStorage and `.deepnote.env.yaml` wins the
+     * merge, and the token store has no file layer to be overridden by. Without this there is no supported way to
+     * drop a refresh token for an integration declared in the file.
+     */
+    private async signOutIntegration(integrationId: string): Promise<void> {
+        try {
+            // `delete` fires onDidChangeTokens, which re-renders the panel; no explicit updateWebview needed.
+            await this.tokenStorage?.delete(integrationId);
+        } catch (error) {
+            logger.error('Failed to sign out integration', error);
+            await this.currentPanel?.webview.postMessage({
+                message: l10n.t('Failed to sign out: {0}', error instanceof Error ? error.message : 'Unknown error'),
+                type: 'error'
+            });
+        }
+    }
+
     private async resetConfiguration(integrationId: string): Promise<boolean> {
         if (await this.refuseEditIfFileConfigured(integrationId)) {
             return false;

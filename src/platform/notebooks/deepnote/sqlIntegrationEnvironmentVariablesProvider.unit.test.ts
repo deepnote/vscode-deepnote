@@ -3,6 +3,7 @@ import type { DeepnoteFile } from '@deepnote/blocks';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { CancellationTokenSource, EventEmitter, NotebookDocument, Uri } from 'vscode';
 
+import { getFilePath } from '../../common/platform/fs-paths';
 import { IDisposableRegistry } from '../../common/types';
 import { SqlIntegrationEnvironmentVariablesProvider } from './sqlIntegrationEnvironmentVariablesProvider';
 import {
@@ -355,6 +356,48 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 assert.ok(parsed.url.includes('db.example.com'), 'URL should contain host');
                 assert.ok(parsed.url.includes('5432'), 'URL should contain port');
                 assert.ok(parsed.url.includes('production'), 'URL should contain database name');
+            });
+
+            test('anchors a CA certificate path to the notebook directory, not the filesystem root', async () => {
+                const resource = Uri.file('/test/proj/notebook.deepnote');
+                const notebook = mock<NotebookDocument>();
+                const postgresConfig: DatabaseIntegrationConfig = {
+                    id: 'my-postgres',
+                    name: 'Production DB',
+                    type: 'pgsql',
+                    metadata: {
+                        host: 'db.example.com',
+                        port: '5432',
+                        database: 'production',
+                        user: 'admin',
+                        password: 'secret123',
+                        sslEnabled: true,
+                        caCertificateName: 'my-ca.pem'
+                    }
+                };
+                const project = createMockProject('project-123', [
+                    { id: 'my-postgres', name: 'Production DB', type: 'pgsql' }
+                ]);
+
+                when(notebook.uri).thenReturn(resource);
+                when(notebook.metadata).thenReturn({
+                    deepnoteProjectId: 'project-123',
+                    deepnoteNotebookId: 'notebook-123'
+                });
+                when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
+                when(notebookManager.getProjectForNotebook('project-123', 'notebook-123')).thenReturn(project);
+                when(integrationStorage.getIntegrationConfig('my-postgres')).thenResolve(postgresConfig);
+
+                const result = await provider.getEnvironmentVariables(resource);
+
+                // A caCertificateName flips sslmode to verify-ca, so an unreadable path fails the connection
+                // rather than degrading — an empty project root produced '/.deepnote/my-postgres/my-ca.pem'.
+                const parsed = JSON.parse(result['SQL_MY_POSTGRES']!);
+                assert.strictEqual(parsed.params.connect_args.sslmode, 'verify-ca');
+                assert.strictEqual(
+                    parsed.params.connect_args.sslrootcert,
+                    `${getFilePath(Uri.file('/test/proj'))}/.deepnote/my-postgres/my-ca.pem`
+                );
             });
 
             test('BigQuery integration generates correct SQL_* env var format', async () => {

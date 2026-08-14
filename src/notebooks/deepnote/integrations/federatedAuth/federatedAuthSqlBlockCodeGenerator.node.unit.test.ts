@@ -194,9 +194,9 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         sinon.assert.notCalled(fetcher);
     });
 
-    test('a .deepnote.env.yaml edit to clientId invalidates the stored token: deletes it and throws NotAuthenticatedError', async () => {
-        // The token was bound to the OAuth client the file declared when it was saved. Editing the YAML rebinds
-        // the integration to a different client, so the fingerprint check must drop the now-unusable token.
+    test('a .deepnote.env.yaml edit to clientId throws NotAuthenticatedError and keeps the stored token', async () => {
+        // A mismatch means "unusable by this notebook", not "dead": deleting would evict a sibling notebook that
+        // declares the same id with its own OAuth client. Sign out is the supported way to clear a stale entry.
         // One perturbed field is enough: the generator hashes clientId/clientSecret/project through a single
         // `computeMetadataFingerprint` call, and per-field sensitivity is covered in the token-storage suite.
         const metadata: GoogleOauthMetadata = {
@@ -217,8 +217,38 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         } catch (err) {
             assert.instanceOf(err, NotAuthenticatedError);
         }
-        sinon.assert.calledOnceWithExactly(deleteSpy, INTEGRATION_ID);
+        sinon.assert.notCalled(deleteSpy);
         sinon.assert.notCalled(fetcher);
+    });
+
+    test('a second notebook with a different OAuth client does not evict the first notebook’s token', async () => {
+        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedConfigs(
+            OTHER_NOTEBOOK_URI,
+            buildGoogleOauthIntegration({
+                metadata: {
+                    authMethod: 'google-oauth',
+                    clientId: 'other-notebook-client',
+                    clientSecret: CLIENT_SECRET,
+                    project: PROJECT
+                }
+            })
+        );
+        tokens.set(
+            INTEGRATION_ID,
+            buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: VALID_FINGERPRINT })
+        );
+
+        try {
+            await generator.generate(buildSqlBlock(), OTHER_NOTEBOOK_URI);
+            assert.fail('Expected NotAuthenticatedError');
+        } catch (err) {
+            assert.instanceOf(err, NotAuthenticatedError);
+        }
+
+        // Deleting here would also fire onDidChangeTokens, restarting the first notebook's kernel mid-session.
+        sinon.assert.notCalled(deleteSpy);
+        assert.strictEqual(tokens.get(INTEGRATION_ID)?.refreshToken, REFRESH_TOKEN);
     });
 
     test('returns a single Python string embedding the access token in the execute call for a valid federated SQL block', async () => {

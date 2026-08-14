@@ -10,6 +10,7 @@ import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deep
 import { IDeepnoteNotebookManager } from '../../types';
 import { IntegrationWebviewProvider } from './integrationWebview';
 import { FederatedAuthTokenEntry, IFederatedAuthTokenStorage, IIntegrationStorage } from './types';
+import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { computeMetadataFingerprint } from './federatedAuth/federatedAuthTokenStorage.node';
 import {
     ConfigurableDatabaseIntegrationConfig,
@@ -110,6 +111,8 @@ suite('IntegrationWebviewProvider', () => {
     let federatedAuthCandidates: Set<string>;
     let candidatesSpy: sinon.SinonSpy<[Resource], Promise<ReadonlySet<string>>>;
     let fileConfiguredIds: Set<string>;
+    /** Merged configs the panel reads to fingerprint OAuth metadata; empty unless a test opts in. */
+    let mergedIntegrationConfigs: DatabaseIntegrationConfig[];
     let onDidChangeEnvironmentVariables: EventEmitter<Resource>;
     let sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
     let mockTelemetryService: ITelemetryService;
@@ -142,8 +145,9 @@ suite('IntegrationWebviewProvider', () => {
             getEnvironmentVariables: async () => ({}),
             getFederatedAuthCandidates: candidatesSpy,
             getFileConfiguredIntegrationIds: async () => fileConfiguredIds,
-            getMergedIntegrationConfigs: async () => []
+            getMergedIntegrationConfigs: async () => mergedIntegrationConfigs
         };
+        mergedIntegrationConfigs = [];
 
         tokens = new Map();
         onDidChangeTokens = new EventEmitter<string>();
@@ -290,6 +294,39 @@ suite('IntegrationWebviewProvider', () => {
             );
         });
 
+        test('a candidate whose stored fingerprint no longer matches the current metadata reports disconnected', async () => {
+            // The user edited clientId in `.deepnote.env.yaml`. The stored token was issued against the old
+            // client, so the codegen will reject it on the next run — the panel must not claim "Authenticated".
+            const config = buildGoogleOauthIntegration({ id: 'bq-rotated-client' });
+            federatedAuthCandidates.add(config.id);
+            mergedIntegrationConfigs = [config as DatabaseIntegrationConfig];
+            preStoreToken(config.id, 'fingerprint-of-the-previous-oauth-client');
+
+            const provider = buildProvider({ tokenStorage });
+            await show(provider, singleIntegrationMap(config.id, config));
+
+            const item = (lastUpdate().integrations || []).find((i) => i.id === config.id);
+            assert.strictEqual(item?.tokenStatus, 'disconnected');
+        });
+
+        test('a candidate whose stored fingerprint matches the current metadata reports authenticated', async () => {
+            const config = buildGoogleOauthIntegration({ id: 'bq-current-client' });
+            federatedAuthCandidates.add(config.id);
+            mergedIntegrationConfigs = [config as DatabaseIntegrationConfig];
+            const { clientId, clientSecret, project } = config.metadata as {
+                clientId: string;
+                clientSecret: string;
+                project: string;
+            };
+            preStoreToken(config.id, computeMetadataFingerprint({ clientId, clientSecret, project }));
+
+            const provider = buildProvider({ tokenStorage });
+            await show(provider, singleIntegrationMap(config.id, config));
+
+            const item = (lastUpdate().integrations || []).find((i) => i.id === config.id);
+            assert.strictEqual(item?.tokenStatus, 'authenticated');
+        });
+
         test('a non-candidate reports unsupported even when a token exists', async () => {
             const config = buildGoogleOauthIntegration({ id: 'bq-not-a-candidate' });
             preStoreToken(config.id);
@@ -381,6 +418,47 @@ suite('IntegrationWebviewProvider', () => {
             items.find((i) => i.id === secretConfig.id)?.isFileConfigured,
             'a SecretStorage-only id stays editable'
         );
+    });
+
+    test('handleMessage: "signOut" clears the token even for a file-configured integration', async () => {
+        // reset/delete are refused for file rows because the panel writes SecretStorage and the file wins the
+        // merge. The token store has no file layer, so signing out must still work — otherwise a refresh token
+        // minted for a `.deepnote.env.yaml` integration can never be removed.
+        const integrationSaveSpy = sinon.spy();
+        when(integrationStorage.save(anything())).thenCall(integrationSaveSpy);
+        when(integrationStorage.delete(anyString())).thenResolve();
+
+        const config = buildGoogleOauthIntegration({ id: 'bq-file-only' });
+        fileConfiguredIds.add(config.id);
+        federatedAuthCandidates.add(config.id);
+
+        const provider = buildProvider({ tokenStorage });
+        preStoreToken(config.id);
+        await show(provider, singleIntegrationMap(config.id, config));
+
+        await fakePanel.onDidReceiveMessage({ type: 'signOut', integrationId: config.id });
+
+        sinon.assert.calledWith(tokenDeleteSpy, config.id);
+        verify(integrationStorage.delete(config.id)).never();
+        sinon.assert.notCalled(integrationSaveSpy);
+    });
+
+    (['reset', 'delete'] as const).forEach((messageType) => {
+        test(`handleMessage: "${messageType}" for a file-configured id touches neither storage`, async () => {
+            when(integrationStorage.delete(anyString())).thenResolve();
+
+            const config = buildGoogleOauthIntegration({ id: `bq-file-${messageType}` });
+            fileConfiguredIds.add(config.id);
+
+            const provider = buildProvider({ tokenStorage });
+            preStoreToken(config.id);
+            await show(provider, singleIntegrationMap(config.id, config));
+
+            await fakePanel.onDidReceiveMessage({ type: messageType, integrationId: config.id });
+
+            verify(integrationStorage.delete(config.id)).never();
+            sinon.assert.notCalled(tokenDeleteSpy);
+        });
     });
 
     test('a save for a file-configured id never reaches SecretStorage, whatever the webview sent', async () => {
@@ -745,19 +823,19 @@ suite('IntegrationWebviewProvider', () => {
         );
     });
 
-    test('updateWebview does not postMessage when panel is disposed during the tokenStorage.has() await', async () => {
-        // `has()` returns a deferred so we can dispose the panel mid-update.
-        let resolveHas: ((value: boolean) => void) | undefined;
-        const deferredHasPromise = new Promise<boolean>((resolve) => {
-            resolveHas = resolve;
+    test('updateWebview does not postMessage when panel is disposed during the token lookup await', async () => {
+        // `get()` returns a deferred so we can dispose the panel mid-update.
+        let resolveGet: ((value: FederatedAuthTokenEntry | undefined) => void) | undefined;
+        const deferredGetPromise = new Promise<FederatedAuthTokenEntry | undefined>((resolve) => {
+            resolveGet = resolve;
         });
         const onDidChangeEmitter = new EventEmitter<string>();
         const slowTokenStorage: IFederatedAuthTokenStorage = {
             onDidChangeTokens: onDidChangeEmitter.event,
-            async get() {
-                return undefined;
+            get: () => deferredGetPromise,
+            async has() {
+                return false;
             },
-            has: () => deferredHasPromise,
             async save() {
                 /* no-op */
             },
@@ -771,7 +849,7 @@ suite('IntegrationWebviewProvider', () => {
 
         const provider = buildProvider({ tokenStorage: slowTokenStorage });
         const integrationId = 'bq-disposed-during-update';
-        // Only candidates reach `deriveTokenStatus`, so the update parks on `has()` only if this id is one.
+        // Only candidates reach `deriveTokenStatus`, so the update parks on `get()` only if this id is one.
         federatedAuthCandidates.add(integrationId);
         const integrations = singleIntegrationMap(integrationId, buildGoogleOauthIntegration({ id: integrationId }));
 
@@ -781,7 +859,7 @@ suite('IntegrationWebviewProvider', () => {
             return true;
         });
 
-        // Fire `show()` without awaiting; it parks on `has()`.
+        // Fire `show()` without awaiting; it parks on `get()`.
         const showPromise = show(provider, integrations);
 
         // Yield so `show()` parks.
@@ -790,8 +868,8 @@ suite('IntegrationWebviewProvider', () => {
         // Dispose mid-update — provider's onDidDispose sets `currentPanel = undefined`.
         fakePanel.triggerDispose();
 
-        // Resolve `has()` so updateWebview finishes; the post-await guard must skip postMessage.
-        resolveHas?.(false);
+        // Resolve `get()` so updateWebview finishes; the post-await guard must skip postMessage.
+        resolveGet?.(undefined);
         await showPromise;
         onDidChangeEmitter.dispose();
 

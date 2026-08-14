@@ -174,6 +174,7 @@ export type LocalizedMessages = {
     integrationsConfigure: string;
     integrationsReconfigure: string;
     integrationsReset: string;
+    integrationsSignOut: string;
     integrationsDelete: string;
     integrationsConfirmResetTitle: string;
     integrationsConfirmResetMessage: string;

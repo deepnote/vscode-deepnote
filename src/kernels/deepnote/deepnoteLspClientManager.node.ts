@@ -42,6 +42,8 @@ const sqlLintRules = {} as const;
 let sharedSqlClient: LanguageClientType | undefined;
 let sharedSqlClientRefCount = 0;
 let sharedSqlClientStarting = false;
+/** Connections the shared client is currently pointed at, so a reconfigure can skip a no-op switch. */
+let sharedSqlConnections: SqlLspConnection[] = [];
 
 export { SqlLspConnection, supportedSqlLspTypes } from './sqlLspConnectionUtils';
 
@@ -239,6 +241,19 @@ export class DeepnoteLspClientManager
         if (sharedSqlClient) {
             sharedSqlClientRefCount++;
             logger.trace(`Reusing shared SQL LSP client, ref count: ${sharedSqlClientRefCount}`);
+
+            // The server holds one active connection globally, so a reused client is still pointed at whichever
+            // notebook started it — without this, this notebook gets the other one's schema completions.
+            // Best-effort: a failed reconfigure leaves stale completions, which must not fail the reuse itself.
+            try {
+                await this.applySqlConnections(sharedSqlClient, await this.getSqlConnections(notebookUri));
+            } catch (error) {
+                logger.warn(
+                    `SQL LSP: failed to reconfigure the shared client for ${notebookUri.toString()}; completions may reflect another notebook.`,
+                    error
+                );
+            }
+
             return;
         }
 
@@ -297,6 +312,8 @@ export class DeepnoteLspClientManager
             } finally {
                 sharedSqlClient = undefined;
                 sharedSqlClientRefCount = 0;
+                // A fresh client must be configured from scratch; a stale value here would skip that as a no-op.
+                sharedSqlConnections = [];
             }
         }
     }
@@ -356,6 +373,51 @@ export class DeepnoteLspClientManager
         logger.info(`Python LSP client started for ${notebookUri.toString()}`);
 
         return client;
+    }
+
+    /**
+     * Points the shared SQL server at `connections` and triggers a schema refetch. Used both at creation and when
+     * another notebook reuses the client, so the two paths cannot drift.
+     */
+    private async applySqlConnections(
+        client: LanguageClientType,
+        connections: SqlLspConnection[],
+        outputChannel?: vscode.OutputChannel
+    ): Promise<void> {
+        if (JSON.stringify(connections) === JSON.stringify(sharedSqlConnections)) {
+            return;
+        }
+
+        // The server ignores an empty list, so the previously loaded schema stays until some notebook supplies
+        // connections again. Clearing it would need a restart, which the global command registration rules out.
+        if (connections.length === 0) {
+            logger.trace('SQL LSP: no connections for this notebook; leaving the server configured as-is');
+
+            return;
+        }
+
+        // The server's onDidChangeConfiguration handler processes this and connects to the database.
+        await client.sendNotification('workspace/didChangeConfiguration', {
+            settings: {
+                sqlLanguageServer: {
+                    connections: connections,
+                    lint: { rules: sqlLintRules }
+                }
+            }
+        });
+
+        // Explicitly switch to the first connection so the schema is fetched and errors are properly reported.
+        try {
+            await client.sendRequest('workspace/executeCommand', {
+                command: 'sqlLanguageServer.switchDatabaseConnection',
+                arguments: [connections[0].name]
+            });
+        } catch (error) {
+            outputChannel?.appendLine(`[SQL LSP] Failed to switch connection: ${error}`);
+            logger.warn(`SQL LSP: Failed to switch to connection ${connections[0].name}:`, error);
+        }
+
+        sharedSqlConnections = connections;
     }
 
     private async createSqlLspClient(
@@ -461,7 +523,12 @@ export class DeepnoteLspClientManager
 
                         for (const item of params.items) {
                             if (item.section === 'sqlLanguageServer') {
-                                result.push({ connections: connections });
+                                // Prefer the live value over the creation-time capture, so a reconfigure is not
+                                // undone by a later pull. It is still empty during the initial pull, which
+                                // happens before the first push — fall back to this client's own connections.
+                                result.push({
+                                    connections: sharedSqlConnections.length > 0 ? sharedSqlConnections : connections
+                                });
                             } else {
                                 result.push(await next(params, _token));
                             }
@@ -505,30 +572,7 @@ export class DeepnoteLspClientManager
 
         await client.start();
 
-        // Send configuration change notification to trigger schema loading
-        // The server's onDidChangeConfiguration handler processes this and connects to the database
-        await client.sendNotification('workspace/didChangeConfiguration', {
-            settings: {
-                sqlLanguageServer: {
-                    connections: connections,
-                    lint: { rules: sqlLintRules }
-                }
-            }
-        });
-
-        // Explicitly switch to the first connection to trigger schema loading
-        // This ensures the database schema is fetched and any errors are properly reported
-        if (connections.length > 0) {
-            try {
-                await client.sendRequest('workspace/executeCommand', {
-                    command: 'sqlLanguageServer.switchDatabaseConnection',
-                    arguments: [connections[0].name]
-                });
-            } catch (error) {
-                outputChannel.appendLine(`[SQL LSP] Failed to switch connection: ${error}`);
-                logger.warn(`SQL LSP: Failed to switch to connection ${connections[0].name}:`, error);
-            }
-        }
+        await this.applySqlConnections(client, connections, outputChannel);
 
         logger.info(`SQL LSP client started and ready for ${notebookUri.toString()}`);
 

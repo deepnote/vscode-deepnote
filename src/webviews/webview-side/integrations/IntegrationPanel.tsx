@@ -118,6 +118,13 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
         });
     };
 
+    const handleSignOut = (integrationId: string) => {
+        postOutbound({
+            type: 'signOut',
+            integrationId
+        });
+    };
+
     const handleReset = (integrationId: string) => {
         // Clear any existing confirmReset timer before creating a new one
         if (confirmResetTimerRef.current) {
@@ -229,6 +236,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 onReset={handleReset}
                 onDelete={handleDelete}
                 onAuthenticate={handleAuthenticate}
+                onSignOut={handleSignOut}
             />
 
             <IntegrationTypeSelector onSelectType={handleSelectIntegrationType} />

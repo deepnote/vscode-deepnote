@@ -4,6 +4,7 @@ import { CancellationToken, Event, EventEmitter, Uri } from 'vscode';
 import { DeepnoteFile } from '@deepnote/blocks';
 import { DatabaseIntegrationConfig, getEnvironmentVariablesForIntegrations } from '@deepnote/database-integrations';
 
+import { getFilePath } from '../../common/platform/fs-paths';
 import { IDisposableRegistry, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
 import { notebookPathToDeepnoteProjectFilePath } from '../../deepnote/deepnoteProjectUtils';
@@ -123,8 +124,13 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             metadata: {}
         });
 
+        // The project root anchors `<root>/.deepnote/<id>/<cert>` CA certificate paths; an empty string made them
+        // absolute at the filesystem root, and a `caCertificateName` flips sslmode to verify-ca, so the connection
+        // fails rather than degrading.
+        const projectRoot = Uri.joinPath(notebookPathToDeepnoteProjectFilePath(resource), '..');
+
         const { envVars: envVarList, errors } = getEnvironmentVariablesForIntegrations(projectIntegrationConfigs, {
-            projectRootDirectory: '',
+            projectRootDirectory: getFilePath(projectRoot),
             snowflakePartnerIdentifier: 'Deepnote_Workspaces'
         });
 

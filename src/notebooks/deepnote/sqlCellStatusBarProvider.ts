@@ -34,7 +34,11 @@ import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
 import { logger } from '../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 import type { DeepnoteFile } from '@deepnote/blocks';
-import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
+import {
+    DatabaseIntegrationConfig,
+    DatabaseIntegrationType,
+    databaseIntegrationTypes
+} from '@deepnote/database-integrations';
 
 /** One entry of a project's `integrations` list as it appears in the file, where `type` is not yet validated. */
 type RawProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']>[number];
@@ -233,8 +237,12 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             return undefined;
         }
 
-        // Get integration configuration to display the name
-        const config = await this.integrationStorage.getProjectIntegrationConfig(projectId, integrationId);
+        // Merged first: at execution time a `.deepnote.env.yaml` config wins on id conflict, so resolving
+        // SecretStorage first would label the cell with a database it does not connect to.
+        const mergedConfig = (await this.getMergedIntegrationConfigs(cell)).find((c) => c.id === integrationId);
+        // The merge only resolves ids the project roster or the file declares; SecretStorage still answers for the rest.
+        const config =
+            mergedConfig ?? (await this.integrationStorage.getProjectIntegrationConfig(projectId, integrationId));
 
         // Determine the display name
         let displayName: string;
@@ -242,23 +250,12 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             // Integration is configured, use the config name
             displayName = config.name;
         } else {
-            // Not in SecretStorage — a `.deepnote.env.yaml` file config still counts as configured, so check the
-            // merged configs before prompting the user to configure.
-            const fileConfig = (await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(cell.notebook.uri)).find(
-                (c) => c.id === integrationId
-            );
-            if (fileConfig) {
-                displayName = fileConfig.name;
-            } else {
-                // Integration is not configured, try to get the name from the project's integration list
-                const notebookId = cell.notebook.metadata?.deepnoteNotebookId;
-                const project = notebookId
-                    ? this.notebookManager.getProjectForNotebook(projectId, notebookId)
-                    : undefined;
-                const projectIntegration = project?.project.integrations?.find((i) => i.id === integrationId);
-                const baseName = projectIntegration?.name || l10n.t('Unknown integration');
-                displayName = l10n.t('{0} (configure)', baseName);
-            }
+            // Integration is not configured, try to get the name from the project's integration list
+            const notebookId = cell.notebook.metadata?.deepnoteNotebookId;
+            const project = notebookId ? this.notebookManager.getProjectForNotebook(projectId, notebookId) : undefined;
+            const projectIntegration = project?.project.integrations?.find((i) => i.id === integrationId);
+            const baseName = projectIntegration?.name || l10n.t('Unknown integration');
+            displayName = l10n.t('{0} (configure)', baseName);
         }
 
         // Create a status bar item that opens the integration picker
@@ -378,6 +375,20 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
     }
 
     /**
+     * The same resolution the kernel executes with (file config wins on id conflict). Never throws: a status bar
+     * render must not be dropped because the YAML could not be read.
+     */
+    private async getMergedIntegrationConfigs(cell: NotebookCell): Promise<DatabaseIntegrationConfig[]> {
+        try {
+            return await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(cell.notebook.uri);
+        } catch (error) {
+            logger.error('SqlCellStatusBarProvider: failed to read file integrations', error);
+
+            return [];
+        }
+    }
+
+    /**
      * The roster plus any `.deepnote.env.yaml` integrations it omits, so a file-only one can be picked here
      * instead of only by hand-editing `sql_integration_id`. A failed lookup falls back to the roster alone.
      */
@@ -385,16 +396,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         cell: NotebookCell,
         projectIntegrations: RawProjectIntegration[]
     ): Promise<RawProjectIntegration[]> {
-        let mergedConfigs;
-
-        try {
-            mergedConfigs = await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(cell.notebook.uri);
-        } catch (error) {
-            logger.error('SqlCellStatusBarProvider: failed to read file integrations; offering the roster only', error);
-
-            return projectIntegrations;
-        }
-
+        const mergedConfigs = await this.getMergedIntegrationConfigs(cell);
         const rosterIds = new Set(projectIntegrations.map((integration) => integration.id));
 
         // Anything merged but absent from the roster came from the file alone — the merge resolves roster ids first.

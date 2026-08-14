@@ -61,4 +61,5 @@ export type WebviewOutboundMessage =
     | { type: 'save'; integrationId: string; config: ConfigurableDatabaseIntegrationConfig }
     | { type: 'reset'; integrationId: string }
     | { type: 'delete'; integrationId: string }
+    | { type: 'signOut'; integrationId: string }
     | AuthenticateMessage;

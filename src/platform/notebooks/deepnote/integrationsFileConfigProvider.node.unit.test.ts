@@ -194,6 +194,51 @@ suite('IntegrationsFileConfigProvider', () => {
         assert.deepStrictEqual(issues, []);
     });
 
+    test('resolves env: refs against the root .env, not a nested one, when the YAML is at the root', async () => {
+        const nestedDeepnoteUri = Uri.file('/workspace/project/sub/notebook.deepnote');
+        const rootFolder: WorkspaceFolder = { uri: Uri.file('/workspace/project'), name: 'project', index: 0 };
+        const rootYamlPath = Uri.joinPath(rootFolder.uri, DEFAULT_INTEGRATIONS_FILE).fsPath;
+        const rootEnvPath = Uri.joinPath(rootFolder.uri, DEFAULT_ENV_FILE).fsPath;
+        const nestedEnvPath = Uri.joinPath(Uri.joinPath(nestedDeepnoteUri, '..'), DEFAULT_ENV_FILE).fsPath;
+
+        workspaceFolder = rootFolder;
+        configureFileSystem([
+            {
+                path: rootYamlPath,
+                content: pgIntegrationYaml({ id: 'root-postgres', name: 'Root Postgres', password: 'env:PG_PASSWORD' })
+            },
+            { path: rootEnvPath, content: 'PG_PASSWORD=root-secret' },
+            // A different project's `.env` sitting next to the notebook must not feed the root YAML's refs.
+            { path: nestedEnvPath, content: 'PG_PASSWORD=nested-secret' }
+        ]);
+
+        const { configs } = await provider.getConfigsForFile(nestedDeepnoteUri);
+
+        assert.strictEqual(configs.length, 1);
+        assert.strictEqual(metadataField(configs[0], 'password'), 'root-secret');
+    });
+
+    test('falls back to the workspace-root .env when a nested YAML has no sibling .env', async () => {
+        const nestedDeepnoteUri = Uri.file('/workspace/project/sub/notebook.deepnote');
+        const rootFolder: WorkspaceFolder = { uri: Uri.file('/workspace/project'), name: 'project', index: 0 };
+        const nestedYamlPath = Uri.joinPath(Uri.joinPath(nestedDeepnoteUri, '..'), DEFAULT_INTEGRATIONS_FILE).fsPath;
+        const rootEnvPath = Uri.joinPath(rootFolder.uri, DEFAULT_ENV_FILE).fsPath;
+
+        workspaceFolder = rootFolder;
+        configureFileSystem([
+            {
+                path: nestedYamlPath,
+                content: pgIntegrationYaml({ id: 'sub-postgres', name: 'Sub Postgres', password: 'env:PG_PASSWORD' })
+            },
+            { path: rootEnvPath, content: 'PG_PASSWORD=root-secret' }
+        ]);
+
+        const { configs } = await provider.getConfigsForFile(nestedDeepnoteUri);
+
+        assert.strictEqual(configs.length, 1);
+        assert.strictEqual(metadataField(configs[0], 'password'), 'root-secret', 'the root fallback must survive');
+    });
+
     test('drops an integration whose id is reserved (reserved_integration_id)', async () => {
         configureFileSystem([
             { path: yamlPath, content: pgIntegrationYaml({ id: 'deepnote-dataframe-sql', name: 'Reserved' }) }

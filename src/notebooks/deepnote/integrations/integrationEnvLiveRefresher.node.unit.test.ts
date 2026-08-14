@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { Disposable, NotebookDocument, Uri } from 'vscode';
 
-import { IKernel, IKernelProvider, INotebookKernelExecution } from '../../../kernels/types';
+import { IKernel, IKernelProvider, IKernelSession, INotebookKernelExecution } from '../../../kernels/types';
 import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposable } from '../../../platform/common/types';
 import { dispose } from '../../../platform/common/utils/lifecycle';
@@ -41,7 +41,7 @@ suite('IntegrationEnvLiveRefresher', () => {
         disposables = dispose(disposables);
     });
 
-    /** A notebook whose kernel is started; `kernelProvider.get(notebook)` returns it. */
+    /** A notebook whose kernel holds a live session; `kernelProvider.get(notebook)` returns it. */
     function createRunningNotebook(uri: Uri): NotebookDocument {
         const notebookMock = mock<NotebookDocument>();
         when(notebookMock.uri).thenReturn(uri);
@@ -49,6 +49,9 @@ suite('IntegrationEnvLiveRefresher', () => {
 
         const kernelMock = mock<IKernel>();
         when(kernelMock.startedAtLeastOnce).thenReturn(true);
+        // The gate is liveness, not history: stub the session so these tests exercise it rather than bypass it.
+        when(kernelMock.session).thenReturn(instance(mock<IKernelSession>()));
+        when(kernelMock.disposed).thenReturn(false);
         when(kernelProvider.get(notebook)).thenReturn(instance(kernelMock));
 
         return notebook;
@@ -97,6 +100,42 @@ suite('IntegrationEnvLiveRefresher', () => {
 
         verify(kernelExecution.executeHidden(anything())).never();
         verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).never();
+    });
+
+    test('skips a kernel that started previously but has since died', async () => {
+        const notebookMock = mock<NotebookDocument>();
+        when(notebookMock.uri).thenReturn(Uri.file('/ws/a.deepnote'));
+        const notebook = instance(notebookMock);
+
+        // `startedAtLeastOnce` never resets, so a dead kernel still reports true; only the session tells the truth.
+        const kernelMock = mock<IKernel>();
+        when(kernelMock.startedAtLeastOnce).thenReturn(true);
+        when(kernelMock.session).thenReturn(undefined);
+        when(kernelMock.disposed).thenReturn(false);
+        when(kernelProvider.get(notebook)).thenReturn(instance(kernelMock));
+
+        await refresher.refresh([notebook], 'env_file');
+
+        // executeHidden calls kernel.start() unconditionally, so reaching it would relaunch the kernel.
+        verify(kernelExecution.executeHidden(anything())).never();
+        verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).never();
+        verify(analytics.trackEvent(anything())).never();
+    });
+
+    test('skips a kernel that has been disposed', async () => {
+        const notebookMock = mock<NotebookDocument>();
+        when(notebookMock.uri).thenReturn(Uri.file('/ws/a.deepnote'));
+        const notebook = instance(notebookMock);
+
+        const kernelMock = mock<IKernel>();
+        when(kernelMock.startedAtLeastOnce).thenReturn(true);
+        when(kernelMock.session).thenReturn(instance(mock<IKernelSession>()));
+        when(kernelMock.disposed).thenReturn(true);
+        when(kernelProvider.get(notebook)).thenReturn(instance(kernelMock));
+
+        await refresher.refresh([notebook], 'env_file');
+
+        verify(kernelExecution.executeHidden(anything())).never();
     });
 
     test('does not show a status-bar message when the refresh snippet produces an error output', async () => {

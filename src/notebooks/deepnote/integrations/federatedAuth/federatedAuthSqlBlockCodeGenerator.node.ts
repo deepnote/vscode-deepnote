@@ -78,8 +78,7 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
             project: integration.metadata.project
         });
         if (currentFingerprint !== entry.metadataFingerprint) {
-            // OAuth client metadata edited since save: stored refresh token is bound to a different client. Drop it.
-            await this.tokenStorage.delete(integrationId);
+            // Not dropped: another notebook may declare this id with its own OAuth client and still be using it.
             throw new NotAuthenticatedError(integration.name);
         }
 

@@ -1,5 +1,6 @@
 import { assert } from 'chai';
 import {
+    ConfigurationChangeEvent,
     Disposable,
     EventEmitter,
     FileSystemWatcher,
@@ -31,6 +32,7 @@ suite('IntegrationsEnvFileWatcher', () => {
     /** One emitter per file system watcher the code under test asked VS Code to create, keyed by dir + file name. */
     let fileEvents: Map<string, EventEmitter<Uri>>;
     let onDidOpenNotebookDocument: EventEmitter<NotebookDocument>;
+    let onDidChangeConfiguration: EventEmitter<ConfigurationChangeEvent>;
 
     const workspaceFolder: WorkspaceFolder = { index: 0, name: 'ws', uri: Uri.file('/ws') };
 
@@ -91,6 +93,9 @@ suite('IntegrationsEnvFileWatcher', () => {
         when(mockedVSCodeNamespaces.workspace.onDidChangeWorkspaceFolders).thenReturn(
             new EventEmitter<WorkspaceFoldersChangeEvent>().event
         );
+        onDidChangeConfiguration = new EventEmitter<ConfigurationChangeEvent>();
+        disposables.push(onDidChangeConfiguration);
+        when(mockedVSCodeNamespaces.workspace.onDidChangeConfiguration).thenReturn(onDidChangeConfiguration.event);
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
 
         // The shared mock's `get()` ignores the default argument; the real API returns it when the setting is
@@ -218,6 +223,57 @@ suite('IntegrationsEnvFileWatcher', () => {
         watcher.activate();
 
         await fireEnvFileChange(deepnoteDirOf(uri));
+
+        verify(liveRefresher.refresh(anything(), anything())).never();
+    });
+
+    test('refreshes when the last .deepnote.env.yaml is deleted, so its SQL_* vars are dropped', async () => {
+        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
+        const notebook = createMockNotebook({ uri });
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        // The file is gone by the time the debounce fires — the same state as the unrelated-.env test below.
+        when(fileSystem.exists(anything())).thenResolve(false);
+        watcher.activate();
+
+        await fireEnvFileChange(deepnoteDirOf(uri), DEFAULT_INTEGRATIONS_FILE);
+
+        // The refresh IS the clearing mechanism: set_integration_env() unsets what it previously set.
+        verify(liveRefresher.refresh(anything(), anything())).once();
+    });
+
+    test('refreshes every open Deepnote notebook when the envFile setting is toggled', async () => {
+        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
+        const notebook = createMockNotebook({ uri });
+        const otherNotebook = createMockNotebook({
+            uri: Uri.file('/ws/other.ipynb'),
+            notebookType: 'jupyter-notebook'
+        });
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook, otherNotebook]);
+        // Disabled — the per-notebook gate would filter this notebook out, yet its kernel still holds file creds.
+        when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenReturn({
+            get: () => false
+        } as never);
+        watcher.activate();
+
+        onDidChangeConfiguration.fire({ affectsConfiguration: () => true });
+        await clock.tickAsync(0);
+
+        verify(liveRefresher.refresh(anything(), anything())).once();
+        const [refreshed] = capture(liveRefresher.refresh).last();
+        assert.deepStrictEqual([...refreshed], [notebook], 'only Deepnote notebooks are refreshed');
+    });
+
+    test('ignores configuration changes that do not touch the envFile setting', async () => {
+        const uri = Uri.file('/ws/proj/app.deepnote').with({ query: 'notebook=nb-a' });
+        const notebook = createMockNotebook({ uri });
+
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+        watcher.activate();
+
+        onDidChangeConfiguration.fire({ affectsConfiguration: () => false });
+        await clock.tickAsync(0);
 
         verify(liveRefresher.refresh(anything(), anything())).never();
     });

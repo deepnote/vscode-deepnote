@@ -61,7 +61,9 @@ export class IntegrationEnvLiveRefresher implements IIntegrationEnvLiveRefresher
     private async refreshNotebook(notebook: NotebookDocument): Promise<RefreshResult> {
         try {
             const kernel = this.kernelProvider.get(notebook);
-            if (!kernel || !kernel.startedAtLeastOnce) {
+            // `startedAtLeastOnce` never resets and executeHidden calls kernel.start() unconditionally, so gating on
+            // it would relaunch a kernel that has since died — a config-file save must not spawn a process.
+            if (!kernel || !kernel.session || kernel.disposed) {
                 return 'skipped';
             }
 

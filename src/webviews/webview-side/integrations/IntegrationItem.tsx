@@ -10,6 +10,7 @@ export interface IIntegrationItemProps {
     onReset: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
     onAuthenticate: (integrationId: string) => void;
+    onSignOut: (integrationId: string) => void;
 }
 
 const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): string => {
@@ -60,7 +61,8 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
     onConfigure,
     onReset,
     onDelete,
-    onAuthenticate
+    onAuthenticate,
+    onSignOut
 }) => {
     // Credentials the panel can edit live in SecretStorage, which is exactly what `config` holds. A
     // `.deepnote.env.yaml`-configured integration is read-only here: the panel writes SecretStorage only and the
@@ -133,6 +135,12 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
                 {showFederatedAuth && (
                     <button type="button" onClick={() => onAuthenticate(integration.id)}>
                         {authenticateButtonText}
+                    </button>
+                )}
+                {/* Allowed for file-configured rows too: this clears the stored token, not the file's config. */}
+                {showFederatedAuth && tokenStatus === 'authenticated' && (
+                    <button type="button" className="secondary" onClick={() => onSignOut(integration.id)}>
+                        {getLocString('integrationsSignOut', 'Sign out')}
                     </button>
                 )}
                 {/* An id can live in both SecretStorage and the file; the file wins at runtime, so hide these there too. */}

@@ -67,8 +67,16 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
 
             const yaml = await this.fileSystem.readFile(yamlUri);
 
-            // Locate the `.env` (dir-then-root) and resolve `env:` refs against it; real env wins over the file.
-            const envUri = await this.findFirstExisting(candidateDirs, DEFAULT_ENV_FILE);
+            // Scan for the `.env` from the YAML's own directory onward, so a workspace-root YAML can never consume a
+            // nested notebook's `.env`; a nested YAML still falls back to the root. Real env wins over the file.
+            const yamlDir = Uri.joinPath(yamlUri, '..');
+            const envDirs = candidateDirs.slice(
+                Math.max(
+                    candidateDirs.findIndex((dir) => dir.toString() === yamlDir.toString()),
+                    0
+                )
+            );
+            const envUri = await this.findFirstExisting(envDirs, DEFAULT_ENV_FILE);
             const fileEnv = envUri ? dotenv.parse(await this.fileSystem.readFile(envUri)) : {};
             const env: Record<string, string | undefined> = { ...fileEnv, ...this.getProcessEnvironment() };
 

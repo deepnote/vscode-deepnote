@@ -179,6 +179,86 @@ suite('SqlCellStatusBarProvider', () => {
         assert.strictEqual(variableItem.priority, 90);
     });
 
+    test('shows the file config name when both SecretStorage and .deepnote.env.yaml define the integration', async () => {
+        const integrationId = 'pg-main';
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: { sql_integration_id: integrationId },
+            notebookMetadata: { deepnoteProjectId: 'project-1' }
+        });
+
+        // Execution resolves file-over-SecretStorage, so the status bar must name the file's config or it would
+        // label the cell with a database the kernel does not connect to.
+        when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
+            id: integrationId,
+            name: 'Staging',
+            type: 'pgsql',
+            metadata: { host: 'staging.db', port: '5432', database: 'test', user: 'u', password: 'p' }
+        } as never);
+        const envVars = mock<ISqlIntegrationEnvVarsProvider>();
+        when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
+            { id: integrationId, name: 'Production', type: 'pgsql', metadata: {} } as never
+        ]);
+        provider = new SqlCellStatusBarProvider(
+            disposables,
+            instance(integrationStorage),
+            instance(notebookManager),
+            instance(mock<ITelemetryService>()),
+            instance(envVars)
+        );
+
+        const items = (await provider.provideCellStatusBarItems(cell, cancellationToken)) as any[];
+
+        assert.strictEqual(items[0].text, '$(database) Production');
+    });
+
+    test('shows the file config name for an integration absent from SecretStorage, with no (configure) suffix', async () => {
+        const integrationId = 'file-only';
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: { sql_integration_id: integrationId },
+            notebookMetadata: { deepnoteProjectId: 'project-1' }
+        });
+
+        when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
+        const envVars = mock<ISqlIntegrationEnvVarsProvider>();
+        when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
+            { id: integrationId, name: 'From File', type: 'pgsql', metadata: {} } as never
+        ]);
+        provider = new SqlCellStatusBarProvider(
+            disposables,
+            instance(integrationStorage),
+            instance(notebookManager),
+            instance(mock<ITelemetryService>()),
+            instance(envVars)
+        );
+
+        const items = (await provider.provideCellStatusBarItems(cell, cancellationToken)) as any[];
+
+        assert.strictEqual(items[0].text, '$(database) From File');
+    });
+
+    test('falls back to the SecretStorage name for an id the merge does not resolve', async () => {
+        const integrationId = 'secret-only';
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: { sql_integration_id: integrationId },
+            notebookMetadata: { deepnoteProjectId: 'project-1' }
+        });
+
+        // The merge only resolves roster and file ids; a bare merged-first rewrite would regress this to (configure).
+        when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
+            id: integrationId,
+            name: 'Stored Only',
+            type: 'pgsql',
+            metadata: { host: 'h', port: '5432', database: 'd', user: 'u', password: 'p' }
+        } as never);
+
+        const items = (await provider.provideCellStatusBarItems(cell, cancellationToken)) as any[];
+
+        assert.strictEqual(items[0].text, '$(database) Stored Only');
+    });
+
     test('shows "Unknown integration (configure)" when config not found and not in project list', async () => {
         const integrationId = 'postgres-123';
         const cell = createMockCell({

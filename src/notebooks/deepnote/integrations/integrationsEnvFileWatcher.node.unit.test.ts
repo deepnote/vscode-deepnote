@@ -238,7 +238,7 @@ suite('IntegrationsEnvFileWatcher', () => {
 
         await fireEnvFileChange(deepnoteDirOf(uri), DEFAULT_INTEGRATIONS_FILE);
 
-        // The refresh IS the clearing mechanism: set_integration_env() unsets what it previously set.
+        // The refresh IS the clearing mechanism: set_integration_env() clears what it previously set.
         verify(liveRefresher.refresh(anything(), anything())).once();
     });
 
@@ -251,7 +251,7 @@ suite('IntegrationsEnvFileWatcher', () => {
         });
 
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook, otherNotebook]);
-        // Disabled — the per-notebook gate would filter this notebook out, yet its kernel still holds file creds.
+        // Disabled — the per-notebook gate would filter this notebook out, yet its kernel still holds file credentials.
         when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenReturn({
             get: () => false
         } as never);

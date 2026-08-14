@@ -296,7 +296,7 @@ suite('IntegrationWebviewProvider', () => {
 
         test('a candidate whose stored fingerprint no longer matches the current metadata reports disconnected', async () => {
             // The user edited clientId in `.deepnote.env.yaml`. The stored token was issued against the old
-            // client, so the codegen will reject it on the next run — the panel must not claim "Authenticated".
+            // client, so generated code will reject it on the next run — the panel must not claim "Authenticated".
             const config = buildGoogleOauthIntegration({ id: 'bq-rotated-client' });
             federatedAuthCandidates.add(config.id);
             mergedIntegrationConfigs = [config as DatabaseIntegrationConfig];

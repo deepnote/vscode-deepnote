@@ -9,11 +9,18 @@ import type {
     ServerOptions
 } from 'vscode-languageclient/node';
 
-// The bundled module uses ESM default export, so we need to access .default
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const languageClientModule = require('vscode-languageclient/node');
-const { LanguageClient, TransportKind, RevealOutputChannelOn } = (languageClientModule.default ??
-    languageClientModule) as typeof import('vscode-languageclient/node');
+/**
+ * Loaded on first use rather than at import time: the module extends classes from `vscode` while loading, which a
+ * test host running against a mocked `vscode` cannot satisfy. Only the two client factories need it, and `require`
+ * caches, so nothing is repeated or deferred that a caller waits on.
+ */
+function getLanguageClientModule(): typeof import('vscode-languageclient/node') {
+    // The bundled module uses ESM default export, so we need to access .default
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const languageClientModule = require('vscode-languageclient/node');
+
+    return (languageClientModule.default ?? languageClientModule) as typeof import('vscode-languageclient/node');
+}
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposable, IDisposableRegistry } from '../../platform/common/types';
@@ -373,6 +380,7 @@ export class DeepnoteLspClientManager
 
         // Use a unique client ID per notebook to prevent conflicts when multiple LSP clients exist
         const clientId = `deepnote-python-lsp-${getNotebookKey(notebookUri)}`;
+        const { LanguageClient } = getLanguageClientModule();
         const client = new LanguageClient(clientId, 'Deepnote Python Language Server', serverOptions, clientOptions);
 
         // Check cancellation before starting client
@@ -439,6 +447,8 @@ export class DeepnoteLspClientManager
         if (token?.isCancellationRequested) {
             throw new CancellationError();
         }
+
+        const { LanguageClient, TransportKind, RevealOutputChannelOn } = getLanguageClientModule();
 
         logger.trace(`Creating SQL LSP client for ${notebookUri.toString()}`);
 

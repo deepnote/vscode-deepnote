@@ -117,14 +117,41 @@ const STOP_ACKNOWLEDGED_TIMEOUT = 30_000;
 // to outlast the trailing cell that a batch which ignored the stop would dispatch next.
 const STOP_SETTLE_WINDOW = 8_000;
 
-/** Keeps exactly one editor open: `clickRunAll` takes the first toolbar in DOM order. */
+/**
+ * Keeps exactly one editor open: `clickRunAll` takes the first toolbar in DOM order.
+ *
+ * A run leaves the notebook dirty, so closing it raises the save prompt. Revert first so the close
+ * is clean, and answer the prompt if one appears anyway: an unanswered modal dims the workbench and
+ * intercepts every later click, which surfaces as an unrelated "element is visible" timeout in
+ * whatever runs next rather than here.
+ */
 async function openOnly(fileName: string): Promise<void> {
     await new WebView().switchBack().catch((error) => {
         console.warn('[agent-block] switch back from webview before opening an editor:', error);
     });
+
+    const alreadyOpen = await new EditorView().getOpenEditorTitles().catch(() => [] as string[]);
+    if (alreadyOpen.length > 0) {
+        await new Workbench().executeCommand(REVERT_FILE_COMMAND).catch((error) => {
+            console.warn('[agent-block] revert notebook before closing it:', error);
+        });
+    }
+
     await new EditorView().closeAllEditors().catch((error) => {
         console.warn('[agent-block] close editors before opening the next notebook:', error);
     });
+
+    // Only when editors survived the close, since `confirmModalDialog` waits out its full timeout
+    // and then throws when no dialog is up.
+    const stillOpen = await new EditorView().getOpenEditorTitles().catch(() => [] as string[]);
+    if (stillOpen.length > 0) {
+        await confirmModalDialog(DISCARD_CHANGES_BUTTON).catch((error) => {
+            console.warn('[agent-block] discard unsaved changes before opening the next notebook:', error);
+        });
+        await new EditorView().closeAllEditors().catch((error) => {
+            console.warn('[agent-block] close editors after discarding unsaved changes:', error);
+        });
+    }
 
     await openWorkspaceFile(fileName);
     await VSBrowser.instance.driver.wait(

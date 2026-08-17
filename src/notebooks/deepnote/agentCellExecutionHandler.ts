@@ -166,10 +166,9 @@ function isStopped(error: unknown): boolean {
  * Runs an agent block into the cell output and inserts generated cells below.
  * Call `removeEphemeralCellsForAgentBlocks` on the batch first. Never rejects — errors become stderr on the cell.
  *
- * `token` stops the run. It reaches the model only indirectly: the host refuses tool calls and throws
- * from the event callback, so an in-flight model turn still finishes. Once `AgentBlockContext` carries
- * an `AbortSignal` (present in runtime-core's `main`, unreleased), bridge the token to one and pass it
- * as `signal` — runtime-core forwards it to `agent.stream`, which aborts the request itself.
+ * `token` stops the run, bridged to the `AbortSignal` runtime-core forwards to `agent.stream`, so the
+ * in-flight model request is aborted rather than left to finish. Throwing from a tool callback cannot
+ * stop it: runtime-core catches that and hands the model an `Execution error: …` string to retry.
  */
 export async function executeAgentCell(
     cell: NotebookCell,
@@ -180,10 +179,13 @@ export async function executeAgentCell(
 ): Promise<void> {
     const executeAgentBlockFn = options?.executeAgentBlockFn ?? executeAgentBlock;
     const execution = controller.createNotebookCellExecution(cell);
+    const stopController = new AbortController();
+    const stopSubscription = token.onCancellationRequested(() => stopController.abort());
 
     // The agent runs off the kernel, so nothing announces it on the internal shim — the only source
     // SnapshotService and the execute_cell analytics read. Without this the run is invisible to both.
     const endExecution = (success: boolean) => {
+        stopSubscription.dispose();
         execution.end(success, Date.now());
         notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Idle);
     };
@@ -232,8 +234,7 @@ export async function executeAgentCell(
             openAiToken,
             ...getProjectAgentContext(cell.notebook),
             notebookContext,
-            // The guards sit outside the `try`s: those turn every throw into a string the model reads
-            // as a tool failure worth retrying, which is how a stop used to make the agent do more work.
+            signal: stopController.signal,
             addMarkdownBlock: async ({ content }: { content: string }) => {
                 Cancellation.throwIfCanceled(token);
 

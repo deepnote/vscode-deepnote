@@ -24,10 +24,10 @@ import { IIntegrationsFileConfigProvider } from './types';
  * filesystem/dotenv shell that `@deepnote/database-integrations` does not export, delegating parsing
  * to the exported, environment-agnostic `parseIntegrations`.
  *
- * No caching, no watching: a fresh read happens on every call. That was cheap when the only caller was
- * kernel/server (re)start, but `getMergedIntegrationConfigs` now reaches here on every SQL cell execution and on every
- * integrations-panel refresh, so each call is up to two `exists` + two `readFile` round-trips and re-publishes
- * the YAML's diagnostics. Adding a cache means invalidating it on file change — deliberately not done yet.
+ * No caching, no watching: a fresh read happens on every call. `getMergedIntegrationConfigs` reaches here on every
+ * SQL cell execution and on every integrations-panel refresh, so each call is up to two `exists` + two `readFile`
+ * round-trips and re-publishes the YAML's diagnostics. Adding a cache means invalidating it on file change —
+ * deliberately not done yet.
  */
 @injectable()
 export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigProvider {
@@ -185,8 +185,7 @@ export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigPr
 
     /**
      * Candidate directories to look for the integration/env files in priority order: next to the
-     * `.deepnote` file first, then the workspace-folder root. Undefined entries are skipped and
-     * duplicates removed.
+     * `.deepnote` file first, then the workspace-folder root. Duplicates are removed.
      */
     private getCandidateDirs(deepnoteFileUri: Uri): Uri[] {
         const dirs: Uri[] = [Uri.joinPath(deepnoteFileUri, '..')];

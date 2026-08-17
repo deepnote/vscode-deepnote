@@ -396,11 +396,11 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         cell: NotebookCell,
         projectIntegrations: RawProjectIntegration[]
     ): Promise<RawProjectIntegration[]> {
-        const mergedConfigs = await this.getMergedIntegrationConfigs(cell);
+        const mergedIntegrationConfigs = await this.getMergedIntegrationConfigs(cell);
         const rosterIds = new Set(projectIntegrations.map((integration) => integration.id));
 
         // Anything merged but absent from the roster came from the file alone — the merge resolves roster ids first.
-        const fileOnly = mergedConfigs
+        const fileOnly = mergedIntegrationConfigs
             .filter((config) => !rosterIds.has(config.id))
             .map((config) => ({ id: config.id, name: config.name, type: config.type }));
 

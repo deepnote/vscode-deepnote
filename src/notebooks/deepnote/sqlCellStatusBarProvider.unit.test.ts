@@ -558,7 +558,6 @@ suite('SqlCellStatusBarProvider', () => {
                 }
             );
 
-            // A merged source reporting one integration the roster below never declares.
             const envVars = mock<ISqlIntegrationEnvVarsProvider>();
             when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
                 { id: 'file-only-bq', name: 'BigQuery from file', type: 'big-query', metadata: {} } as any
@@ -1072,7 +1071,6 @@ suite('SqlCellStatusBarProvider', () => {
             const cell = createMockCell({ languageId: 'sql', metadata: {}, notebookMetadata });
             const fileOnlyId = 'file-only-bq';
 
-            // Declared in the file only — the roster below never mentions it.
             const envVars = mock<ISqlIntegrationEnvVarsProvider>();
             when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
                 { id: fileOnlyId, name: 'BigQuery from file', type: 'big-query', metadata: {} } as any

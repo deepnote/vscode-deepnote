@@ -84,17 +84,17 @@ export class IntegrationDetector implements IIntegrationDetector {
         notebookUri: Uri,
         integrations: Map<string, DetectedIntegration>
     ): Promise<void> {
-        let mergedConfigs: DatabaseIntegrationConfig[];
+        let mergedIntegrationConfigs: DatabaseIntegrationConfig[];
 
         try {
-            mergedConfigs = await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(notebookUri);
+            mergedIntegrationConfigs = await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(notebookUri);
         } catch (error) {
             logger.error('IntegrationDetector: failed to read file integrations; listing the roster only', error);
 
             return;
         }
 
-        for (const config of mergedConfigs) {
+        for (const config of mergedIntegrationConfigs) {
             // Anything merged but absent here came from the file alone — the merge resolves roster ids first.
             if (integrations.has(config.id) || !isConfigurableDatabaseIntegrationType(config.type)) {
                 continue;

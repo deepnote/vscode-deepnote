@@ -488,7 +488,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             }))
         );
 
-        // Bail if the panel was disposed during the candidate/file-configured lookups or the `tokenStorage.has()` await.
+        // Bail if the panel was disposed during the candidate/file-configured lookups or the `tokenStorage.get()` await.
         if (!this.currentPanel) {
             logger.debug('IntegrationWebviewProvider: Panel disposed during update, skipping postMessage');
             return;
@@ -621,9 +621,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      * the webview to have hidden its button — `showConfigurationForm` is reachable from the SQL status bar too.
      *
      * Re-resolves the file per action instead of reading what the last render saw, so it cannot be defeated by a
-     * stale snapshot, a lost `updateWebview()` generation race, or a switch to another notebook. That costs one
-     * extra `.deepnote.env.yaml` read per user-initiated edit (two on the `show(selectedIntegrationId)` path, which
-     * refreshes first) — rare and off the render path, so it is worth paying for a guard that cannot go stale.
+     * stale snapshot, a lost `updateWebview()` generation race, or a switch to another notebook.
      * A read failure fails open: a hiccup must not block a real edit.
      */
     private async refuseEditIfFileConfigured(integrationId: string): Promise<boolean> {

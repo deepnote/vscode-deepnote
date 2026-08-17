@@ -563,7 +563,6 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             assert.ok(!sharedUrl.includes('from-secret.example.com'), 'SecretStorage host must not be used');
             assert.ok(result['SQL_SECRET_ONLY'], 'SecretStorage-only integration should still be resolved');
 
-            // The conflicting id must never hit SecretStorage; the SecretStorage-only id must be queried exactly once.
             verify(integrationStorage.getIntegrationConfig('shared-db')).never();
             verify(integrationStorage.getIntegrationConfig('secret-only')).once();
         });

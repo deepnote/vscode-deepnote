@@ -47,7 +47,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     const OTHER_NOTEBOOK_URI = Uri.file('/workspace/other/project.deepnote');
 
     /** Merged (`.deepnote.env.yaml` over SecretStorage) configs keyed by the notebook they resolve for. */
-    let mergedConfigs: Map<string, DatabaseIntegrationConfig[]>;
+    let mergedIntegrationConfigs: Map<string, DatabaseIntegrationConfig[]>;
     let tokens: Map<string, FederatedAuthTokenEntry>;
     let onDidChangeTokens: EventEmitter<string>;
     let onDidChangeEnvironmentVariables: EventEmitter<Resource>;
@@ -60,7 +60,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     let generator: FederatedAuthSqlBlockCodeGenerator;
 
     setup(() => {
-        mergedConfigs = new Map();
+        mergedIntegrationConfigs = new Map();
         tokens = new Map();
         onDidChangeTokens = new EventEmitter<string>();
         onDidChangeEnvironmentVariables = new EventEmitter<Resource>();
@@ -71,7 +71,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             tokens.delete(id);
         });
         getMergedIntegrationConfigsSpy = sinon.spy(async (resource: Resource) =>
-            resource ? mergedConfigs.get(resource.toString()) ?? [] : []
+            resource ? mergedIntegrationConfigs.get(resource.toString()) ?? [] : []
         );
 
         // Declared as a plain object (not a typed literal) so the extra members the provider grows for other
@@ -113,12 +113,12 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     /** Publishes `configs` as what `.deepnote.env.yaml` + SecretStorage merge to for `uri`. */
-    function setMergedConfigs(uri: Uri, ...configs: DatabaseIntegrationConfig[]) {
-        mergedConfigs.set(uri.toString(), configs);
+    function setMergedIntegrationsConfigs(uri: Uri, ...configs: DatabaseIntegrationConfig[]) {
+        mergedIntegrationConfigs.set(uri.toString(), configs);
     }
 
     function setupValidFederatedIntegration() {
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationsConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
         tokens.set(
             INTEGRATION_ID,
             buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: VALID_FINGERPRINT })
@@ -162,7 +162,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         test(`returns undefined for ${label}`, async () => {
             const integration = buildIntegration();
             if (integration) {
-                setMergedConfigs(NOTEBOOK_URI, integration);
+                setMergedIntegrationsConfigs(NOTEBOOK_URI, integration);
             }
             const result = await generator.generate(buildBlock(), NOTEBOOK_URI);
             assert.strictEqual(result, undefined);
@@ -182,7 +182,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     test('throws NotAuthenticatedError when federated integration has no stored token', async () => {
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationsConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
 
         try {
             await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
@@ -205,7 +205,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             clientSecret: CLIENT_SECRET,
             project: PROJECT
         };
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration({ metadata }));
+        setMergedIntegrationsConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration({ metadata }));
         tokens.set(
             INTEGRATION_ID,
             buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: VALID_FINGERPRINT })
@@ -222,8 +222,8 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     });
 
     test('a second notebook with a different OAuth client does not evict the first notebook’s token', async () => {
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
-        setMergedConfigs(
+        setMergedIntegrationsConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationsConfigs(
             OTHER_NOTEBOOK_URI,
             buildGoogleOauthIntegration({
                 metadata: {
@@ -280,7 +280,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             clientSecret: CLIENT_SECRET,
             project: hostileProject
         };
-        setMergedConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration({ metadata }));
+        setMergedIntegrationsConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration({ metadata }));
         const hostileFingerprint = computeMetadataFingerprint({
             clientId: CLIENT_ID,
             clientSecret: CLIENT_SECRET,

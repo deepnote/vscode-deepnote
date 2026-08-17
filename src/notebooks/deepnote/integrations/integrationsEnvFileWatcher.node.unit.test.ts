@@ -37,7 +37,6 @@ suite('IntegrationsEnvFileWatcher', () => {
 
     const workspaceFolder: WorkspaceFolder = { index: 0, name: 'ws', uri: Uri.file('/ws') };
 
-    /** Hands back a fake watcher whose events the test can fire, standing in for real filesystem events. */
     function createFileSystemWatcher(pattern: RelativePattern): FileSystemWatcher {
         const emitter = new EventEmitter<Uri>();
         fileEvents.set(watcherKey(pattern.baseUri, pattern.pattern), emitter);
@@ -147,7 +146,6 @@ suite('IntegrationsEnvFileWatcher', () => {
         when(mockedVSCodeNamespaces.workspace.getWorkspaceFolder(anything())).thenReturn(workspaceFolder);
         watcher.activate();
 
-        // The changed dir is the workspace root, NOT the .deepnote dir (/ws/nested/deep).
         await fireEnvFileChange(workspaceFolder.uri);
 
         verify(liveRefresher.refresh(anything(), anything())).once();

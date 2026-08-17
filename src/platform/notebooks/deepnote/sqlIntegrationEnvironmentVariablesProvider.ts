@@ -18,7 +18,6 @@ import {
 } from './types';
 import { DATAFRAME_SQL_INTEGRATION_ID, isFederatedAuthMetadata, isSupportedFederatedAuth } from './integrationTypes';
 
-/** One entry of a Deepnote project's `integrations` list. */
 type ProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']>[number];
 
 /**
@@ -236,7 +235,6 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
         const fileConfigsById = new Map(fileConfigs.map((config) => [config.id, config]));
         const consumedFileIds = new Set<string>();
 
-        // Read from SecretStorage only the project integrations the file did not provide.
         const secretStorageIds = projectIntegrations
             .map((integration) => integration.id)
             .filter((id) => !fileConfigsById.has(id));
@@ -259,7 +257,6 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             );
         });
 
-        // Resolve each project integration in declared order: file config wins, else the SecretStorage fallback.
         const allConfigs: Array<DatabaseIntegrationConfig> = [];
         for (const integration of projectIntegrations) {
             const fileConfig = fileConfigsById.get(integration.id);
@@ -275,7 +272,6 @@ export class SqlIntegrationEnvironmentVariablesProvider implements ISqlIntegrati
             }
         }
 
-        // Append file-only integrations (not declared in project.integrations) additively, deduped by the map.
         for (const fileConfig of fileConfigsById.values()) {
             if (!consumedFileIds.has(fileConfig.id)) {
                 allConfigs.push(fileConfig);

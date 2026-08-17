@@ -275,7 +275,7 @@ suite('IntegrationEnvLiveRefresher', () => {
 
         await refresher.refresh([notebookA, notebookB], 'env_file');
 
-        verify(kernelExecution.executeHidden(anything())).twice(); // both started kernels are refreshed
+        verify(kernelExecution.executeHidden(anything())).twice();
         verify(mockedVSCodeNamespaces.window.setStatusBarMessage(anything(), anything())).once();
     });
 });

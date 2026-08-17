@@ -91,7 +91,6 @@ suite('DeepnoteServerStarter', () => {
         // The env shape and the empty-env paths belong to applyIntegrationEndpointEnv and are covered by
         // deepnoteIntegrationEndpointEnv.unit.test.ts; this test covers the per-notebook wiring only.
         test('does NOT leak one project id or bearer token into a sibling notebook server', async () => {
-            // Sibling files in the same directory resolving to DIFFERENT projects, each with its own token.
             stubReadFile((uri) =>
                 uri.toString() === uriA.toString()
                     ? serializeProjectFile('project-a')

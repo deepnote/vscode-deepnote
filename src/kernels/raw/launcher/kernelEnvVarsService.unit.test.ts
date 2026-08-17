@@ -73,7 +73,6 @@ suite('Kernel Environment Variables Service', () => {
 
     teardown(() => Object.assign(process.env, originalEnvVars));
 
-    /** Builds the service under test from the suite's mocks. */
     function buildKernelEnvVarsService(): KernelEnvironmentVariablesService {
         return new KernelEnvironmentVariablesService(
             instance(interpreterService),

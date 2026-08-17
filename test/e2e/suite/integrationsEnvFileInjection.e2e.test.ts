@@ -47,7 +47,6 @@ const INTEGRATIONS_ENV_YAML = `integrations:
 const DOTENV_CONTENT = 'DEMO_DB_HOST=injected-host.example.com\n';
 
 describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`', function () {
-    // Per-test timeout for the whole suite (overrides the mocharc default for these tests).
     this.timeout(SUITE_TIMEOUT);
 
     // A stable name: createEnvironment is idempotent (it treats "already exists" as success), so a
@@ -55,34 +54,29 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
     // also lets a persistent test instance reuse the already-provisioned venv.
     const environmentName = 'E2E Integrations Env';
 
-    // Captured in `before` and invoked in `after` to remove the throwaway temp dir.
     let cleanupTempDir: (() => void) | undefined;
     // The temp workspace dir, so the live-refresh assertion can rewrite `.env`.
     let tempDir: string;
 
     before(async function () {
-        // Work on a throwaway copy so execution-dirtied notebook state never touches the source tree.
         const copied = copyFixtureToTempDir(NOTEBOOK_FILE_NAME);
         cleanupTempDir = copied.cleanup;
         tempDir = copied.tempDir;
 
         // Write the env files next to the notebook BEFORE opening the workspace so the loader sees them
-        // when the kernel first starts. `.deepnote.env.yaml` carries the integration; `.env` resolves its
-        // `env:` ref.
+        // when the kernel first starts.
         fs.writeFileSync(path.join(tempDir, INTEGRATIONS_ENV_FILE_NAME), INTEGRATIONS_ENV_YAML);
         fs.writeFileSync(path.join(tempDir, DOTENV_FILE_NAME), DOTENV_CONTENT);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // Open the folder as the workspace FIRST (the serializer's snapshot read blocks headlessly without one), then re-wait for the workbench after the reload.
+        // Open the folder as the workspace FIRST (the serializer's snapshot read blocks headlessly without one).
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // Now that the containing folder is the workspace, the notebook is reachable by name.
         await openWorkspaceFile(NOTEBOOK_FILE_NAME);
 
-        // The native notebook editor opens because the extension registers a serializer for the
-        // `deepnote` notebook type; a single-notebook file resolves to its default notebook.
+        // A single-notebook file resolves to its default notebook.
         await VSBrowser.instance.driver.wait(
             async () => (await new EditorView().getOpenEditorTitles()).some((t) => t.includes(NOTEBOOK_FILE_NAME)),
             WORKBENCH_TIMEOUT,
@@ -99,7 +93,6 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
             console.warn('[deepnote-e2e] close all editors during cleanup:', error);
         });
 
-        // Remove the throwaway temp dir last so a failure above can't leak it.
         try {
             cleanupTempDir?.();
         } catch (error) {

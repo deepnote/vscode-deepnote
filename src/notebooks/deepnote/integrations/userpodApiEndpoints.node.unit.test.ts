@@ -51,7 +51,6 @@ suite('UserpodApiEndpoints', () => {
         return endpoint.baseUrl;
     }
 
-    /** Registers `notebooks` as the open documents, starts the endpoint, and returns its base URL. */
     function startWith(...notebooks: NotebookDocument[]): Promise<string> {
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn(notebooks);
         endpoint.activate();
@@ -63,7 +62,6 @@ suite('UserpodApiEndpoints', () => {
         return `${baseUrl}/userpod-api/${projectId}/integrations/environment-variables`;
     }
 
-    /** GET the endpoint carrying the per-project bearer token it requires. */
     function authedFetch(url: string, projectId: string): Promise<Response> {
         return fetch(url, { headers: { Authorization: `Bearer ${endpoint.getAuthToken(projectId)}` } });
     }
@@ -148,7 +146,6 @@ suite('UserpodApiEndpoints', () => {
     test('responds 401 for a wrong token of the SAME length (exercises the constant-time compare path)', async () => {
         const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
 
-        // Issue the project's token, then present a DIFFERENT value of the same byte length — timingSafeEqual must reject it.
         const realToken = endpoint.getAuthToken('project-1');
         const sameLengthWrong = `Bearer ${'x'.repeat(realToken.length)}`;
         const response = await fetch(envVarsUrl(baseUrl, 'project-1'), {
@@ -165,7 +162,6 @@ suite('UserpodApiEndpoints', () => {
             createNotebook('project-b', Uri.file('/ws/b.deepnote'))
         );
 
-        // Issue tokens for both projects, then use project A's token against project B's URL.
         const tokenA = endpoint.getAuthToken('project-a');
         endpoint.getAuthToken('project-b');
 

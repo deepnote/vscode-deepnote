@@ -4,12 +4,12 @@ import { OUTPUT_FRAME_SWITCH_TIMEOUT, OUTPUT_POLL_INTERVAL, OUTPUT_SELECTOR, WOR
 import { dismissAllNotifications } from './notifications';
 
 /**
- * Focuses the given notebook editor and clicks its toolbar "Run All" button. The command-palette
- * entry for `deepnote.runallcells` ("Jupyter: Run All Cells") is gated behind context keys
- * (`deepnote.ispythonornativeactive`, …) that are not reliably set under automation, so driving it
+ * Focuses the given notebook editor and clicks the toolbar button carrying `ariaLabel`. The
+ * command-palette entries for these actions are gated behind context keys
+ * (`deepnote.ispythonornativeactive`, …) that are not reliably set under automation, so driving them
  * through `Workbench.executeCommand` can silently miss and trigger the wrong command.
  */
-export async function clickRunAll(notebookFileName: string): Promise<void> {
+async function clickNotebookToolbarButton(notebookFileName: string, ariaLabel: string): Promise<void> {
     const driver = VSBrowser.instance.driver;
 
     await new EditorView().openEditor(notebookFileName);
@@ -17,12 +17,11 @@ export async function clickRunAll(notebookFileName: string): Promise<void> {
     // Locate AND click inside the same wait loop. The notebook toolbar can re-render between finding
     // the button and clicking it (the editor re-focuses, kernel status / notifications change), which
     // would otherwise surface as a StaleElementReferenceError. Re-finding and clicking on the next
-    // tick is still a SINGLE "Run All" — the run is only issued once the click actually lands, so
-    // this does not re-run a notebook whose first execution was accepted.
+    // tick still issues the action only ONCE — it is only issued when the click actually lands.
     await driver.wait(
         async () => {
             try {
-                const [button] = await driver.findElements(By.css('a.action-label[aria-label="Run All"]'));
+                const [button] = await driver.findElements(By.css(`a.action-label[aria-label="${ariaLabel}"]`));
                 if (!button) {
                     return false;
                 }
@@ -31,14 +30,31 @@ export async function clickRunAll(notebookFileName: string): Promise<void> {
 
                 return true;
             } catch (error) {
-                console.warn('[deepnote-e2e] locate/click notebook Run All (retrying):', error);
+                console.warn(`[deepnote-e2e] locate/click notebook "${ariaLabel}" (retrying):`, error);
 
                 return false;
             }
         },
         WORKBENCH_TIMEOUT,
-        'notebook "Run All" button did not appear or could not be clicked'
+        `notebook "${ariaLabel}" button did not appear or could not be clicked`
     );
+}
+
+export async function clickRunAll(notebookFileName: string): Promise<void> {
+    return clickNotebookToolbarButton(notebookFileName, 'Run All');
+}
+
+/**
+ * Clicks the toolbar's "Interrupt" button — VS Code's `notebook.interruptExecution`, shown while
+ * `notebookHasSomethingRunning && notebookInterruptibleKernel`.
+ *
+ * It is the only toolbar action that reaches the controller's `interruptHandler`, and therefore the
+ * only one that signals a running agent to stop. "Stop Execution" (`notebook.cancelExecution`,
+ * which VS Code shows in its place for a kernel that declares no interrupt handler) cancels the
+ * cells without ever telling the agent, so it must not stand in as a fallback here.
+ */
+export async function clickInterrupt(notebookFileName: string): Promise<void> {
+    return clickNotebookToolbarButton(notebookFileName, 'Interrupt');
 }
 
 /**
@@ -136,6 +152,68 @@ export async function readRenderedOutput(): Promise<string> {
 
         return text || (await webView.findWebElement(By.css('body'))).getText();
     });
+}
+
+/**
+ * Polls the notebook webview until every marker in `markers` is rendered and none of `absentMarkers`
+ * is, then returns the text it settled on. `context` names the state being waited for; it is only
+ * used to make the timeout message say what did not happen.
+ */
+export async function awaitWebviewMarkers(
+    markers: string[],
+    timeout: number,
+    context: string,
+    absentMarkers: string[] = []
+): Promise<string> {
+    const driver = VSBrowser.instance.driver;
+    const deadline = Date.now() + timeout;
+    let text = '';
+
+    while (Date.now() < deadline) {
+        text = await readNotebookWebviewText();
+        const missing = markers.filter((marker) => !text.includes(marker));
+        const lingering = absentMarkers.filter((marker) => text.includes(marker));
+        if (missing.length === 0 && lingering.length === 0) {
+            return text;
+        }
+
+        await driver.sleep(OUTPUT_POLL_INTERVAL);
+    }
+
+    const missing = markers.filter((marker) => !text.includes(marker));
+    const lingering = absentMarkers.filter((marker) => text.includes(marker));
+    throw new Error(
+        `Timed out after ${timeout}ms waiting for notebook webview (${context}). Missing: ${JSON.stringify(
+            missing
+        )}. ` + `Lingering: ${JSON.stringify(lingering)}. Last text: ${JSON.stringify(text)}`
+    );
+}
+
+/**
+ * Fails if any of `markers` renders in the notebook webview during the next `windowMs`.
+ *
+ * Non-occurrence needs a window rather than one read: the regressions this guards render the
+ * forbidden text a beat *after* the state the test waited for — a batch that should have stopped
+ * carries on into the agent's round trip to the local mock and then the trailing cell. Size the
+ * window well above that round trip, since the whole window is spent on every passing run.
+ */
+export async function assertMarkersStayAbsent(markers: string[], windowMs: number, context: string): Promise<void> {
+    const driver = VSBrowser.instance.driver;
+    const deadline = Date.now() + windowMs;
+
+    while (Date.now() < deadline) {
+        const text = await readNotebookWebviewText();
+        const rendered = markers.filter((marker) => text.includes(marker));
+
+        if (rendered.length > 0) {
+            throw new Error(
+                `Notebook webview rendered ${JSON.stringify(rendered)}, which must not appear (${context}). ` +
+                    `Full text: ${JSON.stringify(text)}`
+            );
+        }
+
+        await driver.sleep(OUTPUT_POLL_INTERVAL);
+    }
 }
 
 /**

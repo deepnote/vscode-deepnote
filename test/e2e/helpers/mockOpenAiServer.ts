@@ -4,6 +4,10 @@ import { connect } from 'net';
 import * as os from 'os';
 import * as path from 'path';
 import { setTimeout as delay } from 'timers/promises';
+import { InputBox, Workbench } from 'vscode-extension-tester';
+
+import { QUICK_PICK_TIMEOUT } from './constants';
+import { waitForNotification } from './notifications';
 
 // npx aimock — keep jest/vitest peers out of the lockfile.
 const AIMOCK_VERSION = '1.37.4';
@@ -15,6 +19,30 @@ const MOCK_OPENAI_PORT = 18_937;
 /** Set OPENAI_BASE_URL at module scope — ExTester spawns the host before `before` hooks. */
 export function pointExtensionHostAtMockServer(): void {
     process.env.OPENAI_BASE_URL = `http://127.0.0.1:${MOCK_OPENAI_PORT}/v1`;
+}
+
+const MOCK_API_KEY = 'sk-e2e-mock-key';
+const SET_API_KEY_COMMAND = 'Deepnote: Set OpenAI API Key';
+const CLEAR_API_KEY_COMMAND = 'Deepnote: Clear OpenAI API Key';
+const API_KEY_SAVED_NOTIFICATION = /OpenAI API key has been saved/;
+
+/**
+ * Stores a throwaway key so the agent has credentials to send. The request goes to the mock, which
+ * never checks it — `pointExtensionHostAtMockServer` is what keeps it off the real API.
+ */
+export async function storeMockOpenAiApiKey(): Promise<void> {
+    await new Workbench().executeCommand(SET_API_KEY_COMMAND);
+
+    const input = await InputBox.create(QUICK_PICK_TIMEOUT);
+    await input.setText(MOCK_API_KEY);
+    await input.confirm();
+
+    await waitForNotification(API_KEY_SAVED_NOTIFICATION, QUICK_PICK_TIMEOUT, true);
+}
+
+/** Removes the stored key. The key outlives a suite, so every suite that stores one clears it. */
+export async function clearStoredOpenAiApiKey(): Promise<void> {
+    await new Workbench().executeCommand(CLEAR_API_KEY_COMMAND);
 }
 
 const START_TIMEOUT = 90_000;

@@ -112,6 +112,8 @@ const STOP_TRAILING_MARKER = 'e2e-stop-trailing-ran';
 const STOP_MARKDOWN_TEXT = 'Markdown the stopped agent must never write';
 const STOP_FINAL_TEXT = 'Summary the stopped agent must never write.';
 const AGENT_STOPPED_TEXT = '[Agent] Stopped';
+// wrapKernelMethod's error when the controller registration has no entry for the notebook.
+const KERNEL_INTERRUPT_FAILED_TEXT = 'No kernel associated with the notebook';
 const STOP_ACKNOWLEDGED_TIMEOUT = 30_000;
 // Shorter than the batch window: `[Agent] Stopped` already proves the run ended, so this only has
 // to outlast the trailing cell that a batch which ignored the stop would dispatch next.
@@ -649,12 +651,22 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
 
             await clickInterrupt(STOP_FILE);
 
-            await awaitWebviewMarkers(
+            const stoppedText = await awaitWebviewMarkers(
                 [AGENT_STOPPED_TEXT],
                 STOP_ACKNOWLEDGED_TIMEOUT,
                 'the agent reports the stop rather than treating the interrupted cell as a retryable failure',
                 [STOP_MARKDOWN_TEXT, STOP_FINAL_TEXT]
             );
+
+            // The kernel interrupt has to land as well. `handleInterrupt` dispatches it alongside the
+            // agent's own cancellation, and it used to fail on every Deepnote notebook — the controller
+            // registration had no entry for one — leaving this in the cell and the kernel still running.
+            if (stoppedText.includes(KERNEL_INTERRUPT_FAILED_TEXT)) {
+                throw new Error(
+                    `Stop reached the agent but not the kernel: the notebook shows ` +
+                        `${JSON.stringify(KERNEL_INTERRUPT_FAILED_TEXT)}. Full text: ${JSON.stringify(stoppedText)}`
+                );
+            }
 
             await assertMarkersStayAbsent(
                 [STOP_MARKDOWN_TEXT, STOP_FINAL_TEXT, STOP_TRAILING_MARKER],

@@ -1,4 +1,4 @@
-import { EditorView, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
+import { EditorView, InputBox, Key, VSBrowser, Workbench } from 'vscode-extension-tester';
 
 import {
     ENV_CREATED_TIMEOUT,
@@ -74,8 +74,16 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
     // "Not the baked venv" rather than "not any venv": in CI the only other interpreter is the one
     // actions/setup-python installed, which is not a venv, so this resolves to it.
     const index = labels.findIndex((label) => !label.includes(PREBAKED_VENV_DIR_NAME));
+    const target = index >= 0 ? index : 0;
 
-    await picks[index >= 0 ? index : 0].select();
+    // Walk the highlight with arrows and accept with Enter rather than calling select(), which is a
+    // bare click: a row's description `<p>` overlaps the row and intercepts positional clicks. Same
+    // reason selectEnvironmentForNotebook types instead of clicking. Enter is sent through the same
+    // focus context as the arrows so the highlight cannot be disturbed in between.
+    for (let step = 0; step < target; step++) {
+        await driver.actions().sendKeys(Key.ARROW_DOWN).perform();
+    }
+    await driver.actions().sendKeys(Key.ENTER).perform();
 }
 
 /**

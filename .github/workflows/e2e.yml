@@ -39,6 +39,7 @@ jobs:
           node-version-file: '.nvmrc'
 
       - name: Setup Python # interpreter the Deepnote environment is created from
+        id: python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
@@ -72,18 +73,37 @@ jobs:
         run: npm run setup:e2e:deps
 
       - name: Cache pip wheel downloads
-        # Provisioning the Deepnote environment pip-installs the toolkit dependency tree into a
-        # fresh venv on first kernel connect — the bulk of the E2E runtime. Caching pip's wheel
-        # cache makes that warm on later runs (the installs use the cache; nothing passes
-        # --no-cache-dir). The key busts when the toolkit version / install set changes; the
-        # restore-keys prefix keeps the cache warm across unrelated changes, since pip's cache is
-        # additive.
+        # Only the deletion suite still pip-installs at run time (it creates a managed environment
+        # on purpose), so this is now a fallback rather than the main lever — see the baked venv
+        # below. The key carries github.run_id because actions/cache only writes on a miss: with a
+        # bare content hash the entry froze at its first save and the unpinned specs
+        # (ipykernel, python-lsp-server, deepnote-cli, all installed with --upgrade) were
+        # re-downloaded every run and never written back. restore-keys still resolves to the newest
+        # matching entry, so each run starts warm and saves a refreshed copy.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pip
-          key: pip-${{ runner.os }}-py312-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
+          key: pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}-${{ github.run_id }}
           restore-keys: |
-            pip-${{ runner.os }}-py312-
+            pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}-
+            pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-
+
+      - name: Cache the baked Deepnote toolkit venv
+        # Every suite that connects a kernel adopts this venv instead of letting the extension build
+        # one, which is where most of the old E2E runtime went. Keyed on the resolved Python version
+        # as well as the install set: the venv records its base interpreter in pyvenv.cfg, so a
+        # patch bump to the hosted Python would leave a restored venv pointing at a path that no
+        # longer exists. prepareE2eVenv.js also self-heals — it discards and rebuilds any venv that
+        # cannot import deepnote_toolkit.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .venv-e2e
+          key: e2e-venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
+
+      - name: Bake the Deepnote toolkit venv
+        # No-op when the cache restored a usable venv; otherwise creates it and installs the same
+        # set deepnoteToolkitInstaller would have.
+        run: npm run setup:e2e:venv
 
       - name: Run E2E
         # VS Code launches with --no-sandbox (no AppArmor sysctl needed). Runs once; Mocha's retries:1

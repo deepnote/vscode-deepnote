@@ -22,6 +22,7 @@ import {
     FIRST_RUN_OUTPUT_TIMEOUT,
     KERNEL_CONNECT_TIMEOUT,
     QUICK_PICK_TIMEOUT,
+    SHARED_ENV_NAME,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     confirmModalDialog,
@@ -40,7 +41,7 @@ import {
 const FIXTURE = 'sales-analytics.deepnote';
 const CHILD = 'sales-analytics-overview.deepnote';
 const PROJECT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const ENV_NAME = 'E2E Hello Env'; // shared env so CI provisions one venv
+const ENV_NAME = SHARED_ENV_NAME;
 const SPLIT_PROMPT = /multiple notebooks/i;
 const SPLIT_ACTION = 'Split into separate files';
 const SPLIT_DONE = /Split into \d+ files\./i;
@@ -293,7 +294,7 @@ describe('Deepnote — deleting an environment stops even a closed-but-running n
         // Servers already running from earlier suites — exclude these when isolating THIS PID.
         const pidsBefore = serverPids();
 
-        await createEnvironment(DELETE_ENV_NAME);
+        await createEnvironment(DELETE_ENV_NAME, { useManagedVenv: true });
 
         await openWorkspaceFile(G2_FIXTURE);
         await driver.wait(

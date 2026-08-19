@@ -47,3 +47,19 @@ export const FOLDER_OK_RETRY_DELAY = 400;
 // Selectors that only exist inside the notebook output iframe (`#active-frame`),
 // so reading them cannot accidentally match the cell's source in the editor.
 export const OUTPUT_SELECTOR = '.output_container, .output, .rendered-output';
+
+// The environment every suite shares. Creating a Deepnote environment is cheap (metadata only), but
+// the first kernel connect provisions a venv + the Deepnote toolkit, so a suite that invents its own
+// name pays that once more. Import this instead of writing a name; `E2E Delete Env` in
+// environment.e2e.test.ts is the one deliberate exception, since that suite deletes what it creates.
+export const SHARED_ENV_NAME = 'E2E Hello Env';
+
+// Venv baked by build/e2e/prepareE2eVenv.js, adopted by every suite that connects a kernel. Kept in
+// sync with that script by convention; the suite falls back to whatever the quick pick offers (and
+// warns) when it is absent, so a missed setup step is slow rather than red.
+export const PREBAKED_VENV_DIR_NAME = '.venv-e2e';
+
+// How long to wait for the interpreter quick pick to actually narrow to the baked venv. The
+// filter is near-instant when the venv is discoverable, so this only elapses when it is missing —
+// keep it well under QUICK_PICK_TIMEOUT so a forgotten setup step does not stall every suite.
+export const PREBAKED_VENV_FILTER_TIMEOUT = 10_000;

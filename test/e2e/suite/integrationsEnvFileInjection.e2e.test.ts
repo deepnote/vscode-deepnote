@@ -10,6 +10,7 @@ import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 
 import {
     FIRST_RUN_OUTPUT_TIMEOUT,
+    SHARED_ENV_NAME,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
@@ -52,7 +53,7 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
     // A stable name: createEnvironment is idempotent (it treats "already exists" as success), so a
     // leftover environment from a previous or retried run is reused rather than colliding — which
     // also lets a persistent test instance reuse the already-provisioned venv.
-    const environmentName = 'E2E Integrations Env';
+    const environmentName = SHARED_ENV_NAME;
 
     let cleanupTempDir: (() => void) | undefined;
     // The temp workspace dir, so the live-refresh assertion can rewrite `.env`.

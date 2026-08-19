@@ -1,4 +1,4 @@
-import { serializeDeepnoteFile, type DeepnoteBlock } from '@deepnote/blocks';
+import { serializeDeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { when, reset, anything, mock, instance } from 'ts-mockito';
@@ -26,10 +26,10 @@ import { IConfigurationService, IDisposable } from '../../platform/common/types'
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
 import { WrappedError } from '../../platform/errors/types';
+import { createBlockFromPocket } from '../../platform/deepnote/pocket';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
 import {
-    createDeepnoteBlock,
     createDeepnoteFile,
     createDeepnoteNotebook,
     createDeepnoteProject,
@@ -359,11 +359,11 @@ suite('DeepnoteNotebookCommandListener', () => {
     suite('getInputBlockMetadata', () => {
         INPUT_BLOCK_TYPES.forEach((blockType) => {
             test(`default ${blockType} metadata is accepted by the @deepnote/blocks serializer`, () => {
-                const block = {
-                    ...createDeepnoteBlock(),
-                    metadata: getInputBlockMetadata(blockType, 'input_1'),
-                    type: blockType
-                } as DeepnoteBlock;
+                const metadata = getInputBlockMetadata(blockType, 'input_1');
+                const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
+                cell.metadata = { __deepnotePocket: { type: blockType, ...metadata }, ...metadata };
+
+                const block = createBlockFromPocket(cell, 0);
                 const file = createDeepnoteFile({
                     project: createDeepnoteProject({ notebooks: [createDeepnoteNotebook({ blocks: [block] })] })
                 });

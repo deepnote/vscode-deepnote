@@ -1,9 +1,5 @@
 import { z } from 'zod';
 
-// Block metadata parsed here is handed back to @deepnote/blocks on save, and its schema
-// rejects an explicit null on optional fields — deepnote_variable_default_value is the one
-// field it coerces. Defaults below must resolve to a valid value or to undefined.
-
 export const DeepnoteChartBigNumberOutputSchema = z.object({
     title: z.string().nullish(),
     value: z.string().nullish(),

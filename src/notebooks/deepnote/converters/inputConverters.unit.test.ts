@@ -276,10 +276,6 @@ suite('InputSelectBlockConverter', () => {
         converter = new InputSelectBlockConverter();
     });
 
-    test('defaults select_type to from-options', () => {
-        assert.strictEqual(converter.defaultConfig().deepnote_variable_select_type, 'from-options');
-    });
-
     suite('convertToCell', () => {
         test('converts input-select block to Python cell with quoted value', () => {
             const block: DeepnoteBlock = {

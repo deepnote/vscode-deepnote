@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable, optional } from 'inversify';
+import { inject, injectable } from 'inversify';
 import { logger } from '../../../platform/logging';
 import { getDisplayPath } from '../../../platform/common/platform/fs-paths.node';
 import { IConfigurationService, Resource, type ReadWrite } from '../../../platform/common/types';
@@ -33,13 +33,8 @@ export class KernelEnvironmentVariablesService {
         private readonly customEnvVars: ICustomEnvironmentVariablesProvider,
         @inject(IConfigurationService) private readonly configService: IConfigurationService,
         @inject(ISqlIntegrationEnvVarsProvider)
-        @optional()
-        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
-    ) {
-        logger.debug(
-            `KernelEnvironmentVariablesService: Constructor; SQL env provider present=${!!sqlIntegrationEnvVars}`
-        );
-    }
+        private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider
+    ) {}
     /**
      * Generates the environment variables for the kernel.
      *
@@ -62,7 +57,7 @@ export class KernelEnvironmentVariablesService {
         logger.debug(
             `KernelEnvVarsService.getEnvironmentVariables: Called for resource ${
                 resource ? getDisplayPath(resource) : 'undefined'
-            }, sqlIntegrationEnvVars is ${this.sqlIntegrationEnvVars ? 'AVAILABLE' : 'UNDEFINED'}`
+            }`
         );
         let kernelEnv =
             kernelSpec.env && Object.keys(kernelSpec.env).length > 0
@@ -97,21 +92,17 @@ export class KernelEnvironmentVariablesService {
                       })
                 : undefined,
             this.sqlIntegrationEnvVars
-                ? this.sqlIntegrationEnvVars
-                      .getEnvironmentVariables(resource, token)
-                      .then((vars) => {
-                          if (vars && Object.keys(vars).length > 0) {
-                              logger.debug(
-                                  `KernelEnvVarsService: Got ${Object.keys(vars).length} SQL integration env vars`
-                              );
-                          }
-                          return vars;
-                      })
-                      .catch<undefined>((ex) => {
-                          logger.error('Failed to get SQL integration env variables for Kernel', ex);
-                          return undefined;
-                      })
-                : undefined
+                .getEnvironmentVariables(resource, token)
+                .then((vars) => {
+                    if (vars && Object.keys(vars).length > 0) {
+                        logger.debug(`KernelEnvVarsService: Got ${Object.keys(vars).length} SQL integration env vars`);
+                    }
+                    return vars;
+                })
+                .catch<undefined>((ex) => {
+                    logger.error('Failed to get SQL integration env variables for Kernel', ex);
+                    return undefined;
+                })
         ]);
         if (token?.isCancellationRequested) {
             return;

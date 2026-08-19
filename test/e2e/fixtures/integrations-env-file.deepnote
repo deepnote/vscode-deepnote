@@ -1,0 +1,26 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-integrations-env-file-project
+  name: E2E Integrations Env File
+  integrations:
+    - id: e2e-pg-integration
+      name: Prod Postgres
+      type: pgsql
+  notebooks:
+    - id: e2e-integrations-env-file-notebook
+      name: Integrations Env File
+      blocks:
+        - id: e2e-integrations-block
+          blockGroup: e2e-group
+          type: code
+          content: |-
+            import os
+            print(os.environ.get('PROD_POSTGRES_HOST'))
+          sortingKey: a0
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

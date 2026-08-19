@@ -1,4 +1,7 @@
-import { ConfigurableDatabaseIntegrationConfig } from '../../platform/notebooks/deepnote/integrationTypes';
+import {
+    ConfigurableDatabaseIntegrationConfig,
+    isFederatedAuthMetadata
+} from '../../platform/notebooks/deepnote/integrationTypes';
 
 /**
  * SQL LSP connection configuration format expected by sql-language-server
@@ -36,39 +39,31 @@ export function isSupportedBySqlLsp(type: string): boolean {
  */
 export function convertToSqlLspConnection(config: ConfigurableDatabaseIntegrationConfig): SqlLspConnection | null {
     try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const metadata = config.metadata as Record<string, any>;
-        const type = config.type as string;
+        if (isFederatedAuthMetadata(config.metadata)) {
+            return null;
+        }
 
-        switch (type) {
+        switch (config.type) {
             case 'pgsql':
                 return {
                     name: config.name || 'postgres',
                     adapter: 'postgres',
-                    host: metadata.host || 'localhost',
-                    port: Number(metadata.port) || 5432,
-                    user: metadata.username || metadata.user,
-                    password: metadata.password,
-                    database: metadata.database || metadata.dbname
+                    host: config.metadata.host || 'localhost',
+                    port: Number(config.metadata.port) || 5432,
+                    user: config.metadata.user,
+                    password: config.metadata.password,
+                    database: config.metadata.database
                 };
 
             case 'mysql':
                 return {
                     name: config.name || 'mysql',
                     adapter: 'mysql',
-                    host: metadata.host || 'localhost',
-                    port: Number(metadata.port) || 3306,
-                    user: metadata.username || metadata.user,
-                    password: metadata.password,
-                    database: metadata.database || metadata.dbname
-                };
-
-            case 'big-query':
-                return {
-                    name: config.name || 'bigquery',
-                    adapter: 'bigquery',
-                    projectId: metadata.projectId || metadata.project_id,
-                    keyFilename: metadata.keyFilename || metadata.key_filename
+                    host: config.metadata.host || 'localhost',
+                    port: Number(config.metadata.port) || 3306,
+                    user: config.metadata.user,
+                    password: config.metadata.password,
+                    database: config.metadata.database
                 };
 
             default:

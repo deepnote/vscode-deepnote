@@ -10,7 +10,7 @@ import { IFederatedAuthTokenStorage } from '../types';
 
 /**
  * Node-only bridge that restarts kernels when a federated integration's token changes, clearing stale
- * `os.environ` mutations and kernel globals. Separate from {@link IntegrationKernelRestartHandler} because
+ * `os.environ` mutations and kernel globals. Separate from {@link IntegrationEnvRefreshHandler} because
  * {@link IFederatedAuthTokenStorage} is node-only.
  */
 @injectable()

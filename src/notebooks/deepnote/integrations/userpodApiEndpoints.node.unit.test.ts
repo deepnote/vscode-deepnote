@@ -1,0 +1,223 @@
+import * as http from 'http';
+
+import { assert } from 'chai';
+import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
+import { Disposable, NotebookDocument, Uri } from 'vscode';
+
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
+import { ITelemetryService } from '../../../platform/analytics/types';
+import { IDisposable } from '../../../platform/common/types';
+import { dispose } from '../../../platform/common/utils/lifecycle';
+import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
+import { createMockNotebook } from '../deepnoteTestHelpers';
+import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
+import { UserpodApiEndpoints } from './userpodApiEndpoints.node';
+
+suite('UserpodApiEndpoints', () => {
+    let endpoint: UserpodApiEndpoints;
+    let provider: ISqlIntegrationEnvVarsProvider;
+    let telemetry: ITelemetryService;
+    let disposables: IDisposable[];
+
+    setup(() => {
+        resetVSCodeMocks();
+        disposables = [new Disposable(() => resetVSCodeMocks())];
+        provider = mock<ISqlIntegrationEnvVarsProvider>();
+        telemetry = mock<ITelemetryService>();
+
+        endpoint = new UserpodApiEndpoints(instance(provider), disposables, instance(telemetry));
+    });
+
+    teardown(() => {
+        // Disposing tears down the HTTP server (a dispose handler is pushed into `disposables` at start).
+        disposables = dispose(disposables);
+    });
+
+    /** A notebook carrying `projectId` in its metadata, which is how the endpoint's route lookup finds it. */
+    function createNotebook(projectId: string, uri: Uri, notebookType: string = DEEPNOTE_NOTEBOOK_TYPE) {
+        return createMockNotebook({ notebookType, uri, metadata: { deepnoteProjectId: projectId } });
+    }
+
+    /** `activate()` is fire-and-forget; poll `baseUrl` until the server has bound a port. */
+    async function waitForBaseUrl(timeoutMs = 3000): Promise<string> {
+        const start = Date.now();
+        while (endpoint.baseUrl === undefined) {
+            if (Date.now() - start > timeoutMs) {
+                throw new Error('UserpodApiEndpoints did not start listening in time');
+            }
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+
+        return endpoint.baseUrl;
+    }
+
+    function startWith(...notebooks: NotebookDocument[]): Promise<string> {
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn(notebooks);
+        endpoint.activate();
+
+        return waitForBaseUrl();
+    }
+
+    function envVarsUrl(baseUrl: string, projectId: string): string {
+        return `${baseUrl}/userpod-api/${projectId}/integrations/environment-variables`;
+    }
+
+    function authedFetch(url: string, projectId: string): Promise<Response> {
+        return fetch(url, { headers: { Authorization: `Bearer ${endpoint.getAuthToken(projectId)}` } });
+    }
+
+    test('returns the provider env map as [{name,value}] for a matching open deepnote notebook', async () => {
+        when(provider.getEnvironmentVariables(anything())).thenResolve({ FOO: 'bar', BAZ: 'qux' });
+
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
+
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
+
+        assert.strictEqual(response.status, 200);
+        const body = await response.json();
+        assert.deepStrictEqual(body, [
+            { name: 'FOO', value: 'bar' },
+            { name: 'BAZ', value: 'qux' }
+        ]);
+    });
+
+    test('routes by projectId: queries only the notebook whose metadata matches the URL param', async () => {
+        const uriTwo = Uri.file('/ws/two.deepnote');
+        when(provider.getEnvironmentVariables(anything())).thenResolve({ FROM: 'two' });
+
+        const baseUrl = await startWith(
+            createNotebook('project-one', Uri.file('/ws/one.deepnote')),
+            createNotebook('project-two', uriTwo)
+        );
+
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-two'), 'project-two');
+        const body = await response.json();
+
+        assert.deepStrictEqual(body, [{ name: 'FROM', value: 'two' }]);
+        // The endpoint must resolve env vars for the matching notebook's uri, not the other project's.
+        verify(provider.getEnvironmentVariables(anything())).once();
+        const [uriArg] = capture(provider.getEnvironmentVariables).last();
+        assert.strictEqual((uriArg as Uri).toString(), uriTwo.toString());
+    });
+
+    test('returns an empty array and never queries the provider when no notebook matches the projectId', async () => {
+        const baseUrl = await startWith(createNotebook('some-other-project', Uri.file('/ws/app.deepnote')));
+
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
+
+        assert.strictEqual(response.status, 200);
+        assert.deepStrictEqual(await response.json(), []);
+        verify(provider.getEnvironmentVariables(anything())).never();
+    });
+
+    test('ignores non-Deepnote notebooks even when their projectId matches', async () => {
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.ipynb'), 'jupyter-notebook'));
+
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
+
+        assert.deepStrictEqual(await response.json(), []);
+        verify(provider.getEnvironmentVariables(anything())).never();
+    });
+
+    test('responds 500 when the provider rejects', async () => {
+        when(provider.getEnvironmentVariables(anything())).thenReject(new Error('resolution failed'));
+
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
+
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
+
+        assert.strictEqual(response.status, 500);
+    });
+
+    test('responds 401 and never queries the provider when the bearer token is missing or wrong', async () => {
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
+
+        const noHeader = await fetch(envVarsUrl(baseUrl, 'project-1'));
+        assert.strictEqual(noHeader.status, 401);
+
+        const wrongToken = await fetch(envVarsUrl(baseUrl, 'project-1'), {
+            headers: { Authorization: 'Bearer wrong-token' }
+        });
+        assert.strictEqual(wrongToken.status, 401);
+
+        verify(provider.getEnvironmentVariables(anything())).never();
+    });
+
+    test('responds 401 for a wrong token of the SAME length (exercises the constant-time compare path)', async () => {
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
+
+        const realToken = endpoint.getAuthToken('project-1');
+        const sameLengthWrong = `Bearer ${'x'.repeat(realToken.length)}`;
+        const response = await fetch(envVarsUrl(baseUrl, 'project-1'), {
+            headers: { Authorization: sameLengthWrong }
+        });
+
+        assert.strictEqual(response.status, 401);
+        verify(provider.getEnvironmentVariables(anything())).never();
+    });
+
+    test('cross-project: a token issued for one project cannot read another project', async () => {
+        const baseUrl = await startWith(
+            createNotebook('project-a', Uri.file('/ws/a.deepnote')),
+            createNotebook('project-b', Uri.file('/ws/b.deepnote'))
+        );
+
+        const tokenA = endpoint.getAuthToken('project-a');
+        endpoint.getAuthToken('project-b');
+
+        const response = await fetch(envVarsUrl(baseUrl, 'project-b'), {
+            headers: { Authorization: `Bearer ${tokenA}` }
+        });
+
+        assert.strictEqual(response.status, 401, "project A's token must not authorize a read of project B");
+        verify(provider.getEnvironmentVariables(anything())).never();
+    });
+
+    test('ready resolves once the server is listening', async () => {
+        endpoint.activate();
+
+        await endpoint.ready;
+
+        assert.isString(endpoint.baseUrl, 'baseUrl must be set once ready resolves');
+    });
+
+    test('prompts the user to recover when the initial bind fails, and never advertises a base URL', async () => {
+        when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).thenResolve(undefined as never);
+
+        endpoint.activate();
+
+        // `start()` assigns the server synchronously before its first await, so the bind failure can be
+        // simulated here — while `isListening` is still false, i.e. the initial-bind path.
+        const server = (endpoint as unknown as { server: http.Server }).server;
+        server.emit('error', new Error('EADDRINUSE'));
+
+        await endpoint.ready;
+
+        assert.strictEqual(endpoint.baseUrl, undefined, 'a failed bind must not advertise a base URL');
+        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).once();
+        verify(
+            telemetry.trackEvent(
+                deepEqual({ eventName: 'integration_endpoint_failed', properties: { phase: 'startup' } })
+            )
+        ).once();
+    });
+
+    test('logs and prompts the user to recover when the server errors after startup, without crashing', async () => {
+        when(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).thenResolve(undefined as never);
+
+        await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
+
+        // Reach the running server to simulate a post-listen failure (e.g. an accept error under fd exhaustion).
+        const server = (endpoint as unknown as { server: http.Server }).server;
+        server.emit('error', new Error('accept failed'));
+
+        assert.strictEqual(endpoint.baseUrl, undefined, 'a crashed endpoint must stop advertising its base URL');
+        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything())).once();
+        // Tracked even though nobody clicked the notification: the emit must not hang off its `then`.
+        verify(
+            telemetry.trackEvent(
+                deepEqual({ eventName: 'integration_endpoint_failed', properties: { phase: 'running' } })
+            )
+        ).once();
+    });
+});

@@ -1,12 +1,18 @@
 import assert from 'assert';
 import type { DeepnoteFile } from '@deepnote/blocks';
-import { instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { CancellationTokenSource, EventEmitter, NotebookDocument, Uri } from 'vscode';
 
+import { getFilePath } from '../../common/platform/fs-paths';
 import { IDisposableRegistry } from '../../common/types';
 import { SqlIntegrationEnvironmentVariablesProvider } from './sqlIntegrationEnvironmentVariablesProvider';
-import { IIntegrationStorage, IPlatformDeepnoteNotebookManager, IPlatformNotebookEditorProvider } from './types';
-import { DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
+import {
+    IIntegrationsFileConfigProvider,
+    IIntegrationStorage,
+    IPlatformDeepnoteNotebookManager,
+    IPlatformNotebookEditorProvider
+} from './types';
+import { ConfigurableDatabaseIntegrationConfig, DATAFRAME_SQL_INTEGRATION_ID } from './integrationTypes';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 
 /** Create a minimal `DeepnoteFile` for tests. */
@@ -29,13 +35,49 @@ function createMockProject(
     };
 }
 
+/** A file-config source that yields nothing — what callers see when no `.deepnote.env.yaml` exists. */
+function emptyFileConfigProvider(): IIntegrationsFileConfigProvider {
+    return { getConfigsForFile: async () => ({ configs: [], issues: [] }) };
+}
+
 suite('SqlIntegrationEnvironmentVariablesProvider', () => {
+    const notebookUri = Uri.file('/ws/project.deepnote');
+    const duckDbEnvVar = `SQL_${DATAFRAME_SQL_INTEGRATION_ID.toUpperCase().replace(/-/g, '_')}`;
     let provider: SqlIntegrationEnvironmentVariablesProvider;
     let integrationStorage: IIntegrationStorage;
     let notebookEditorProvider: IPlatformNotebookEditorProvider;
     let notebookManager: IPlatformDeepnoteNotebookManager;
     let disposables: IDisposableRegistry;
     let onDidChangeIntegrationsEmitter: EventEmitter<void>;
+
+    /** A non-federated, non-reserved pgsql config whose host is embedded in the generated connection URL. */
+    function pgConfig(id: string, host: string): ConfigurableDatabaseIntegrationConfig {
+        return {
+            id,
+            name: id,
+            type: 'pgsql',
+            metadata: {
+                host,
+                port: '5432',
+                database: 'db',
+                user: 'u',
+                password: 'p',
+                sslEnabled: false
+            }
+        };
+    }
+
+    /** Stubs the resource -> notebook -> project chain that every public method walks for `notebookUri`. */
+    function stubNotebookWithProject(project: DeepnoteFile): void {
+        const notebook = mock<NotebookDocument>();
+        when(notebook.uri).thenReturn(notebookUri);
+        when(notebook.metadata).thenReturn({
+            deepnoteProjectId: 'project-123',
+            deepnoteNotebookId: 'notebook-123'
+        });
+        when(notebookEditorProvider.findAssociatedNotebookDocument(notebookUri)).thenReturn(instance(notebook));
+        when(notebookManager.getProjectForNotebook('project-123', 'notebook-123')).thenReturn(project);
+    }
 
     setup(() => {
         integrationStorage = mock<IIntegrationStorage>();
@@ -50,7 +92,8 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
             instance(integrationStorage),
             instance(notebookEditorProvider),
             instance(notebookManager),
-            disposables
+            disposables,
+            emptyFileConfigProvider()
         );
     });
 
@@ -315,6 +358,48 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
                 assert.ok(parsed.url.includes('production'), 'URL should contain database name');
             });
 
+            test('anchors a CA certificate path to the notebook directory, not the filesystem root', async () => {
+                const resource = Uri.file('/test/proj/notebook.deepnote');
+                const notebook = mock<NotebookDocument>();
+                const postgresConfig: DatabaseIntegrationConfig = {
+                    id: 'my-postgres',
+                    name: 'Production DB',
+                    type: 'pgsql',
+                    metadata: {
+                        host: 'db.example.com',
+                        port: '5432',
+                        database: 'production',
+                        user: 'admin',
+                        password: 'secret123',
+                        sslEnabled: true,
+                        caCertificateName: 'my-ca.pem'
+                    }
+                };
+                const project = createMockProject('project-123', [
+                    { id: 'my-postgres', name: 'Production DB', type: 'pgsql' }
+                ]);
+
+                when(notebook.uri).thenReturn(resource);
+                when(notebook.metadata).thenReturn({
+                    deepnoteProjectId: 'project-123',
+                    deepnoteNotebookId: 'notebook-123'
+                });
+                when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
+                when(notebookManager.getProjectForNotebook('project-123', 'notebook-123')).thenReturn(project);
+                when(integrationStorage.getIntegrationConfig('my-postgres')).thenResolve(postgresConfig);
+
+                const result = await provider.getEnvironmentVariables(resource);
+
+                // A caCertificateName flips sslmode to verify-ca, so an unreadable path fails the connection
+                // rather than degrading — an empty project root produced '/.deepnote/my-postgres/my-ca.pem'.
+                const parsed = JSON.parse(result['SQL_MY_POSTGRES']!);
+                assert.strictEqual(parsed.params.connect_args.sslmode, 'verify-ca');
+                assert.strictEqual(
+                    parsed.params.connect_args.sslrootcert,
+                    `${getFilePath(Uri.file('/test/proj'))}/.deepnote/my-postgres/my-ca.pem`
+                );
+            });
+
             test('BigQuery integration generates correct SQL_* env var format', async () => {
                 const resource = Uri.file('/test/notebook.deepnote');
                 const notebook = mock<NotebookDocument>();
@@ -437,52 +522,270 @@ suite('SqlIntegrationEnvironmentVariablesProvider', () => {
         });
     });
 
-    suite('Federated-auth integrations are skipped', () => {
-        test('Mixed project: federated integration is skipped, non-federated is included', async () => {
-            const resource = Uri.file('/test/notebook.deepnote');
-            const notebook = mock<NotebookDocument>();
-            const postgresConfig: DatabaseIntegrationConfig = {
-                id: 'pg-1',
-                name: 'Postgres',
-                type: 'pgsql',
-                metadata: {
-                    host: 'localhost',
-                    port: '5432',
-                    database: 'db',
-                    user: 'u',
-                    password: 'p',
-                    sslEnabled: false
-                }
-            };
-            const federatedConfig: DatabaseIntegrationConfig = {
-                id: 'bq-oauth',
-                name: 'OAuth BQ',
+    suite('File config source (.deepnote.env.yaml) merge', () => {
+        let fileConfigProvider: IIntegrationsFileConfigProvider;
+        let providerWithFile: SqlIntegrationEnvironmentVariablesProvider;
+
+        setup(() => {
+            fileConfigProvider = mock<IIntegrationsFileConfigProvider>();
+            providerWithFile = new SqlIntegrationEnvironmentVariablesProvider(
+                instance(integrationStorage),
+                instance(notebookEditorProvider),
+                instance(notebookManager),
+                disposables,
+                instance(fileConfigProvider)
+            );
+        });
+
+        test('File wins on id conflict: file config used and SecretStorage is not queried for that id', async () => {
+            stubNotebookWithProject(
+                createMockProject('project-123', [
+                    { id: 'shared-db', name: 'shared-db', type: 'pgsql' },
+                    { id: 'secret-only', name: 'secret-only', type: 'pgsql' }
+                ])
+            );
+            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
+                configs: [pgConfig('shared-db', 'from-file.example.com')],
+                issues: []
+            });
+            // Stubbed with a different host to prove the file wins; the provider must never consult it for `shared-db`.
+            when(integrationStorage.getIntegrationConfig('shared-db')).thenResolve(
+                pgConfig('shared-db', 'from-secret.example.com')
+            );
+            when(integrationStorage.getIntegrationConfig('secret-only')).thenResolve(
+                pgConfig('secret-only', 'secret-only.example.com')
+            );
+
+            const result = await providerWithFile.getEnvironmentVariables(notebookUri);
+
+            const sharedUrl = JSON.parse(result['SQL_SHARED_DB']!).url as string;
+            assert.ok(sharedUrl.includes('from-file.example.com'), 'File config host should win the conflict');
+            assert.ok(!sharedUrl.includes('from-secret.example.com'), 'SecretStorage host must not be used');
+            assert.ok(result['SQL_SECRET_ONLY'], 'SecretStorage-only integration should still be resolved');
+
+            verify(integrationStorage.getIntegrationConfig('shared-db')).never();
+            verify(integrationStorage.getIntegrationConfig('secret-only')).once();
+        });
+
+        test('getMergedIntegrationConfigs returns the merged config list (file wins, SecretStorage fallback, file-only additive)', async () => {
+            stubNotebookWithProject(
+                createMockProject('project-123', [
+                    { id: 'shared-db', name: 'shared-db', type: 'pgsql' },
+                    { id: 'secret-only', name: 'secret-only', type: 'pgsql' }
+                ])
+            );
+            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
+                configs: [
+                    pgConfig('shared-db', 'from-file.example.com'),
+                    pgConfig('file-only', 'file-only.example.com')
+                ],
+                issues: []
+            });
+            when(integrationStorage.getIntegrationConfig('secret-only')).thenResolve(
+                pgConfig('secret-only', 'secret-only.example.com')
+            );
+
+            const merged = await providerWithFile.getMergedIntegrationConfigs(notebookUri);
+            const byId = new Map(merged.map((config) => [config.id, config]));
+
+            assert.deepStrictEqual(
+                [...byId.keys()].sort(),
+                ['file-only', 'secret-only', 'shared-db'],
+                'merged configs must include the file-won, SecretStorage-fallback, and file-only integrations'
+            );
+            const sharedDb = byId.get('shared-db');
+            assert.ok(
+                sharedDb && JSON.stringify(sharedDb.metadata).includes('from-file.example.com'),
+                'file config must win the id conflict in the merged list'
+            );
+            assert.ok(
+                !byId.has(DATAFRAME_SQL_INTEGRATION_ID),
+                'the internal DuckDB integration is not part of the merged list'
+            );
+            verify(integrationStorage.getIntegrationConfig('shared-db')).never();
+        });
+
+        test('getMergedIntegrationConfigs returns [] when the resource resolves to no project', async () => {
+            const merged = await providerWithFile.getMergedIntegrationConfigs(undefined);
+
+            assert.deepStrictEqual(merged, []);
+        });
+
+        test('getFileConfiguredIntegrationIds returns the file config ids only', async () => {
+            stubNotebookWithProject(
+                createMockProject('project-123', [{ id: 'secret-only', name: 'secret-only', type: 'pgsql' }])
+            );
+            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
+                configs: [pgConfig('shared-db', 'from-file.example.com'), pgConfig('file-only', 'file-only.test')],
+                issues: []
+            });
+
+            const ids = await providerWithFile.getFileConfiguredIntegrationIds(notebookUri);
+
+            assert.deepStrictEqual(
+                ids,
+                new Set(['shared-db', 'file-only']),
+                'SecretStorage-only ids must not be reported as file-configured'
+            );
+            assert.deepStrictEqual(
+                await providerWithFile.getFileConfiguredIntegrationIds(undefined),
+                new Set(),
+                'no resource means nothing to look up'
+            );
+            assert.deepStrictEqual(
+                await providerWithFile.getFileConfiguredIntegrationIds(Uri.file('/ws/not-open.deepnote')),
+                new Set(),
+                'a resource with no associated notebook resolves to no file configs'
+            );
+        });
+
+        test('File source yields nothing: behavior is SecretStorage-only (unchanged)', async () => {
+            const providerWithoutFile = new SqlIntegrationEnvironmentVariablesProvider(
+                instance(integrationStorage),
+                instance(notebookEditorProvider),
+                instance(notebookManager),
+                disposables,
+                emptyFileConfigProvider()
+            );
+            stubNotebookWithProject(
+                createMockProject('project-123', [{ id: 'secret-db', name: 'secret-db', type: 'pgsql' }])
+            );
+            when(integrationStorage.getIntegrationConfig('secret-db')).thenResolve(
+                pgConfig('secret-db', 'from-secret.example.com')
+            );
+
+            const result = await providerWithoutFile.getEnvironmentVariables(notebookUri);
+
+            assert.ok(result['SQL_SECRET_DB'], 'SecretStorage integration should be resolved without a file provider');
+            assert.ok(
+                JSON.parse(result['SQL_SECRET_DB']!).url.includes('from-secret.example.com'),
+                'SecretStorage config should be used'
+            );
+            assert.ok(result[duckDbEnvVar], 'DuckDB integration should always be included');
+            verify(integrationStorage.getIntegrationConfig('secret-db')).once();
+        });
+
+        test('File source throws: degrades to SecretStorage + DuckDB without rejecting', async () => {
+            stubNotebookWithProject(
+                createMockProject('project-123', [{ id: 'secret-db', name: 'secret-db', type: 'pgsql' }])
+            );
+            when(fileConfigProvider.getConfigsForFile(anything())).thenReject(new Error('boom'));
+            when(integrationStorage.getIntegrationConfig('secret-db')).thenResolve(
+                pgConfig('secret-db', 'from-secret.example.com')
+            );
+
+            const result = await providerWithFile.getEnvironmentVariables(notebookUri);
+
+            assert.ok(
+                result['SQL_SECRET_DB'],
+                'SecretStorage integration should still be resolved when the file source throws'
+            );
+            assert.ok(result[duckDbEnvVar], 'DuckDB integration should still be included when the file source throws');
+        });
+    });
+
+    suite('Federated-auth candidates and env-var exclusion', () => {
+        let fileConfigProvider: IIntegrationsFileConfigProvider;
+        let providerWithFile: SqlIntegrationEnvironmentVariablesProvider;
+
+        /** BigQuery + `google-oauth` — the one federated combination this extension implements. */
+        function bigQueryOauthConfig(id: string, name: string): ConfigurableDatabaseIntegrationConfig {
+            return {
+                id,
+                name,
                 type: 'big-query',
                 metadata: {
                     authMethod: 'google-oauth',
                     project: 'oauth-project',
-                    clientId: 'client',
-                    clientSecret: 'secret'
+                    clientId: `${id}-client-id`,
+                    clientSecret: `${id}-client-secret`
                 }
             };
-            const project = createMockProject('project-123', [
-                { id: 'pg-1', name: 'Postgres', type: 'pgsql' },
-                { id: 'bq-oauth', name: 'OAuth BQ', type: 'big-query' }
-            ]);
+        }
 
-            when(notebook.metadata).thenReturn({
-                deepnoteProjectId: 'project-123',
-                deepnoteNotebookId: 'notebook-123'
+        setup(() => {
+            fileConfigProvider = mock<IIntegrationsFileConfigProvider>();
+            providerWithFile = new SqlIntegrationEnvironmentVariablesProvider(
+                instance(integrationStorage),
+                instance(notebookEditorProvider),
+                instance(notebookManager),
+                disposables,
+                instance(fileConfigProvider)
+            );
+        });
+
+        test('File-sourced federated config reaches getMergedIntegrationConfigs but contributes no env vars', async () => {
+            stubNotebookWithProject(createMockProject('project-123', []));
+            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
+                configs: [bigQueryOauthConfig('bq-file', 'File BQ'), pgConfig('pg-file', 'pg-file.example.com')],
+                issues: []
             });
-            when(notebookEditorProvider.findAssociatedNotebookDocument(resource)).thenReturn(instance(notebook));
-            when(notebookManager.getProjectForNotebook('project-123', 'notebook-123')).thenReturn(project);
-            when(integrationStorage.getIntegrationConfig('pg-1')).thenResolve(postgresConfig);
-            when(integrationStorage.getIntegrationConfig('bq-oauth')).thenResolve(federatedConfig);
 
-            const result = await provider.getEnvironmentVariables(resource);
+            const merged = await providerWithFile.getMergedIntegrationConfigs(notebookUri);
+            const envVars = await providerWithFile.getEnvironmentVariables(notebookUri);
 
-            assert.ok(result['SQL_PG_1'], 'Non-federated postgres env var should be present');
-            assert.strictEqual(result['SQL_BQ_OAUTH'], undefined, 'Federated integration env var should be omitted');
+            assert.deepStrictEqual(
+                merged.map((config) => config.id),
+                ['bq-file', 'pg-file'],
+                'the file-declared federated config must survive the merge; the SQL LSP and status bar need it'
+            );
+            // Without the skip in `getEnvironmentVariables`, upstream emits every metadata key for the federated
+            // config (`FILE_BQ_CLIENTID` / `FILE_BQ_CLIENTSECRET`) and no usable `SQL_*` connection var for it.
+            assert.deepStrictEqual(
+                Object.keys(envVars).filter((name) => /_CLIENTID$|_CLIENTSECRET$/.test(name)),
+                [],
+                'OAuth client credentials must never reach the kernel environment'
+            );
+            assert.strictEqual(
+                envVars['SQL_BQ_FILE'],
+                undefined,
+                'no connection var is emitted for a federated config'
+            );
+            assert.ok(envVars['SQL_PG_FILE'], 'a federated config must not suppress its non-federated siblings');
+            assert.ok(envVars[duckDbEnvVar], 'DuckDB integration should still be included');
+        });
+
+        test('getFederatedAuthCandidates returns the supported federated ids from either source', async () => {
+            stubNotebookWithProject(
+                createMockProject('project-123', [
+                    { id: 'bq-secret-oauth', name: 'Secret BQ', type: 'big-query' },
+                    { id: 'bq-service-account', name: 'Service Account BQ', type: 'big-query' },
+                    { id: 'sf-native-oauth', name: 'Snowflake OAuth', type: 'snowflake' }
+                ])
+            );
+            when(fileConfigProvider.getConfigsForFile(anything())).thenResolve({
+                configs: [bigQueryOauthConfig('bq-file-oauth', 'File BQ')],
+                issues: []
+            });
+            when(integrationStorage.getIntegrationConfig('bq-secret-oauth')).thenResolve(
+                bigQueryOauthConfig('bq-secret-oauth', 'Secret BQ')
+            );
+            // BigQuery, but not federated at all.
+            when(integrationStorage.getIntegrationConfig('bq-service-account')).thenResolve({
+                id: 'bq-service-account',
+                name: 'Service Account BQ',
+                type: 'big-query',
+                metadata: {
+                    authMethod: 'service-account',
+                    service_account: '{"type":"service_account","project_id":"test"}'
+                }
+            });
+            // Federated, but not the combination `FederatedAuthSqlBlockCodeGenerator` implements.
+            when(integrationStorage.getIntegrationConfig('sf-native-oauth')).thenResolve({
+                id: 'sf-native-oauth',
+                name: 'Snowflake OAuth',
+                type: 'snowflake',
+                metadata: {
+                    authMethod: 'snowflake',
+                    accountName: 'test-account',
+                    clientId: 'sf-client-id',
+                    clientSecret: 'sf-client-secret'
+                }
+            });
+
+            const candidates = await providerWithFile.getFederatedAuthCandidates(notebookUri);
+
+            assert.deepStrictEqual(candidates, new Set(['bq-file-oauth', 'bq-secret-oauth']));
         });
     });
 

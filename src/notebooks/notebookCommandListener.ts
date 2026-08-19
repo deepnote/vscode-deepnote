@@ -253,7 +253,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
                     : new Disposable(noop);
             try {
                 if (!controller) {
-                    throw new Error('No kernel associated with the notebook');
+                    throw new Error(DataScience.noSelectedKernelController);
                 }
                 // Wrap the restart/interrupt in a loop that allows the user to switch
                 await KernelConnector.wrapKernelMethod(

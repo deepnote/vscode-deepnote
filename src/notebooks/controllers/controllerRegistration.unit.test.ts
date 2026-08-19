@@ -453,13 +453,14 @@ suite('Controller Registration', () => {
                 verify(condaController.dispose()).atLeast(1);
                 verify(javaController.dispose()).atLeast(1);
             });
-            test('Selecting a controller for a Deepnote notebook records it as the selected controller', () => {
-                const deepnoteController = mock<VSCodeNotebookController>();
-                when(deepnoteController.connection).thenReturn(activePythonConnection);
-                const selection = stubSelectionEvent(deepnoteController);
+            /** Registers one Deepnote controller and hands back the pieces a selection test drives. */
+            function registerDeepnoteController() {
+                const controller = mock<VSCodeNotebookController>();
+                when(controller.connection).thenReturn(activePythonConnection);
+                const selection = stubSelectionEvent(controller);
                 sinon.stub(VSCodeNotebookController, 'create').callsFake((_connection, id) => {
-                    when(deepnoteController.id).thenReturn(id);
-                    return instance(deepnoteController);
+                    when(controller.id).thenReturn(id);
+                    return instance(controller);
                 });
                 const notebook = {
                     uri: Uri.file('sample.deepnote'),
@@ -467,6 +468,11 @@ suite('Controller Registration', () => {
                 } as NotebookDocument;
 
                 registration.addOrUpdate(activePythonConnection, [DEEPNOTE_NOTEBOOK_TYPE]);
+
+                return { controller: instance(controller), notebook, selection };
+            }
+            test('Selecting a controller for a Deepnote notebook records it as the selected controller', () => {
+                const { controller, notebook, selection } = registerDeepnoteController();
 
                 assert.isUndefined(registration.getSelected(notebook), 'Nothing is selected before VS Code says so');
 
@@ -476,7 +482,15 @@ suite('Controller Registration', () => {
                 // what broke Interrupt and Restart.
                 selection.fire({ notebook, selected: true });
 
-                assert.strictEqual(registration.getSelected(notebook), instance(deepnoteController));
+                assert.strictEqual(registration.getSelected(notebook), controller);
+            });
+            test('Deselecting a controller for a Deepnote notebook clears the selected controller', () => {
+                const { notebook, selection } = registerDeepnoteController();
+                selection.fire({ notebook, selected: true });
+
+                selection.fire({ notebook, selected: false });
+
+                assert.isUndefined(registration.getSelected(notebook));
             });
         });
     });

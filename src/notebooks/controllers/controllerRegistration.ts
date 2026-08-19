@@ -326,6 +326,10 @@ export class ControllerRegistration implements IControllerRegistration, IExtensi
                     controller.controller.onDidChangeSelectedNotebooks(
                         (e) => {
                             if (!e.selected) {
+                                if (this.selectedControllers.get(e.notebook) === controller) {
+                                    this.selectedControllers.delete(e.notebook);
+                                }
+
                                 return;
                             }
                             logger.ci(`Controller ${controller.id} selected for ${e.notebook.uri.toString()}`);

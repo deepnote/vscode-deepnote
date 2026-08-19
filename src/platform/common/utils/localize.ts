@@ -260,6 +260,9 @@ export namespace DataScience {
     export const failedToStartKernel = l10n.t('Failed to start the Kernel.');
     export const failedToRestartKernel = l10n.t('Failed to restart the Kernel.');
     export const failedToInterruptKernel = l10n.t('Failed to interrupt the Kernel.');
+    export const noSelectedKernelController = l10n.t(
+        'The notebook has no selected kernel controller, so the running kernel cannot be reached.'
+    );
     export const rawKernelStartFailedDueToTimeout = (kernelName: string) =>
         l10n.t({
             message:

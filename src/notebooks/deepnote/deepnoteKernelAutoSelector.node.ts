@@ -621,8 +621,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     ): Promise<void> {
         Cancellation.throwIfCanceled(token);
 
-        const alreadySelected = this.controllerRegistration.getSelected(notebook);
-        if (alreadySelected?.id === controller.id) {
+        // Identity, not id: a Deepnote controller id is derived from the notebook URI, so a disposed
+        // controller and the one replacing it share one. Matching on id would skip selectKernel and
+        // leave the notebook bound to the dead controller.
+        if (this.controllerRegistration.getSelected(notebook) === controller) {
             logger.info(`Controller ${controller.id} already selected for ${getDisplayPath(notebook.uri)}`);
             controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
             return;

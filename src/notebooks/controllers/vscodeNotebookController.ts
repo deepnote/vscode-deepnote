@@ -615,7 +615,14 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
         // and an agent that has not yet seen the stop reads the ended cell as a failure worth retrying.
         // Setting an interruptHandler leaves NotebookCellExecution.token inert, so this is the agent's
         // only stop signal.
-        this.agentCancellations.get(notebook)?.cancel();
+        const agentCancellation = this.agentCancellations.get(notebook);
+
+        if (agentCancellation) {
+            // A miss is the ordinary case — every interrupt of a non-agent cell is one — so only the hit
+            // is logged, and it is the only proof the stop left this side when the agent never reports it.
+            logger.info(`Stopping the agent cell running in ${getDisplayPath(notebook.uri)}`);
+            agentCancellation.cancel();
+        }
         commands
             .executeCommand(Commands.InterruptKernel, { notebookEditor: { notebookUri: notebook.uri } })
             .then(noop, (ex) => logger.error('Failed to interrupt', ex));

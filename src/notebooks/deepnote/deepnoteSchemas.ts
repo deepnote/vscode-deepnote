@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+// Block metadata parsed here is handed back to @deepnote/blocks on save, and its schema
+// rejects an explicit null on optional fields — deepnote_variable_default_value is the one
+// field it coerces. Defaults below must resolve to a valid value or to undefined.
+
 export const DeepnoteChartBigNumberOutputSchema = z.object({
     title: z.string().nullish(),
     value: z.string().nullish(),
@@ -117,9 +121,6 @@ export const DeepnoteSelectInputMetadataSchema = DeepnoteBaseInputWithLabelMetad
         .transform((val) => val ?? DEEPNOTE_SELECT_INPUT_DEFAULT_OPTIONS),
     deepnote_variable_select_type: z
         .enum(['from-options', 'from-variable'])
-        // Default to 'from-options' (not null): the @deepnote/blocks serialize
-        // schema rejects null here, which previously made new Input Select blocks
-        // impossible to save and could trigger a content-reformat loop.
         .nullish()
         .transform((val) => val ?? 'from-options'),
     deepnote_allow_multiple_values: z
@@ -210,7 +211,7 @@ export const DeepnoteFileInputMetadataSchema = DeepnoteBaseInputWithLabelMetadat
     deepnote_allowed_file_extensions: z
         .string()
         .nullish()
-        .transform((val) => val ?? null)
+        .transform((val) => val ?? undefined)
 });
 
 export const DeepnoteButtonMetadataSchema = DeepnoteBaseInputMetadataSchema.extend({

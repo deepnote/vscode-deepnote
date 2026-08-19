@@ -1,3 +1,4 @@
+import { serializeDeepnoteFile, type DeepnoteBlock } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { when, reset, anything, mock, instance } from 'ts-mockito';
@@ -14,7 +15,9 @@ import {
 
 import {
     DeepnoteNotebookCommandListener,
+    getInputBlockMetadata,
     getNextDeepnoteVariableName,
+    INPUT_BLOCK_TYPES,
     InputBlockType
 } from './deepnoteNotebookCommandListener';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
@@ -25,7 +28,13 @@ import { createMockedNotebookDocument } from '../../test/datascience/editor-inte
 import { WrappedError } from '../../platform/errors/types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
-import { createMockCell } from './deepnoteTestHelpers';
+import {
+    createDeepnoteBlock,
+    createDeepnoteFile,
+    createDeepnoteNotebook,
+    createDeepnoteProject,
+    createMockCell
+} from './deepnoteTestHelpers';
 
 suite('DeepnoteNotebookCommandListener', () => {
     let commandListener: DeepnoteNotebookCommandListener;
@@ -347,6 +356,23 @@ suite('DeepnoteNotebookCommandListener', () => {
         });
     });
 
+    suite('getInputBlockMetadata', () => {
+        INPUT_BLOCK_TYPES.forEach((blockType) => {
+            test(`default ${blockType} metadata is accepted by the @deepnote/blocks serializer`, () => {
+                const block = {
+                    ...createDeepnoteBlock(),
+                    metadata: getInputBlockMetadata(blockType, 'input_1'),
+                    type: blockType
+                } as DeepnoteBlock;
+                const file = createDeepnoteFile({
+                    project: createDeepnoteProject({ notebooks: [createDeepnoteNotebook({ blocks: [block] })] })
+                });
+
+                assert.doesNotThrow(() => serializeDeepnoteFile(file));
+            });
+        });
+    });
+
     suite('addBlock', () => {
         let sandbox: sinon.SinonSandbox;
 
@@ -538,12 +564,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 selection: undefined,
                 expectedInsertIndex: 0,
                 expectedVariableName: 'input_1',
-                expectedMetadataKeys: [
-                    'deepnote_variable_name',
-                    'deepnote_input_label',
-                    'deepnote_variable_value',
-                    'deepnote_allowed_file_extensions'
-                ]
+                expectedMetadataKeys: ['deepnote_variable_name', 'deepnote_input_label', 'deepnote_variable_value']
             },
             {
                 description: 'should add button block with correct metadata',

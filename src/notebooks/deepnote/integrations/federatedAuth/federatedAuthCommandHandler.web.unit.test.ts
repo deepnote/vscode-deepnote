@@ -37,13 +37,14 @@ suite('FederatedAuthCommandHandlerWeb', () => {
         assert.strictEqual(subscriptions.length, 1);
     });
 
-    test('the registered command surfaces the not-supported-in-web information toast', () => {
+    test('the registered command surfaces the not-supported-in-web information toast and reports failed', () => {
         handler.activate();
         assert.isDefined(registeredCallback, 'command callback should have been captured');
 
         // Invoke the command — should not throw and should show the toast.
-        registeredCallback!('some-integration-id');
+        const outcome = registeredCallback!('some-integration-id');
 
+        assert.strictEqual(outcome, 'failed', 'the web stub must report a failed outcome for telemetry');
         verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
     });
 });

@@ -21,13 +21,13 @@ import * as path from '../../platform/vscode-path/path';
 import { DeepnoteServerInfo, IDeepnoteLspClientManager } from './types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { logger } from '../../platform/logging';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { noop } from '../../platform/common/utils/misc';
 import {
-    IIntegrationStorage,
     IPlatformNotebookEditorProvider,
-    IPlatformDeepnoteNotebookManager
+    IPlatformDeepnoteNotebookManager,
+    ISqlIntegrationEnvVarsProvider
 } from '../../platform/notebooks/deepnote/types';
-import { ConfigurableDatabaseIntegrationConfig } from '../../platform/notebooks/deepnote/integrationTypes';
 import { SqlLspConnection, isSupportedBySqlLsp, convertToSqlLspConnection } from './sqlLspConnectionUtils';
 
 interface LspClientInfo {
@@ -42,6 +42,8 @@ const sqlLintRules = {} as const;
 let sharedSqlClient: LanguageClientType | undefined;
 let sharedSqlClientRefCount = 0;
 let sharedSqlClientStarting = false;
+/** Connections the shared client is currently pointed at, so a reconfigure can skip a no-op switch. */
+let sharedSqlConnections: SqlLspConnection[] = [];
 
 export { SqlLspConnection, supportedSqlLspTypes } from './sqlLspConnectionUtils';
 
@@ -60,10 +62,11 @@ export class DeepnoteLspClientManager
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
-        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
         @inject(IPlatformNotebookEditorProvider)
         private readonly notebookEditorProvider: IPlatformNotebookEditorProvider,
-        @inject(IPlatformDeepnoteNotebookManager) private readonly notebookManager: IPlatformDeepnoteNotebookManager
+        @inject(IPlatformDeepnoteNotebookManager) private readonly notebookManager: IPlatformDeepnoteNotebookManager,
+        @inject(ISqlIntegrationEnvVarsProvider)
+        private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider
     ) {
         this.disposables.push(this);
     }
@@ -86,7 +89,7 @@ export class DeepnoteLspClientManager
             return;
         }
 
-        const notebookKey = notebookUri.toString();
+        const notebookKey = getNotebookKey(notebookUri);
 
         const pendingStart = this.pendingStarts.get(notebookKey);
 
@@ -158,7 +161,7 @@ export class DeepnoteLspClientManager
     }
 
     public async stopLspClients(notebookUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void> {
-        const notebookKey = notebookUri.toString();
+        const notebookKey = getNotebookKey(notebookUri);
         const clientInfo = this.clients.get(notebookKey);
 
         if (!clientInfo) {
@@ -238,6 +241,9 @@ export class DeepnoteLspClientManager
         if (sharedSqlClient) {
             sharedSqlClientRefCount++;
             logger.trace(`Reusing shared SQL LSP client, ref count: ${sharedSqlClientRefCount}`);
+
+            await this.reconfigureSharedSqlClient(sharedSqlClient, notebookUri);
+
             return;
         }
 
@@ -254,6 +260,9 @@ export class DeepnoteLspClientManager
             }
             if (sharedSqlClient) {
                 sharedSqlClientRefCount++;
+
+                await this.reconfigureSharedSqlClient(sharedSqlClient, notebookUri);
+
                 return;
             }
             throw new Error('Shared SQL LSP client failed to start');
@@ -267,6 +276,25 @@ export class DeepnoteLspClientManager
             logger.info('Shared SQL LSP client created successfully');
         } finally {
             sharedSqlClientStarting = false;
+        }
+    }
+
+    /**
+     * Points the shared client at this notebook's connections. The server holds one active connection globally, so a
+     * client this notebook did not start is still aimed at whichever notebook did — without this, this notebook gets
+     * the other one's schema completions. Called from both reuse paths, since a notebook that waited out someone
+     * else's startup is in exactly the same position as one that arrived after it.
+     *
+     * Best-effort: a failed reconfigure leaves stale completions, which must not fail the reuse itself.
+     */
+    private async reconfigureSharedSqlClient(client: LanguageClientType, notebookUri: vscode.Uri): Promise<void> {
+        try {
+            await this.applySqlConnections(client, await this.getSqlConnections(notebookUri));
+        } catch (error) {
+            logger.warn(
+                `SQL LSP: failed to reconfigure the shared client for ${notebookUri.toString()}; completions may reflect another notebook.`,
+                error
+            );
         }
     }
 
@@ -296,6 +324,8 @@ export class DeepnoteLspClientManager
             } finally {
                 sharedSqlClient = undefined;
                 sharedSqlClientRefCount = 0;
+                // A fresh client must be configured from scratch; a stale value here would skip that as a no-op.
+                sharedSqlConnections = [];
             }
         }
     }
@@ -342,7 +372,7 @@ export class DeepnoteLspClientManager
         };
 
         // Use a unique client ID per notebook to prevent conflicts when multiple LSP clients exist
-        const clientId = `deepnote-python-lsp-${notebookUri.toString()}`;
+        const clientId = `deepnote-python-lsp-${getNotebookKey(notebookUri)}`;
         const client = new LanguageClient(clientId, 'Deepnote Python Language Server', serverOptions, clientOptions);
 
         // Check cancellation before starting client
@@ -355,6 +385,51 @@ export class DeepnoteLspClientManager
         logger.info(`Python LSP client started for ${notebookUri.toString()}`);
 
         return client;
+    }
+
+    /**
+     * Points the shared SQL server at `connections` and triggers a schema refetch. Used both at creation and when
+     * another notebook reuses the client, so the two paths cannot drift.
+     */
+    private async applySqlConnections(
+        client: LanguageClientType,
+        connections: SqlLspConnection[],
+        outputChannel?: vscode.OutputChannel
+    ): Promise<void> {
+        if (JSON.stringify(connections) === JSON.stringify(sharedSqlConnections)) {
+            return;
+        }
+
+        // The server ignores an empty list, so the previously loaded schema stays until some notebook supplies
+        // connections again. Clearing it would need a restart, which the global command registration rules out.
+        if (connections.length === 0) {
+            logger.trace('SQL LSP: no connections for this notebook; leaving the server configured as-is');
+
+            return;
+        }
+
+        // The server's onDidChangeConfiguration handler processes this and connects to the database.
+        await client.sendNotification('workspace/didChangeConfiguration', {
+            settings: {
+                sqlLanguageServer: {
+                    connections: connections,
+                    lint: { rules: sqlLintRules }
+                }
+            }
+        });
+
+        // Explicitly switch to the first connection so the schema is fetched and errors are properly reported.
+        try {
+            await client.sendRequest('workspace/executeCommand', {
+                command: 'sqlLanguageServer.switchDatabaseConnection',
+                arguments: [connections[0].name]
+            });
+        } catch (error) {
+            outputChannel?.appendLine(`[SQL LSP] Failed to switch connection: ${error}`);
+            logger.warn(`SQL LSP: Failed to switch to connection ${connections[0].name}:`, error);
+        }
+
+        sharedSqlConnections = connections;
     }
 
     private async createSqlLspClient(
@@ -460,7 +535,12 @@ export class DeepnoteLspClientManager
 
                         for (const item of params.items) {
                             if (item.section === 'sqlLanguageServer') {
-                                result.push({ connections: connections });
+                                // Prefer the live value over the creation-time capture, so a reconfigure is not
+                                // undone by a later pull. It is still empty during the initial pull, which
+                                // happens before the first push — fall back to this client's own connections.
+                                result.push({
+                                    connections: sharedSqlConnections.length > 0 ? sharedSqlConnections : connections
+                                });
                             } else {
                                 result.push(await next(params, _token));
                             }
@@ -504,30 +584,7 @@ export class DeepnoteLspClientManager
 
         await client.start();
 
-        // Send configuration change notification to trigger schema loading
-        // The server's onDidChangeConfiguration handler processes this and connects to the database
-        await client.sendNotification('workspace/didChangeConfiguration', {
-            settings: {
-                sqlLanguageServer: {
-                    connections: connections,
-                    lint: { rules: sqlLintRules }
-                }
-            }
-        });
-
-        // Explicitly switch to the first connection to trigger schema loading
-        // This ensures the database schema is fetched and any errors are properly reported
-        if (connections.length > 0) {
-            try {
-                await client.sendRequest('workspace/executeCommand', {
-                    command: 'sqlLanguageServer.switchDatabaseConnection',
-                    arguments: [connections[0].name]
-                });
-            } catch (error) {
-                outputChannel.appendLine(`[SQL LSP] Failed to switch connection: ${error}`);
-                logger.warn(`SQL LSP: Failed to switch to connection ${connections[0].name}:`, error);
-            }
-        }
+        await this.applySqlConnections(client, connections, outputChannel);
 
         logger.info(`SQL LSP client started and ready for ${notebookUri.toString()}`);
 
@@ -604,13 +661,14 @@ export class DeepnoteLspClientManager
             }
 
             const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
+            const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
 
-            if (!projectId) {
-                logger.warn('SQL LSP: No project ID in notebook metadata');
+            if (!projectId || !notebookId) {
+                logger.warn('SQL LSP: No project/notebook ID in notebook metadata');
                 return [];
             }
 
-            const project = this.notebookManager.getOriginalProject(projectId);
+            const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
 
             if (!project) {
                 logger.warn(`SQL LSP: No project found for ID: ${projectId}`);
@@ -621,18 +679,16 @@ export class DeepnoteLspClientManager
 
             logger.trace(`SQL LSP: Found ${projectIntegrations.length} integrations in project ${projectId}`);
 
+            // Merged (SecretStorage + `.deepnote.env.yaml`) configs, so file-configured databases also get
+            // LSP autocomplete/schema.
             const projectIntegrationConfigs = (
-                await Promise.all(
-                    projectIntegrations.map((integration) =>
-                        this.integrationStorage.getIntegrationConfig(integration.id)
-                    )
-                )
-            ).filter((config): config is ConfigurableDatabaseIntegrationConfig => config != null);
+                await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(notebookUri)
+            ).filter((config) => config.type !== 'pandas-dataframe');
 
             const connections = projectIntegrationConfigs
                 .filter((config) => isSupportedBySqlLsp(config.type))
                 .map((config) => convertToSqlLspConnection(config))
-                .filter((conn): conn is SqlLspConnection => conn !== null);
+                .filter((conn) => conn !== null);
 
             logger.trace(
                 `SQL LSP: Found ${connections.length} SQL LSP-compatible integrations for project ${projectId}`

@@ -9,6 +9,7 @@ const mariadbLogo: string = require('./icons/mariadb.svg');
 const mongodbLogo: string = require('./icons/mongodb.svg');
 const sqlServerLogo: string = require('./icons/sql-server.svg');
 const bigqueryLogo: string = require('./icons/bigquery.svg');
+const cloudSqlLogo: string = require('./icons/cloud-sql.svg');
 const snowflakeLogo: string = require('./icons/snowflake.svg');
 const alloydbLogo: string = require('./icons/alloydb.svg');
 const spannerLogo: string = require('./icons/spanner.svg');
@@ -28,6 +29,7 @@ export const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, 
     athena: 'Amazon Athena',
     'big-query': 'Google BigQuery',
     clickhouse: 'ClickHouse',
+    'cloud-sql': 'Google Cloud SQL',
     databricks: 'Databricks',
     dremio: 'Dremio',
     mariadb: 'MariaDB',
@@ -49,6 +51,7 @@ export const integrationTypeIcons: Record<ConfigurableDatabaseIntegrationType, s
     athena: athenaLogo,
     'big-query': bigqueryLogo,
     clickhouse: clickhouseLogo,
+    'cloud-sql': cloudSqlLogo,
     databricks: databricksLogo,
     dremio: dremioLogo,
     mariadb: mariadbLogo,

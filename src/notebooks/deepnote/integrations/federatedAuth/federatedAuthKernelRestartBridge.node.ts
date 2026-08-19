@@ -10,7 +10,7 @@ import { IFederatedAuthTokenStorage } from '../types';
 
 /**
  * Node-only bridge that restarts kernels when a federated integration's token changes, clearing stale
- * `os.environ` mutations and kernel globals. Separate from {@link IntegrationKernelRestartHandler} because
+ * `os.environ` mutations and kernel globals. Separate from {@link IntegrationEnvRefreshHandler} because
  * {@link IFederatedAuthTokenStorage} is node-only.
  */
 @injectable()
@@ -58,11 +58,12 @@ export class FederatedAuthKernelRestartBridge implements IExtensionSyncActivatio
             }
 
             const projectId = notebook.metadata?.deepnoteProjectId as string | undefined;
-            if (!projectId) {
+            const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+            if (!projectId || !notebookId) {
                 continue;
             }
 
-            const project = this.notebookManager.getOriginalProject(projectId);
+            const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
             if (!project) {
                 continue;
             }

@@ -1,6 +1,20 @@
-import { NotebookCell, NotebookCellKind, NotebookCellOutput, NotebookDocument, TextDocument, Uri } from 'vscode';
+import { DeepnoteFile, serializeDeepnoteFile } from '@deepnote/blocks';
+import {
+    NotebookCell,
+    NotebookCellKind,
+    NotebookCellOutput,
+    NotebookDocument,
+    TextDocument,
+    Uri,
+    WorkspaceFolder
+} from 'vscode';
 
 import { generateUuid } from '../../platform/common/uuid';
+
+type DeepnoteProjectData = DeepnoteFile['project'];
+type DeepnoteNotebookData = DeepnoteProjectData['notebooks'][number];
+type DeepnoteBlockData = DeepnoteNotebookData['blocks'][number];
+type DeepnoteCodeBlock = Extract<DeepnoteBlockData, { type: 'code' }>;
 
 /**
  * Options for creating a mock notebook cell.
@@ -133,4 +147,39 @@ export function createMockCell(options?: CreateMockCellOptions): NotebookCell {
         outputs,
         executionSummary: undefined
     } as unknown as NotebookCell;
+}
+
+/** A Deepnote code block (whole-file YAML shape); override any field. */
+export function createDeepnoteBlock(overrides: Partial<DeepnoteCodeBlock> = {}): DeepnoteCodeBlock {
+    return { id: 'block-1', type: 'code', blockGroup: 'g', sortingKey: 'a0', content: '', metadata: {}, ...overrides };
+}
+
+/** A Deepnote notebook (no blocks by default); override any field. */
+export function createDeepnoteNotebook(overrides: Partial<DeepnoteNotebookData> = {}): DeepnoteNotebookData {
+    return { id: 'notebook-1', name: 'Notebook', blocks: [], ...overrides };
+}
+
+/** A Deepnote project (one empty notebook by default); override any field. */
+export function createDeepnoteProject(overrides: Partial<DeepnoteProjectData> = {}): DeepnoteProjectData {
+    return { id: 'project-1', name: 'Test Project', notebooks: [createDeepnoteNotebook()], ...overrides };
+}
+
+/** A whole `.deepnote` file; override any field (build `project` with {@link createDeepnoteProject}). */
+export function createDeepnoteFile(overrides: Partial<DeepnoteFile> = {}): DeepnoteFile {
+    return {
+        version: '1.0.0',
+        metadata: { createdAt: '2020-01-01T00:00:00Z' },
+        project: createDeepnoteProject(),
+        ...overrides
+    };
+}
+
+/** A VS Code {@link WorkspaceFolder} from a `Uri` (name = last path segment). */
+export function createWorkspaceFolder(uri: Uri, index = 0): WorkspaceFolder {
+    return { uri, name: uri.path.split('/').pop() ?? '', index };
+}
+
+/** The serialized YAML of a minimal `.deepnote` file carrying `projectId`, for stubbing a file read. */
+export function serializeProjectFile(projectId: string): string {
+    return serializeDeepnoteFile(createDeepnoteFile({ project: createDeepnoteProject({ id: projectId }) }));
 }

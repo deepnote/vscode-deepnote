@@ -81,6 +81,10 @@ const watchAll = process.argv.includes('--watch-all');
 const isWatchMode = watchAll || process.argv.includes('--watch');
 const extensionFolder = path.join(__dirname, '..', '..');
 
+// Security pins copied from the root `overrides` into the generated sql-lsp-modules package.json,
+// which npm installs in isolation and would otherwise resolve to vulnerable versions.
+const sqlLspOverridesToPropagate = ['ip-address', 'ssh2', 'tar', '@tootallnate/once'];
+
 interface StylePluginOptions {
     /**
      * whether to minify the css code.
@@ -230,6 +234,13 @@ function createConfig(
         } else {
             inject.push(path.join(__dirname, isDevbuild ? 'process.development.js' : 'process.production.js'));
         }
+    }
+    if (target === 'desktop') {
+        // Empty when unset locally; src/platform/analytics/constants.ts falls back to safe defaults.
+        define = {
+            POSTHOG_API_KEY_BUILD: JSON.stringify(process.env.POSTHOG_API_KEY ?? ''),
+            POSTHOG_CHANNEL_BUILD: JSON.stringify(process.env.POSTHOG_CHANNEL ?? '')
+        };
     }
     if (source.endsWith(path.join('data-explorer', 'index.tsx'))) {
         inject.push(path.join(__dirname, 'jquery.js'));
@@ -660,6 +671,20 @@ async function buildSqlLanguageServer() {
     await fs.ensureDir(sqlLspNodeModules);
 
     // Create a minimal package.json and install dependencies
+    const rootPackageJson = await fs.readJSON(path.join(extensionFolder, 'package.json'));
+    const rootOverrides: Record<string, string> = rootPackageJson.overrides || {};
+    const overrides: Record<string, string> = {};
+
+    for (const name of sqlLspOverridesToPropagate) {
+        if (typeof rootOverrides[name] === 'string') {
+            overrides[name] = rootOverrides[name];
+        } else {
+            throw new Error(
+                `Expected a string "${name}" entry in the root package.json overrides to propagate to sql-lsp-modules.`
+            );
+        }
+    }
+
     const packageJson = {
         name: 'sql-lsp-deps',
         version: '1.0.0',
@@ -669,7 +694,8 @@ async function buildSqlLanguageServer() {
             pg: '^8.9.0',
             sqlite3: '^5.0.3',
             '@google-cloud/bigquery': '^8.1.1'
-        }
+        },
+        overrides
     };
 
     const packageJsonPath = path.join(sqlLspNodeModules, 'package.json');

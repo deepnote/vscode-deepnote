@@ -4,11 +4,12 @@ import { CancellationError, CancellationToken, ProgressLocation, Uri, commands, 
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
 import { IExtensionSyncActivationService } from '../../../../platform/activation/types';
+import type { CommandOutcome } from '../../../../platform/analytics/types';
 import { Commands } from '../../../../platform/common/constants';
 import { IExtensionContext } from '../../../../platform/common/types';
 import { Integrations } from '../../../../platform/common/utils/localize';
 import { logger } from '../../../../platform/logging';
-import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
+import { ISqlIntegrationEnvVarsProvider } from '../../../../platform/notebooks/deepnote/types';
 import { IFederatedAuthTokenStorage, type FederatedAuthTokenEntry } from '../types';
 import { generateOAuthStateNonce, generatePkcePair } from './googleOAuthProvider.node';
 import { computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
@@ -30,35 +31,51 @@ export type RunOAuthFlowFn = (params: RunOAuthFlowParams) => Promise<{ refreshTo
 export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivationService {
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
+        @inject(ISqlIntegrationEnvVarsProvider)
+        private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider,
         @inject(IFederatedAuthTokenStorage) private readonly tokenStorage: IFederatedAuthTokenStorage,
         private readonly runOAuthFlowFn: RunOAuthFlowFn = runOAuthFlow
     ) {}
 
     public activate(): void {
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.AuthenticateIntegration, (integrationId: string) =>
-                this.authenticate(integrationId)
+            commands.registerCommand(Commands.AuthenticateIntegration, (integrationId: string, resource: Uri) =>
+                this.authenticate(integrationId, resource)
             )
         );
     }
 
-    /** Core flow. Public so tests can drive the handler without `commands.executeCommand`. */
-    public async authenticate(integrationId: string): Promise<void> {
+    /**
+     * Public so tests can drive the handler without `commands.executeCommand`.
+     *
+     * `resource` is the notebook the request came from. Required, because the config is resolved per notebook
+     * from `.deepnote.env.yaml` merged over SecretStorage — falling back to whichever notebook happens to be
+     * focused would let the caller's eligibility check and this lookup mean different notebooks.
+     */
+    public async authenticate(integrationId: string, resource: Uri): Promise<CommandOutcome> {
         if (typeof integrationId !== 'string' || integrationId.length === 0) {
             logger.warn(
                 `FederatedAuthCommandHandlerNode: invoked without a valid integrationId (received: ${String(
                     integrationId
                 )})`
             );
-            return;
+            return 'failed';
         }
 
-        const integration = await this.integrationStorage.getIntegrationConfig(integrationId);
+        if (!resource) {
+            logger.warn(
+                `FederatedAuthCommandHandlerNode: invoked without a resource for integration "${integrationId}"`
+            );
+            return 'failed';
+        }
+
+        const integration = (await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(resource)).find(
+            (config) => config.id === integrationId
+        );
         if (!integration) {
             logger.warn(`FederatedAuthCommandHandlerNode: integration "${integrationId}" not found.`);
             void window.showErrorMessage(Integrations.federatedAuthIntegrationNotFound(integrationId));
-            return;
+            return 'failed';
         }
 
         if (integration.type !== 'big-query' || integration.metadata.authMethod !== BigQueryAuthMethods.GoogleOauth) {
@@ -66,13 +83,13 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
                 `FederatedAuthCommandHandlerNode: integration "${integration.name}" is not configured for Google OAuth.`
             );
             void window.showErrorMessage(Integrations.federatedAuthIntegrationNotConfiguredForOAuth(integration.name));
-            return;
+            return 'failed';
         }
 
         const { clientId, clientSecret, project } = integration.metadata;
         const state = generateOAuthStateNonce();
         const { challenge: codeChallenge, verifier: codeVerifier } = generatePkcePair();
-        const deepnoteDomain = getDeepnoteDomain(getConfigurationResource());
+        const deepnoteDomain = getDeepnoteDomain(resource);
         const proxyCallbackUrl = `https://${deepnoteDomain}/auth/bigquery/google-oauth-callback`;
 
         try {
@@ -100,19 +117,22 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
                                 finalRedirect: externalCallbackUrl
                             });
                             logger.info(`FederatedAuthCommandHandlerNode: opening start URL ${startUrl}`);
-                            try {
-                                const opened = await env.openExternal(Uri.parse(startUrl));
-                                if (!opened) {
+                            // The promise might hang, and not resolve
+                            env.openExternal(Uri.parse(startUrl)).then(
+                                (opened) => {
+                                    if (!opened) {
+                                        logger.warn(
+                                            `FederatedAuthCommandHandlerNode: openExternal returned false for ${startUrl}; the user can paste the URL manually.`
+                                        );
+                                    }
+                                },
+                                (err) => {
                                     logger.warn(
-                                        `FederatedAuthCommandHandlerNode: openExternal returned false for ${startUrl}; the user can paste the URL manually.`
+                                        `FederatedAuthCommandHandlerNode: failed to open browser for ${startUrl}.`,
+                                        err
                                     );
                                 }
-                            } catch (err) {
-                                logger.warn(
-                                    `FederatedAuthCommandHandlerNode: failed to open browser for ${startUrl}.`,
-                                    err
-                                );
-                            }
+                            );
                         }
                     });
                 }
@@ -126,31 +146,28 @@ export class FederatedAuthCommandHandlerNode implements IExtensionSyncActivation
             await this.tokenStorage.save(entry);
 
             void window.showInformationMessage(Integrations.authenticationSucceeded(integration.name));
+
+            return 'completed';
         } catch (err) {
             if (err instanceof CancellationError) {
                 logger.info(`FederatedAuthCommandHandlerNode: authentication cancelled for "${integration.name}".`);
-                return;
+                return 'cancelled';
             }
             const message = err instanceof Error ? err.message : String(err);
             logger.error(`FederatedAuthCommandHandlerNode: authentication failed for "${integration.name}".`, err);
             void window.showErrorMessage(Integrations.authenticationFailed(message));
+
+            return 'failed';
         }
     }
 }
 
-/** Reads the deepnote-host override (`deepnote.domain` setting); default `deepnote.com`. Mirrors `importClient.node.ts`. */
-function getDeepnoteDomain(resource?: Uri): string {
+/**
+ * Reads the deepnote-host override (`deepnote.domain` setting); default `deepnote.com`. Mirrors
+ * `importClient.node.ts`. Scoped to the requesting notebook so workspace/folder overrides apply.
+ */
+function getDeepnoteDomain(resource: Uri): string {
     return workspace.getConfiguration('deepnote', resource).get<string>('domain') ?? 'deepnote.com';
-}
-
-/** Prefer the active Deepnote notebook URI so workspace/folder `deepnote.domain` overrides apply. */
-function getConfigurationResource(): Uri | undefined {
-    const notebook = window.activeNotebookEditor?.notebook;
-    if (notebook?.notebookType === 'deepnote') {
-        return notebook.uri;
-    }
-
-    return undefined;
 }
 
 /** Builds the proxy-start URL the user's browser will open. Public for unit tests. */

@@ -3,7 +3,7 @@
 
 import { Context } from 'mocha';
 import { AppinsightsKey, Telemetry } from '../platform/common/constants';
-import TelemetryReporter from '@vscode/extension-telemetry';
+import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { IS_CI_SERVER } from './ciConstants.node';
 import { sleep } from '../platform/common/utils/async';
 import { logger } from '../platform/logging';

@@ -19,6 +19,7 @@ import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { extractProjectIdFromSnapshotUri, isSnapshotFile } from './snapshots/snapshotFiles';
 import { SnapshotService } from './snapshots/snapshotService';
@@ -67,12 +68,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
     private readonly pendingOperations = new Map<string, PendingOperation>();
     private readonly runningOperations = new Set<string>();
 
+    private readonly selfWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
     /**
      * Deterministic self-write tracking for workspace.save() calls.
-     * Incremented before save, decremented when the fs event arrives.
+     * One-shot markers keyed by the base file URI (query/fragment stripped),
+     * added before save and consumed when the fs event arrives.
      */
-    private readonly selfWriteCounts = new Map<string, number>();
-    private readonly selfWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly selfWriteUris = new Set<string>();
     private readonly serializer: DeepnoteNotebookSerializer;
 
     /**
@@ -100,25 +103,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         this.disposables.push({ dispose: () => this.clearAllTimers() });
 
         if (this.snapshotService) {
-            this.disposables.push(
-                this.snapshotService.onFileWritten((uri) => {
-                    const key = uri.toString();
-                    this.snapshotSelfWriteUris.add(key);
-
-                    // Safety net: clean stale entries after 30s
-                    const existing = this.snapshotSelfWriteTimers.get(key);
-                    if (existing) {
-                        clearTimeout(existing);
-                    }
-                    this.snapshotSelfWriteTimers.set(
-                        key,
-                        setTimeout(() => {
-                            this.snapshotSelfWriteUris.delete(key);
-                            this.snapshotSelfWriteTimers.delete(key);
-                        }, selfWriteExpirationMs)
-                    );
-                })
-            );
+            this.disposables.push(this.snapshotService.onFileWritten((uri) => this.markSnapshotSelfWrite(uri)));
         }
     }
 
@@ -132,7 +117,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             clearTimeout(timer);
         }
         this.selfWriteTimers.clear();
-        this.selfWriteCounts.clear();
+        this.selfWriteUris.clear();
 
         for (const timer of this.snapshotSelfWriteTimers.values()) {
             clearTimeout(timer);
@@ -145,7 +130,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * Consumes a self-write marker. Returns true if the fs event was self-triggered.
      */
     private consumeSelfWrite(uri: Uri): boolean {
-        const key = uri.toString();
+        const key = this.selfWriteKey(uri);
 
         // Check snapshot self-writes first
         if (this.snapshotSelfWriteUris.has(key)) {
@@ -159,17 +144,12 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         // Check workspace.save self-writes
-        const count = this.selfWriteCounts.get(key);
-        if (count && count > 0) {
-            if (count === 1) {
-                this.selfWriteCounts.delete(key);
-                const timer = this.selfWriteTimers.get(key);
-                if (timer) {
-                    clearTimeout(timer);
-                    this.selfWriteTimers.delete(key);
-                }
-            } else {
-                this.selfWriteCounts.set(key, count - 1);
+        if (this.selfWriteUris.has(key)) {
+            this.selfWriteUris.delete(key);
+            const timer = this.selfWriteTimers.get(key);
+            if (timer) {
+                clearTimeout(timer);
+                this.selfWriteTimers.delete(key);
             }
             return true;
         }
@@ -235,7 +215,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         );
 
         for (const notebook of affectedNotebooks) {
-            const nbKey = notebook.uri.toString();
+            const nbKey = getNotebookKey(notebook.uri);
             // main-file-sync always replaces any pending operation
             this.pendingOperations.set(nbKey, { type: 'main-file-sync' });
             void this.drainQueue(nbKey, notebook, uri);
@@ -252,7 +232,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         );
 
         for (const notebook of affectedNotebooks) {
-            const nbKey = notebook.uri.toString();
+            const nbKey = getNotebookKey(notebook.uri);
             const pending = this.pendingOperations.get(nbKey);
             // Don't replace a pending main-file-sync
             if (pending?.type === 'main-file-sync') {
@@ -363,13 +343,17 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
+        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+        const snapshotOutputs = await this.snapshotService.readSnapshot(projectId, notebookId);
         if (!snapshotOutputs || snapshotOutputs.size === 0) {
             return;
         }
 
-        // Look up original project blocks for fallback block ID resolution
-        const originalProject = this.notebookManager.getOriginalProject(projectId);
+        // Exact (projectId, notebookId) lookup: sibling files share a project.id, so a project-only
+        // lookup could return a different sibling and silently skip the block-id recovery below.
+        const originalProject = notebookId
+            ? this.notebookManager.getProjectForNotebook(projectId, notebookId)
+            : undefined;
         const notebookBlocksMap = new Map<string, DeepnoteBlock[]>();
         if (originalProject) {
             for (const nb of originalProject.project.notebooks) {
@@ -378,7 +362,6 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         const liveCells = notebook.getCells();
-        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
         const originalBlocks = notebookId ? notebookBlocksMap.get(notebookId) : undefined;
 
         // Collect cells that need output updates
@@ -581,9 +564,8 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * Call before workspace.save() to prevent the resulting fs event from triggering a reload.
      */
     private markSelfWrite(uri: Uri): void {
-        const key = uri.toString();
-        const count = this.selfWriteCounts.get(key) ?? 0;
-        this.selfWriteCounts.set(key, count + 1);
+        const key = this.selfWriteKey(uri);
+        this.selfWriteUris.add(key);
 
         // Safety net: clean stale entries after 30s
         const existing = this.selfWriteTimers.get(key);
@@ -593,8 +575,30 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         this.selfWriteTimers.set(
             key,
             setTimeout(() => {
-                this.selfWriteCounts.delete(key);
+                this.selfWriteUris.delete(key);
                 this.selfWriteTimers.delete(key);
+            }, selfWriteExpirationMs)
+        );
+    }
+
+    /**
+     * Marks a URI as written by the snapshot service, so the resulting fs event is treated as a
+     * self-write and skipped.
+     */
+    private markSnapshotSelfWrite(uri: Uri): void {
+        const key = this.selfWriteKey(uri);
+        this.snapshotSelfWriteUris.add(key);
+
+        // Safety net: clean stale entries after 30s
+        const existing = this.snapshotSelfWriteTimers.get(key);
+        if (existing) {
+            clearTimeout(existing);
+        }
+        this.snapshotSelfWriteTimers.set(
+            key,
+            setTimeout(() => {
+                this.snapshotSelfWriteUris.delete(key);
+                this.snapshotSelfWriteTimers.delete(key);
             }, selfWriteExpirationMs)
         );
     }
@@ -640,6 +644,10 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             }
         }
         return true;
+    }
+
+    private selfWriteKey(uri: Uri): string {
+        return uri.with({ query: '', fragment: '' }).toString();
     }
 
     /**

@@ -1,22 +1,28 @@
 import type { DeepnoteBlock } from '@deepnote/blocks';
-import { Event } from 'vscode';
+import { Event, NotebookDocument, Uri } from 'vscode';
 
-import { IntegrationWithStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
+import { DetectedIntegration } from '../../../platform/notebooks/deepnote/integrationTypes';
 
 // Re-export IIntegrationStorage from platform layer
 export { IIntegrationStorage } from '../../../platform/notebooks/deepnote/types';
 
 export const IIntegrationDetector = Symbol('IIntegrationDetector');
+
+/**
+ * Inputs for {@link IIntegrationDetector.detectIntegrations}: the open notebook's already-validated Deepnote IDs,
+ * plus its URI — `.deepnote.env.yaml` is located relative to the notebook, so the ids alone cannot find it.
+ */
+export interface IntegrationDetectionInput {
+    notebookId: string;
+    notebookUri: Uri;
+    projectId: string;
+}
+
 export interface IIntegrationDetector {
     /**
      * Detect all integrations used in the given project
      */
-    detectIntegrations(projectId: string): Promise<Map<string, IntegrationWithStatus>>;
-
-    /**
-     * Check if a project has any unconfigured integrations
-     */
-    hasUnconfiguredIntegrations(projectId: string): Promise<boolean>;
+    detectIntegrations(input: IntegrationDetectionInput): Promise<Map<string, DetectedIntegration>>;
 }
 
 export const IIntegrationWebviewProvider = Symbol('IIntegrationWebviewProvider');
@@ -24,13 +30,17 @@ export interface IIntegrationWebviewProvider {
     /**
      * Show the integration management webview
      * @param projectId The Deepnote project ID
-     * @param integrations Map of integration IDs to their status
+     * @param integrations Map of integration IDs to their detected config and metadata
+     * @param activeFileUri The `.deepnote` file being edited — always persisted to disk on save
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
+     * @param projectName Optional project display name (sourced from the active notebook's metadata)
      */
     show(
         projectId: string,
-        integrations: Map<string, IntegrationWithStatus>,
-        selectedIntegrationId?: string
+        integrations: Map<string, DetectedIntegration>,
+        activeFileUri: Uri,
+        selectedIntegrationId?: string,
+        projectName?: string
     ): Promise<void>;
 }
 
@@ -41,6 +51,18 @@ export interface IIntegrationManager {
      */
     activate(): void;
 }
+
+export const IIntegrationEnvLiveRefresher = Symbol('IIntegrationEnvLiveRefresher');
+export interface IIntegrationEnvLiveRefresher {
+    /**
+     * Re-runs the toolkit's `set_integration_env()` in each notebook's running kernel (no restart); notifies once.
+     * `trigger` is what changed, and is reported as-is to telemetry.
+     */
+    refresh(notebooks: readonly NotebookDocument[], trigger: IntegrationEnvRefreshTrigger): Promise<void>;
+}
+
+/** What prompted a live refresh: an edited `.deepnote.env.yaml`/`.env`, or a SecretStorage integration change. */
+export type IntegrationEnvRefreshTrigger = 'env_file' | 'integration_config';
 
 /** Persisted federated-auth token entry; fingerprints `${clientId}|${clientSecret}|${project}` to detect stale tokens. Only the refresh token is persisted. */
 export interface FederatedAuthTokenEntry {
@@ -67,15 +89,21 @@ export interface IFederatedAuthTokenStorage {
     delete(integrationId: string): Promise<void>;
     get(integrationId: string): Promise<FederatedAuthTokenEntry | undefined>;
     has(integrationId: string): Promise<boolean>;
-    /** All integration IDs with a stored token entry; used for orphaned-token cleanup. */
-    listIntegrationIds(): Promise<string[]>;
     /** Persists a token entry. Pass `silent: true` for refresh-token rotation to skip `onDidChangeTokens` (avoids interrupting in-flight SQL cells). */
     save(entry: FederatedAuthTokenEntry, options?: { silent?: boolean }): Promise<void>;
 }
 
 export const IFederatedAuthSqlBlockCodeGenerator = Symbol('IFederatedAuthSqlBlockCodeGenerator');
 export interface IFederatedAuthSqlBlockCodeGenerator {
-    generate(block: DeepnoteBlock): Promise<string | undefined>;
+    /**
+     * Python for a federated SQL block, or `undefined` when the block is not one (non-SQL, no integration id, or
+     * an integration that is not BigQuery + `google-oauth`).
+     *
+     * `notebookUri` is required, not optional: the integration config is resolved per notebook as
+     * `.deepnote.env.yaml` merged over SecretStorage, so the same integration id can carry different OAuth-client
+     * metadata in two notebooks and there is no ambient answer to fall back on.
+     */
+    generate(block: DeepnoteBlock, notebookUri: Uri): Promise<string | undefined>;
 }
 
 /** Thrown when a federated integration has no usable refresh token (not authenticated yet, fingerprint mismatch, or `invalid_grant`). */

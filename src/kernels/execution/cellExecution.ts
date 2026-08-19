@@ -483,7 +483,10 @@ export class CellExecution implements ICellExecution, IDisposable {
         // Federated-auth (BigQuery + google-oauth): generator returns a single Python string with the connection JSON embedded as a literal (containing the fresh access token). `undefined` means non-federated or web — fall back to `createPythonCode`.
         let federatedCode: string | undefined;
         try {
-            federatedCode = await this.federatedAuthSqlBlockCodeGenerator?.generate(deepnoteBlock);
+            federatedCode = await this.federatedAuthSqlBlockCodeGenerator?.generate(
+                deepnoteBlock,
+                this.cell.notebook.uri
+            );
         } catch (ex) {
             await this.handleFederatedGenerateError(ex);
             return;

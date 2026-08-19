@@ -1,3 +1,4 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
@@ -5,7 +6,7 @@ import { Disposable, EventEmitter, FileSystemWatcher, NotebookCellKind, Notebook
 
 import type { IControllerRegistration } from '../controllers/types';
 import type { IDisposableRegistry } from '../../platform/common/types';
-import type { DeepnoteOutput, DeepnoteProject } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteFileChangeWatcher } from './deepnoteFileChangeWatcher';
@@ -113,7 +114,7 @@ suite('DeepnoteFileChangeWatcher', () => {
             notebookType: opts.notebookType ?? 'deepnote',
             cellCount: opts.cellCount ?? (cells.length || 1),
             metadata: opts.metadata ?? {
-                deepnoteProjectId: 'project-1',
+                deepnoteProjectId: 'e132b172-b114-410e-8331-011517db664f',
                 deepnoteNotebookId: 'notebook-1'
             },
             getCells: () => cells
@@ -136,7 +137,7 @@ version: '1.0.0'
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
 project:
-  id: project-1
+  id: e132b172-b114-410e-8331-011517db664f
   name: Test Project
   notebooks:
     - id: notebook-1
@@ -335,7 +336,7 @@ version: '1.0.0'
 metadata:
   createdAt: '2025-01-01T00:00:00Z'
 project:
-  id: project-1
+  id: e132b172-b114-410e-8331-011517db664f
   name: Test Project
   notebooks:
     - id: notebook-1
@@ -399,6 +400,212 @@ project:
         assert.strictEqual(applyEditCount, 0, 'applyEdit should NOT be called for auto-save (same source)');
     });
 
+    suite('normalized one-shot self-write markers', () => {
+        // YAML matching `print("hello")` lives in `validYaml` above.
+        const helloYaml = validYaml;
+        const worldYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: e132b172-b114-410e-8331-011517db664f
+  name: Test Project
+  notebooks:
+    - id: notebook-1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: code
+          sortingKey: a0
+          blockGroup: '1'
+          content: print("world")
+`;
+        // Two-notebook file, used for the coalesced-event test.
+        const twoNotebookYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: e132b172-b114-410e-8331-011517db664f
+  name: Test Project
+  notebooks:
+    - id: n1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: code
+          sortingKey: a0
+          blockGroup: '1'
+          content: print("one")
+    - id: n2
+      name: Notebook 2
+      blocks:
+        - id: block-2
+          type: code
+          sortingKey: a0
+          blockGroup: '2'
+          content: print("two")
+`;
+
+        test('consumes self-write keyed by base URI for a query-URI notebook (no second read)', async function () {
+            this.timeout(8000);
+            const baseUri = Uri.file('/x/test.deepnote');
+            // Sidebar-opened notebook: URI carries a ?notebook= query.
+            const notebookUri = baseUri.with({ query: 'notebook=n1' });
+            // Live cells differ from the YAML on disk, so the watcher reloads + saves.
+            const notebook = createMockNotebook({ uri: notebookUri, cellCount: 0, cells: [] });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+            setupMockFs(helloYaml);
+
+            // Fire the external change at the BARE base URI (fs events deliver the base URI).
+            onDidChangeFile.fire(baseUri);
+
+            // Reload runs: applyEdit, then markSelfWrite(notebook.uri) keyed by the base URI, then save.
+            await waitFor(() => saveCount >= 1);
+            assert.isAtLeast(applyEditCount, 1, 'reload should applyEdit on the genuine change');
+            const readsAfterFirstCycle = readFileCalls;
+
+            // The watcher's own save marked the base key. Now the fs event for that save
+            // arrives at the BARE base URI — it must be consumed BEFORE any read.
+            onDidChangeFile.fire(baseUri);
+
+            // Wait well past the 500ms debounce to prove no read was scheduled.
+            await new Promise((resolve) => setTimeout(resolve, debounceWaitMs));
+
+            assert.strictEqual(
+                readFileCalls,
+                readsAfterFirstCycle,
+                'readFile must NOT be called again for the self-write event (consumed before the read)'
+            );
+        });
+
+        test('coalesced self-writes (one base key) do not swallow a later genuine change', async function () {
+            this.timeout(8000);
+            const baseUri = Uri.file('/x/test.deepnote');
+            // Two notebooks from the same file, different ?notebook= queries.
+            // Their declared notebook ids (n1/n2) must exist in the YAML on disk so the
+            // serializer can resolve them via its open-document fallback.
+            const nb1 = createMockNotebook({
+                uri: baseUri.with({ query: 'notebook=n1' }),
+                cellCount: 0,
+                cells: [],
+                metadata: { deepnoteProjectId: 'e132b172-b114-410e-8331-011517db664f', deepnoteNotebookId: 'n1' }
+            });
+            const nb2 = createMockNotebook({
+                uri: baseUri.with({ query: 'notebook=n2' }),
+                cellCount: 0,
+                cells: [],
+                metadata: { deepnoteProjectId: 'e132b172-b114-410e-8331-011517db664f', deepnoteNotebookId: 'n2' }
+            });
+
+            // Genuine change: same two-notebook structure (so n1/n2 still resolve), but with
+            // DIFFERENT block content so contentActuallyChanged is true.
+            const changedTwoNotebookYaml = `
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00Z'
+project:
+  id: e132b172-b114-410e-8331-011517db664f
+  name: Test Project
+  notebooks:
+    - id: n1
+      name: Notebook 1
+      blocks:
+        - id: block-1
+          type: code
+          sortingKey: a0
+          blockGroup: '1'
+          content: print("one-changed")
+    - id: n2
+      name: Notebook 2
+      blocks:
+        - id: block-2
+          type: code
+          sortingKey: a0
+          blockGroup: '2'
+          content: print("two-changed")
+`;
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([nb1, nb2]);
+            setupMockFs(twoNotebookYaml);
+
+            // One external change reloads BOTH notebooks in one cycle → two markSelfWrite
+            // calls, both keyed by the SAME base URI → they collapse into ONE Set entry.
+            onDidChangeFile.fire(baseUri);
+            await waitFor(() => saveCount >= 2);
+            const applyEditsAfterCoalesce = applyEditCount;
+            assert.strictEqual(applyEditsAfterCoalesce, 2, 'both notebooks reload in the coalesced cycle');
+
+            // First bare event consumes the single one-shot marker.
+            onDidChangeFile.fire(baseUri);
+            await new Promise((resolve) => setTimeout(resolve, autoSaveGraceMs));
+
+            // A genuine external change with DIFFERENT YAML must STILL reload (marker already gone).
+            // A counter-based scheme would have left a stale count of 1 and wrongly swallowed this.
+            setupMockFs(changedTwoNotebookYaml);
+            onDidChangeFile.fire(baseUri);
+
+            await waitFor(() => applyEditCount >= applyEditsAfterCoalesce + 1, waitForTimeoutMs);
+
+            assert.isAtLeast(
+                applyEditCount,
+                applyEditsAfterCoalesce + 1,
+                'genuine external change after a consumed coalesced marker must reload'
+            );
+        });
+
+        test('duplicate self-write events fall through to the content comparison (no applyEdit)', async function () {
+            this.timeout(8000);
+            const baseUri = Uri.file('/x/test.deepnote');
+            const notebookUri = baseUri.with({ query: 'notebook=n1' });
+            // Live cells match helloYaml. The first external change uses worldYaml so the
+            // content differs → reload + mark + save. Afterwards disk matches the live cells.
+            const notebook = createMockNotebook({
+                uri: notebookUri,
+                cells: [
+                    {
+                        metadata: { id: 'block-1' },
+                        outputs: [],
+                        kind: NotebookCellKind.Code,
+                        document: { getText: () => 'print("hello")', languageId: 'python' }
+                    }
+                ]
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+            // First: genuine change (different source) → reload + markSelfWrite + save.
+            setupMockFs(worldYaml);
+            onDidChangeFile.fire(baseUri);
+            await waitFor(() => saveCount >= 1);
+            assert.strictEqual(applyEditCount, 1, 'first genuine change reloads exactly once');
+
+            // Disk now matches the live cells (steady state after the reload).
+            setupMockFs(helloYaml);
+            const readsBeforeDuplicates = readFileCalls;
+
+            // Fire TWO bare events. The first is consumed by the one-shot marker (no read);
+            // the second falls through to the content comparison and ends without applyEdit.
+            onDidChangeFile.fire(baseUri);
+            onDidChangeFile.fire(baseUri);
+
+            await waitFor(() => readFileCalls > readsBeforeDuplicates);
+            await new Promise((resolve) => setTimeout(resolve, autoSaveGraceMs));
+
+            assert.strictEqual(
+                readFileCalls,
+                readsBeforeDuplicates + 1,
+                'only the second event reaches the read; the first was consumed as a self-write'
+            );
+            assert.strictEqual(
+                applyEditCount,
+                1,
+                'the duplicate event ends at "Source unchanged" — no additional applyEdit'
+            );
+        });
+    });
+
     suite('snapshot file watching', () => {
         let mockSnapshotService: SnapshotService;
         let snapshotWatcher: DeepnoteFileChangeWatcher;
@@ -432,7 +639,7 @@ project:
 
             mockSnapshotService = mock<SnapshotService>();
             when(mockSnapshotService.isSnapshotsEnabled()).thenReturn(true);
-            when(mockSnapshotService.readSnapshot(anything())).thenCall(() => {
+            when(mockSnapshotService.readSnapshot(anything(), anything())).thenCall(() => {
                 readSnapshotCallCount++;
                 return Promise.resolve(snapshotOutputs);
             });
@@ -480,7 +687,9 @@ project:
         });
 
         test('should update outputs when snapshot file changes', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
                 cells: [
@@ -509,7 +718,9 @@ project:
             const noSnapshotWatcher = new DeepnoteFileChangeWatcher(noSnapshotDisposables, mockNotebookManager);
             noSnapshotWatcher.activate();
 
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
 
             when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
 
@@ -526,7 +737,9 @@ project:
         });
 
         test('should skip self-triggered snapshot writes via onFileWritten', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
                 cells: [{ metadata: { id: 'block-1', type: 'code' }, outputs: [] }]
@@ -549,7 +762,9 @@ project:
         test('should skip when snapshots are disabled', async () => {
             when(mockSnapshotService.isSnapshotsEnabled()).thenReturn(false);
 
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
 
             snapshotOnDidChange.fire(snapshotUri);
 
@@ -560,9 +775,11 @@ project:
 
         test('should debounce rapid snapshot changes for same project', async () => {
             const snapshotUri1 = Uri.file(
-                '/workspace/snapshots/my-project_project-1_2025-01-15T10-31-48.snapshot.deepnote'
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_2025-01-15T10-31-48.snapshot.deepnote'
             );
-            const snapshotUri2 = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri2 = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
                 cells: [
@@ -587,7 +804,9 @@ project:
         });
 
         test('should handle onDidCreate for new snapshot files', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
                 cells: [
@@ -611,7 +830,9 @@ project:
         });
 
         test('should skip update when snapshot outputs match live state', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
                 cells: [
@@ -657,7 +878,9 @@ project:
         });
 
         test('should update outputs when content changed but count is the same', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const existingOutput = { items: [{ mime: 'text/plain', data: new Uint8Array([72]) }] };
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
@@ -682,7 +905,9 @@ project:
         });
 
         test('should skip main-file reload after snapshot update via self-write tracking', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebookUri = Uri.file('/workspace/test.deepnote');
             const notebook = createMockNotebook({
                 uri: notebookUri,
@@ -726,7 +951,9 @@ project:
         });
 
         test('should use two-phase edit for snapshot updates (replaceCells + metadata restore)', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
                 cells: [
@@ -754,7 +981,9 @@ project:
         });
 
         test('should call workspace.save after snapshot fallback output update', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
                 cells: [
@@ -778,7 +1007,9 @@ project:
         });
 
         test('should preserve outputs for cells not covered by snapshot', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const existingOutput = { items: [{ mime: 'text/plain', data: new Uint8Array([72]) }] };
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
@@ -811,13 +1042,14 @@ project:
         });
 
         test('should apply snapshot outputs using original blocks when metadata is lost', async () => {
-            // Create a mock notebook manager that returns an original project
+            // Create a mock notebook manager that returns an original project via the exact
+            // (projectId, notebookId) lookup the snapshot path uses.
             const mockedManager = mock<IDeepnoteNotebookManager>();
-            when(mockedManager.getOriginalProject('project-1')).thenReturn({
+            when(mockedManager.getProjectForNotebook('e132b172-b114-410e-8331-011517db664f', 'notebook-1')).thenReturn({
                 version: '1.0',
                 metadata: { createdAt: '2025-01-01T00:00:00Z' },
                 project: {
-                    id: 'project-1',
+                    id: 'e132b172-b114-410e-8331-011517db664f',
                     name: 'Test Project',
                     notebooks: [
                         {
@@ -827,7 +1059,7 @@ project:
                         }
                     ]
                 }
-            } as DeepnoteProject);
+            } as DeepnoteFile);
 
             // Re-create the watcher with the mocked manager
             const fallbackDisposables: IDisposableRegistry = [];
@@ -853,11 +1085,16 @@ project:
             );
             fallbackWatcher.activate();
 
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             // Cell has NO id in metadata — simulates VS Code losing metadata after replaceCells
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
-                metadata: { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' },
+                metadata: {
+                    deepnoteProjectId: 'e132b172-b114-410e-8331-011517db664f',
+                    deepnoteNotebookId: 'notebook-1'
+                },
                 cells: [
                     {
                         metadata: { type: 'code' }, // No id!
@@ -883,7 +1120,7 @@ project:
                     ]
                 ]
             ]);
-            when(mockSnapshotService.readSnapshot(anything())).thenReturn(Promise.resolve(newOutputs));
+            when(mockSnapshotService.readSnapshot(anything(), anything())).thenReturn(Promise.resolve(newOutputs));
 
             fallbackOnDidChange.fire(snapshotUri);
 
@@ -900,7 +1137,9 @@ project:
         });
 
         test('should only update cells whose outputs changed (per-cell updates)', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
 
             // Two cells: block-1 has no outputs (will get updated), block-2 already has matching outputs
             const outputItem = {
@@ -948,7 +1187,7 @@ project:
                     ]
                 ]
             ]);
-            when(mockSnapshotService.readSnapshot(anything())).thenCall(() => {
+            when(mockSnapshotService.readSnapshot(anything(), anything())).thenCall(() => {
                 readSnapshotCallCount++;
                 return Promise.resolve(multiOutputs);
             });
@@ -1020,7 +1259,9 @@ project:
             );
             execWatcher.activate();
 
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
                 cells: [
@@ -1053,7 +1294,9 @@ project:
         });
 
         test('should not apply updates when cells have no block IDs and no fallback', async () => {
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
                 cells: [
@@ -1109,7 +1352,9 @@ project:
             );
             fbWatcher.activate();
 
-            const snapshotUri = Uri.file('/workspace/snapshots/my-project_project-1_latest.snapshot.deepnote');
+            const snapshotUri = Uri.file(
+                '/workspace/snapshots/my-project_e132b172-b114-410e-8331-011517db664f_latest.snapshot.deepnote'
+            );
             const notebook = createMockNotebook({
                 uri: Uri.file('/workspace/test.deepnote'),
                 cells: [

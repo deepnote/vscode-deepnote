@@ -1,11 +1,12 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { TreeItemCollapsibleState, ThemeIcon } from 'vscode';
 
 import { DeepnoteTreeItem, DeepnoteTreeItemType, DeepnoteTreeItemContext } from './deepnoteTreeItem';
-import type { DeepnoteProject, DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
+import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 
 suite('DeepnoteTreeItem', () => {
-    const mockProject: DeepnoteProject = {
+    const mockProject: DeepnoteFile = {
         metadata: {
             createdAt: '2023-01-01T00:00:00Z',
             modifiedAt: '2023-01-02T00:00:00Z'
@@ -13,10 +14,18 @@ suite('DeepnoteTreeItem', () => {
         project: {
             id: 'project-123',
             name: 'Test Project',
+            // Two notebooks → a legacy multi-notebook (collapsible) ProjectFile node.
             notebooks: [
                 {
                     id: 'notebook-1',
                     name: 'First Notebook',
+                    blocks: [],
+                    executionMode: 'block',
+                    isModule: false
+                },
+                {
+                    id: 'notebook-2',
+                    name: 'Second Notebook',
                     blocks: [],
                     executionMode: 'block',
                     isModule: false
@@ -52,17 +61,16 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 context,
-                mockProject,
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProject },
                 TreeItemCollapsibleState.Collapsed
             );
 
-            assert.strictEqual(item.type, DeepnoteTreeItemType.ProjectFile);
+            assert.strictEqual(item.extra.type, DeepnoteTreeItemType.ProjectFile);
             assert.deepStrictEqual(item.context, context);
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.Collapsed);
             assert.strictEqual(item.label, 'Test Project');
-            assert.strictEqual(item.description, '1 notebook');
+            assert.strictEqual(item.description, '2 notebooks');
         });
 
         test('should create notebook item with basic properties', () => {
@@ -73,13 +81,12 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                mockNotebook,
+                { type: DeepnoteTreeItemType.Notebook, data: mockNotebook },
                 TreeItemCollapsibleState.None
             );
 
-            assert.strictEqual(item.type, DeepnoteTreeItemType.Notebook);
+            assert.strictEqual(item.extra.type, DeepnoteTreeItemType.Notebook);
             assert.deepStrictEqual(item.context, context);
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.None);
             assert.strictEqual(item.label, 'Analysis Notebook');
@@ -93,9 +100,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 context,
-                mockProject,
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProject },
                 TreeItemCollapsibleState.Expanded
             );
 
@@ -111,29 +117,31 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 context,
-                mockProject,
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProject },
                 TreeItemCollapsibleState.Collapsed
             );
 
             assert.strictEqual(item.label, 'Test Project');
-            assert.strictEqual(item.type, DeepnoteTreeItemType.ProjectFile);
+            assert.strictEqual(item.extra.type, DeepnoteTreeItemType.ProjectFile);
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.Collapsed);
             assert.strictEqual(item.contextValue, 'projectFile');
-            assert.strictEqual(item.tooltip, 'Deepnote Project: Test Project\nFile: /workspace/my-project.deepnote');
-            assert.strictEqual(item.description, '1 notebook');
+            assert.strictEqual(
+                item.tooltip,
+                'Deepnote Project: Test Project (legacy)\nFile: /workspace/my-project.deepnote'
+            );
+            assert.strictEqual(item.description, '2 notebooks');
 
-            // Should have notebook icon for project files
+            // Legacy multi-notebook files use the book (collection) icon
             assert.instanceOf(item.iconPath, ThemeIcon);
-            assert.strictEqual((item.iconPath as ThemeIcon).id, 'notebook');
+            assert.strictEqual((item.iconPath as ThemeIcon).id, 'book');
 
             // Should not have command for project files
             assert.isUndefined(item.command);
         });
 
         test('should handle project with multiple notebooks', () => {
-            const projectWithMultipleNotebooks: DeepnoteProject = {
+            const projectWithMultipleNotebooks: DeepnoteFile = {
                 ...mockProject,
                 project: {
                     ...mockProject.project,
@@ -169,9 +177,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 context,
-                projectWithMultipleNotebooks,
+                { type: DeepnoteTreeItemType.ProjectFile, data: projectWithMultipleNotebooks },
                 TreeItemCollapsibleState.Collapsed
             );
 
@@ -193,9 +200,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 context,
-                projectWithNoNotebooks,
+                { type: DeepnoteTreeItemType.ProjectFile, data: projectWithNoNotebooks },
                 TreeItemCollapsibleState.Collapsed
             );
 
@@ -217,9 +223,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 context,
-                unnamedProject as any,
+                { type: DeepnoteTreeItemType.ProjectFile, data: unnamedProject as any },
                 TreeItemCollapsibleState.Collapsed
             );
 
@@ -236,14 +241,13 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                mockNotebook,
+                { type: DeepnoteTreeItemType.Notebook, data: mockNotebook },
                 TreeItemCollapsibleState.None
             );
 
             assert.strictEqual(item.label, 'Analysis Notebook');
-            assert.strictEqual(item.type, DeepnoteTreeItemType.Notebook);
+            assert.strictEqual(item.extra.type, DeepnoteTreeItemType.Notebook);
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.None);
             assert.strictEqual(item.contextValue, 'notebook');
             assert.strictEqual(item.tooltip, 'Notebook: Analysis Notebook\nExecution Mode: block');
@@ -258,13 +262,6 @@ suite('DeepnoteTreeItem', () => {
             assert.strictEqual(item.command!.command, 'deepnote.openNotebook');
             assert.strictEqual(item.command!.title, 'Open Notebook');
             assert.deepStrictEqual(item.command!.arguments, [context]);
-
-            // Should have resource URI
-            assert.isDefined(item.resourceUri);
-            assert.strictEqual(
-                item.resourceUri!.toString(),
-                'deepnote-notebook:/workspace/project.deepnote#notebook-789'
-            );
         });
 
         test('should handle notebook with multiple blocks', () => {
@@ -313,9 +310,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                notebookWithMultipleBlocks,
+                { type: DeepnoteTreeItemType.Notebook, data: notebookWithMultipleBlocks },
                 TreeItemCollapsibleState.None
             );
 
@@ -335,9 +331,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                notebookWithNoBlocks,
+                { type: DeepnoteTreeItemType.Notebook, data: notebookWithNoBlocks },
                 TreeItemCollapsibleState.None
             );
 
@@ -357,9 +352,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                unnamedNotebook as any,
+                { type: DeepnoteTreeItemType.Notebook, data: unnamedNotebook as any },
                 TreeItemCollapsibleState.None
             );
 
@@ -374,14 +368,13 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                mockNotebook,
+                { type: DeepnoteTreeItemType.Notebook, data: mockNotebook },
                 TreeItemCollapsibleState.None
             );
 
             // Should still create the item with proper command
-            assert.strictEqual(item.type, DeepnoteTreeItemType.Notebook);
+            assert.strictEqual(item.extra.type, DeepnoteTreeItemType.Notebook);
             assert.isDefined(item.command);
             assert.strictEqual(item.command!.command, 'deepnote.openNotebook');
             assert.deepStrictEqual(item.command!.arguments, [context]);
@@ -399,16 +392,14 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const projectItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 baseContext,
-                mockProject,
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProject },
                 TreeItemCollapsibleState.Collapsed
             );
 
             const notebookItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 { ...baseContext, notebookId: 'notebook-1' },
-                mockNotebook,
+                { type: DeepnoteTreeItemType.Notebook, data: mockNotebook },
                 TreeItemCollapsibleState.None
             );
 
@@ -425,9 +416,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 context,
-                mockProject,
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProject },
                 TreeItemCollapsibleState.Collapsed
             );
 
@@ -442,9 +432,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                mockNotebook,
+                { type: DeepnoteTreeItemType.Notebook, data: mockNotebook },
                 TreeItemCollapsibleState.None
             );
 
@@ -457,21 +446,40 @@ suite('DeepnoteTreeItem', () => {
     });
 
     suite('icon configuration', () => {
-        test('should use notebook icon for project files', () => {
+        test('should use the book icon for a legacy multi-notebook project file', () => {
             const context: DeepnoteTreeItemContext = {
                 filePath: '/test/project.deepnote',
                 projectId: 'project-123'
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 context,
-                mockProject,
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProject },
                 TreeItemCollapsibleState.Collapsed
             );
 
             assert.instanceOf(item.iconPath, ThemeIcon);
-            assert.strictEqual((item.iconPath as ThemeIcon).id, 'notebook');
+            assert.strictEqual((item.iconPath as ThemeIcon).id, 'book');
+        });
+
+        test('should use the file-code icon for a single-notebook project file (matches its notebook children)', () => {
+            const singleNotebookProject: DeepnoteFile = {
+                ...mockProject,
+                project: { ...mockProject.project, notebooks: [mockProject.project.notebooks[0]] }
+            };
+            const context: DeepnoteTreeItemContext = {
+                filePath: '/test/single.deepnote',
+                projectId: 'project-123'
+            };
+
+            const item = new DeepnoteTreeItem(
+                context,
+                { type: DeepnoteTreeItemType.ProjectFile, data: singleNotebookProject },
+                TreeItemCollapsibleState.None
+            );
+
+            assert.instanceOf(item.iconPath, ThemeIcon);
+            assert.strictEqual((item.iconPath as ThemeIcon).id, 'file-code');
         });
 
         test('should use file-code icon for notebooks', () => {
@@ -482,9 +490,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                mockNotebook,
+                { type: DeepnoteTreeItemType.Notebook, data: mockNotebook },
                 TreeItemCollapsibleState.None
             );
 
@@ -509,15 +516,14 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const projectItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 context,
-                projectWithName,
+                { type: DeepnoteTreeItemType.ProjectFile, data: projectWithName },
                 TreeItemCollapsibleState.Collapsed
             );
 
             assert.strictEqual(
                 projectItem.tooltip,
-                'Deepnote Project: My Amazing Project\nFile: /test/amazing-project.deepnote'
+                'Deepnote Project: My Amazing Project (legacy)\nFile: /test/amazing-project.deepnote'
             );
         });
 
@@ -535,9 +541,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const notebookItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                notebookWithDetails,
+                { type: DeepnoteTreeItemType.Notebook, data: notebookWithDetails },
                 TreeItemCollapsibleState.None
             );
 
@@ -558,9 +563,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 context,
-                notebookWithSpecialChars,
+                { type: DeepnoteTreeItemType.Notebook, data: notebookWithSpecialChars },
                 TreeItemCollapsibleState.None
             );
 
@@ -580,9 +584,8 @@ suite('DeepnoteTreeItem', () => {
             const expectedContext = { ...originalContext };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Notebook,
                 originalContext,
-                mockNotebook,
+                { type: DeepnoteTreeItemType.Notebook, data: mockNotebook },
                 TreeItemCollapsibleState.None
             );
 
@@ -600,16 +603,15 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Loading,
                 context,
-                null,
+                { type: DeepnoteTreeItemType.Loading, data: null },
                 TreeItemCollapsibleState.None
             );
 
-            assert.strictEqual(item.type, DeepnoteTreeItemType.Loading);
+            assert.strictEqual(item.extra.type, DeepnoteTreeItemType.Loading);
             assert.strictEqual(item.contextValue, 'loading');
             assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.None);
-            assert.isNull(item.data);
+            assert.isNull(item.extra.data);
         });
 
         test('should set minimal visuals for loading items', () => {
@@ -619,15 +621,14 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const item = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.Loading,
                 context,
-                null,
+                { type: DeepnoteTreeItemType.Loading, data: null },
                 TreeItemCollapsibleState.None
             );
 
             // Loading items should have minimal visuals set to show a readable placeholder
             assert.isDefined(item);
-            assert.strictEqual(item.type, DeepnoteTreeItemType.Loading);
+            assert.strictEqual(item.extra.type, DeepnoteTreeItemType.Loading);
 
             // Verify minimal visuals are set
             assert.strictEqual(item.label, 'Loading…');
@@ -646,9 +647,8 @@ suite('DeepnoteTreeItem', () => {
             };
 
             const projectItem = new DeepnoteTreeItem(
-                DeepnoteTreeItemType.ProjectFile,
                 projectContext,
-                mockProject,
+                { type: DeepnoteTreeItemType.ProjectFile, data: mockProject },
                 TreeItemCollapsibleState.Expanded
             );
 
@@ -687,22 +687,21 @@ suite('DeepnoteTreeItem', () => {
             const notebookItems = notebooks.map(
                 (nb) =>
                     new DeepnoteTreeItem(
-                        DeepnoteTreeItemType.Notebook,
                         nb.context,
-                        nb.data,
+                        { type: DeepnoteTreeItemType.Notebook, data: nb.data },
                         TreeItemCollapsibleState.None
                     )
             );
 
             // Verify project structure
-            assert.strictEqual(projectItem.type, DeepnoteTreeItemType.ProjectFile);
+            assert.strictEqual(projectItem.extra.type, DeepnoteTreeItemType.ProjectFile);
             assert.strictEqual(projectItem.collapsibleState, TreeItemCollapsibleState.Expanded);
             assert.strictEqual(projectItem.contextValue, 'projectFile');
 
             // Verify notebook structure
             assert.strictEqual(notebookItems.length, 2);
             notebookItems.forEach((item) => {
-                assert.strictEqual(item.type, DeepnoteTreeItemType.Notebook);
+                assert.strictEqual(item.extra.type, DeepnoteTreeItemType.Notebook);
                 assert.strictEqual(item.collapsibleState, TreeItemCollapsibleState.None);
                 assert.strictEqual(item.contextValue, 'notebook');
                 assert.isDefined(item.command);
@@ -735,9 +734,8 @@ suite('DeepnoteTreeItem', () => {
             const items = contexts.map(
                 (context) =>
                     new DeepnoteTreeItem(
-                        DeepnoteTreeItemType.ProjectFile,
                         context,
-                        mockProject,
+                        { type: DeepnoteTreeItemType.ProjectFile, data: mockProject },
                         TreeItemCollapsibleState.Collapsed
                     )
             );

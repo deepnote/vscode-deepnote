@@ -74,7 +74,15 @@ export interface LegacyDuckDBIntegrationConfig extends BaseLegacyIntegrationConf
     type: LegacyIntegrationType.DuckDB;
 }
 
-import { DatabaseIntegrationConfig, DatabaseIntegrationType } from '@deepnote/database-integrations';
+import {
+    BigQueryAuthMethods,
+    DatabaseIntegrationConfig,
+    DatabaseIntegrationType,
+    databaseIntegrationTypes,
+    FederatedAuthMethod,
+    isDatabaseIntegrationType,
+    isFederatedAuthMethod
+} from '@deepnote/database-integrations';
 // Import and re-export Snowflake auth constants from shared module
 import {
     type SnowflakeAuthMethod,
@@ -143,25 +151,33 @@ export type ConfigurableDatabaseIntegrationConfig = Extract<
 
 export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationType, 'pandas-dataframe'>;
 
+/** Narrows a raw type string to one the webview can configure; excludes the internal DuckDB integration. */
+export function isConfigurableDatabaseIntegrationType(
+    type: string | undefined
+): type is ConfigurableDatabaseIntegrationType {
+    return (
+        type !== undefined &&
+        type !== 'pandas-dataframe' &&
+        (databaseIntegrationTypes as readonly string[]).includes(type)
+    );
+}
+
 /**
- * Integration connection status
+ * `integrations[].type` is free-form in the `.deepnote` schema; collapsing unrecognized values to
+ * `'unknown'` keeps analytics property cardinality bounded.
  */
-export enum IntegrationStatus {
-    Connected = 'connected',
-    Disconnected = 'disconnected',
-    Error = 'error'
+export function toTelemetryIntegrationType(type: string | undefined): DatabaseIntegrationType | 'unknown' {
+    return type && isDatabaseIntegrationType(type) ? type : 'unknown';
 }
 
 /** Federated-auth token status: `'authenticated'`, `'disconnected'` (federated but no token), or `'unsupported'` (non-federated or web/remote). */
 export type FederatedAuthTokenStatus = 'authenticated' | 'disconnected' | 'unsupported';
 
 /**
- * Integration with its current status
+ * An integration declared by a project, paired with the credentials stored for it (if any)
  */
-export interface IntegrationWithStatus {
+export interface DetectedIntegration {
     config: ConfigurableDatabaseIntegrationConfig | null;
-    status: IntegrationStatus;
-    error?: string;
     /**
      * Name from the project's integrations list (used for prefilling when config is null)
      */
@@ -170,6 +186,35 @@ export interface IntegrationWithStatus {
      * Type from the project's integrations list (used for prefilling when config is null)
      */
     integrationType?: ConfigurableDatabaseIntegrationType;
+    /**
+     * `.deepnote.env.yaml` supplies this integration's config. The panel only ever edits SecretStorage, and the
+     * file wins the merge, so anything saved from here would be silently overridden — the row is read-only.
+     */
+    isFileConfigured?: boolean;
     /** Federated-auth token status; only meaningful for federated integrations (currently BigQuery + `google-oauth`). */
     tokenStatus?: FederatedAuthTokenStatus;
+}
+
+/**
+ * Narrows integration metadata to the federated-auth variant. Shared by the file-config provider and the SQL
+ * env-vars provider (upstream `isFederatedAuthMetadata`'s generic doesn't unify with our
+ * `DatabaseIntegrationConfig['metadata']` union); delegates to the exported `isFederatedAuthMethod` at runtime.
+ */
+export function isFederatedAuthMetadata(
+    metadata: DatabaseIntegrationConfig['metadata']
+): metadata is Extract<DatabaseIntegrationConfig['metadata'], { authMethod: FederatedAuthMethod }> {
+    if (typeof metadata !== 'object' || metadata === null) {
+        return false;
+    }
+    if (!('authMethod' in metadata)) {
+        return false;
+    }
+    const authMethod = metadata.authMethod;
+
+    return typeof authMethod === 'string' && isFederatedAuthMethod(authMethod);
+}
+
+/** The only federated combination this extension implements — see `FederatedAuthSqlBlockCodeGenerator`. */
+export function isSupportedFederatedAuth(integration: DatabaseIntegrationConfig): boolean {
+    return integration.type === 'big-query' && integration.metadata.authMethod === BigQueryAuthMethods.GoogleOauth;
 }

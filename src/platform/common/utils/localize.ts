@@ -818,10 +818,12 @@ export namespace Integrations {
     export const title = l10n.t('Deepnote Integrations');
     export const noIntegrationsFound = l10n.t('No integrations found in this project.');
     export const connected = l10n.t('Connected');
+    export const configuredInFile = l10n.t('Configured in file');
     export const notConfigured = l10n.t('Not Configured');
     export const configure = l10n.t('Configure');
     export const reconfigure = l10n.t('Reconfigure');
     export const reset = l10n.t('Reset');
+    export const signOut = l10n.t('Sign out');
     export const deleteIntegration = l10n.t('Delete');
     export const confirmResetTitle = l10n.t('Confirm Reset');
     export const confirmResetMessage = l10n.t('Are you sure you want to reset this integration configuration?');
@@ -851,6 +853,7 @@ export namespace Integrations {
     export const alloyDBTypeLabel = l10n.t('Google AlloyDB');
     export const athenaTypeLabel = l10n.t('Amazon Athena');
     export const clickHouseTypeLabel = l10n.t('ClickHouse');
+    export const cloudSqlTypeLabel = l10n.t('Google Cloud SQL');
     export const databricksTypeLabel = l10n.t('Databricks');
     export const dremioTypeLabel = l10n.t('Dremio');
     export const mariaDBTypeLabel = l10n.t('MariaDB');
@@ -1081,10 +1084,24 @@ export namespace Integrations {
         'Paste the contents of your Google Cloud service account JSON key file.'
     );
     export const spannerServiceAccountInvalidJson = l10n.t('Invalid JSON format');
+    export const spannerServiceAccountRequired = l10n.t('Service account is required');
     export const spannerDataBoostLabel = l10n.t('Enable Data Boost');
     export const spannerDataBoostHelp = l10n.t(
         'Data Boost provides independent compute resources for analytics queries.'
     );
+
+    // Cloud SQL form strings
+    export const cloudSqlNameLabel = l10n.t('Name (optional)');
+    export const cloudSqlNamePlaceholder = l10n.t('My Cloud SQL Database');
+    export const cloudSqlServiceAccountLabel = l10n.t('Service Account JSON');
+    export const cloudSqlServiceAccountPlaceholder = l10n.t(
+        '{\n  "type": "service_account",\n  "project_id": "...",\n  ...\n}'
+    );
+    export const cloudSqlServiceAccountHelp = l10n.t(
+        'Paste the contents of your Google Cloud service account JSON key file.'
+    );
+    export const cloudSqlServiceAccountInvalidJson = l10n.t('Invalid JSON format');
+    export const cloudSqlServiceAccountRequired = l10n.t('Service account is required');
 
     // AlloyDB form strings
     export const alloyDBNameLabel = l10n.t('Name (optional)');

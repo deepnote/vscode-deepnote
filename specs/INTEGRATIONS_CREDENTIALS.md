@@ -33,7 +33,7 @@ This ensures consistency between the VSCode extension and Deepnote's cloud platf
 
 **Supported Integration Types:**
 
-The extension supports all 18 database integration types from the `@deepnote/database-integrations` package:
+The extension supports all 19 database integration types from the `@deepnote/database-integrations` package:
 
 **SQL Databases (standard authentication):**
 
@@ -52,6 +52,7 @@ The extension supports all 18 database integration types from the `@deepnote/dat
 - `'big-query'` - Google BigQuery (service account JSON)
 - `'snowflake'` - Snowflake (password or key-pair auth)
 - `'spanner'` - Google Spanner (service account JSON)
+- `'cloud-sql'` - Google Cloud SQL (service account JSON)
 
 **Cloud Databases (AWS credentials):**
 
@@ -349,6 +350,16 @@ The system uses `DatabaseIntegrationConfig` from `@deepnote/database-integration
     dataBoostEnabled: boolean;
   }
 }
+
+// Cloud SQL (type: 'cloud-sql')
+{
+  id: string;
+  name: string;
+  type: 'cloud-sql';
+  metadata: {
+    service_account: string; // JSON string
+  }
+}
 ```
 
 **Note:** The `pandas-dataframe` type is an internal integration that is automatically configured and cannot be modified by users.
@@ -386,28 +397,25 @@ Handles migration of legacy integration configurations to the new `@deepnote/dat
 
 #### 2. **Integration Detector** (`integrationDetector.ts`)
 
-Scans Deepnote projects to discover which integrations are used in SQL blocks.
+Lists the integrations a Deepnote project declares, paired with the credentials stored for each.
 
 **Detection Process:**
 
 1. Retrieves the Deepnote project from `IDeepnoteNotebookManager`
-2. Scans all notebooks in the project
-3. Examines each code block for `metadata.sql_integration_id`
-4. Maps Deepnote integration types to `DatabaseIntegrationType` using the project's integration list
-5. Checks if each integration is configured (has credentials)
-6. Returns a map of integration IDs to their status
-
-**Integration Status:**
-
-- `Connected`: Integration has valid credentials stored
-- `Disconnected`: Integration is used but not configured
-- `Error`: Integration configuration is invalid
+2. Iterates the project's `integrations` roster (ids, names and types only — never credentials)
+3. Skips entries whose type is not a configurable `DatabaseIntegrationType`
+4. Reads each integration's config from `SecretStorage`, or `null` when nothing is stored
+5. Appends `.deepnote.env.yaml` integrations the roster omits, so the panel lists what actually applies at
+   execution time; a failed lookup leaves the roster-only result rather than blocking the panel
+6. Returns a map of integration IDs to their config and declared name/type
 
 **Special Cases:**
 
 - Excludes `deepnote-dataframe-sql` (internal DuckDB integration)
-- Only processes code blocks with SQL integration metadata
-- Uses project integration metadata to determine integration types
+- Integrations configured in `.deepnote.env.yaml` have a `null` config here, since those configs are never
+  written through `SecretStorage`. They still resolve normally for kernel execution and SQL autocomplete, which
+  read the merged configs directly, and the panel marks them read-only rather than unconfigured (see below):
+  `IntegrationWebviewProvider` pairs the detection result with the file-configured ids.
 
 #### 3. **Integration Manager** (`integrationManager.ts`)
 
@@ -416,10 +424,6 @@ Orchestrates the integration management UI and commands.
 **Responsibilities:**
 
 - Registers the `deepnote.manageIntegrations` command
-- Updates VSCode context keys for UI visibility:
-  - `deepnote.hasIntegrations`: True if any integrations are detected
-  - `deepnote.hasUnconfiguredIntegrations`: True if any integrations lack credentials
-- Handles notebook selection changes
 - Opens the integration webview with detected integrations
 
 **Command Flow:**
@@ -436,9 +440,27 @@ Provides the webview-based UI for managing integration credentials.
 **Features:**
 
 - Persistent webview panel (survives defocus)
-- Real-time integration status updates
+- Real-time updates as credentials are saved or cleared
 - Configuration forms for each integration type
 - Delete/reset functionality
+
+**Connection Status:**
+
+`IntegrationItem.tsx` derives the status pill from two inputs: `config` (the SecretStorage credentials the panel
+can edit) and `isFileConfigured`, which `IntegrationWebviewProvider` computes from
+`ISqlIntegrationEnvVarsProvider.getFileConfiguredIntegrationIds()`. That call returns ids only, so neither the
+file's config nor its credentials ever reach the webview.
+
+- **"Configured in file"** — `.deepnote.env.yaml` configures this id. Rendered with the connected styling, and
+  the Configure/Reset/Delete actions are hidden: the panel writes `SecretStorage` only and the file wins the
+  merge, so those edits would be silent no-ops at runtime. This holds even when SecretStorage also happens to
+  hold a config for the same id.
+- **"Connected"** — SecretStorage holds credentials and no file config overrides them.
+- **"Not Configured"** — neither layer configures the integration.
+
+The separate federated-auth pill (BigQuery + `google-oauth`) is independent and tracks whether a refresh token
+is stored. It is driven by `tokenStatus` alone, which the extension derives from its own candidate set, so the
+Authenticate action stays available for file-configured integrations — exactly the rows that carry no `config`.
 
 **Message Protocol:**
 
@@ -446,7 +468,7 @@ Extension → Webview:
 
 ```typescript
 // Update integration list
-{ type: 'update', integrations: IntegrationWithStatus[] }
+{ type: 'update', integrations: DetectedIntegration[] }
 
 // Show configuration form
 { type: 'showForm', integrationId: string, config: IntegrationConfig | null }
@@ -476,7 +498,7 @@ Main React component that manages the webview UI state.
 
 **State Management:**
 
-- `integrations`: List of detected integrations with status
+- `integrations`: List of detected integrations with their stored configs
 - `selectedIntegrationId`: Currently selected integration for configuration
 - `selectedConfig`: Existing configuration being edited
 - `message`: Success/error messages
@@ -490,7 +512,7 @@ Main React component that manages the webview UI state.
 2. Panel shows configuration form overlay
 3. User enters credentials
 4. Panel sends save message to extension
-5. Extension stores credentials and updates status
+5. Extension stores credentials
 6. Panel shows success message and refreshes list
 
 **Delete Integration:**
@@ -500,7 +522,7 @@ Main React component that manages the webview UI state.
 3. User clicks again to confirm
 4. Panel sends delete message to extension
 5. Extension removes credentials
-6. Panel updates status to "Disconnected"
+6. Panel clears the stored config, so the item offers "Configure" again
 
 #### 6. **Configuration Forms**
 
@@ -567,9 +589,10 @@ Supported databases with standard forms:
 
 - **MongoDB**: Connection String (supports mongodb:// and mongodb+srv:// formats)
 
-**Google Cloud Forms** (`SpannerForm.tsx`):
+**Google Cloud Forms** (`SpannerForm.tsx`, `CloudSqlForm.tsx`):
 
 - **Spanner**: Instance ID, Database, Service Account JSON, Data Boost Enabled (checkbox)
+- **Cloud SQL**: Service Account JSON
 
 **Validation:**
 
@@ -666,55 +689,23 @@ DuckDB (internal):
 
 **Integration Points:**
 
-- Registered as an environment variable provider in the kernel environment service
-- Called when starting a Jupyter kernel for a Deepnote notebook
-- Environment variables are passed to the kernel process at startup
+- Backs the loopback `userpod-api` endpoint (`userpodApiEndpoints.node.ts`), which serves the resolved credentials to `deepnote-toolkit` as `[{name, value}]`
+- Queried per request rather than at kernel start, so a kernel always reads the credentials that are current at the moment it asks
 - Fires `onDidChangeEnvironmentVariables` event when integration storage changes
-
-#### 8. **SQL Integration Startup Code Provider** (`sqlIntegrationStartupCodeProvider.ts`)
-
-Injects Python code into the kernel at startup to set environment variables.
-
-**Why This Is Needed:**
-Jupyter doesn't automatically pass all environment variables from the server process to the kernel process. This provider ensures credentials are available in the kernel's `os.environ`.
-
-**Generated Code:**
-
-```python
-try:
-    import os
-    # [SQL Integration] Setting N SQL integration env vars...
-    os.environ['SQL_MY_POSTGRES_DB'] = '{"url":"postgresql://...","params":{},"param_style":"format"}'
-    os.environ['SQL_MY_BIGQUERY'] = '{"url":"bigquery://...","params":{...},"param_style":"format"}'
-    # [SQL Integration] Successfully set N SQL integration env vars
-except Exception as e:
-    import traceback
-    print(f"[SQL Integration] ERROR: Failed to set SQL integration env vars: {e}")
-    traceback.print_exc()
-```
-
-**Execution:**
-
-- Registered with `IStartupCodeProviders` for `JupyterNotebookView`
-- Runs automatically when a Python kernel starts for a Deepnote notebook
-- Priority: `StartupCodePriority.Base` (runs early)
-- Only runs for Python kernels on Deepnote notebooks
 
 ### Toolkit Integration
 
-#### 9. **How Credentials Are Exposed to deepnote-toolkit**
+#### 8. **How Credentials Are Exposed to deepnote-toolkit**
 
 The `deepnote-toolkit` Python package reads credentials from environment variables to execute SQL blocks.
 
 **Flow:**
 
-1. Extension detects SQL blocks in notebook
-2. Extension retrieves credentials from secure storage
-3. Extension converts credentials to JSON format
-4. Extension injects credentials as environment variables (two methods):
-   - **Server Process**: Via `SqlIntegrationEnvironmentVariablesProvider` when starting Jupyter server
-   - **Kernel Process**: Via `SqlIntegrationStartupCodeProvider` when starting Python kernel
-5. `deepnote-toolkit` reads environment variables when executing SQL blocks
+1. Extension starts the Jupyter server with the integration endpoint env vars applied by `applyIntegrationEndpointEnv` (`DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED`, `DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE`, `DEEPNOTE_RUNTIME__WEBAPP_URL`, `DEEPNOTE_RUNTIME__PROJECT_SECRET`, `DEEPNOTE_PROJECT_ID`) — no credentials are injected by the extension
+2. At kernel init, `deepnote-toolkit`'s `set_integration_env()` calls the extension's loopback `userpod-api` endpoint at `DEEPNOTE_RUNTIME__WEBAPP_URL`, authenticating with the per-project bearer token in `DEEPNOTE_RUNTIME__PROJECT_SECRET`
+3. The endpoint resolves the project's integrations via `SqlIntegrationEnvironmentVariablesProvider` — reading secure storage and converting the configs to `SQL_*` JSON values — and returns them as `[{name, value}]`
+4. Toolkit sets the returned variables into the kernel's `os.environ`
+5. `deepnote-toolkit` reads those environment variables when executing SQL blocks
 6. Toolkit creates database connections using the credentials
 7. Toolkit executes SQL queries and returns results
 
@@ -748,21 +739,31 @@ User → IntegrationPanel (UI)
 ### Execution Flow
 
 ```text
+Deepnote server starts
+  → applyIntegrationEndpointEnv()
+    → Awaits UserpodApiEndpoints readiness, reads its loopback baseUrl
+    → Resolves the project id from the .deepnote file
+    → Sets DEEPNOTE_RUNTIME__* + DEEPNOTE_PROJECT_ID on the server process
+  → Jupyter server process starts with those env vars (no credentials)
+
 User executes SQL cell
   → Kernel startup triggered
-  → SqlIntegrationEnvironmentVariablesProvider.getEnvironmentVariables()
-    → Identifies Deepnote project from notebook resource
-    → Retrieves project integrations from notebook manager
-    → Fetches configured credentials from IntegrationStorage
-    → Adds internal DuckDB integration
-    → Calls getEnvironmentVariablesForIntegrations() from @deepnote/database-integrations
-      → Converts configs to environment variable format
-      → Generates SQL_* environment variables
-    → Returns environment variables
-  → Environment variables passed to Jupyter server process
-  → SqlIntegrationStartupCodeProvider.getCode()
-    → Generates Python code to set os.environ
-  → Startup code executed in kernel
+  → deepnote-toolkit set_integration_env()
+    → GET {DEEPNOTE_RUNTIME__WEBAPP_URL}/userpod-api/{projectId}/integrations/environment-variables
+      Authorization: Bearer {DEEPNOTE_RUNTIME__PROJECT_SECRET}
+  → UserpodApiEndpoints handles the request
+    → Verifies the per-project bearer token
+    → Finds the open deepnote notebook(s) for that project id
+    → SqlIntegrationEnvironmentVariablesProvider.getEnvironmentVariables()
+      → Retrieves project integrations from notebook manager
+      → Fetches configured credentials from IntegrationStorage
+      → Adds internal DuckDB integration
+      → Calls getEnvironmentVariablesForIntegrations() from @deepnote/database-integrations
+        → Converts configs to environment variable format
+        → Generates SQL_* environment variables
+      → Returns environment variables
+    → Responds with [{name, value}]
+  → Toolkit sets them into the kernel's os.environ
   → deepnote-toolkit reads os.environ['SQL_*']
   → Toolkit executes SQL query
   → Results returned to notebook
@@ -817,7 +818,7 @@ The system was refactored to use the `@deepnote/database-integrations` package a
 
 ## Adding New Integration Types
 
-The extension now supports all 18 integration types from the `@deepnote/database-integrations` package (v1.1.1). To add support for a new integration type in the future:
+The extension now supports all 19 integration types from the `@deepnote/database-integrations` package. To add support for a new integration type in the future:
 
 1. **Add support to `@deepnote/database-integrations` package** (if not already supported):
 

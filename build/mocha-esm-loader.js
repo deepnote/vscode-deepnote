@@ -349,7 +349,7 @@ export async function load(url, context, nextLoad) {
                 format: 'module',
                 source: `
                     import { vscMockTelemetryReporter } from '${telemetryMockPath}';
-                    export default vscMockTelemetryReporter;
+                    export const TelemetryReporter = vscMockTelemetryReporter;
                 `,
                 shortCircuit: true
             };

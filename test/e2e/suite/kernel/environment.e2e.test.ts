@@ -36,7 +36,7 @@ import {
     selectDeepnoteContextMenu,
     selectEnvironmentForNotebook,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'sales-analytics.deepnote';
 const CHILD = 'sales-analytics-overview.deepnote';

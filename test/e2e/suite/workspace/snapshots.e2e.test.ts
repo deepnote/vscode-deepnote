@@ -22,7 +22,7 @@ import {
     runOnceAndAwaitOutput,
     selectEnvironmentForNotebook,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'legacy-snapshot-demo.deepnote';
 const SNAPSHOT = 'legacy-snapshot-demo_ffffffff-ffff-4fff-8fff-ffffffffffff_latest.snapshot.deepnote';

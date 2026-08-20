@@ -32,7 +32,7 @@ import {
     openWorkspaceFile,
     runOnceAndAwaitOutput,
     selectEnvironmentForNotebook
-} from '../helpers';
+} from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'hello-world.deepnote';
 const EXPECTED_OUTPUT = 'hello world';

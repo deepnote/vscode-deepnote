@@ -19,7 +19,7 @@ import {
     openWorkspaceFile,
     runOnceAndAwaitOutput,
     selectEnvironmentForNotebook
-} from '../helpers';
+} from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'integrations-env-file.deepnote';
 const EXPECTED_OUTPUT = 'injected-host.example.com';

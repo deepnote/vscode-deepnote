@@ -22,7 +22,7 @@ import {
     assertNotNull,
     selectDeepnoteContextMenu,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'bootstrap-only.deepnote';
 const NOTEBOOK_NAME = 'Bootstrap';

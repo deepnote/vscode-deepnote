@@ -23,7 +23,7 @@ import {
     readRenderedOutput,
     runOnceAndAwaitOutput,
     selectEnvironmentForNotebook
-} from '../helpers';
+} from '../../helpers';
 
 const MAIN_FILE = 'etl-pipeline-extract.deepnote';
 const INIT_SIBLING_FILE = 'etl-pipeline-init.deepnote';

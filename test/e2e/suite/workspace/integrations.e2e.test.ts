@@ -14,7 +14,7 @@ import {
     createScreenshotter,
     openFolderViaDialog,
     openWorkspaceFile
-} from '../helpers';
+} from '../../helpers';
 
 const REVENUE_FILE = 'sales-analytics-revenue.deepnote';
 const PLAIN_FILE = 'quick-notes.deepnote';

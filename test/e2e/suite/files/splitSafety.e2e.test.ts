@@ -17,7 +17,7 @@ import {
     openWorkspaceFile,
     assertNotNull,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const DISMISS_FIXTURE = 'sales-analytics.deepnote';
 const SPLIT_PROMPT = /multiple notebooks/i;

@@ -18,9 +18,16 @@ concurrency:
 
 jobs:
   e2e:
-    name: E2E (ExTester)
+    name: E2E (${{ matrix.group }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      # One shard per directory in test/e2e/suite/. Grouped by what the suites cover rather than by
+      # measured time, so a new suite has an obvious home and the split does not silently skew as
+      # suites are added; check:e2e:groups fails the build if a suite lands outside a shard.
+      fail-fast: false
+      matrix:
+        group: [kernel, files, workspace]
     env:
       # Keep ExTester's downloads (test VS Code, ChromeDriver, settings, screenshots) inside the
       # workspace so the artifact-upload paths are predictable. Both this and .test-extensions are
@@ -52,6 +59,9 @@ jobs:
 
       - name: Compile the E2E test sources
         run: npm run compile-e2e
+
+      - name: Check every suite belongs to a shard
+        run: npm run check:e2e:groups
 
       - name: Install Electron/Chromium runtime libraries + Xvfb
         run: |
@@ -108,13 +118,13 @@ jobs:
       - name: Run E2E
         # VS Code launches with --no-sandbox (no AppArmor sysctl needed). Runs once; Mocha's retries:1
         # and rootHooks.ts (dismiss toasts between tests) handle flakiness in the single shared instance.
-        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:prebuilt
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:${{ matrix.group }}
 
       - name: Upload failure screenshots
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-screenshots
+          name: e2e-screenshots-${{ matrix.group }}
           path: ${{ env.TEST_RESOURCES }}/screenshots/**/*.png
           if-no-files-found: ignore
           retention-days: 14

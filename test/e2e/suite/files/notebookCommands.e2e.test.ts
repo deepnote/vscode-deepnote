@@ -30,7 +30,7 @@ import {
     openWorkspaceFile,
     assertNotNull,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const MARKETING_FILES = ['marketing-overview.deepnote', 'marketing-campaigns.deepnote', 'marketing-metrics.deepnote'];
 const GROUP = 'Marketing';

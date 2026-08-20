@@ -16,7 +16,7 @@ import {
     openFolderViaDialog,
     openWorkspaceFile,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'quick-notes.deepnote';
 const SCRATCH_FILE = 'clipboard-scratch.txt';

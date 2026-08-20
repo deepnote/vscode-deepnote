@@ -23,7 +23,7 @@ import {
     readDeepnoteTreeRows,
     selectDeepnoteContextMenu,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const DIRTIED_FILE = 'marketing-overview.deepnote' as const;
 const MARKETING_FILES = [DIRTIED_FILE, 'marketing-campaigns.deepnote', 'marketing-metrics.deepnote'] as const;

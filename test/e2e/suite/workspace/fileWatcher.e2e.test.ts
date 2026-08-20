@@ -17,7 +17,7 @@ import {
     openFolderViaDialog,
     openWorkspaceFile,
     readRenderedOutput
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'hello-world.deepnote';
 const ORIGINAL_SOURCE = 'hello world';

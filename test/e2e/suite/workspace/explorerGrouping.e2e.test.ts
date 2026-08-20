@@ -13,7 +13,7 @@ import {
     copyFixtureToTempDir,
     createScreenshotter,
     openFolderViaDialog
-} from '../helpers';
+} from '../../helpers';
 
 const MARKETING_FILES = ['marketing-overview.deepnote', 'marketing-campaigns.deepnote', 'marketing-metrics.deepnote'];
 const OTHER_PROJECT_FILE = 'quick-notes.deepnote';

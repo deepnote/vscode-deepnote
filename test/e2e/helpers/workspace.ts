@@ -7,8 +7,13 @@ import {
     QUICK_PICK_TIMEOUT,
     RELOAD_POLL_TIMEOUT
 } from './constants';
-import { isInsideFixturesWorkspaceRoot } from './fixtures';
+import { fixturesWorkspaceRoot, isInsideFixturesWorkspaceRoot } from './fixtures';
 import { clickDialogOkButton } from './quickInput';
+
+// Whether the shared fixtures root has been opened as the workspace folder yet. Tracked here rather
+// than opened from a Mocha root hook: ExTester's runner does not fire `mochaHooks.beforeAll`, so a
+// root hook silently never runs and every suite ends up with no workspace at all.
+let fixturesRootOpened = false;
 
 /**
  * Opens a file that lives in the currently-open workspace folder via Quick Open ("Go to File..."),
@@ -40,11 +45,15 @@ export async function openWorkspaceFile(fileName: string): Promise<void> {
  * Re-opening the dialog per attempt instead would reset navigation and fail on 2nd+ opens.
  */
 export async function openFolderViaDialog(folder: string): Promise<void> {
-    // Fixture copies all live under one root that rootHooks opens once, and opening a folder reloads
-    // the workbench — the reload is what made per-suite setup expensive. A directory already inside
-    // that root is therefore reachable without reopening anything.
+    // Fixture copies all live under one shared root, and opening a folder reloads the workbench —
+    // that reload is what made per-suite setup expensive. So the root is opened once, by whichever
+    // suite asks first, and every later request for a directory inside it is already satisfied.
+    let target = folder;
     if (isInsideFixturesWorkspaceRoot(folder)) {
-        return;
+        if (fixturesRootOpened) {
+            return;
+        }
+        target = fixturesWorkspaceRoot();
     }
 
     const driver = VSBrowser.instance.driver;
@@ -52,7 +61,7 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
 
     await new Workbench().executeCommand('File: Open Folder...');
     const dialog = await InputBox.create(QUICK_PICK_TIMEOUT);
-    await dialog.setText(folder);
+    await dialog.setText(target);
 
     // The simple dialog resolves the typed path asynchronously; wait for the listing, then settle.
     await driver
@@ -80,6 +89,8 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
             .then(() => true)
             .catch(() => false);
         if (reloaded) {
+            fixturesRootOpened = target === fixturesWorkspaceRoot();
+
             return;
         }
 
@@ -90,5 +101,5 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
         console.warn('[deepnote-e2e] cancel folder dialog:', error);
     });
 
-    throw new Error(`Failed to open folder "${folder}": the dialog never accepted the target`);
+    throw new Error(`Failed to open folder "${target}": the dialog never accepted the target`);
 }

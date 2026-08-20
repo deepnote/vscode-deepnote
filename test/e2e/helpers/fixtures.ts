@@ -28,9 +28,9 @@ const idMappings = new Map<string, Map<string, string>>();
 let workspaceRoot: string | undefined;
 
 /**
- * The single directory every fixture copy lives under. Opened once as the workspace folder (see
- * rootHooks) rather than once per suite: opening a folder reloads the workbench, and that reload
- * dominated suite setup.
+ * The single directory every fixture copy lives under. openFolderViaDialog opens it once, on the
+ * first suite that asks, rather than once per suite: opening a folder reloads the workbench, and
+ * that reload dominated suite setup. Each suite still removes its own subdirectory in `after`.
  */
 export function fixturesWorkspaceRoot(): string {
     if (!workspaceRoot) {
@@ -43,13 +43,6 @@ export function fixturesWorkspaceRoot(): string {
 /** True when `folder` sits inside the already-opened shared root (so opening it would be a no-op). */
 export function isInsideFixturesWorkspaceRoot(folder: string): boolean {
     return workspaceRoot !== undefined && path.resolve(folder).startsWith(path.resolve(workspaceRoot) + path.sep);
-}
-
-export function removeFixturesWorkspaceRoot(): void {
-    if (workspaceRoot) {
-        fs.rmSync(workspaceRoot, { recursive: true, force: true });
-        workspaceRoot = undefined;
-    }
 }
 
 /**

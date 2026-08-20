@@ -39,6 +39,7 @@ export async function removeEphemeralCellsOwnedBy(
         logger.info(`Removed ${deletions.length} ephemeral cell(s) owned by ${agentBlockIds.size} agent block(s)`);
     } else {
         logger.error(`Failed to remove ephemeral cells owned by agent block(s) ${[...agentBlockIds].join(', ')}`);
+        return new Set();
     }
 
     return deletedCells;

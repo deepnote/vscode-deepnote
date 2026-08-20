@@ -1,4 +1,4 @@
-import { EditorView, InputBox, Key, VSBrowser, Workbench } from 'vscode-extension-tester';
+import { EditorView, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
 
 import {
     ENV_CREATED_TIMEOUT,
@@ -68,22 +68,38 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
     }
 
     const picks = await interpreterPick.getQuickPicks();
-    const labels = await Promise.all(
-        picks.map(async (pick) => `${await pick.getLabel()} ${(await pick.getDescription()) ?? ''}`)
-    );
+    const labels = await Promise.all(picks.map(async (pick) => pick.getLabel()));
     // "Not the baked venv" rather than "not any venv": in CI the only other interpreter is the one
     // actions/setup-python installed, which is not a venv, so this resolves to it.
-    const index = labels.findIndex((label) => !label.includes(PREBAKED_VENV_DIR_NAME));
-    const target = index >= 0 ? index : 0;
+    const wanted = labels.find((label) => !label.includes(PREBAKED_VENV_DIR_NAME));
 
-    // Walk the highlight with arrows and accept with Enter rather than calling select(), which is a
-    // bare click: a row's description `<p>` overlaps the row and intercepts positional clicks. Same
-    // reason selectEnvironmentForNotebook types instead of clicking. Enter is sent through the same
-    // focus context as the arrows so the highlight cannot be disturbed in between.
-    for (let step = 0; step < target; step++) {
-        await driver.actions().sendKeys(Key.ARROW_DOWN).perform();
+    if (wanted) {
+        // Filter to it and accept with Enter, the same way the baked-venv branch does, rather than
+        // clicking a row or walking the list: rows intercept positional clicks, and an arrow-key walk
+        // silently lands on the wrong entry whenever the list scrolls or reorders under it.
+        await interpreterPick.setText(wanted);
+        const narrowed = await driver
+            .wait(async () => {
+                const filtered = await interpreterPick.getQuickPicks();
+
+                return filtered.length > 0 && !(await filtered[0].getLabel()).includes(PREBAKED_VENV_DIR_NAME);
+            }, PREBAKED_VENV_FILTER_TIMEOUT)
+            .catch(() => false);
+
+        if (narrowed) {
+            await interpreterPick.confirm();
+
+            return;
+        }
+
+        await interpreterPick.setText('');
     }
-    await driver.actions().sendKeys(Key.ENTER).perform();
+
+    console.warn(
+        `[deepnote-e2e] no interpreter outside ${PREBAKED_VENV_DIR_NAME} could be filtered to; ` +
+            `accepting the first entry. Offered: ${JSON.stringify(labels)}`
+    );
+    await interpreterPick.confirm();
 }
 
 /**

@@ -15,6 +15,10 @@ import { clickDialogOkButton } from './quickInput';
 // root hook silently never runs and every suite ends up with no workspace at all.
 let fixturesRootOpened = false;
 
+// Exact palette labels (category + title) the way `Workbench.executeCommand` matches them.
+const CLOSE_ALL_EDITORS_COMMAND = 'View: Close All Editors';
+const REFRESH_EXPLORER_COMMAND = 'Deepnote: Refresh Explorer';
+
 /**
  * Opens a file that lives in the currently-open workspace folder via Quick Open ("Go to File..."),
  * matching by file name. Unlike the simple Open File dialog (where Enter does not accept a typed
@@ -51,6 +55,19 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
     let target = folder;
     if (isInsideFixturesWorkspaceRoot(folder)) {
         if (fixturesRootOpened) {
+            // Two things the window reload used to do, which now have to happen explicitly.
+            //
+            // Editors first: a suite that renamed or deleted notebooks leaves tabs open on files that
+            // no longer exist, so the next suite starts with the wrong notebook active and finds no
+            // code cell in it. Driven through the palette rather than EditorView.closeAllEditors,
+            // which clicks each tab's close button and fails with ElementNotInteractableError on
+            // notebook tabs — the reason each suite's own cleanup silently never worked either.
+            await new Workbench().executeCommand(CLOSE_ALL_EDITORS_COMMAND);
+
+            // Then the tree: it keeps showing a group for the previous suite's directory after that
+            // directory was removed, and a lookup by notebook name finds the dead entry instead.
+            await new Workbench().executeCommand(REFRESH_EXPLORER_COMMAND);
+
             return;
         }
         target = fixturesWorkspaceRoot();

@@ -23,6 +23,7 @@ import {
     KERNEL_CONNECT_TIMEOUT,
     QUICK_PICK_TIMEOUT,
     SHARED_ENV_NAME,
+    fixturesWorkspaceRoot,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     confirmModalDialog,
@@ -145,7 +146,11 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
 
         // Delete the sidecar so only a child's migrated mapping can rewrite it (proves migration, not
         // a stale pre-split entry).
-        const sidecarPath = path.join(tempDir, '.vscode', 'deepnote.json');
+        // The sidecar is written to workspace.workspaceFolders[0] (deepnoteExtensionSidecarWriter
+        // .node.ts:300), which is the shared fixtures root rather than this suite's directory. Its
+        // mappings are keyed by project id, and every copy gets a fresh one, so a shared file still
+        // isolates suites from each other.
+        const sidecarPath = path.join(fixturesWorkspaceRoot(), '.vscode', 'deepnote.json');
         fs.rmSync(sidecarPath, { force: true });
 
         await new EditorView().closeAllEditors().catch(() => undefined);
@@ -174,7 +179,7 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         }
 
         if (!sidecarEnvId) {
-            const vscodeDir = path.join(tempDir, '.vscode');
+            const vscodeDir = path.join(fixturesWorkspaceRoot(), '.vscode');
             const listing = fs.existsSync(vscodeDir) ? fs.readdirSync(vscodeDir) : '(.vscode missing)';
             console.log('[G1] .vscode listing after opening child:', JSON.stringify(listing));
             if (fs.existsSync(sidecarPath)) {

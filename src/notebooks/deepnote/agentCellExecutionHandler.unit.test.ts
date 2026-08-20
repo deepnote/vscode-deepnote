@@ -325,8 +325,29 @@ suite('AgentCellExecutionHandler', () => {
 
             const item = mockExecution.appendOutputItems.firstCall.args[0] as NotebookCellOutputItem;
             expect(item.mime).to.equal('application/vnd.code.notebook.stdout');
-            expect(getStdoutChunkText(0)).to.equal('[Agent] Text:\nfirst');
+            expect(getStdoutChunkText(0)).to.equal('\n\n[Agent] Text:\nfirst');
             expect(getStdoutChunkText(1)).to.equal(' second');
+        });
+
+        test('separates the planning line from the first streamed event', async () => {
+            executeAgentBlockStub.callsFake(async (_block: AgentBlock, context: AgentBlockContext) => {
+                await context.onAgentEvent?.({ type: 'reasoning_delta', text: 'Considering the request' });
+
+                return { finalOutput: '' };
+            });
+
+            const cell = createAgentCell();
+
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
+
+            const seedOutputs = mockExecution.replaceOutput.firstCall.args[0] as NotebookCellOutput[];
+            const seed = Buffer.from(seedOutputs[0].items[0].data).toString('utf-8');
+
+            expect(seed + getStdoutChunkText(0)).to.equal(
+                '[Agent] Planning next steps...\n\n[Agent] Reasoning:\nConsidering the request'
+            );
         });
 
         test('separates different event types with blank lines', async () => {

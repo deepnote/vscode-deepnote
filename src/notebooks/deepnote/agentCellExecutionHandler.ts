@@ -277,7 +277,7 @@ export async function executeAgentCell(
 
                 logger.trace(`Agent event: ${event.type}`);
 
-                let delta = lastAgentEventType != null && lastAgentEventType !== event.type ? `\n\n` : '';
+                let delta = lastAgentEventType !== event.type ? `\n\n` : '';
 
                 switch (event.type) {
                     case 'tool_called':

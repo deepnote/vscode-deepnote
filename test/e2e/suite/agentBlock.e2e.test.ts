@@ -520,18 +520,22 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
                 const files = fs.existsSync(snapshotsDir)
                     ? fs.readdirSync(snapshotsDir).filter((file) => file.endsWith('_latest.snapshot.deepnote'))
                     : [];
-                transcript =
-                    files.length > 0
-                        ? blockStreamOutputText(
-                              fs.readFileSync(path.join(snapshotsDir, files[0]), 'utf8'),
-                              AGENT_BLOCK_ID
-                          )
-                        : '';
-
+                transcript = '';
+                for (const file of files) {
+                    try {
+                        transcript = blockStreamOutputText(
+                            fs.readFileSync(path.join(snapshotsDir, file), 'utf8'),
+                            AGENT_BLOCK_ID
+                        );
+                        break;
+                    } catch (error) {
+                        // Another notebook's snapshot, or a partially written file — keep polling.
+                        console.warn(`[agent-block] read snapshot ${file}:`, error);
+                    }
+                }
                 if (transcript.includes(PERSISTED_FINAL_AGENT_TEXT)) {
                     break;
                 }
-
                 await driver.sleep(SNAPSHOT_POLL_INTERVAL);
             }
 

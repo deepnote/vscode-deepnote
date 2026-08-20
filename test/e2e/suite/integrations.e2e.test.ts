@@ -4,13 +4,12 @@
  */
 
 import { expect } from 'chai';
-import * as fs from 'fs';
-import * as path from 'path';
 import { By, EditorView, VSBrowser, WebView, Workbench } from 'vscode-extension-tester';
 
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
     openFolderViaDialog,
@@ -98,10 +97,7 @@ describe('Deepnote — the integrations UI', function () {
 
         const copy = copyFixtureToTempDir(REVENUE_FILE);
         cleanupTempDir = copy.cleanup;
-        fs.copyFileSync(
-            path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', PLAIN_FILE),
-            path.join(copy.tempDir, PLAIN_FILE)
-        );
+        copyFixtureIntoDir(copy.tempDir, PLAIN_FILE);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(copy.tempDir);

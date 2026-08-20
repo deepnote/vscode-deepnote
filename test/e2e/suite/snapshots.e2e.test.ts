@@ -11,7 +11,9 @@ import {
     SHARED_ENV_NAME,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    copyFixtureIntoDir,
     copyFixtureToTempDir,
+    copySnapshotIntoDir,
     createEnvironment,
     createScreenshotter,
     openFolderViaDialog,
@@ -39,12 +41,7 @@ describe('Deepnote — a legacy project-scoped snapshot still loads its saved ou
         const screenshot = createScreenshotter(this);
         const copy = copyFixtureToTempDir(FIXTURE);
         cleanupTempDir = copy.cleanup;
-        const snapshotsDir = path.join(copy.tempDir, 'snapshots');
-        fs.mkdirSync(snapshotsDir, { recursive: true });
-        fs.copyFileSync(
-            path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'snapshots', SNAPSHOT),
-            path.join(snapshotsDir, SNAPSHOT)
-        );
+        copySnapshotIntoDir(copy.tempDir, SNAPSHOT);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(copy.tempDir);
@@ -108,10 +105,7 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
         const copy = copyFixtureToTempDir(SIBLINGS[0].file);
         cleanupTempDir = copy.cleanup;
         tempDir = copy.tempDir;
-        fs.copyFileSync(
-            path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', SIBLINGS[1].file),
-            path.join(tempDir, SIBLINGS[1].file)
-        );
+        copyFixtureIntoDir(tempDir, SIBLINGS[1].file);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(tempDir);

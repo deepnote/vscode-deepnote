@@ -4,13 +4,12 @@
  */
 
 import { expect } from 'chai';
-import * as fs from 'fs';
-import * as path from 'path';
 import { ActivityBar, EditorView, SideBarView, VSBrowser, WebView, type ViewItem } from 'vscode-extension-tester';
 
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
     openFolderViaDialog
@@ -87,10 +86,7 @@ describe('Deepnote — the Explorer groups sibling files by project', function (
         const copy = copyFixtureToTempDir(MARKETING_FILES[0]);
         cleanupTempDir = copy.cleanup;
         for (const name of [...MARKETING_FILES.slice(1), OTHER_PROJECT_FILE]) {
-            fs.copyFileSync(
-                path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', name),
-                path.join(copy.tempDir, name)
-            );
+            copyFixtureIntoDir(copy.tempDir, name);
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);

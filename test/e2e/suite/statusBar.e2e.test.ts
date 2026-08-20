@@ -21,7 +21,6 @@ import {
 const FIXTURE = 'quick-notes.deepnote';
 const SCRATCH_FILE = 'clipboard-scratch.txt';
 const NOTEBOOK_NAME = 'Quick Notes';
-const PROJECT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const NOTEBOOK_ID = 'c-nb-main';
 const COPIED_TOAST = /Copied Deepnote notebook details to clipboard\./i;
 
@@ -57,6 +56,7 @@ describe('Deepnote — the active-notebook status bar item', function () {
     this.timeout(SUITE_TIMEOUT);
 
     let cleanupTempDir: (() => void) | undefined;
+    let projectId = '';
     let itemTextWithNotebook = '';
     let itemTooltip = '';
     let copyToastShown = false;
@@ -68,6 +68,7 @@ describe('Deepnote — the active-notebook status bar item', function () {
         const screenshot = createScreenshotter(this);
 
         const copy = copyFixtureToTempDir(FIXTURE);
+        projectId = copy.projectId;
         cleanupTempDir = copy.cleanup;
         // A plain, non-notebook editor to paste the clipboard into (also serves the hidden-item check).
         fs.writeFileSync(path.join(copy.tempDir, SCRATCH_FILE), '');
@@ -157,7 +158,7 @@ describe('Deepnote — the active-notebook status bar item', function () {
         expect(copyToastShown, 'copied-to-clipboard toast').to.equal(true);
         expect(clipboardText, 'clipboard details').to.contain(`Notebook name: ${NOTEBOOK_NAME}`);
         expect(clipboardText, 'clipboard details').to.contain(`Notebook ID: ${NOTEBOOK_ID}`);
-        expect(clipboardText, 'clipboard details').to.contain(`Project ID: ${PROJECT_ID}`);
+        expect(clipboardText, 'clipboard details').to.contain(`Project ID: ${projectId}`);
         expect(clipboardText, 'clipboard details').to.contain(FIXTURE);
     });
 });

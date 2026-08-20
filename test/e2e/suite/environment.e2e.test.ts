@@ -40,7 +40,6 @@ import {
 
 const FIXTURE = 'sales-analytics.deepnote';
 const CHILD = 'sales-analytics-overview.deepnote';
-const PROJECT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const ENV_NAME = SHARED_ENV_NAME;
 const SPLIT_PROMPT = /multiple notebooks/i;
 const SPLIT_ACTION = 'Split into separate files';
@@ -87,6 +86,7 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
     this.timeout(SUITE_TIMEOUT);
     this.retries(0); // destructive (retires the original to .legacy); not idempotent
 
+    let projectId = '';
     let cleanupTempDir: (() => void) | undefined;
     let sidecarEnvId: string | undefined;
 
@@ -94,6 +94,7 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         const driver = VSBrowser.instance.driver;
         const screenshot = createScreenshotter(this);
         const copy = copyFixtureToTempDir(FIXTURE);
+        projectId = copy.projectId;
         cleanupTempDir = copy.cleanup;
         const tempDir = copy.tempDir;
 
@@ -160,7 +161,7 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
             if (fs.existsSync(sidecarPath)) {
                 try {
                     const parsed = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
-                    const id = parsed?.mappings?.[PROJECT_ID]?.environmentId;
+                    const id = parsed?.mappings?.[projectId]?.environmentId;
                     if (typeof id === 'string' && id.length > 0) {
                         sidecarEnvId = id;
                         break;

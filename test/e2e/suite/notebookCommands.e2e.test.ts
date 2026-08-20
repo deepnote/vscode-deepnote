@@ -23,6 +23,7 @@ import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     confirmModalDialog,
+    copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
     openFolderViaDialog,
@@ -158,7 +159,7 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
         cleanupTempDir = copy.cleanup;
         tempDir = copy.tempDir;
         for (const name of MARKETING_FILES.slice(1)) {
-            fs.copyFileSync(path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', name), path.join(tempDir, name));
+            copyFixtureIntoDir(tempDir, name);
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);

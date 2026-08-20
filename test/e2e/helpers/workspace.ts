@@ -7,6 +7,7 @@ import {
     QUICK_PICK_TIMEOUT,
     RELOAD_POLL_TIMEOUT
 } from './constants';
+import { isInsideFixturesWorkspaceRoot } from './fixtures';
 import { clickDialogOkButton } from './quickInput';
 
 /**
@@ -39,6 +40,13 @@ export async function openWorkspaceFile(fileName: string): Promise<void> {
  * Re-opening the dialog per attempt instead would reset navigation and fail on 2nd+ opens.
  */
 export async function openFolderViaDialog(folder: string): Promise<void> {
+    // Fixture copies all live under one root that rootHooks opens once, and opening a folder reloads
+    // the workbench — the reload is what made per-suite setup expensive. A directory already inside
+    // that root is therefore reachable without reopening anything.
+    if (isInsideFixturesWorkspaceRoot(folder)) {
+        return;
+    }
+
     const driver = VSBrowser.instance.driver;
     const previousWorkbench = await driver.findElement(By.css('.monaco-workbench'));
 

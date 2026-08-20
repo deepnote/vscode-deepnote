@@ -1,62 +1,79 @@
-// Fails when an E2E suite would not be run by any shard.
+// Fails when the E2E shard list and the suite directories disagree.
 //
-// The E2E job is a matrix over the directories in test/e2e/suite/, each shard running one directory's
-// glob. A suite added to the wrong place — or a new group directory without a matching script and
-// matrix entry — does not fail anything: it just silently never runs, which looks like a faster green
-// build. This turns that into a build error.
+// The E2E job is a matrix over a list of group names, each shard running one directory's glob. A
+// directory that is missing from that list does not fail anything: nothing runs it, and the build
+// goes green sooner. Same for a suite left outside a group directory. This turns both into errors.
+//
+// The authoritative list comes from E2E_GROUPS (set by the workflow from the same job output the
+// matrix reads, so the two cannot drift). Run locally without it and the list is inferred from the
+// `test:e2e:<group>` scripts instead.
 
 const fs = require('fs');
 const path = require('path');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const suiteDir = path.join(repoRoot, 'test', 'e2e', 'suite');
-const workflowPath = path.join(repoRoot, '.github', 'workflows', 'e2e.yml');
+const scripts = require(path.join(repoRoot, 'package.json')).scripts;
 
+const RESERVED_SCRIPT_SUFFIXES = ['prebuilt'];
+
+function declaredGroups() {
+    const fromEnv = process.env.E2E_GROUPS;
+    if (!fromEnv) {
+        return Object.keys(scripts)
+            .map((name) => name.match(/^test:e2e:(.+)$/)?.[1])
+            .filter((group) => group && !RESERVED_SCRIPT_SUFFIXES.includes(group));
+    }
+
+    const parsed = JSON.parse(fromEnv);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+        throw new Error(`E2E_GROUPS must be a non-empty JSON array, got: ${fromEnv}`);
+    }
+
+    return parsed;
+}
+
+const groups = declaredGroups();
 const problems = [];
-
 const entries = fs.readdirSync(suiteDir, { withFileTypes: true });
 
-const stray = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.e2e.test.ts'));
-for (const file of stray) {
+for (const file of entries.filter((entry) => entry.isFile() && entry.name.endsWith('.e2e.test.ts'))) {
     problems.push(`${file.name} sits directly in test/e2e/suite/ — move it into a group directory.`);
 }
 
-const groups = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-if (groups.length === 0) {
-    problems.push('test/e2e/suite/ has no group directories.');
+// The check this job exists for: a directory nobody shards.
+for (const dir of entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)) {
+    if (!groups.includes(dir)) {
+        problems.push(`test/e2e/suite/${dir}/ is not in the shard list [${groups.join(', ')}] — no job runs it.`);
+    }
 }
-
-const scripts = require(path.join(repoRoot, 'package.json')).scripts;
-const workflow = fs.readFileSync(workflowPath, 'utf8');
 
 for (const group of groups) {
-    const files = fs.readdirSync(path.join(suiteDir, group)).filter((name) => name.endsWith('.e2e.test.ts'));
-    if (files.length === 0) {
-        problems.push(`Group "${group}" contains no suites.`);
+    const dir = path.join(suiteDir, group);
+    if (!fs.existsSync(dir)) {
+        problems.push(`Shard "${group}" has no test/e2e/suite/${group}/ directory.`);
+        continue;
+    }
+
+    const suites = fs.readdirSync(dir).filter((name) => name.endsWith('.e2e.test.ts'));
+    if (suites.length === 0) {
+        problems.push(`Shard "${group}" contains no suites.`);
     }
     if (!scripts[`test:e2e:${group}`]) {
-        problems.push(`Group "${group}" has no "test:e2e:${group}" script in package.json.`);
+        problems.push(`Shard "${group}" has no "test:e2e:${group}" script in package.json.`);
     }
-    if (!workflow.includes(group)) {
-        problems.push(`Group "${group}" is not named in .github/workflows/e2e.yml — no shard runs it.`);
-    }
-    console.log(`  ${group.padEnd(12)} ${files.length} suites`);
-}
 
-// A script without a directory would fail the shard rather than skip it, but it is still a mistake.
-for (const name of Object.keys(scripts)) {
-    const match = name.match(/^test:e2e:(.+)$/);
-    if (match && !['prebuilt'].includes(match[1]) && !groups.includes(match[1])) {
-        problems.push(`Script "${name}" has no matching directory under test/e2e/suite/.`);
-    }
+    console.log(`  ${group.padEnd(12)} ${suites.length} suites`);
 }
 
 if (problems.length > 0) {
-    console.error('\nE2E suite grouping is inconsistent:');
+    console.error('\nE2E shard list and suite directories disagree:');
     for (const problem of problems) {
         console.error(`  - ${problem}`);
     }
     process.exit(1);
 }
 
-console.log('\nEvery E2E suite belongs to exactly one shard.');
+console.log(
+    `\nEvery suite directory is covered by a shard (${process.env.E2E_GROUPS ? 'E2E_GROUPS' : 'package.json'}).`
+);

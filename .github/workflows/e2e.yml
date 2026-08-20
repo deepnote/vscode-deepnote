@@ -17,22 +17,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Single source of truth for the shard list. GitHub Actions does not support YAML anchors, and
-  # `env` is not a permitted context inside `strategy`, so a job output is the only way to define the
-  # list once and have both the matrix and the verification job read the same value.
-  groups:
-    name: E2E groups
-    runs-on: ubuntu-latest
-    outputs:
-      list: ${{ steps.define.outputs.list }}
-    steps:
-      - name: Define the shard list
-        id: define
-        run: echo 'list=["kernel","files","workspace"]' >> "$GITHUB_OUTPUT"
-
   verify-groups:
     name: Verify suite directories
-    needs: groups
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -43,27 +29,34 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
+          cache: 'npm'
           node-version-file: '.nvmrc'
+
+      # Only js-yaml is needed, to resolve the matrix anchor out of this file.
+      - name: Install dependencies
+        run: npm ci --omit=dev --prefer-offline --no-audit --ignore-scripts
 
       # A suite directory missing from the matrix is not a failure on its own — nothing runs it, and
       # the build goes green faster. This is the job that turns that into an error.
       - name: Check every suite directory has a shard
         run: node ./build/e2e/checkSuiteGroups.js
-        env:
-          E2E_GROUPS: ${{ needs.groups.outputs.list }}
 
   e2e:
     name: E2E (${{ matrix.group }})
-    needs: groups
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       # One shard per directory in test/e2e/suite/, grouped by what the suites cover rather than by
       # measured time, so a new suite has an obvious home and the split does not silently skew as
-      # suites are added. The verify-groups job above fails the build if the two ever diverge.
+      # suites are added.
+      #
+      # This list is the single definition of the shards. It carries an anchor so other jobs can
+      # alias it; it cannot live at the top of the file because the workflow schema rejects custom
+      # top-level keys, and `env` is not a permitted context inside `strategy`. verify-groups reads
+      # the resolved value straight out of this file, so the two cannot drift.
       fail-fast: false
       matrix:
-        group: ${{ fromJson(needs.groups.outputs.list) }}
+        group: &e2e-groups [kernel, files, workspace]
     env:
       # Keep ExTester's downloads (test VS Code, ChromeDriver, settings, screenshots) inside the
       # workspace so the artifact-upload paths are predictable. Both this and .test-extensions are

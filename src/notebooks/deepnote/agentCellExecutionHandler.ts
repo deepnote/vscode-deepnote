@@ -8,7 +8,6 @@ import {
     NotebookController,
     NotebookDocument,
     NotebookEdit,
-    NotebookRange,
     WorkspaceEdit,
     commands,
     workspace
@@ -42,6 +41,7 @@ import {
 } from './dataConversionUtils';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { getOrPromptOpenAiApiKey } from './deepnoteSecretStore';
+import { removeEphemeralCellsOwnedBy } from './ephemeralCellCleanup';
 
 /** Project MCP servers and integrations from the `.deepnote` file (CLI ExecutionEngine parity). Callers must gate on `workspace.isTrusted` — MCP spawn is arbitrary command execution. */
 function getProjectAgentContext(notebook: NotebookDocument): Pick<AgentBlockContext, 'mcpServers' | 'integrations'> {
@@ -478,7 +478,7 @@ export async function executeEphemeralCell(
 /**
  * Removes prior-run scratch cells owned by agents in `cells` and returns the batch without them.
  * Required before `executeAgentCell` — otherwise stale generated code would run. Only agents in
- * `cells` are scoped so standalone ephemeral runs stay untouched. Edit failures are logged, not thrown.
+ * `cells` are scoped so standalone ephemeral runs stay untouched.
  */
 export async function removeEphemeralCellsForAgentBlocks(
     notebook: NotebookDocument,
@@ -488,40 +488,14 @@ export async function removeEphemeralCellsForAgentBlocks(
         cells
             .filter(isAgentCell)
             .map(getBlockId)
-            .filter((id): id is string => typeof id === 'string')
+            .filter((id) => id != null)
     );
 
     if (agentBlockIds.size === 0) {
         return cells;
     }
 
-    const isOwnedScratch = (cell: NotebookCell) => {
-        const owner = getEphemeralCellAgentSourceBlockId(cell);
+    const deletedCells = await removeEphemeralCellsOwnedBy(notebook, agentBlockIds);
 
-        return owner !== undefined && agentBlockIds.has(owner);
-    };
-
-    const remainingCells = cells.filter((cell) => !isOwnedScratch(cell));
-    const deletions: NotebookEdit[] = [];
-
-    for (let i = notebook.cellCount - 1; i >= 0; i--) {
-        if (isOwnedScratch(notebook.cellAt(i))) {
-            deletions.push(NotebookEdit.deleteCells(new NotebookRange(i, i + 1)));
-        }
-    }
-
-    if (deletions.length === 0) {
-        return remainingCells;
-    }
-
-    const edit = new WorkspaceEdit();
-    edit.set(notebook.uri, deletions);
-
-    if (await workspace.applyEdit(edit)) {
-        logger.info(`Removed ${deletions.length} ephemeral cell(s) for ${agentBlockIds.size} agent block(s)`);
-    } else {
-        logger.error(`Failed to remove ephemeral cells for agent blocks ${[...agentBlockIds].join(', ')}`);
-    }
-
-    return remainingCells;
+    return cells.filter((cell) => !deletedCells.has(cell));
 }

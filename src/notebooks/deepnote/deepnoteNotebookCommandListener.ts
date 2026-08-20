@@ -233,8 +233,9 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     /**
-     * Inserts an empty agent block below the selection. A notebook may hold at most one; a second
-     * request reports that and leaves the notebook untouched.
+     * Appends an empty agent block to the end of the notebook, matching Deepnote Cloud, regardless
+     * of the selection. A notebook may hold at most one; a second request reports that and leaves
+     * the notebook untouched.
      *
      * Unlike the other block commands this mints the block id up front: an agent block without one
      * gets a fresh random id on every `convertCellToBlock`, so each run would stamp its generated
@@ -246,7 +247,6 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             throw new Error(l10n.t('No active notebook editor found'));
         }
         const document = editor.notebook;
-        const selection = editor.selection;
         const agentBlockExistsMessage = l10n.t('This notebook already contains an agent block.');
 
         if (document.getCells().some(isAgentCell)) {
@@ -269,7 +269,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
                 return;
             }
 
-            insertIndex = selection ? selection.end : document.cellCount;
+            insertIndex = document.cellCount;
 
             const newCell = new NotebookCellData(NotebookCellKind.Code, '', 'plaintext');
             newCell.metadata = {

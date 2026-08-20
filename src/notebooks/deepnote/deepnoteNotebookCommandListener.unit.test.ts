@@ -886,9 +886,11 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
             });
 
-            test('should add the agent block after the selection when one exists', async () => {
-                const existingCells = [createMockCellData('{}'), createMockCellData('{}')];
-                const { editor, document } = createMockEditor(existingCells, new NotebookRange(1, 2));
+            test('should append the agent block to the end even when an earlier cell is selected', async () => {
+                // Catches: a selection-relative insert, which drops the agent between the user's
+                // cells and then interleaves its generated cells through the rest of the notebook.
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}'), createMockCellData('{}')];
+                const { editor, document } = createMockEditor(existingCells, new NotebookRange(0, 1));
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
 
                 await commandListener.addAgentBlock();
@@ -897,8 +899,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(chainStub.firstCall.args[0], document, 'Should edit the active document');
 
                 const revealCall = editor.revealRange.firstCall;
-                assert.equal(revealCall.args[0].start, 2, 'Should insert below the selection');
-                assert.equal(revealCall.args[0].end, 3, 'Should select only the new cell');
+                assert.equal(revealCall.args[0].start, 3, 'Should append to the end, not below the selection');
+                assert.equal(revealCall.args[0].end, 4, 'Should select only the new cell');
             });
 
             test('should mint a block id under both keys so runs keep a stable owner', async () => {

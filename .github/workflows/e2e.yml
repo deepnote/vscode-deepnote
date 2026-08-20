@@ -17,63 +17,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # The shard list IS the directory listing under test/e2e/suite/ — there is no second copy to keep
-  # in sync, so a new group directory gets a shard automatically and one can never be left unrun.
-  discover:
-    name: Discover suites
-    runs-on: ubuntu-latest
-    outputs:
-      groups: ${{ steps.scan.outputs.groups }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Scan test/e2e/suite for shard directories
-        id: scan
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd test/e2e/suite
-
-          # A suite outside a group directory would never be globbed by any shard.
-          if compgen -G '*.e2e.test.ts' > /dev/null; then
-            echo "::error::Suites sit directly in test/e2e/suite/; move them into a group directory:"
-            ls *.e2e.test.ts
-            exit 1
-          fi
-
-          groups=()
-          for dir in */; do
-            group="${dir%/}"
-            if ! compgen -G "${group}/*.e2e.test.ts" > /dev/null; then
-              echo "::error::test/e2e/suite/${group}/ contains no suites."
-              exit 1
-            fi
-            groups+=("${group}")
-          done
-
-          if [ ${#groups[@]} -eq 0 ]; then
-            echo "::error::test/e2e/suite/ has no group directories."
-            exit 1
-          fi
-
-          printf 'Sharding: %s\n' "${groups[*]}"
-          printf 'groups=%s\n' "$(printf '%s\n' "${groups[@]}" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
-
   e2e:
     name: E2E (${{ matrix.group }})
-    needs: discover
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       # One shard per directory in test/e2e/suite/, grouped by what the suites cover rather than by
       # measured time, so a new suite has an obvious home and the split does not skew as suites are
-      # added.
+      # added. Adding a directory means adding it here; verify-coverage below fails the run if you
+      # forget, since nothing would otherwise run it.
       fail-fast: false
       matrix:
-        group: ${{ fromJson(needs.discover.outputs.groups) }}
+        group: [kernel, files, workspace]
     env:
       # Keep ExTester's downloads (test VS Code, ChromeDriver, settings, screenshots) inside the
       # workspace so the artifact-upload paths are predictable. Both this and .test-extensions are
@@ -166,6 +121,19 @@ jobs:
             npx extest run-tests "./out/e2e/suite/${{ matrix.group }}/*.e2e.test.js" \
               -c max -o ./test/e2e/settings.generated.json -e .test-extensions -m ./test/e2e/.mocharc.js
 
+      # Written even when the tests fail, so a shard that ran is never mistaken for one that was
+      # never scheduled. verify-coverage collects these.
+      - name: Record the shard that ran
+        if: always()
+        run: mkdir -p shard-ran && touch "shard-ran/${{ matrix.group }}"
+
+      - name: Upload the shard record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-ran-${{ matrix.group }}
+          path: shard-ran/
+
       - name: Upload failure screenshots
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -174,3 +142,49 @@ jobs:
           path: ${{ env.TEST_RESOURCES }}/screenshots/**/*.png
           if-no-files-found: ignore
           retention-days: 14
+
+  verify-coverage:
+    name: Verify shard coverage
+    needs: e2e
+    # Runs even when a shard failed: a directory nobody runs is a separate problem from a failing
+    # test, and it is the one that hides — nothing runs it and the build goes green sooner. Not on
+    # cancellation though, or superseding a run (cancel-in-progress) would report every directory as
+    # unrun.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Collect what each shard reported
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          merge-multiple: true
+          path: shard-ran
+          pattern: e2e-ran-*
+
+      - name: Every suite directory must have been run
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "Shards that reported in: $(ls shard-ran 2>/dev/null | tr '\n' ' ')"
+
+          status=0
+          for dir in test/e2e/suite/*/; do
+            group="$(basename "${dir}")"
+            if [ ! -e "shard-ran/${group}" ]; then
+              echo "::error::test/e2e/suite/${group}/ was not run by any shard — add it to the matrix in this workflow."
+              status=1
+            fi
+          done
+
+          # A suite outside a group directory is never globbed by any shard either.
+          if compgen -G 'test/e2e/suite/*.e2e.test.ts' > /dev/null; then
+            echo "::error::Suites sit directly in test/e2e/suite/; move them into a group directory:"
+            ls test/e2e/suite/*.e2e.test.ts
+            status=1
+          fi
+
+          exit "${status}"

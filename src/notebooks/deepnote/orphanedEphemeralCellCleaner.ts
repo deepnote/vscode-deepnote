@@ -4,6 +4,7 @@ import { NotebookDocumentChangeEvent, workspace } from 'vscode';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
+import { logger } from '../../platform/logging';
 import { getBlockId, isAgentCell } from './dataConversionUtils';
 import { removeEphemeralCellsOwnedBy } from './ephemeralCellCleanup';
 
@@ -52,6 +53,10 @@ export class OrphanedEphemeralCellCleaner implements IExtensionSyncActivationSer
             return;
         }
 
-        await removeEphemeralCellsOwnedBy(e.notebook, deletedAgentBlockIds);
+        try {
+            await removeEphemeralCellsOwnedBy(e.notebook, deletedAgentBlockIds);
+        } catch (error) {
+            logger.error('Failed to remove orphaned ephemeral cells', error);
+        }
     }
 }

@@ -6,7 +6,7 @@ import { getEphemeralCellAgentSourceBlockId } from './dataConversionUtils';
 /**
  * Deletes ephemeral cells owned by any block in `agentBlockIds`, scanning the whole notebook — not
  * just a caller's batch — so scratch left outside a run's cell selection still gets cleaned up.
- * Returns the cells that were deleted. Edit failures are logged, not thrown.
+ * Returns the cells that were deleted, or throws if the edit could not be applied.
  */
 export async function removeEphemeralCellsOwnedBy(
     notebook: NotebookDocument,
@@ -35,12 +35,11 @@ export async function removeEphemeralCellsOwnedBy(
     const edit = new WorkspaceEdit();
     edit.set(notebook.uri, deletions);
 
-    if (await workspace.applyEdit(edit)) {
-        logger.info(`Removed ${deletions.length} ephemeral cell(s) owned by ${agentBlockIds.size} agent block(s)`);
-    } else {
-        logger.error(`Failed to remove ephemeral cells owned by agent block(s) ${[...agentBlockIds].join(', ')}`);
-        return new Set();
+    if (!(await workspace.applyEdit(edit))) {
+        throw new Error(`Failed to remove ephemeral cells owned by agent block(s) ${[...agentBlockIds].join(', ')}`);
     }
+
+    logger.info(`Removed ${deletions.length} ephemeral cell(s) owned by ${agentBlockIds.size} agent block(s)`);
 
     return deletedCells;
 }

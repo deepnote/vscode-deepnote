@@ -187,6 +187,22 @@ suite('OrphanedEphemeralCellCleaner', () => {
         expect(cells.map((c) => c.metadata)).to.deep.equal([agentBlock('agent-block-9').metadata]);
     });
 
+    // removeEphemeralCellsOwnedBy throws on a rejected edit; nothing awaits this listener, so an
+    // uncaught throw here would surface only as an unhandled promise rejection.
+    test('does not throw when the delete edit is rejected', async () => {
+        cleaner.activate();
+        const { cells, notebook } = createMockNotebookWithCells([ephemeralCell('agent-block-1')]);
+        const deletedAgent = { ...agentBlock('agent-block-1'), notebook } as unknown as NotebookCell;
+        when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(false));
+
+        await notebookChangeHandler!({
+            notebook,
+            contentChanges: [{ removedCells: [deletedAgent], addedCells: [] }]
+        });
+
+        expect(cells).to.have.lengthOf(1);
+    });
+
     // Our own deletion re-enters the listener with the ephemeral cells in removedCells; none of them
     // is an agent cell, so the gate must stop it there rather than looping.
     test('the follow-up event from its own deletion applies no further edit', async () => {

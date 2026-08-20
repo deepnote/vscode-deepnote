@@ -8,8 +8,10 @@ import {
     NotebookController,
     NotebookDocument,
     NotebookEdit,
+    NotebookRange,
     WorkspaceEdit,
     commands,
+    window,
     workspace
 } from 'vscode';
 
@@ -24,7 +26,7 @@ import {
 import { translateCellDisplayOutput } from '../../kernels/execution/helpers';
 import { IEncryptedStorage } from '../../platform/common/application/types';
 import type { IDisposable } from '../../platform/common/types';
-import { createDeferred } from '../../platform/common/utils/async';
+import { createDeferred, sleep } from '../../platform/common/utils/async';
 import { dispose } from '../../platform/common/utils/lifecycle';
 import { uuidUtils } from '../../platform/common/uuid';
 import { ServiceContainer } from '../../platform/ioc/container';
@@ -162,6 +164,54 @@ function isStopped(error: unknown): boolean {
     return error instanceof CancellationError || (error instanceof Error && error.name === 'AbortError');
 }
 
+/** Outlasts the 200ms VS Code waits before releasing a cell's output height (CellOutputContainer#_validateFinalOutputHeight). */
+const OUTPUT_HEIGHT_RELEASE_DELAY = 400;
+
+/**
+ * Empties the cell's outputs before the run writes its first transcript line, so a re-run is laid
+ * out at what it prints rather than at what the run before it printed.
+ *
+ * VS Code floors a cell's output area at the height it had when its execution was created, and only
+ * schedules the release (200ms later) on an output change that lands while that execution is not yet
+ * running. It creates the execution before dispatching to the controller, so by the time any of this
+ * code runs the floor is already the previous transcript's height, and every write the run makes —
+ * `NotebookCellExecution.clearOutput` included — comes too late to release it: the cell holds that
+ * height as blank space until the run ends. Clearing through `notebook.cell.clearOutputs` while the
+ * execution is still unconfirmed is what schedules the release, and the wait after it is what stops
+ * the run's own first output write from cancelling the release again.
+ *
+ * The command takes no arguments and resolves its target from the focused cell of the active
+ * notebook editor, hence the focus and the restore around it — the selection and the command travel
+ * the same extension-host channel, so the focus is in place by the time the command is handled. Skips
+ * a notebook that is not the active editor rather than reaching for it: the command would clear
+ * whichever cell that editor has focused, and losing another cell's outputs is far worse than
+ * leaving this one stretched.
+ */
+async function discardPreviousTranscript(cell: NotebookCell): Promise<void> {
+    const editor = window.activeNotebookEditor;
+
+    if (cell.index < 0 || cell.outputs.length === 0 || editor?.notebook !== cell.notebook) {
+        return;
+    }
+
+    const previousSelections = editor.selections;
+
+    try {
+        editor.selection = new NotebookRange(cell.index, cell.index + 1);
+
+        await commands.executeCommand('notebook.cell.clearOutputs');
+    } catch (error) {
+        logger.warn('Agent cell: could not clear the previous transcript before starting the run', error);
+
+        return;
+    } finally {
+        editor.selections = previousSelections;
+    }
+
+    // Waited out with the selection already back where it was; only the outputs matter here.
+    await sleep(OUTPUT_HEIGHT_RELEASE_DELAY);
+}
+
 /**
  * Runs an agent block into the cell output and inserts generated cells below.
  * Call `removeEphemeralCellsForAgentBlocks` on the batch first. Never rejects — errors become stderr on the cell.
@@ -178,6 +228,9 @@ export async function executeAgentCell(
     options?: ExecuteAgentCellOptions
 ): Promise<void> {
     const executeAgentBlockFn = options?.executeAgentBlockFn ?? executeAgentBlock;
+
+    await discardPreviousTranscript(cell);
+
     const execution = controller.createNotebookCellExecution(cell);
     const stopController = new AbortController();
     const stopSubscription = token.onCancellationRequested(() => stopController.abort());
@@ -194,8 +247,6 @@ export async function executeAgentCell(
     notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Executing);
 
     try {
-        await execution.clearOutput();
-
         const prompt = cell.document.getText();
 
         // runtime-core awaits each event; append deltas only (O(n) over the EH boundary).

@@ -98,6 +98,34 @@ export async function clickCellStatusBarItem(label: string): Promise<void> {
     );
 }
 
+/**
+ * Height in px that VS Code lays out the cell whose source contains `cellMarker` at, or -1 when no
+ * cell matches. Cell chrome lives in the main window DOM, so this switches out of the output iframe
+ * first and matches on `textContent`, which — unlike Selenium's `getText()` — also reads cells
+ * scrolled out of view.
+ *
+ * Measured off the cell's focus indicator, the bar down its left side: outputs render in the shared
+ * notebook webview positioned over the cell, so neither the list row nor the `.output` placeholder
+ * they stand in for carries a height, and the indicator is the only element sized to the whole cell.
+ */
+export async function readCellLayoutHeight(cellMarker: string): Promise<number> {
+    const driver = VSBrowser.instance.driver;
+
+    await new WebView().switchBack().catch((error) => {
+        console.warn('[deepnote-e2e] switch back before measuring a notebook cell:', error);
+    });
+
+    return driver.executeScript<number>(
+        `const marker = arguments[0];
+         const rows = Array.from(document.querySelectorAll('.monaco-list-row'));
+         const row = rows.find((candidate) => (candidate.textContent || '').includes(marker));
+         const indicator = row === undefined ? null : row.querySelector('.cell-focus-indicator-left');
+
+         return indicator === null ? -1 : Math.round(indicator.getBoundingClientRect().height);`,
+        cellMarker
+    );
+}
+
 /** Run `read` in the notebook output webview; '' if the frame is missing. */
 async function readInsideNotebookWebview(read: (webView: WebView) => Promise<string>): Promise<string> {
     const driver = VSBrowser.instance.driver;

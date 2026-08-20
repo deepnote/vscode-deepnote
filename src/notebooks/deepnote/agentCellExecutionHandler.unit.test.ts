@@ -12,6 +12,8 @@ import {
     NotebookCellOutputItem,
     NotebookController,
     NotebookDocument,
+    NotebookEditor,
+    NotebookRange,
     WorkspaceEdit
 } from 'vscode';
 
@@ -207,14 +209,18 @@ suite('AgentCellExecutionHandler', () => {
         teardown(() => {
             disposables = dispose(disposables);
             reset(mockedVSCodeNamespaces.commands);
+            // The vscode namespace mock is built once for the whole run, so anything a test points at
+            // the active editor outlives it unless it is put back.
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
             // Restore applyEdit default; don't reset() the shared workspace mock.
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(true));
             secretStorage.clear();
         });
 
-        function createAgentCell(text: string = 'Test prompt') {
+        function createAgentCell(text: string = 'Test prompt', outputs: NotebookCellOutput[] = []) {
             return createMockCell({
                 metadata: { __deepnotePocket: { type: 'agent' } },
+                outputs,
                 text
             });
         }
@@ -241,7 +247,77 @@ suite('AgentCellExecutionHandler', () => {
             return Buffer.from(item.data).toString('utf-8');
         }
 
-        test('creates execution, clears output, sets planning output, and ends successfully', async () => {
+        // The clear only releases the cell's output height while the run has written nothing yet, so
+        // the ordering is the point of the test, not the call itself.
+        test('clears the previous transcript before the run takes the execution or writes output', async () => {
+            const cell = createAgentCell('Analyze data', [
+                new NotebookCellOutput([NotebookCellOutputItem.stdout('transcript from the previous run')])
+            ]);
+
+            (cell as { index: number }).index = 2;
+
+            const priorSelections = [new NotebookRange(5, 6)];
+            let selections: readonly NotebookRange[] = priorSelections;
+            const editor = {
+                notebook: cell.notebook,
+                get selection() {
+                    return selections[0];
+                },
+                set selection(range: NotebookRange) {
+                    selections = [range];
+                },
+                get selections() {
+                    return selections;
+                },
+                set selections(ranges: readonly NotebookRange[]) {
+                    selections = ranges;
+                }
+            } as unknown as NotebookEditor;
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
+
+            const clears: Array<{ executionTaken: boolean; focused: NotebookRange; outputWritten: boolean }> = [];
+
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenCall((command: string) => {
+                if (command === 'notebook.cell.clearOutputs') {
+                    clears.push({
+                        executionTaken: (mockController.createNotebookCellExecution as sinon.SinonStub).called,
+                        focused: editor.selection,
+                        outputWritten: mockExecution.replaceOutput.called
+                    });
+                }
+
+                return Promise.resolve();
+            });
+
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
+
+            expect(clears).to.have.lengthOf(1);
+            expect(clears[0].executionTaken).to.be.false;
+            expect(clears[0].outputWritten).to.be.false;
+            expect(clears[0].focused.start).to.equal(2);
+            expect(clears[0].focused.end).to.equal(3);
+            expect(editor.selections).to.equal(priorSelections);
+        });
+
+        test('leaves other cells alone when the notebook is not the active editor', async () => {
+            const cell = createAgentCell('Analyze data', [
+                new NotebookCellOutput([NotebookCellOutputItem.stdout('transcript from the previous run')])
+            ]);
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenResolve();
+
+            await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
+                executeAgentBlockFn: executeAgentBlockStub
+            });
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand(anything())).never();
+        });
+
+        test('creates execution, sets planning output, and ends successfully', async () => {
             const cell = createAgentCell('Analyze data');
 
             await executeAgentCell(cell, mockController, encryptedStorage, neverCancelled, {
@@ -250,8 +326,6 @@ suite('AgentCellExecutionHandler', () => {
 
             expect((mockController.createNotebookCellExecution as sinon.SinonStub).calledOnceWith(cell)).to.be.true;
             expect(mockExecution.start.calledOnce).to.be.true;
-            expect(mockExecution.clearOutput.calledOnce).to.be.true;
-            expect(mockExecution.clearOutput.calledBefore(mockExecution.replaceOutput)).to.be.true;
             expect(mockExecution.replaceOutput.calledOnce).to.be.true;
 
             const outputs = mockExecution.replaceOutput.firstCall.args[0] as NotebookCellOutput[];
@@ -286,7 +360,7 @@ suite('AgentCellExecutionHandler', () => {
         });
 
         test('reports Idle on the shim even when the run fails', async () => {
-            mockExecution.clearOutput.rejects(new Error('Something went wrong'));
+            mockExecution.replaceOutput.rejects(new Error('Something went wrong'));
 
             const cell = createAgentCell();
             const seenStates: NotebookCellExecutionState[] = [];
@@ -369,8 +443,8 @@ suite('AgentCellExecutionHandler', () => {
             expect(chunk2).to.include('[Agent] Tool called: search');
         });
 
-        test('fails execution and writes clearOutput error to stderr', async () => {
-            mockExecution.clearOutput.rejects(new Error('Something went wrong'));
+        test('fails execution and writes the output error to stderr', async () => {
+            mockExecution.replaceOutput.rejects(new Error('Something went wrong'));
 
             const cell = createAgentCell();
 

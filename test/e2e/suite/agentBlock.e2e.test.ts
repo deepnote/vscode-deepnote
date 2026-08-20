@@ -1,10 +1,10 @@
 /**
  * Agent block E2E vs local aimock; legs 2–3 advance on real tool results (no live OpenAI).
  *
- * Three fixtures share one workspace and one environment — provisioning a second environment costs
+ * The fixtures share one workspace and one environment — provisioning a second environment costs
  * ~90s of CI and every test here wants the same kernel. Only that setup is shared: each group below
- * opens and binds the notebook it runs, so the groups are order-independent and either can run on
- * its own.
+ * opens and binds the notebook it runs, so the groups are order-independent and any one of them can
+ * run on its own.
  */
 
 import * as fs from 'fs';
@@ -31,6 +31,7 @@ import {
     openFolderViaDialog,
     openWorkspaceFile,
     pointExtensionHostAtMockServer,
+    readCellLayoutHeight,
     selectEnvironmentForNotebook,
     startMockOpenAiServer,
     storeMockOpenAiApiKey
@@ -119,6 +120,29 @@ const STOP_ACKNOWLEDGED_TIMEOUT = 30_000;
 // to outlast the trailing cell that a batch which ignored the stop would dispatch next.
 const STOP_SETTLE_WINDOW = 8_000;
 
+// Output-height fixture: one agent block run twice, long transcript first and short transcript second.
+const HEIGHT_FILE = 'agent-block-height.deepnote';
+// Sits in the fixture's prompt so the agent cell can be found by its text.
+const HEIGHT_PROMPT_MARKER = 'e2e-agent-height-prompt';
+// Kept under `notebook.output.textLineLimit` (30) so the whole reply renders and the cell is laid
+// out at its true height instead of behind the stdout renderer's "show more" truncation.
+const HEIGHT_LONG_REPLY = Array.from(
+    { length: 20 },
+    (_, index) => `height-long-line-${index + 1}: filler that makes the first run's transcript tall.`
+).join('\n');
+const HEIGHT_LONG_REPLY_TAIL = 'height-long-line-20:';
+const HEIGHT_SLEEP_MARKER = 'e2e-height-sleeping';
+// Prints, then sleeps: a window in which the agent block is demonstrably mid-run while its own
+// transcript is only a few lines long. Never waited out in full — the height is read as soon as the
+// marker renders.
+const HEIGHT_SLEEP_PYTHON = `print("${HEIGHT_SLEEP_MARKER}", flush=True)\nimport time\ntime.sleep(20)`;
+const HEIGHT_SECOND_RUN_FINAL_TEXT = 'Second height run finished.';
+// The first run has to leave the cell genuinely tall, or the second measurement proves nothing.
+const HEIGHT_TALL_MIN_PX = 400;
+// A cell whose output container never shrank measures identical to the first run, so any real
+// collapse clears this by a wide margin.
+const HEIGHT_SHRUNK_RATIO = 0.6;
+
 /**
  * Keeps exactly one editor open: `clickRunAll` takes the first toolbar in DOM order.
  *
@@ -174,6 +198,17 @@ function assertRenderedContiguously(transcript: string, expected: string): void 
     );
 }
 
+/** Fails loudly on a missing cell — an unmeasured cell would otherwise satisfy the shrink check. */
+async function measureAgentCellHeight(context: string): Promise<number> {
+    const height = await readCellLayoutHeight(HEIGHT_PROMPT_MARKER);
+
+    if (height < 0) {
+        throw new Error(`No rendered notebook cell contains ${JSON.stringify(HEIGHT_PROMPT_MARKER)} (${context}).`);
+    }
+
+    return height;
+}
+
 function assertOccurrences(rendered: string, needle: string, expected: number): void {
     const actual = rendered.split(needle).length - 1;
 
@@ -202,7 +237,7 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
         cleanupTempDir = copy.cleanup;
         workspaceDir = copy.tempDir;
 
-        for (const fixture of [BATCH_FILE, STOP_FILE]) {
+        for (const fixture of [BATCH_FILE, HEIGHT_FILE, STOP_FILE]) {
             fs.copyFileSync(
                 path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', fixture),
                 path.join(copy.tempDir, fixture)
@@ -681,6 +716,89 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
             );
 
             await screenshot('batch-stopped-by-interrupt');
+        });
+    });
+
+    describe('re-running an agent block that already carries a transcript', function () {
+        before(async function () {
+            await openOnly(HEIGHT_FILE);
+            await selectEnvironmentForNotebook(ENVIRONMENT_NAME, HEIGHT_FILE);
+            await dismissAllNotifications();
+        });
+
+        /**
+         * Both runs live in one test because the assertion is a comparison between them: the height
+         * the first run leaves behind is the baseline the second run must no longer be laid out at.
+         */
+        it('lays the cell out at the new transcript rather than the previous height', async function () {
+            mockServer = await startMockOpenAiServer([
+                { match: { hasToolResult: false }, response: { content: HEIGHT_LONG_REPLY } }
+            ]);
+
+            await clickRunAll(HEIGHT_FILE);
+            await awaitWebviewMarkers(
+                [HEIGHT_LONG_REPLY_TAIL],
+                FIRST_RUN_OUTPUT_TIMEOUT,
+                "the first run's long transcript"
+            );
+
+            const tallHeight = await measureAgentCellHeight('after the long first run');
+
+            if (tallHeight < HEIGHT_TALL_MIN_PX) {
+                throw new Error(
+                    `The first run left the agent cell only ${tallHeight}px tall, under the ${HEIGHT_TALL_MIN_PX}px ` +
+                        `this test needs to tell a stretched cell from a collapsed one.`
+                );
+            }
+
+            await releaseMockServer();
+
+            mockServer = await startMockOpenAiServer([
+                {
+                    match: { hasToolResult: false },
+                    response: {
+                        toolCall: {
+                            arguments: JSON.stringify({ code: HEIGHT_SLEEP_PYTHON }),
+                            id: 'call_e2e_height_code',
+                            name: CODE_TOOL_NAME
+                        }
+                    }
+                },
+                {
+                    match: { toolResultContains: HEIGHT_SLEEP_MARKER },
+                    response: { content: HEIGHT_SECOND_RUN_FINAL_TEXT }
+                }
+            ]);
+
+            await dismissAllNotifications();
+            await clickRunAll(HEIGHT_FILE);
+
+            // The generated cell's sleep holds the agent block mid-run with only a handful of
+            // transcript lines on it. Requiring the first run's tail to be gone proves the outputs
+            // themselves were replaced, so anything left over is the cell's layout, not its content.
+            await awaitWebviewMarkers(
+                [HEIGHT_SLEEP_MARKER],
+                AGENT_RUN_TIMEOUT,
+                'the generated cell reached its sleep, so the agent block is mid-run on a short transcript',
+                [HEIGHT_LONG_REPLY_TAIL]
+            );
+
+            const runningHeight = await measureAgentCellHeight('mid-way through the short second run');
+            await screenshot('height-during-short-rerun');
+
+            if (runningHeight > tallHeight * HEIGHT_SHRUNK_RATIO) {
+                throw new Error(
+                    `The agent cell is ${runningHeight}px tall mid-run, against the ${tallHeight}px its previous ` +
+                        `run left behind, with only a few transcript lines on it: its output container did not ` +
+                        `follow the transcript down. See discardPreviousTranscript in agentCellExecutionHandler.`
+                );
+            }
+
+            await awaitWebviewMarkers(
+                [HEIGHT_SECOND_RUN_FINAL_TEXT],
+                AGENT_RUN_TIMEOUT,
+                'the second run finished, so the notebook is left idle for whatever runs next'
+            );
         });
     });
 });

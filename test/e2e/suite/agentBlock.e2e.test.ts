@@ -604,7 +604,8 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
             await assertMarkersStayAbsent(
                 [BATCH_AGENT_PYTHON_MARKER, BATCH_AGENT_MARKDOWN_TEXT, BATCH_AGENT_FINAL_TEXT, BATCH_TRAILING_MARKER],
                 BATCH_SETTLE_WINDOW,
-                'a failing cell must end the batch, so neither the agent block nor the cell after it runs'
+                'a failing cell must end the batch, so neither the agent block nor the cell after it runs',
+                BATCH_FAILURE_MARKER
             );
 
             await screenshot('batch-stopped-at-failure');
@@ -675,7 +676,8 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
             await assertMarkersStayAbsent(
                 [STOP_MARKDOWN_TEXT, STOP_FINAL_TEXT, STOP_TRAILING_MARKER],
                 STOP_SETTLE_WINDOW,
-                'a stopped agent ends the batch, so nothing after it runs'
+                'a stopped agent ends the batch, so nothing after it runs',
+                AGENT_STOPPED_TEXT
             );
 
             await screenshot('batch-stopped-by-interrupt');

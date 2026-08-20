@@ -190,16 +190,25 @@ export async function awaitWebviewMarkers(
 }
 
 /**
- * Fails if any of `markers` renders in the notebook webview during the next `windowMs`.
+ * Fails if any of `markers` renders in the notebook webview during the next `windowMs`. `requiredMarker`
+ * must render on at least one poll — otherwise a webview that stays unreadable the whole window
+ * (`readNotebookWebviewText` reads a missing, top-level, or unreadable frame as '') would find no
+ * forbidden marker on every poll and pass without having checked anything.
  *
  * Non-occurrence needs a window rather than one read: the regressions this guards render the
  * forbidden text a beat *after* the state the test waited for — a batch that should have stopped
  * carries on into the agent's round trip to the local mock and then the trailing cell. Size the
  * window well above that round trip, since the whole window is spent on every passing run.
  */
-export async function assertMarkersStayAbsent(markers: string[], windowMs: number, context: string): Promise<void> {
+export async function assertMarkersStayAbsent(
+    markers: string[],
+    windowMs: number,
+    context: string,
+    requiredMarker: string
+): Promise<void> {
     const driver = VSBrowser.instance.driver;
     const deadline = Date.now() + windowMs;
+    let sawRequiredMarker = false;
 
     while (Date.now() < deadline) {
         const text = await readNotebookWebviewText();
@@ -212,7 +221,17 @@ export async function assertMarkersStayAbsent(markers: string[], windowMs: numbe
             );
         }
 
+        sawRequiredMarker ||= text.includes(requiredMarker);
+
         await driver.sleep(OUTPUT_POLL_INTERVAL);
+    }
+
+    if (!sawRequiredMarker) {
+        throw new Error(
+            `Notebook webview never rendered required marker ${JSON.stringify(requiredMarker)} while confirming ` +
+                `${JSON.stringify(markers)} stayed absent (${context}) — the webview may have been unreadable for ` +
+                `the whole window, which would otherwise let this pass without checking anything.`
+        );
     }
 }
 

@@ -17,46 +17,63 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify-groups:
-    name: Verify suite directories
+  # The shard list IS the directory listing under test/e2e/suite/ — there is no second copy to keep
+  # in sync, so a new group directory gets a shard automatically and one can never be left unrun.
+  discover:
+    name: Discover suites
     runs-on: ubuntu-latest
+    outputs:
+      groups: ${{ steps.scan.outputs.groups }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          cache: 'npm'
-          node-version-file: '.nvmrc'
+      - name: Scan test/e2e/suite for shard directories
+        id: scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd test/e2e/suite
 
-      # Only js-yaml is needed, to resolve the matrix anchor out of this file.
-      - name: Install dependencies
-        run: npm ci --omit=dev --prefer-offline --no-audit --ignore-scripts
+          # A suite outside a group directory would never be globbed by any shard.
+          if compgen -G '*.e2e.test.ts' > /dev/null; then
+            echo "::error::Suites sit directly in test/e2e/suite/; move them into a group directory:"
+            ls *.e2e.test.ts
+            exit 1
+          fi
 
-      # A suite directory missing from the matrix is not a failure on its own — nothing runs it, and
-      # the build goes green faster. This is the job that turns that into an error.
-      - name: Check every suite directory has a shard
-        run: node ./build/e2e/checkSuiteGroups.js
+          groups=()
+          for dir in */; do
+            group="${dir%/}"
+            if ! compgen -G "${group}/*.e2e.test.ts" > /dev/null; then
+              echo "::error::test/e2e/suite/${group}/ contains no suites."
+              exit 1
+            fi
+            groups+=("${group}")
+          done
+
+          if [ ${#groups[@]} -eq 0 ]; then
+            echo "::error::test/e2e/suite/ has no group directories."
+            exit 1
+          fi
+
+          printf 'Sharding: %s\n' "${groups[*]}"
+          printf 'groups=%s\n' "$(printf '%s\n' "${groups[@]}" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
   e2e:
     name: E2E (${{ matrix.group }})
+    needs: discover
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       # One shard per directory in test/e2e/suite/, grouped by what the suites cover rather than by
-      # measured time, so a new suite has an obvious home and the split does not silently skew as
-      # suites are added.
-      #
-      # This list is the single definition of the shards. It carries an anchor so other jobs can
-      # alias it; it cannot live at the top of the file because the workflow schema rejects custom
-      # top-level keys, and `env` is not a permitted context inside `strategy`. verify-groups reads
-      # the resolved value straight out of this file, so the two cannot drift.
+      # measured time, so a new suite has an obvious home and the split does not skew as suites are
+      # added.
       fail-fast: false
       matrix:
-        group: &e2e-groups [kernel, files, workspace]
+        group: ${{ fromJson(needs.discover.outputs.groups) }}
     env:
       # Keep ExTester's downloads (test VS Code, ChromeDriver, settings, screenshots) inside the
       # workspace so the artifact-upload paths are predictable. Both this and .test-extensions are
@@ -144,7 +161,10 @@ jobs:
       - name: Run E2E
         # VS Code launches with --no-sandbox (no AppArmor sysctl needed). Runs once; Mocha's retries:1
         # and rootHooks.ts (dismiss toasts between tests) handle flakiness in the single shared instance.
-        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:${{ matrix.group }}
+        run: |
+          xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
+            npx extest run-tests "./out/e2e/suite/${{ matrix.group }}/*.e2e.test.js" \
+              -c max -o ./test/e2e/settings.generated.json -e .test-extensions -m ./test/e2e/.mocharc.js
 
       - name: Upload failure screenshots
         if: failure()

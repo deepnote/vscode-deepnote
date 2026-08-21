@@ -231,6 +231,10 @@ export async function executeAgentCell(
 
     await discardPreviousTranscript(cell);
 
+    if (token.isCancellationRequested) {
+        throw new CancellationError();
+    }
+
     const execution = controller.createNotebookCellExecution(cell);
     const stopController = new AbortController();
     const stopSubscription = token.onCancellationRequested(() => stopController.abort());

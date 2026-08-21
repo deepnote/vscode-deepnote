@@ -754,8 +754,8 @@ suite('AgentCellExecutionHandler', () => {
             expect(appliedEdits()).to.equal(0);
         });
 
-        // Rejected delete edit must not block running ordinary cells in the batch.
-        test('still drops the previous run from the batch when the edit is rejected', async () => {
+        // A rejected delete-edit must stop the batch rather than leave stale cells to re-run.
+        test('propagates when the delete edit is rejected', async () => {
             const agentCell = createAgentCell('agent-block-1');
             const previousResult = createEphemeralCell('agent-block-1', 'print("previous run")');
             const userCell = createMockCell({ text: 'user code', metadata: {} });
@@ -764,10 +764,13 @@ suite('AgentCellExecutionHandler', () => {
 
             when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenCall(() => Promise.resolve(false));
 
-            const batch = await removeEphemeralCellsForAgentBlocks(notebook, [...cells]);
-
-            expect(batch).to.deep.equal([agentCell, userCell]);
-            expect(cells).to.deep.equal([agentCell, previousResult, userCell]);
+            try {
+                await removeEphemeralCellsForAgentBlocks(notebook, [...cells]);
+                expect.fail('Should have thrown');
+            } catch (e) {
+                expect(e).to.be.instanceOf(Error);
+                expect(e.message).to.include('Failed to remove ephemeral cells owned by agent block(s) agent-block-1');
+            }
         });
     });
 

@@ -531,10 +531,7 @@ export async function executeEphemeralCell(
  * Required before `executeAgentCell` — otherwise stale generated code would run. Only agents in
  * `cells` are scoped so standalone ephemeral runs stay untouched.
  *
- * A rejected delete-edit is caught, not propagated: it must not stop unrelated cells in the batch
- * from running. The stale cells still come out of the batch, though — `executeAgentCell` never
- * rejects (it turns its own errors into stderr on the cell), so nothing else would stop a stale
- * cell that stayed in the batch from being scheduled and re-run in the kernel.
+ * A rejected delete-edit is propagated so leftover scratch cannot stay in the batch and re-run.
  */
 export async function removeEphemeralCellsForAgentBlocks(
     notebook: NotebookDocument,
@@ -551,19 +548,7 @@ export async function removeEphemeralCellsForAgentBlocks(
         return cells;
     }
 
-    const isOwnedScratch = (cell: NotebookCell) => {
-        const owner = getEphemeralCellAgentSourceBlockId(cell);
+    const deletedCells = await removeEphemeralCellsOwnedBy(notebook, agentBlockIds);
 
-        return owner !== undefined && agentBlockIds.has(owner);
-    };
-
-    try {
-        const deletedCells = await removeEphemeralCellsOwnedBy(notebook, agentBlockIds);
-
-        return cells.filter((cell) => !deletedCells.has(cell));
-    } catch (error) {
-        logger.error('Failed to remove ephemeral cells before executing the batch', error);
-
-        return cells.filter((cell) => !isOwnedScratch(cell));
-    }
+    return cells.filter((cell) => !deletedCells.has(cell));
 }

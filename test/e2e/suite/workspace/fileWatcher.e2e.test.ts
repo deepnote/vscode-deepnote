@@ -14,7 +14,7 @@ import {
     copyFixtureToTempDir,
     copySnapshotIntoDir,
     createScreenshotter,
-    openFolderViaDialog,
+    enterFixturesWorkspace,
     openWorkspaceFile,
     readRenderedOutput
 } from '../../helpers';
@@ -47,7 +47,7 @@ describe('Deepnote — the file watcher reloads an open notebook when its .deepn
 
         // Open the temp dir as workspace root first: the serializer reads snapshots relative to a
         // workspace folder, else deserialization blocks headlessly. Opening a folder reloads the window.
-        await openFolderViaDialog(copy.tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await openWorkspaceFile(FIXTURE);
@@ -175,7 +175,7 @@ describe('Deepnote — the file watcher applies snapshot outputs to an open note
 
         // Open the temp dir as workspace root first: the serializer reads snapshots relative to a
         // workspace folder, else deserialization blocks headlessly. Opening a folder reloads the window.
-        await openFolderViaDialog(copy.tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await openWorkspaceFile(SNAPSHOT_FIXTURE);

@@ -40,11 +40,6 @@ export function fixturesWorkspaceRoot(): string {
     return workspaceRoot;
 }
 
-/** True when `folder` sits inside the already-opened shared root (so opening it would be a no-op). */
-export function isInsideFixturesWorkspaceRoot(folder: string): boolean {
-    return workspaceRoot !== undefined && path.resolve(folder).startsWith(path.resolve(workspaceRoot) + path.sep);
-}
-
 /**
  * Reads `project.id` out of a fixture. Scanned line by line rather than matched with a
  * multi-line regex, which backtracks catastrophically on a file that does not match.

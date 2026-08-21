@@ -11,11 +11,11 @@ import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    assertNotNull,
     copyFixtureToTempDir,
     createScreenshotter,
-    openFolderViaDialog,
+    enterFixturesWorkspace,
     openWorkspaceFile,
-    assertNotNull,
     waitForNotification
 } from '../../helpers';
 
@@ -34,7 +34,7 @@ describe('Deepnote — split-prompt safety', function () {
         tempDir = copy.tempDir;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
     });
 

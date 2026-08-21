@@ -12,7 +12,7 @@ import {
     copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
-    openFolderViaDialog
+    enterFixturesWorkspace,
 } from '../../helpers';
 
 const MARKETING_FILES = ['marketing-overview.deepnote', 'marketing-campaigns.deepnote', 'marketing-metrics.deepnote'];
@@ -90,7 +90,7 @@ describe('Deepnote — the Explorer groups sibling files by project', function (
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(copy.tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         const control = await new ActivityBar().getViewControl('Deepnote');

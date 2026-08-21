@@ -16,7 +16,7 @@ import {
     copySnapshotIntoDir,
     createEnvironment,
     createScreenshotter,
-    openFolderViaDialog,
+    enterFixturesWorkspace,
     openWorkspaceFile,
     readRenderedOutput,
     runOnceAndAwaitOutput,
@@ -44,7 +44,7 @@ describe('Deepnote — a legacy project-scoped snapshot still loads its saved ou
         copySnapshotIntoDir(copy.tempDir, SNAPSHOT);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(copy.tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await openWorkspaceFile(FIXTURE);
@@ -108,7 +108,7 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
         copyFixtureIntoDir(tempDir, SIBLINGS[1].file);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await createEnvironment(ENV_NAME);

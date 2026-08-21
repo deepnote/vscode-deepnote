@@ -11,13 +11,13 @@ import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    assertNotNull,
     copyFixtureToTempDir,
     createScreenshotter,
     dismissAllNotifications,
+    enterFixturesWorkspace,
     notebookCount,
-    openFolderViaDialog,
     openWorkspaceFile,
-    assertNotNull,
     showView,
     waitForNotification
 } from '../../helpers';
@@ -74,7 +74,7 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file into sin
 
         // Open the workspace folder FIRST: the serializer reads snapshots relative to it, and
         // without one deserialization blocks on a warning that never resolves headlessly.
-        await openFolderViaDialog(tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await showView('Deepnote', '[split]');

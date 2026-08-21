@@ -10,16 +10,16 @@ import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    assertNotNull,
     confirmModalDialog,
     copyFixtureToTempDir,
     createScreenshotter,
+    enterFixturesWorkspace,
     findDeepnoteLeaf,
     getDeepnoteExplorerSection,
-    openFolderViaDialog,
     openWorkspaceFile,
     readDeepnoteTreeRows,
     readStatusBarText,
-    assertNotNull,
     selectDeepnoteContextMenu,
     waitForNotification
 } from '../../helpers';
@@ -48,7 +48,7 @@ describe('Deepnote — opening a file whose only notebook is the init notebook',
         cleanupTempDir = copy.cleanup;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(copy.tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await openWorkspaceFile(FIXTURE);
@@ -125,7 +125,7 @@ describe('Deepnote — deleting an init-only leaf removes the whole file', funct
         filePath = copy.filePath;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         const section = await getDeepnoteExplorerSection();

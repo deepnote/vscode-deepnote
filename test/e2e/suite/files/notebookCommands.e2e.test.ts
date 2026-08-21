@@ -22,13 +22,13 @@ import {
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    assertNotNull,
     confirmModalDialog,
     copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
-    openFolderViaDialog,
+    enterFixturesWorkspace,
     openWorkspaceFile,
-    assertNotNull,
     waitForNotification
 } from '../../helpers';
 
@@ -163,7 +163,7 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         const section = await getExplorerSection();

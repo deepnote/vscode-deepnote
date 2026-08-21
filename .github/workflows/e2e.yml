@@ -24,8 +24,7 @@ jobs:
     strategy:
       # One shard per directory in test/e2e/suite/, grouped by what the suites cover rather than by
       # measured time, so a new suite has an obvious home and the split does not skew as suites are
-      # added. Adding a directory means adding it here; verify-coverage below fails the run if you
-      # forget, since nothing would otherwise run it.
+      # added.
       fail-fast: false
       matrix:
         group: [kernel, files, workspace]
@@ -101,25 +100,18 @@ jobs:
         # one, which is where most of the old E2E runtime went. Keyed on the resolved Python version
         # as well as the install set: the venv records its base interpreter in pyvenv.cfg, so a
         # patch bump to the hosted Python would leave a restored venv pointing at a path that no
-        # longer exists. prepareE2eVenv.js also self-heals — it discards and rebuilds any venv that
-        # cannot import deepnote_toolkit.
+        # longer exists.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .venv-e2e
           key: e2e-venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
 
-      - name: Bake the Deepnote toolkit venv
-        # No-op when the cache restored a usable venv; otherwise creates it and installs the same
-        # set deepnoteToolkitInstaller would have.
-        run: npm run setup:e2e:venv
-
       - name: Run E2E
         # VS Code launches with --no-sandbox (no AppArmor sysctl needed). Runs once; Mocha's retries:1
         # and rootHooks.ts (dismiss toasts between tests) handle flakiness in the single shared instance.
-        run: |
-          xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
-            npx extest run-tests "./out/e2e/suite/${{ matrix.group }}/*.e2e.test.js" \
-              -c max -o ./test/e2e/settings.generated.json -e .test-extensions -m ./test/e2e/.mocharc.js
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:ci
+        env:
+          E2E_GROUP: ${{ matrix.group }}
 
       # Written even when the tests fail, so a shard that ran is never mistaken for one that was
       # never scheduled. verify-coverage collects these.

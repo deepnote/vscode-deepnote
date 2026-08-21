@@ -7,12 +7,12 @@ import {
     QUICK_PICK_TIMEOUT,
     RELOAD_POLL_TIMEOUT
 } from './constants';
-import { fixturesWorkspaceRoot, isInsideFixturesWorkspaceRoot } from './fixtures';
+import { fixturesWorkspaceRoot } from './fixtures';
 import { clickDialogOkButton } from './quickInput';
 
-// Whether the shared fixtures root has been opened as the workspace folder yet. Tracked here rather
-// than opened from a Mocha root hook: ExTester's runner does not fire `mochaHooks.beforeAll`, so a
-// root hook silently never runs and every suite ends up with no workspace at all.
+// Whether the shared fixtures root has been opened yet. Tracked here rather than opened from a Mocha
+// root hook: ExTester's runner does not fire `mochaHooks.beforeAll`, so a root hook silently never
+// runs and every suite ends up with no workspace at all.
 let fixturesRootOpened = false;
 
 // Exact palette labels (category + title) the way `Workbench.executeCommand` matches them.
@@ -48,37 +48,13 @@ export async function openWorkspaceFile(fileName: string): Promise<void> {
  * the path once and re-click OK in the SAME dialog until the pre-open workbench detaches (= accepted).
  * Re-opening the dialog per attempt instead would reset navigation and fail on 2nd+ opens.
  */
-export async function openFolderViaDialog(folder: string): Promise<void> {
-    // Fixture copies all live under one shared root, and opening a folder reloads the workbench —
-    // that reload is what made per-suite setup expensive. So the root is opened once, by whichever
-    // suite asks first, and every later request for a directory inside it is already satisfied.
-    let target = folder;
-    if (isInsideFixturesWorkspaceRoot(folder)) {
-        if (fixturesRootOpened) {
-            // Two things the window reload used to do, which now have to happen explicitly.
-            //
-            // Editors first: a suite that renamed or deleted notebooks leaves tabs open on files that
-            // no longer exist, so the next suite starts with the wrong notebook active and finds no
-            // code cell in it. Driven through the palette rather than EditorView.closeAllEditors,
-            // which clicks each tab's close button and fails with ElementNotInteractableError on
-            // notebook tabs — the reason each suite's own cleanup silently never worked either.
-            await new Workbench().executeCommand(CLOSE_ALL_EDITORS_COMMAND);
-
-            // Then the tree: it keeps showing a group for the previous suite's directory after that
-            // directory was removed, and a lookup by notebook name finds the dead entry instead.
-            await new Workbench().executeCommand(REFRESH_EXPLORER_COMMAND);
-
-            return;
-        }
-        target = fixturesWorkspaceRoot();
-    }
-
+async function openFolderViaDialog(folder: string): Promise<void> {
     const driver = VSBrowser.instance.driver;
     const previousWorkbench = await driver.findElement(By.css('.monaco-workbench'));
 
     await new Workbench().executeCommand('File: Open Folder...');
     const dialog = await InputBox.create(QUICK_PICK_TIMEOUT);
-    await dialog.setText(target);
+    await dialog.setText(folder);
 
     // The simple dialog resolves the typed path asynchronously; wait for the listing, then settle.
     await driver
@@ -106,8 +82,6 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
             .then(() => true)
             .catch(() => false);
         if (reloaded) {
-            fixturesRootOpened = target === fixturesWorkspaceRoot();
-
             return;
         }
 
@@ -118,5 +92,32 @@ export async function openFolderViaDialog(folder: string): Promise<void> {
         console.warn('[deepnote-e2e] cancel folder dialog:', error);
     });
 
-    throw new Error(`Failed to open folder "${target}": the dialog never accepted the target`);
+    throw new Error(`Failed to open folder "${folder}": the dialog never accepted the target`);
+}
+
+/**
+ * Puts the window into the state a suite expects: the shared fixtures workspace open, no editors
+ * from the previous suite, and a Deepnote Explorer that reflects what is actually on disk.
+ *
+ * Every suite calls this in `before()` and gets the same behaviour. The folder itself is opened once
+ * — opening one reloads the workbench, and doing that per suite is what made setup slow — so the
+ * rest of what the reload used to do has to happen explicitly on every call:
+ *
+ * - Editors: a suite that renames or deletes notebooks leaves tabs open on files that no longer
+ *   exist, and the next suite would start with the wrong notebook active. Driven through the palette
+ *   rather than `EditorView.closeAllEditors`, which clicks each tab's close button and fails on
+ *   notebook tabs with ElementNotInteractableError.
+ * - The Explorer: it keeps a group for a directory that has been removed, and a lookup by notebook
+ *   name would find the dead entry.
+ */
+export async function enterFixturesWorkspace(): Promise<void> {
+    if (!fixturesRootOpened) {
+        await openFolderViaDialog(fixturesWorkspaceRoot());
+        fixturesRootOpened = true;
+
+        return;
+    }
+
+    await new Workbench().executeCommand(CLOSE_ALL_EDITORS_COMMAND);
+    await new Workbench().executeCommand(REFRESH_EXPLORER_COMMAND);
 }

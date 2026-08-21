@@ -23,16 +23,16 @@ import {
     KERNEL_CONNECT_TIMEOUT,
     QUICK_PICK_TIMEOUT,
     SHARED_ENV_NAME,
-    fixturesWorkspaceRoot,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    assertNotNull,
     confirmModalDialog,
     copyFixtureToTempDir,
     createEnvironment,
     createScreenshotter,
-    openFolderViaDialog,
+    enterFixturesWorkspace,
+    fixturesWorkspaceRoot,
     openWorkspaceFile,
-    assertNotNull,
     runOnceAndAwaitOutput,
     selectDeepnoteContextMenu,
     selectEnvironmentForNotebook,
@@ -100,7 +100,7 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         const tempDir = copy.tempDir;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await createEnvironment(ENV_NAME);
@@ -294,7 +294,7 @@ describe('Deepnote — deleting an environment stops even a closed-but-running n
         cleanupTempDir = copy.cleanup;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(copy.tempDir);
+        await enterFixturesWorkspace();
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         // Servers already running from earlier suites — exclude these when isolating THIS PID.

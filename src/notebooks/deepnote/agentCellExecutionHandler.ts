@@ -247,10 +247,10 @@ export async function executeAgentCell(
         notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Idle);
     };
 
-    execution.start(Date.now());
-    notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Executing);
-
     try {
+        execution.start(Date.now());
+        notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Executing);
+
         const prompt = cell.document.getText();
 
         // runtime-core awaits each event; append deltas only (O(n) over the EH boundary).

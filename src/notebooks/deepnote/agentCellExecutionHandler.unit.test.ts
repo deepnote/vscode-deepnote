@@ -669,6 +669,27 @@ suite('AgentCellExecutionHandler', () => {
 
                 expect(mockExecution.end.firstCall.args[0]).to.be.true;
             });
+
+            // execution.start() and the Executing state change sat outside the try, so a throw from
+            // either left the cell spinning and the stop listener attached.
+            test('ends the cell and drops the stop listener when the execution fails to start', async () => {
+                const cell = createAgentCell();
+                const subscription = { dispose: sinon.stub() };
+                const token = {
+                    isCancellationRequested: false,
+                    onCancellationRequested: sinon.stub().returns(subscription)
+                } as unknown as CancellationToken;
+
+                mockExecution.start.throws(new Error('Cannot call start again'));
+
+                await executeAgentCell(cell, mockController, encryptedStorage, token, {
+                    executeAgentBlockFn: executeAgentBlockStub
+                });
+
+                expect(mockExecution.end.called, 'execution was never ended').to.be.true;
+                expect(mockExecution.end.firstCall.args[0]).to.be.false;
+                expect(subscription.dispose.called, 'stop listener was never disposed').to.be.true;
+            });
         });
     });
 

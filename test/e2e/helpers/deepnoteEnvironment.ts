@@ -7,7 +7,7 @@ import {
     KERNEL_CONNECT_TIMEOUT,
     MAX_CREATE_ATTEMPTS,
     OPTIONAL_PROMPT_TIMEOUT,
-    PREBAKED_VENV_DIR_NAME,
+    PREBAKED_VENV_MARKER,
     PREBAKED_VENV_FILTER_TIMEOUT,
     QUICK_PICK_TIMEOUT
 } from './constants';
@@ -37,7 +37,7 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
     const driver = VSBrowser.instance.driver;
 
     if (!useManagedVenv) {
-        await interpreterPick.setText(PREBAKED_VENV_DIR_NAME);
+        await interpreterPick.setText(PREBAKED_VENV_MARKER);
         // Wait for the *top row* to be the baked venv, not merely for the list to be non-empty:
         // VS Code applies the filter asynchronously, so the stale unfiltered list is briefly still
         // there and confirming against it would pick an arbitrary interpreter.
@@ -49,7 +49,7 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
                 }
                 const first = `${await picks[0].getLabel()} ${(await picks[0].getDescription()) ?? ''}`;
 
-                return first.includes(PREBAKED_VENV_DIR_NAME) ? picks[0] : undefined;
+                return first.includes(PREBAKED_VENV_MARKER) ? picks[0] : undefined;
             }, PREBAKED_VENV_FILTER_TIMEOUT)
             .catch(() => undefined);
 
@@ -60,7 +60,7 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
         }
 
         console.warn(
-            `[deepnote-e2e] no interpreter under ${PREBAKED_VENV_DIR_NAME} was offered; falling back to ` +
+            `[deepnote-e2e] no interpreter under ${PREBAKED_VENV_MARKER} was offered; falling back to ` +
                 'the first entry. The run will provision a venv and take several minutes longer — ' +
                 'check that `npm run setup:e2e:venv` ran.'
         );
@@ -71,7 +71,7 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
     const labels = await Promise.all(picks.map(async (pick) => pick.getLabel()));
     // "Not the baked venv" rather than "not any venv": in CI the only other interpreter is the one
     // actions/setup-python installed, which is not a venv, so this resolves to it.
-    const wanted = labels.find((label) => !label.includes(PREBAKED_VENV_DIR_NAME));
+    const wanted = labels.find((label) => !label.includes(PREBAKED_VENV_MARKER));
 
     if (wanted) {
         // Filter to it and accept with Enter, the same way the baked-venv branch does, rather than
@@ -82,7 +82,7 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
             .wait(async () => {
                 const filtered = await interpreterPick.getQuickPicks();
 
-                return filtered.length > 0 && !(await filtered[0].getLabel()).includes(PREBAKED_VENV_DIR_NAME);
+                return filtered.length > 0 && !(await filtered[0].getLabel()).includes(PREBAKED_VENV_MARKER);
             }, PREBAKED_VENV_FILTER_TIMEOUT)
             .catch(() => false);
 
@@ -96,7 +96,7 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
     }
 
     console.warn(
-        `[deepnote-e2e] no interpreter outside ${PREBAKED_VENV_DIR_NAME} could be filtered to; ` +
+        `[deepnote-e2e] no interpreter outside ${PREBAKED_VENV_MARKER} could be filtered to; ` +
             `accepting the first entry. Offered: ${JSON.stringify(labels)}`
     );
     await interpreterPick.confirm();

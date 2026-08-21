@@ -54,10 +54,10 @@ export const OUTPUT_SELECTOR = '.output_container, .output, .rendered-output';
 // environment.e2e.test.ts is the one deliberate exception, since that suite deletes what it creates.
 export const SHARED_ENV_NAME = 'E2E Hello Env';
 
-// Venv baked by build/e2e/prepareE2eVenv.js, adopted by every suite that connects a kernel. Kept in
-// sync with that script by convention; the suite falls back to whatever the quick pick offers (and
-// warns) when it is absent, so a missed setup step is slow rather than red.
+// Where the managed venv lives, and the substring that identifies it in the interpreter quick pick.
+// The marker matches both the real directory and the `.venv` link the workspace exposes it through.
 export const PREBAKED_VENV_DIR_NAME = '.venv-e2e';
+export const PREBAKED_VENV_MARKER = '.venv';
 
 // How long to wait for the interpreter quick pick to actually narrow to the baked venv. The
 // filter is near-instant when the venv is discoverable, so this only elapses when it is missing —

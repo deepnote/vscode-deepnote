@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+import { linkManagedVenvInto } from './venv';
+
 export interface FixtureCopy {
     /** Removes the throwaway temp directory and its contents. Idempotent; safe to call more than once. */
     cleanup: () => void;
@@ -35,6 +37,9 @@ let workspaceRoot: string | undefined;
 export function fixturesWorkspaceRoot(): string {
     if (!workspaceRoot) {
         workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-e2e-root-'));
+        // Exposed as `.venv` so the Python extension discovers it with no configuration, which is
+        // what lets the suites run without a settings file written ahead of the window opening.
+        linkManagedVenvInto(workspaceRoot);
     }
 
     return workspaceRoot;

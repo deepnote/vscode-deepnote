@@ -5,7 +5,8 @@ import {
     FOLDER_OK_RETRY_DELAY,
     FOLDER_OPEN_TIMEOUT,
     QUICK_PICK_TIMEOUT,
-    RELOAD_POLL_TIMEOUT
+    RELOAD_POLL_TIMEOUT,
+    WORKBENCH_TIMEOUT
 } from './constants';
 import { fixturesWorkspaceRoot } from './fixtures';
 import { clickDialogOkButton } from './quickInput';
@@ -17,7 +18,7 @@ let fixturesRootOpened = false;
 
 // Exact palette labels (category + title) the way `Workbench.executeCommand` matches them.
 const CLOSE_ALL_EDITORS_COMMAND = 'View: Close All Editors';
-const REFRESH_EXPLORER_COMMAND = 'Deepnote: Refresh Explorer';
+const RELOAD_WINDOW_COMMAND = 'Developer: Reload Window';
 
 /**
  * Opens a file that lives in the currently-open workspace folder via Quick Open ("Go to File..."),
@@ -96,19 +97,19 @@ async function openFolderViaDialog(folder: string): Promise<void> {
 }
 
 /**
- * Puts the window into the state a suite expects: the shared fixtures workspace open, no editors
- * from the previous suite, and a Deepnote Explorer that reflects what is actually on disk.
+ * Puts the window into the state a suite expects: the shared fixtures workspace open and nothing left
+ * over from the suite before it. Every suite calls this in `before()`.
  *
- * Every suite calls this in `before()` and gets the same behaviour. The folder itself is opened once
- * — opening one reloads the workbench, and doing that per suite is what made setup slow — so the
- * rest of what the reload used to do has to happen explicitly on every call:
+ * The folder is opened once; after that each suite gets a window reload. Reloading restarts the
+ * extension host, which is the only thing that reliably clears everything a previous suite can leave
+ * behind — open editors, the Deepnote Explorer's cached project groups, cached project data keyed by
+ * id, and the Python extension's interpreter discovery. Clearing those individually was possible but
+ * open-ended; every fix uncovered another.
  *
- * - Editors: a suite that renames or deletes notebooks leaves tabs open on files that no longer
- *   exist, and the next suite would start with the wrong notebook active. Driven through the palette
- *   rather than `EditorView.closeAllEditors`, which clicks each tab's close button and fails on
- *   notebook tabs with ElementNotInteractableError.
- * - The Explorer: it keeps a group for a directory that has been removed, and a lookup by notebook
- *   name would find the dead entry.
+ * The reload is not what made the old per-suite setup slow. That was `File: Open Folder...`, whose
+ * simple dialog navigates one level per OK click, so opening a path meant re-clicking for up to
+ * FOLDER_OPEN_TIMEOUT. Keeping one workspace and reloading inside it drops that cost while keeping
+ * the isolation.
  */
 export async function enterFixturesWorkspace(): Promise<void> {
     if (!fixturesRootOpened) {
@@ -118,6 +119,28 @@ export async function enterFixturesWorkspace(): Promise<void> {
         return;
     }
 
+    const driver = VSBrowser.instance.driver;
+
+    // Close before reloading: a reload restores whatever was open, so a suite that renamed or deleted
+    // notebooks would hand its dead tabs straight to the next one. Driven through the palette rather
+    // than `EditorView.closeAllEditors`, which clicks each tab's close button and fails on notebook
+    // tabs with ElementNotInteractableError.
     await new Workbench().executeCommand(CLOSE_ALL_EDITORS_COMMAND);
-    await new Workbench().executeCommand(REFRESH_EXPLORER_COMMAND);
+
+    const previousWorkbench = await driver.findElement(By.css('.monaco-workbench'));
+    await new Workbench().executeCommand(RELOAD_WINDOW_COMMAND);
+
+    // Same staleness probe openFolderViaDialog uses: the old workbench detaching is the signal that
+    // the reload actually started, rather than a fixed sleep.
+    await driver.wait(async () => {
+        try {
+            await previousWorkbench.getTagName();
+
+            return false;
+        } catch {
+            return true;
+        }
+    }, WORKBENCH_TIMEOUT);
+
+    await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 }

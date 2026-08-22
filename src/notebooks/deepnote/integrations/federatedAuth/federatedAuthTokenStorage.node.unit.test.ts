@@ -107,24 +107,6 @@ suite('federatedAuthTokenStorage', () => {
             assert.strictEqual(await storage.has(entry.integrationId), true);
         });
 
-        test('listIntegrationIds returns all stored integration ids', async () => {
-            await storage.save(sampleEntry('integration-a'));
-            await storage.save(sampleEntry('integration-b'));
-            await storage.save(sampleEntry('integration-c'));
-
-            const ids = await storage.listIntegrationIds();
-            assert.deepStrictEqual(ids.sort(), ['integration-a', 'integration-b', 'integration-c']);
-        });
-
-        test('listIntegrationIds reflects deletions', async () => {
-            await storage.save(sampleEntry('integration-a'));
-            await storage.save(sampleEntry('integration-b'));
-            await storage.delete('integration-a');
-
-            const ids = await storage.listIntegrationIds();
-            assert.deepStrictEqual(ids, ['integration-b']);
-        });
-
         test('delete removes the entry', async () => {
             const entry = sampleEntry();
             await storage.save(entry);

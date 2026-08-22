@@ -1,0 +1,234 @@
+import dotenv from 'dotenv';
+import { inject, injectable } from 'inversify';
+import { Diagnostic, DiagnosticCollection, DiagnosticSeverity, languages, Range, Uri, workspace } from 'vscode';
+
+import {
+    BUILTIN_INTEGRATIONS,
+    DatabaseIntegrationConfig,
+    DEFAULT_ENV_FILE,
+    DEFAULT_INTEGRATIONS_FILE,
+    parseIntegrations,
+    ValidationIssue
+} from '@deepnote/database-integrations';
+
+import { IFileSystem } from '../../common/platform/types';
+import { IDisposableRegistry } from '../../common/types';
+import { logger } from '../../logging';
+import { isIntegrationsEnvFileEnabled } from './integrationsEnvFileSettings';
+import { isFederatedAuthMetadata, isSupportedFederatedAuth } from './integrationTypes';
+import { IIntegrationsFileConfigProvider } from './types';
+
+/**
+ * Stateless loader that reads integration configs from a `.deepnote.env.yaml` file (CLI parity),
+ * resolving `env:` references against a sibling `.env` file and `process.env`. Replicates the Node
+ * filesystem/dotenv shell that `@deepnote/database-integrations` does not export, delegating parsing
+ * to the exported, environment-agnostic `parseIntegrations`.
+ *
+ * No caching, no watching: a fresh read happens on every call. `getMergedIntegrationConfigs` reaches here on every
+ * SQL cell execution and on every integrations-panel refresh, so each call is up to two `exists` + two `readFile`
+ * round-trips and re-publishes the YAML's diagnostics. Adding a cache means invalidating it on file change —
+ * deliberately not done yet.
+ */
+@injectable()
+export class IntegrationsFileConfigProvider implements IIntegrationsFileConfigProvider {
+    private readonly diagnostics: DiagnosticCollection | undefined;
+
+    constructor(
+        @inject(IFileSystem) private readonly fileSystem: IFileSystem,
+        @inject(IDisposableRegistry) disposables: IDisposableRegistry
+    ) {
+        this.diagnostics = languages.createDiagnosticCollection('deepnote-integrations');
+        if (this.diagnostics) {
+            disposables.push(this.diagnostics);
+        }
+    }
+
+    public async getConfigsForFile(
+        deepnoteFileUri: Uri
+    ): Promise<{ configs: DatabaseIntegrationConfig[]; issues: ValidationIssue[] }> {
+        try {
+            const candidateDirs = this.getCandidateDirs(deepnoteFileUri);
+
+            // Both early returns clear first: nothing below republishes diagnostics, so a warning from a previous
+            // read would otherwise stay pinned in Problems after the file is fixed, deleted or the gate turned off.
+            if (!isIntegrationsEnvFileEnabled(deepnoteFileUri)) {
+                this.clearDiagnostics(candidateDirs);
+
+                return { configs: [], issues: [] };
+            }
+
+            // Locate the integrations YAML (dir-then-root). A missing file is not an error.
+            const yamlUri = await this.findFirstExisting(candidateDirs, DEFAULT_INTEGRATIONS_FILE);
+            if (!yamlUri) {
+                this.clearDiagnostics(candidateDirs);
+
+                return { configs: [], issues: [] };
+            }
+
+            const yaml = await this.fileSystem.readFile(yamlUri);
+
+            // Scan for the `.env` from the YAML's own directory onward, so a workspace-root YAML can never consume a
+            // nested notebook's `.env`; a nested YAML still falls back to the root. Real env wins over the file.
+            const yamlDir = Uri.joinPath(yamlUri, '..');
+            const envDirs = candidateDirs.slice(
+                Math.max(
+                    candidateDirs.findIndex((dir) => dir.toString() === yamlDir.toString()),
+                    0
+                )
+            );
+            const envUri = await this.findFirstExisting(envDirs, DEFAULT_ENV_FILE);
+            const fileEnv = envUri ? dotenv.parse(await this.fileSystem.readFile(envUri)) : {};
+            const env: Record<string, string | undefined> = { ...fileEnv, ...this.getProcessEnvironment() };
+
+            const { integrations, issues } = parseIntegrations({ yaml, env });
+
+            const result = this.filterIntegrations(integrations, issues);
+            this.updateDiagnostics(yamlUri, result.issues);
+
+            return result;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            const issue: ValidationIssue = {
+                path: '',
+                message: `Failed to read integrations file: ${message}`,
+                code: 'file_read_error'
+            };
+            logger.error(`IntegrationsFileConfigProvider: ${issue.message}`);
+
+            return { configs: [], issues: [issue] };
+        }
+    }
+
+    /** The process environment merged over the `.env` file; a seam tests override so they never touch the real `process.env`. */
+    protected getProcessEnvironment(): Record<string, string | undefined> {
+        return process.env;
+    }
+
+    /** Drops any diagnostics published against a candidate dir's `.deepnote.env.yaml`, whether or not it still exists. */
+    private clearDiagnostics(dirs: Uri[]): void {
+        dirs.forEach((dir) => this.diagnostics?.delete(Uri.joinPath(dir, DEFAULT_INTEGRATIONS_FILE)));
+    }
+
+    /** Drops reserved, unsupported, duplicate, and unsupported federated-auth integrations, recording an issue for each. */
+    private filterIntegrations(
+        integrations: DatabaseIntegrationConfig[],
+        parseIssues: ValidationIssue[]
+    ): { configs: DatabaseIntegrationConfig[]; issues: ValidationIssue[] } {
+        const configs: DatabaseIntegrationConfig[] = [];
+        const issues: ValidationIssue[] = [...parseIssues];
+        const seenIds = new Set<string>();
+
+        integrations.forEach((integration, index) => {
+            const issuePath = `integrations[${index}]`;
+
+            if (BUILTIN_INTEGRATIONS.has(integration.id)) {
+                issues.push({
+                    path: issuePath,
+                    message: `Integration '${integration.id}' uses a reserved id and was ignored.`,
+                    code: 'reserved_integration_id'
+                });
+
+                return;
+            }
+
+            if (integration.type === 'pandas-dataframe') {
+                issues.push({
+                    path: issuePath,
+                    message: `Integration '${integration.id}' has unsupported type '${integration.type}' and was ignored.`,
+                    code: 'unsupported_integration_type'
+                });
+
+                return;
+            }
+
+            if (seenIds.has(integration.id)) {
+                issues.push({
+                    path: issuePath,
+                    message: `Integration '${integration.id}' has a duplicate id and was ignored.`,
+                    code: 'duplicate_integration_id'
+                });
+
+                return;
+            }
+
+            if (isFederatedAuthMetadata(integration.metadata) && !isSupportedFederatedAuth(integration)) {
+                issues.push({
+                    path: issuePath,
+                    message: `Integration '${integration.id}' uses an unsupported federated authentication method and was ignored.`,
+                    code: 'unsupported_federated_integration'
+                });
+
+                return;
+            }
+
+            seenIds.add(integration.id);
+            configs.push(integration);
+        });
+
+        issues.forEach((issue) => {
+            logger.warn(`IntegrationsFileConfigProvider: ${issue.code} at '${issue.path}': ${issue.message}`);
+        });
+
+        return { configs, issues };
+    }
+
+    private async findFirstExisting(dirs: Uri[], fileName: string): Promise<Uri | undefined> {
+        for (const dir of dirs) {
+            const candidate = Uri.joinPath(dir, fileName);
+            if (await this.fileSystem.exists(candidate)) {
+                return candidate;
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Candidate directories to look for the integration/env files in priority order: next to the
+     * `.deepnote` file first, then the workspace-folder root. Duplicates are removed.
+     */
+    private getCandidateDirs(deepnoteFileUri: Uri): Uri[] {
+        const dirs: Uri[] = [Uri.joinPath(deepnoteFileUri, '..')];
+        const workspaceFolder = workspace.getWorkspaceFolder(deepnoteFileUri);
+        if (workspaceFolder) {
+            dirs.push(workspaceFolder.uri);
+        }
+
+        const seen = new Set<string>();
+
+        return dirs.filter((dir) => {
+            const key = dir.toString();
+            if (seen.has(key)) {
+                return false;
+            }
+            seen.add(key);
+
+            return true;
+        });
+    }
+
+    /** Surfaces validation issues in the Problems panel against the located `.deepnote.env.yaml` so a typo/missing key isn't silent; a clean parse clears them. No-op when diagnostics are unavailable (e.g. web/tests). */
+    private updateDiagnostics(yamlUri: Uri, issues: ValidationIssue[]): void {
+        if (!this.diagnostics) {
+            return;
+        }
+
+        if (issues.length === 0) {
+            this.diagnostics.delete(yamlUri);
+
+            return;
+        }
+
+        const diagnostics = issues.map((issue) => {
+            const detail = issue.path
+                ? `${issue.code} at '${issue.path}': ${issue.message}`
+                : `${issue.code}: ${issue.message}`;
+            const diagnostic = new Diagnostic(new Range(0, 0, 0, 0), detail, DiagnosticSeverity.Warning);
+            diagnostic.source = 'Deepnote integrations';
+
+            return diagnostic;
+        });
+
+        this.diagnostics.set(yamlUri, diagnostics);
+    }
+}

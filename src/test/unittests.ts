@@ -38,7 +38,7 @@ Module._load = function (request: string, _parent: NodeModule) {
         return mockedVSCode;
     }
     if (request === '@vscode/extension-telemetry') {
-        return { default: vscMockTelemetryReporter };
+        return { TelemetryReporter: vscMockTelemetryReporter };
     }
     if (request === '@deepnote/convert') {
         return {

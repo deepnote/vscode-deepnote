@@ -1,4 +1,5 @@
 import { assert } from 'chai';
+import { anything, instance, mock, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
 import { DeepnoteLspClientManager } from './deepnoteLspClientManager.node';
@@ -6,7 +7,7 @@ import { createMockChildProcess } from './deepnoteTestHelpers.node';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
-import { noop } from '../../platform/common/utils/misc';
+import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 
 suite('DeepnoteLspClientManager Integration Tests', () => {
     let lspClientManager: DeepnoteLspClientManager;
@@ -29,16 +30,6 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
         dispose: () => Promise.resolve()
     } as any;
 
-    // Mock integration storage
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockIntegrationStorage = {
-        getAll: async () => [],
-        getIntegrationConfig: async () => undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onDidChangeIntegrations: { dispose: noop } as any,
-        dispose: noop
-    } as any;
-
     // Mock notebook editor provider
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockNotebookEditorProvider = {
@@ -52,11 +43,14 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
     } as any;
 
     setup(() => {
+        const sqlIntegrationEnvVars = mock<ISqlIntegrationEnvVarsProvider>();
+        when(sqlIntegrationEnvVars.getMergedIntegrationConfigs(anything())).thenResolve([]);
+
         lspClientManager = new DeepnoteLspClientManager(
             mockDisposableRegistry,
-            mockIntegrationStorage,
             mockNotebookEditorProvider,
-            mockNotebookManager
+            mockNotebookManager,
+            instance(sqlIntegrationEnvVars)
         );
         lspClientManager.activate();
     });

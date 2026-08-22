@@ -818,10 +818,12 @@ export namespace Integrations {
     export const title = l10n.t('Deepnote Integrations');
     export const noIntegrationsFound = l10n.t('No integrations found in this project.');
     export const connected = l10n.t('Connected');
+    export const configuredInFile = l10n.t('Configured in file');
     export const notConfigured = l10n.t('Not Configured');
     export const configure = l10n.t('Configure');
     export const reconfigure = l10n.t('Reconfigure');
     export const reset = l10n.t('Reset');
+    export const signOut = l10n.t('Sign out');
     export const deleteIntegration = l10n.t('Delete');
     export const confirmResetTitle = l10n.t('Confirm Reset');
     export const confirmResetMessage = l10n.t('Are you sure you want to reset this integration configuration?');

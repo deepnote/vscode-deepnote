@@ -42,7 +42,7 @@ suite('SQL LSP Connection Utils Unit Tests', () => {
                 const config = createTestConfig('pgsql', 'My Postgres', {
                     host: 'db.example.com',
                     port: '5433',
-                    username: 'admin',
+                    user: 'admin',
                     password: 'secret123',
                     database: 'mydb'
                 });
@@ -76,21 +76,6 @@ suite('SQL LSP Connection Utils Unit Tests', () => {
                 });
             });
 
-            test('should handle alternative field names (user, dbname)', () => {
-                const config = createTestConfig('pgsql', 'Alt Fields', {
-                    host: 'localhost',
-                    port: 5432,
-                    user: 'altuser',
-                    password: 'pass',
-                    dbname: 'altdb'
-                });
-
-                const result = convertToSqlLspConnection(config);
-
-                assert.strictEqual(result?.user, 'altuser');
-                assert.strictEqual(result?.database, 'altdb');
-            });
-
             test('should convert string port to number', () => {
                 const config = createTestConfig('pgsql', 'String Port', {
                     port: '5432'
@@ -108,7 +93,7 @@ suite('SQL LSP Connection Utils Unit Tests', () => {
                 const config = createTestConfig('mysql', 'My MySQL', {
                     host: 'mysql.example.com',
                     port: '3307',
-                    username: 'root',
+                    user: 'root',
                     password: 'rootpass',
                     database: 'testdb'
                 });
@@ -135,8 +120,8 @@ suite('SQL LSP Connection Utils Unit Tests', () => {
             });
         });
 
-        suite('BigQuery conversion', () => {
-            test('should convert big-query config with all fields', () => {
+        suite('BigQuery', () => {
+            test('should return null for big-query (not converted to SQL LSP connection)', () => {
                 const config = createTestConfig('big-query', 'My BigQuery', {
                     projectId: 'my-gcp-project',
                     keyFilename: '/path/to/key.json'
@@ -144,24 +129,32 @@ suite('SQL LSP Connection Utils Unit Tests', () => {
 
                 const result = convertToSqlLspConnection(config);
 
-                assert.deepStrictEqual(result, {
-                    name: 'My BigQuery',
-                    adapter: 'bigquery',
-                    projectId: 'my-gcp-project',
-                    keyFilename: '/path/to/key.json'
-                });
+                assert.isNull(result);
             });
+        });
 
-            test('should handle alternative field names (project_id, key_filename)', () => {
-                const config = createTestConfig('big-query', 'Alt BigQuery', {
-                    project_id: 'alt-project',
-                    key_filename: '/alt/path.json'
+        suite('Federated auth', () => {
+            test('should return null for federated-auth metadata', () => {
+                const config = createTestConfig('big-query', 'Federated BigQuery', {
+                    authMethod: 'google-oauth'
                 });
 
                 const result = convertToSqlLspConnection(config);
 
-                assert.strictEqual(result?.projectId, 'alt-project');
-                assert.strictEqual(result?.keyFilename, '/alt/path.json');
+                assert.isNull(result);
+            });
+
+            test('should return null for federated-auth pgsql metadata', () => {
+                const config = createTestConfig('pgsql', 'Federated Postgres', {
+                    authMethod: 'google-oauth',
+                    host: 'db.example.com',
+                    user: 'admin',
+                    database: 'mydb'
+                });
+
+                const result = convertToSqlLspConnection(config);
+
+                assert.isNull(result);
             });
         });
 
@@ -191,12 +184,9 @@ suite('SQL LSP Connection Utils Unit Tests', () => {
                     // Missing metadata entirely
                 } as ConfigurableDatabaseIntegrationConfig;
 
-                // Should not throw
                 const result = convertToSqlLspConnection(config);
 
-                // Behavior depends on implementation - either null or partial result
-                // The important thing is it doesn't crash
-                assert.ok(result === null || typeof result === 'object');
+                assert.isNull(result);
             });
         });
     });

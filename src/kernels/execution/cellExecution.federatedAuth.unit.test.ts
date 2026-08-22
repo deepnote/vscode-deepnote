@@ -168,15 +168,22 @@ suite('CellExecution federated-auth branch', () => {
         assertMainExecuteShape(calls[0]);
     });
 
-    test('when generate() returns undefined: single requestExecute with silent=false, store_history=true', async () => {
-        const generator: IFederatedAuthSqlBlockCodeGenerator = {
-            generate: sinon.stub().resolves(undefined)
-        };
+    test("generate() is passed the converted block and the executing cell's own notebook URI", async () => {
+        // Catches: dropping the URI (or sourcing it from the active editor) — the integration config is resolved
+        // per notebook from `.deepnote.env.yaml` merged over SecretStorage, so the wrong notebook resolves wrong.
+        const generateStub = sinon.stub().resolves(undefined);
+        const generator: IFederatedAuthSqlBlockCodeGenerator = { generate: generateStub };
         const execution = createExecution(generator);
+
         await execution.start(instance(session));
         await execution.result.catch(() => undefined);
 
-        sinon.assert.calledOnce(generator.generate as sinon.SinonStub);
+        sinon.assert.calledOnce(generateStub);
+        const [block, notebookUri] = generateStub.firstCall.args;
+        assert.isObject(block, 'first argument must be the converted Deepnote block');
+        assert.strictEqual(notebookUri, cell.notebook.uri);
+
+        // `undefined` from the generator falls back to `createPythonCode` — still exactly one execute.
         const calls = requestExecuteSpy.getCalls();
         assert.strictEqual(calls.length, 1, `expected exactly 1 requestExecute call, got ${calls.length}`);
         assertMainExecuteShape(calls[0]);

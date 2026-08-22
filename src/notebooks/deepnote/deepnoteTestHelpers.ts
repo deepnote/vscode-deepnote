@@ -1,4 +1,4 @@
-import { DeepnoteFile } from '@deepnote/blocks';
+import { DeepnoteFile, serializeDeepnoteFile } from '@deepnote/blocks';
 import {
     NotebookCell,
     NotebookCellKind,
@@ -221,4 +221,9 @@ export function createDeepnoteFile(overrides: Partial<DeepnoteFile> = {}): Deepn
 /** A VS Code {@link WorkspaceFolder} from a `Uri` (name = last path segment). */
 export function createWorkspaceFolder(uri: Uri, index = 0): WorkspaceFolder {
     return { uri, name: uri.path.split('/').pop() ?? '', index };
+}
+
+/** The serialized YAML of a minimal `.deepnote` file carrying `projectId`, for stubbing a file read. */
+export function serializeProjectFile(projectId: string): string {
+    return serializeDeepnoteFile(createDeepnoteFile({ project: createDeepnoteProject({ id: projectId }) }));
 }

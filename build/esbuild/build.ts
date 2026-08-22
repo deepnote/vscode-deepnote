@@ -83,7 +83,7 @@ const extensionFolder = path.join(__dirname, '..', '..');
 
 // Security pins copied from the root `overrides` into the generated sql-lsp-modules package.json,
 // which npm installs in isolation and would otherwise resolve to vulnerable versions.
-const sqlLspOverridesToPropagate = ['ip-address', 'ssh2', 'tar'];
+const sqlLspOverridesToPropagate = ['ip-address', 'ssh2', 'tar', '@tootallnate/once'];
 
 interface StylePluginOptions {
     /**

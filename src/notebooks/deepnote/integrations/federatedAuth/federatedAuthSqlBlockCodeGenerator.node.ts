@@ -1,8 +1,9 @@
 import type { DeepnoteBlock } from '@deepnote/blocks';
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 import { inject, injectable } from 'inversify';
+import { Uri } from 'vscode';
 
-import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
+import { ISqlIntegrationEnvVarsProvider } from '../../../../platform/notebooks/deepnote/types';
 import {
     fetchFreshAccessToken,
     InvalidClientError,
@@ -28,7 +29,8 @@ import {
 @injectable()
 export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBlockCodeGenerator {
     constructor(
-        @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
+        @inject(ISqlIntegrationEnvVarsProvider)
+        private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider,
         @inject(IFederatedAuthTokenStorage) private readonly tokenStorage: IFederatedAuthTokenStorage
     ) {}
 
@@ -40,7 +42,7 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
         return fetchFreshAccessToken(entry, oauthConfig);
     }
 
-    public async generate(block: DeepnoteBlock): Promise<string | undefined> {
+    public async generate(block: DeepnoteBlock, notebookUri: Uri): Promise<string | undefined> {
         if (block.type !== 'sql') {
             return undefined;
         }
@@ -52,7 +54,11 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
             return undefined;
         }
 
-        const integration = await this.integrationStorage.getIntegrationConfig(integrationId);
+        // Merged configs, not SecretStorage: a federated integration can be declared purely in `.deepnote.env.yaml`,
+        // and when both sources have it the file wins — same resolution the kernel and the SQL LSP use.
+        const integration = (await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(notebookUri)).find(
+            (config) => config.id === integrationId
+        );
         if (!integration || integration.type !== 'big-query') {
             return undefined;
         }
@@ -72,8 +78,7 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
             project: integration.metadata.project
         });
         if (currentFingerprint !== entry.metadataFingerprint) {
-            // OAuth client metadata edited since save: stored refresh token is bound to a different client. Drop it.
-            await this.tokenStorage.delete(integrationId);
+            // Not dropped: another notebook may declare this id with its own OAuth client and still be using it.
             throw new NotAuthenticatedError(integration.name);
         }
 

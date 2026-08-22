@@ -1676,6 +1676,12 @@
                     "description": "When enabled, outputs are saved to separate snapshot files in a 'snapshots' folder instead of the main .deepnote file.",
                     "scope": "resource"
                 },
+                "deepnote.integrations.envFile.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "When enabled, integration credentials are also loaded from a '.deepnote.env.yaml' file (with 'env:' references resolved against '.env' and environment variables) next to the .deepnote file or at the workspace root.",
+                    "scope": "resource"
+                },
                 "deepnote.experiments.enabled": {
                     "type": "boolean",
                     "default": true,
@@ -2721,7 +2727,7 @@
         "@nteract/transform-plotly": "^7.0.0",
         "@nteract/transform-vega": "^7.0.6",
         "@nteract/transforms": "^3.2.0",
-        "@vscode/extension-telemetry": "^0.7.7",
+        "@vscode/extension-telemetry": "^1.5.2",
         "@vscode/jupyter-ipywidgets7": "^2.0.4",
         "@vscode/jupyter-ipywidgets8": "^1.0.9",
         "@vscode/python-extension": "^1.0.4",
@@ -2731,6 +2737,7 @@
         "clsx": "^2.1.1",
         "cross-fetch": "^3.1.5",
         "d3-format": "^3.1.0",
+        "dotenv": "^17.2.3",
         "encoding": "^0.1.13",
         "express": "^5.2.1",
         "fast-deep-equal": "^2.0.1",
@@ -3021,6 +3028,8 @@
         "form-data@>=4.0.0 <4.0.6": "4.0.6",
         "body-parser": "2.3.0",
         "immutable": "4.3.9",
-        "js-yaml@3": "3.15.1"
+        "js-yaml@3": "3.15.1",
+        "@tootallnate/once": "2.0.1",
+        "uuid@8": "11.1.1"
     }
 }

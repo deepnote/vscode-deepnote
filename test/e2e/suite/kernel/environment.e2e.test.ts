@@ -139,7 +139,30 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         }
         await screenshot('split-prompt');
 
-        await assertNotNull(prompt, 'split prompt notification').takeAction(SPLIT_ACTION);
+        // Re-find the toast on each attempt instead of reusing the reference captured before the
+        // screenshot above: the notification re-renders while it sits there, which stales it. Same
+        // locate-and-act-in-one-loop shape as clickRunAll.
+        assertNotNull(prompt, 'split prompt notification');
+        await driver.wait(
+            async () => {
+                const current = await waitForNotification(SPLIT_PROMPT, INLINE_PROMPT_TIMEOUT, false);
+                if (!current) {
+                    return false;
+                }
+
+                try {
+                    await current.takeAction(SPLIT_ACTION);
+
+                    return true;
+                } catch (error) {
+                    console.warn('[deepnote-e2e] take split action (retrying):', error);
+
+                    return false;
+                }
+            },
+            WORKBENCH_TIMEOUT,
+            `could not take the "${SPLIT_ACTION}" action on the split prompt`
+        );
         await waitForNotification(SPLIT_DONE, WORKBENCH_TIMEOUT, true);
         await driver.sleep(2500);
         await screenshot('split-done');

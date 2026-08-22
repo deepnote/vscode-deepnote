@@ -18,7 +18,12 @@ import {
 } from '../../platform/errors/deepnoteKernelErrors';
 import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import { DEEPNOTE_TOOLKIT_VERSION, IDeepnoteToolkitInstaller, VenvAndToolkitInstallation } from './types';
+import {
+    DEEPNOTE_TOOLKIT_PACKAGES,
+    DEEPNOTE_TOOLKIT_VERSION,
+    IDeepnoteToolkitInstaller,
+    VenvAndToolkitInstallation
+} from './types';
 
 /**
  * Handles installation of the deepnote-toolkit Python package.
@@ -367,9 +372,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 'install',
                 '--upgrade',
                 `deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`,
-                'ipykernel',
-                'python-lsp-server[all]',
-                'deepnote-cli'
+                ...DEEPNOTE_TOOLKIT_PACKAGES
             ],
             token
         );

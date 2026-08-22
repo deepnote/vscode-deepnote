@@ -414,5 +414,13 @@ export interface IDeepnoteLspClientManager {
 }
 
 export const DEEPNOTE_TOOLKIT_VERSION = '2.1.1';
+
+/**
+ * Installed alongside `deepnote-toolkit[server]` into every managed venv. Kept here, next to the
+ * version, because the E2E suite builds an equivalent venv of its own and reads both from this file
+ * — see test/e2e/helpers/venv.ts. A package added here without the tests seeing it would leave them
+ * running against an environment production never has.
+ */
+export const DEEPNOTE_TOOLKIT_PACKAGES = ['ipykernel', 'python-lsp-server[all]', 'deepnote-cli'];
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

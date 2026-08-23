@@ -48,10 +48,8 @@ export const FOLDER_OK_RETRY_DELAY = 400;
 // so reading them cannot accidentally match the cell's source in the editor.
 export const OUTPUT_SELECTOR = '.output_container, .output, .rendered-output';
 
-// The environment every suite shares. Creating a Deepnote environment is cheap (metadata only), but
-// the first kernel connect provisions a venv + the Deepnote toolkit, so a suite that invents its own
-// name pays that once more. Import this instead of writing a name; `E2E Delete Env` in
-// environment.e2e.test.ts is the one deliberate exception, since that suite deletes what it creates.
+// Shared by every suite so only one venv is ever provisioned; the deletion suite is the one
+// exception, since it deletes what it creates.
 export const SHARED_ENV_NAME = 'E2E Hello Env';
 
 // Where the managed venv lives, and the substring that identifies it in the interpreter quick pick.
@@ -59,7 +57,5 @@ export const SHARED_ENV_NAME = 'E2E Hello Env';
 export const PREBAKED_VENV_DIR_NAME = '.venv-e2e';
 export const PREBAKED_VENV_MARKER = '.venv';
 
-// How long to wait for the interpreter quick pick to actually narrow to the baked venv. The
-// filter is near-instant when the venv is discoverable, so this only elapses when it is missing —
-// keep it well under QUICK_PICK_TIMEOUT so a forgotten setup step does not stall every suite.
+// Only elapses when the venv is missing, so it stays well under QUICK_PICK_TIMEOUT.
 export const PREBAKED_VENV_FILTER_TIMEOUT = 10_000;

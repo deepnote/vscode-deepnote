@@ -15,12 +15,8 @@ function venvPython(): string {
 }
 
 /**
- * The exact pip specs deepnoteToolkitInstaller installs, read out of the extension source.
- *
- * The installer itself cannot be reused: it is an injected class built on `workspace.fs`, `l10n` and
- * cancellation tokens, and it runs in the extension host — this runs in the Mocha process, where
- * `vscode` does not resolve. Reading its inputs is the next best thing, and it means a version bump
- * or a new package cannot leave the tests provisioning something production never has.
+ * The pip specs deepnoteToolkitInstaller installs, read from source so they cannot drift. The
+ * installer itself needs `vscode`, which does not resolve in the Mocha process.
  */
 function toolkitPipSpecs(): string[] {
     const source = fs.readFileSync(TOOLKIT_SPEC_SOURCE, 'utf8');
@@ -39,21 +35,15 @@ function toolkitPipSpecs(): string[] {
 }
 
 /**
- * Whether the venv already satisfies every spec, checked against installed distribution metadata
- * rather than by importing anything.
- *
- * `import deepnote_toolkit` — what the extension itself uses — executes the whole package, which
- * takes seconds and emits a page of import warnings. This runs on every suite, so it reads
- * `importlib.metadata` instead: same guarantee that the right versions are present, in milliseconds
- * and silently.
+ * Whether the venv satisfies every spec. Checked via distribution metadata rather than
+ * `import deepnote_toolkit`, which costs seconds and floods the log on every suite.
  */
 function isUsable(specs: string[]): boolean {
     if (!fs.existsSync(venvPython())) {
         return false;
     }
 
-    // 'deepnote-toolkit[server]==2.1.1' -> ['deepnote-toolkit', '2.1.1']; extras do not affect the
-    // distribution name, and a spec without `==` is satisfied by any version.
+    // 'deepnote-toolkit[server]==2.1.1' -> name 'deepnote-toolkit', version '2.1.1'.
     const required = specs.map((spec) => {
         const [name, version] = spec.split('==');
 
@@ -78,17 +68,8 @@ function isUsable(specs: string[]): boolean {
 }
 
 /**
- * Guarantees a venv with the Deepnote toolkit installed, and returns its interpreter.
- *
- * Suites adopt this venv instead of letting the extension build one per environment:
- * `getVenvPathIfInVenv` makes the extension take over any interpreter that already lives in a venv,
- * and `ensureVenvAndToolkit` returns early once the toolkit imports, so the whole pip install is
- * skipped.
- *
- * Cheap when it already exists — one metadata lookup — so suites can call it unconditionally and CI
- * can restore it from a cache and pay only that check. A venv that does not satisfy every spec is
- * discarded and rebuilt, which also covers a restored cache whose base interpreter has moved and a
- * package added to the extension's install list.
+ * Guarantees a venv with the toolkit installed and returns its interpreter. The extension adopts it
+ * rather than provisioning its own, and a venv failing any spec is discarded and rebuilt.
  */
 export function ensureManagedVenv(): string {
     const specs = toolkitPipSpecs();
@@ -105,8 +86,7 @@ export function ensureManagedVenv(): string {
     console.log(`[e2e-venv] creating ${VENV_DIR} — this only happens once`);
     execFileSync(process.env.PYTHON ?? 'python3', ['-m', 'venv', VENV_DIR], { stdio: 'inherit' });
 
-    // Mirrors deepnoteToolkitInstaller.installVenvAndToolkit, so the venv satisfies the same checks
-    // the extension would have made after building it itself.
+    // Mirrors deepnoteToolkitInstaller.installVenvAndToolkit.
     execFileSync(venvPython(), ['-m', 'pip', 'install', '--upgrade', 'pip'], { stdio: 'inherit' });
     execFileSync(venvPython(), ['-m', 'pip', 'install', '--upgrade', ...specs], { stdio: 'inherit' });
 
@@ -114,9 +94,8 @@ export function ensureManagedVenv(): string {
 }
 
 /**
- * Links the managed venv into a workspace folder as `.venv`, which is where the Python extension
- * looks without any configuration. Doing it this way rather than pointing settings at an absolute
- * path keeps the venv cacheable at a fixed location while the workspace stays a throwaway directory.
+ * Links the venv into a workspace as `.venv`, where the Python extension finds it with no settings,
+ * while the venv itself stays at a fixed cacheable path.
  */
 export function linkManagedVenvInto(workspaceFolder: string): void {
     const target = path.join(workspaceFolder, '.venv');

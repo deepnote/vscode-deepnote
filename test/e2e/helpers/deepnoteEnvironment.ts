@@ -19,19 +19,11 @@ const CREATE_ENV_COMMAND = 'Deepnote: Create Environment';
 const SELECT_ENV_COMMAND = 'Deepnote: Select Environment for Notebook';
 
 /**
- * Chooses which interpreter the environment is built on.
+ * Picks the managed venv, which the extension adopts instead of provisioning its own.
  *
- * By default the venv baked by `build/e2e/prepareE2eVenv.js`. The extension adopts any interpreter
- * that already lives in a venv, so the environment reuses it and skips provisioning entirely — that
- * reuse is the point of baking it. Typing the directory name filters the pick rather than clicking a
- * row, because the command enables `matchOnDescription` and the description is the interpreter path.
- *
- * `useManagedVenv` picks an interpreter outside that venv instead, leaving the extension to create
- * and own one. Only the deletion suite needs it: `deleteEnvironment` removes the venv directory for
- * managed environments only, so adopting the baked venv there would stop exercising that teardown.
- *
- * A missing baked venv warns and falls through to the first offered interpreter, so a skipped setup
- * step makes the run slow instead of red.
+ * `useManagedVenv` picks an interpreter outside it, so the extension creates and owns the venv —
+ * only the deletion suite needs that, since deleteEnvironment removes the directory for managed
+ * environments only.
  */
 async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: boolean): Promise<void> {
     const driver = VSBrowser.instance.driver;

@@ -41,6 +41,7 @@ import {
 
 const FIXTURE = 'sales-analytics.deepnote';
 const CHILD = 'sales-analytics-overview.deepnote';
+const PROJECT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const ENV_NAME = SHARED_ENV_NAME;
 const SPLIT_PROMPT = /multiple notebooks/i;
 const SPLIT_ACTION = 'Split into separate files';
@@ -87,7 +88,6 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
     this.timeout(SUITE_TIMEOUT);
     this.retries(0); // destructive (retires the original to .legacy); not idempotent
 
-    let projectId = '';
     let cleanupTempDir: (() => void) | undefined;
     let sidecarEnvId: string | undefined;
 
@@ -95,7 +95,6 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         const driver = VSBrowser.instance.driver;
         const screenshot = createScreenshotter(this);
         const copy = copyFixtureToTempDir(FIXTURE);
-        projectId = copy.projectId;
         cleanupTempDir = copy.cleanup;
         const tempDir = copy.tempDir;
 
@@ -168,11 +167,9 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         await screenshot('split-done');
 
         // Delete the sidecar so only a child's migrated mapping can rewrite it (proves migration, not
-        // a stale pre-split entry).
-        // The sidecar is written to workspace.workspaceFolders[0] (deepnoteExtensionSidecarWriter
-        // .node.ts:300), which is the shared fixtures root rather than this suite's directory. Its
-        // mappings are keyed by project id, and every copy gets a fresh one, so a shared file still
-        // isolates suites from each other.
+        // a stale pre-split entry). It is written to workspace.workspaceFolders[0]
+        // (deepnoteExtensionSidecarWriter.node.ts:300), which is the shared fixtures root rather than
+        // this suite's directory, so the delete also drops whatever earlier suites left in it.
         const sidecarPath = path.join(fixturesWorkspaceRoot(), '.vscode', 'deepnote.json');
         fs.rmSync(sidecarPath, { force: true });
 
@@ -189,7 +186,7 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
             if (fs.existsSync(sidecarPath)) {
                 try {
                     const parsed = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
-                    const id = parsed?.mappings?.[projectId]?.environmentId;
+                    const id = parsed?.mappings?.[PROJECT_ID]?.environmentId;
                     if (typeof id === 'string' && id.length > 0) {
                         sidecarEnvId = id;
                         break;

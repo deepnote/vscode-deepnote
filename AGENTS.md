@@ -20,7 +20,7 @@ Start with the owning directory and its colocated tests before searching broadly
 | When working on                                        | Start with                                                                              |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `.deepnote` parsing, serialization, block conversion    | `src/notebooks/deepnote/deepnoteSerializer.ts`, `src/notebooks/deepnote/converters/`     |
-| Explorer sidebar / tree view                             | `src/notebooks/deepnote/deepnoteExplorerView.ts`, `deepnoteTreeDataProvider.ts`          |
+| Explorer sidebar / tree view                             | `src/notebooks/deepnote/deepnoteExplorerView.ts`, `src/notebooks/deepnote/deepnoteTreeDataProvider.ts` |
 | Environment snapshots & `requirements.txt` generation    | `src/notebooks/deepnote/snapshots/`                                                       |
 | Database integrations (credentials, env refresh, webview) | `src/notebooks/deepnote/integrations/`, `src/webviews/webview-side/integrations/`       |
 | Kernel selection, SQL LSP, server startup                | `src/kernels/deepnote/`                                                                   |
@@ -175,6 +175,6 @@ Extract magic numbers (retry counts, delays, timeouts) as named constants near t
 ## File Structure Conventions
 
 - Source code: `src/`
-- Tests: colocated with source as `*.unit.test.ts` (unit) or under `test/e2e/` (end-to-end)
+- Tests: colocated with source as `*.unit.test.ts` (unit), `*.vscode.test*.ts` under `src/test/` (integration), or under `test/e2e/` (end-to-end)
 - Reference docs for agents and contributors: `specs/`
 - Build output: `out/` (compiled TS) and `dist/`/bundled output from esbuild (gitignored)

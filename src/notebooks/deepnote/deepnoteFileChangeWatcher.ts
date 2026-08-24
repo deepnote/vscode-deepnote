@@ -12,13 +12,16 @@ import {
 } from 'vscode';
 import { inject, injectable, optional } from 'inversify';
 import type { DeepnoteBlock } from '@deepnote/blocks';
+import fastDeepEqual from 'fast-deep-equal';
 
 import { IControllerRegistration } from '../controllers/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
+import { getBlockId, isEphemeralCell } from './dataConversionUtils';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { extractProjectIdFromSnapshotUri, isSnapshotFile } from './snapshots/snapshotFiles';
 import { SnapshotService } from './snapshots/snapshotService';
@@ -67,12 +70,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
     private readonly pendingOperations = new Map<string, PendingOperation>();
     private readonly runningOperations = new Set<string>();
 
+    private readonly selfWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
     /**
      * Deterministic self-write tracking for workspace.save() calls.
-     * Incremented before save, decremented when the fs event arrives.
+     * One-shot markers keyed by the base file URI (query/fragment stripped),
+     * added before save and consumed when the fs event arrives.
      */
-    private readonly selfWriteCounts = new Map<string, number>();
-    private readonly selfWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly selfWriteUris = new Set<string>();
     private readonly serializer: DeepnoteNotebookSerializer;
 
     /**
@@ -100,25 +105,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         this.disposables.push({ dispose: () => this.clearAllTimers() });
 
         if (this.snapshotService) {
-            this.disposables.push(
-                this.snapshotService.onFileWritten((uri) => {
-                    const key = uri.toString();
-                    this.snapshotSelfWriteUris.add(key);
-
-                    // Safety net: clean stale entries after 30s
-                    const existing = this.snapshotSelfWriteTimers.get(key);
-                    if (existing) {
-                        clearTimeout(existing);
-                    }
-                    this.snapshotSelfWriteTimers.set(
-                        key,
-                        setTimeout(() => {
-                            this.snapshotSelfWriteUris.delete(key);
-                            this.snapshotSelfWriteTimers.delete(key);
-                        }, selfWriteExpirationMs)
-                    );
-                })
-            );
+            this.disposables.push(this.snapshotService.onFileWritten((uri) => this.markSnapshotSelfWrite(uri)));
         }
     }
 
@@ -132,7 +119,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             clearTimeout(timer);
         }
         this.selfWriteTimers.clear();
-        this.selfWriteCounts.clear();
+        this.selfWriteUris.clear();
 
         for (const timer of this.snapshotSelfWriteTimers.values()) {
             clearTimeout(timer);
@@ -145,7 +132,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * Consumes a self-write marker. Returns true if the fs event was self-triggered.
      */
     private consumeSelfWrite(uri: Uri): boolean {
-        const key = uri.toString();
+        const key = this.selfWriteKey(uri);
 
         // Check snapshot self-writes first
         if (this.snapshotSelfWriteUris.has(key)) {
@@ -159,17 +146,12 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         // Check workspace.save self-writes
-        const count = this.selfWriteCounts.get(key);
-        if (count && count > 0) {
-            if (count === 1) {
-                this.selfWriteCounts.delete(key);
-                const timer = this.selfWriteTimers.get(key);
-                if (timer) {
-                    clearTimeout(timer);
-                    this.selfWriteTimers.delete(key);
-                }
-            } else {
-                this.selfWriteCounts.set(key, count - 1);
+        if (this.selfWriteUris.has(key)) {
+            this.selfWriteUris.delete(key);
+            const timer = this.selfWriteTimers.get(key);
+            if (timer) {
+                clearTimeout(timer);
+                this.selfWriteTimers.delete(key);
             }
             return true;
         }
@@ -178,21 +160,34 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
     }
 
     /**
-     * Checks whether the source code content has actually changed between the
-     * live notebook and the new cells from disk. If only outputs differ (disk
-     * has fewer/no outputs), it's an auto-save of stripped content — skip reload.
+     * Checks whether anything the file carries has actually changed between the live notebook and
+     * the new cells from disk. Outputs and execution state are ignored: in snapshot mode the main
+     * file has them stripped, so our own auto-save would otherwise look like an external edit.
      */
     private contentActuallyChanged(notebook: NotebookDocument, newCells: NotebookCellData[]): boolean {
-        const liveCells = notebook.getCells();
+        // Ephemeral cells aren't persisted; counting them looks like an external delete.
+        const liveCells = notebook.getCells().filter((cell) => !isEphemeralCell(cell));
         if (liveCells.length !== newCells.length) {
             return true;
         }
-        return liveCells.some(
-            (live, i) =>
-                live.kind !== newCells[i].kind ||
-                live.document.languageId !== newCells[i].languageId ||
-                live.document.getText() !== newCells[i].value
-        );
+
+        return liveCells.some((live, i) => {
+            const fromDisk = newCells[i];
+
+            if (
+                live.kind !== fromDisk.kind ||
+                live.document.languageId !== fromDisk.languageId ||
+                live.document.getText() !== fromDisk.value ||
+                getBlockId(live) !== getBlockId(fromDisk)
+            ) {
+                return true;
+            }
+
+            const liveBlock = this.persistedBlock(live, i);
+            const diskBlock = this.persistedBlock(fromDisk, i);
+
+            return liveBlock.type !== diskBlock.type || !fastDeepEqual(liveBlock.metadata, diskBlock.metadata);
+        });
     }
 
     /**
@@ -235,7 +230,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         );
 
         for (const notebook of affectedNotebooks) {
-            const nbKey = notebook.uri.toString();
+            const nbKey = getNotebookKey(notebook.uri);
             // main-file-sync always replaces any pending operation
             this.pendingOperations.set(nbKey, { type: 'main-file-sync' });
             void this.drainQueue(nbKey, notebook, uri);
@@ -252,7 +247,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         );
 
         for (const notebook of affectedNotebooks) {
-            const nbKey = notebook.uri.toString();
+            const nbKey = getNotebookKey(notebook.uri);
             const pending = this.pendingOperations.get(nbKey);
             // Don't replace a pending main-file-sync
             if (pending?.type === 'main-file-sync') {
@@ -299,14 +294,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         const liveCells = notebook.getCells();
         const liveOutputsByBlockId = new Map<string, readonly NotebookCellOutput[]>();
         for (const liveCell of liveCells) {
-            const blockId = this.getBlockIdFromMetadata(liveCell.metadata);
+            const blockId = getBlockId(liveCell);
             if (blockId && liveCell.outputs.length > 0) {
                 liveOutputsByBlockId.set(blockId, liveCell.outputs);
             }
         }
 
         for (const cell of newCells) {
-            const blockId = this.getBlockIdFromMetadata(cell.metadata);
+            const blockId = getBlockId(cell);
             if (blockId && (!cell.outputs || cell.outputs.length === 0)) {
                 const liveOutputs = liveOutputsByBlockId.get(blockId);
                 if (liveOutputs) {
@@ -320,7 +315,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         edits.push(NotebookEdit.replaceCells(new NotebookRange(0, notebook.cellCount), newCells));
 
         for (let i = 0; i < newCells.length; i++) {
-            const blockId = this.getBlockIdFromMetadata(newCells[i].metadata);
+            const blockId = getBlockId(newCells[i]);
             if (blockId) {
                 edits.push(
                     NotebookEdit.updateCellMetadata(i, {
@@ -363,13 +358,17 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             return;
         }
 
-        const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
+        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
+        const snapshotOutputs = await this.snapshotService.readSnapshot(projectId, notebookId);
         if (!snapshotOutputs || snapshotOutputs.size === 0) {
             return;
         }
 
-        // Look up original project blocks for fallback block ID resolution
-        const originalProject = this.notebookManager.getOriginalProject(projectId);
+        // Exact (projectId, notebookId) lookup: sibling files share a project.id, so a project-only
+        // lookup could return a different sibling and silently skip the block-id recovery below.
+        const originalProject = notebookId
+            ? this.notebookManager.getProjectForNotebook(projectId, notebookId)
+            : undefined;
         const notebookBlocksMap = new Map<string, DeepnoteBlock[]>();
         if (originalProject) {
             for (const nb of originalProject.project.notebooks) {
@@ -378,7 +377,6 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         const liveCells = notebook.getCells();
-        const notebookId = notebook.metadata?.deepnoteNotebookId as string | undefined;
         const originalBlocks = notebookId ? notebookBlocksMap.get(notebookId) : undefined;
 
         // Collect cells that need output updates
@@ -390,15 +388,20 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             blockIdFromFallback: boolean;
         }> = [];
 
+        // Ephemeral cells live in the document but are stripped from the file, so a live index cannot
+        // address originalBlocks. Track the file's own cursor, advanced only by persisted cells.
+        let fileBlockIndex = 0;
+
         for (let i = 0; i < liveCells.length; i++) {
             try {
                 const cell = liveCells[i];
-                let blockId = this.getBlockIdFromMetadata(cell.metadata);
+                const originalBlock = isEphemeralCell(cell) ? undefined : originalBlocks?.[fileBlockIndex++];
+                let blockId = getBlockId(cell);
                 let blockIdFromFallback = false;
 
                 // Fallback to original project blocks when metadata was lost
-                if (!blockId && originalBlocks) {
-                    blockId = originalBlocks[i]?.id;
+                if (!blockId && originalBlock) {
+                    blockId = originalBlock.id;
                     blockIdFromFallback = true;
                 }
 
@@ -406,7 +409,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                     continue;
                 }
 
-                const fallbackType = originalBlocks?.[i]?.type;
+                const fallbackType = originalBlock?.type;
                 const blockType = ((cell.metadata?.type as string) ?? fallbackType ?? 'code') as DeepnoteBlock['type'];
                 const newOutputs = this.converter.transformOutputsForVsCode(
                     snapshotOutputs.get(blockId)!,
@@ -519,10 +522,6 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         logger.info(`[FileChangeWatcher] Updated notebook outputs from external snapshot: ${notebook.uri.path}`);
     }
 
-    private getBlockIdFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
-        return (metadata?.__deepnoteBlockId ?? metadata?.id) as string | undefined;
-    }
-
     private handleFileChange(uri: Uri): void {
         // Deterministic self-write check — no timers involved
         if (this.consumeSelfWrite(uri)) {
@@ -581,9 +580,8 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
      * Call before workspace.save() to prevent the resulting fs event from triggering a reload.
      */
     private markSelfWrite(uri: Uri): void {
-        const key = uri.toString();
-        const count = this.selfWriteCounts.get(key) ?? 0;
-        this.selfWriteCounts.set(key, count + 1);
+        const key = this.selfWriteKey(uri);
+        this.selfWriteUris.add(key);
 
         // Safety net: clean stale entries after 30s
         const existing = this.selfWriteTimers.get(key);
@@ -593,8 +591,30 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         this.selfWriteTimers.set(
             key,
             setTimeout(() => {
-                this.selfWriteCounts.delete(key);
+                this.selfWriteUris.delete(key);
                 this.selfWriteTimers.delete(key);
+            }, selfWriteExpirationMs)
+        );
+    }
+
+    /**
+     * Marks a URI as written by the snapshot service, so the resulting fs event is treated as a
+     * self-write and skipped.
+     */
+    private markSnapshotSelfWrite(uri: Uri): void {
+        const key = this.selfWriteKey(uri);
+        this.snapshotSelfWriteUris.add(key);
+
+        // Safety net: clean stale entries after 30s
+        const existing = this.snapshotSelfWriteTimers.get(key);
+        if (existing) {
+            clearTimeout(existing);
+        }
+        this.snapshotSelfWriteTimers.set(
+            key,
+            setTimeout(() => {
+                this.snapshotSelfWriteUris.delete(key);
+                this.snapshotSelfWriteTimers.delete(key);
             }, selfWriteExpirationMs)
         );
     }
@@ -640,6 +660,30 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             }
         }
         return true;
+    }
+
+    /**
+     * The block a cell would be written as, produced by the very conversion the serializer runs on
+     * save. Comparing that instead of raw cell metadata keeps the check honest in both directions:
+     * whatever the write path derives, normalizes or strips ends up on the block rather than in
+     * `block.metadata`, while everything an external editor can put in the file survives.
+     * Outputs are left out — they are deliberately not compared and converting them is the
+     * expensive part.
+     */
+    private persistedBlock(cell: NotebookCell | NotebookCellData, index: number): DeepnoteBlock {
+        const isLiveCell = 'document' in cell;
+        const projection = new NotebookCellData(
+            cell.kind,
+            isLiveCell ? cell.document.getText() : cell.value,
+            isLiveCell ? cell.document.languageId : cell.languageId
+        );
+        projection.metadata = { ...cell.metadata };
+
+        return this.converter.convertCellToBlock(projection, index);
+    }
+
+    private selfWriteKey(uri: Uri): string {
+        return uri.with({ query: '', fragment: '' }).toString();
     }
 
     /**

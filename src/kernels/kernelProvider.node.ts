@@ -32,8 +32,8 @@ import { IReplNotebookTrackerService } from '../platform/notebooks/replNotebookT
 import { logger } from '../platform/logging';
 import { getDisplayPath } from '../platform/common/platform/fs-paths.node';
 import { IRawNotebookSupportedService } from './raw/types';
-// eslint-disable-next-line import/no-restricted-paths
-import { ISnapshotMetadataService } from '../notebooks/deepnote/snapshots/snapshotService';
+import { ISnapshotMetadataService } from '../notebooks/deepnote/snapshots/snapshotService'; // oxlint-disable-line import-plugin/no-restricted-paths
+import { IFederatedAuthSqlBlockCodeGenerator } from '../notebooks/deepnote/integrations/types'; // oxlint-disable-line import-plugin/no-restricted-paths
 
 /**
  * Node version of a kernel provider. Needed in order to create the node version of a kernel.
@@ -54,7 +54,10 @@ export class KernelProvider extends BaseCoreKernelProvider {
         @inject(IReplNotebookTrackerService) private readonly replTracker: IReplNotebookTrackerService,
         @inject(IKernelWorkingDirectory) private readonly kernelWorkingDirectory: IKernelWorkingDirectory,
         @inject(IRawNotebookSupportedService) private readonly rawKernelSupported: IRawNotebookSupportedService,
-        @inject(ISnapshotMetadataService) @optional() private readonly snapshotService?: ISnapshotMetadataService
+        @inject(ISnapshotMetadataService) @optional() private readonly snapshotService?: ISnapshotMetadataService,
+        @inject(IFederatedAuthSqlBlockCodeGenerator)
+        @optional()
+        private readonly federatedAuthSqlBlockCodeGenerator?: IFederatedAuthSqlBlockCodeGenerator
     ) {
         super(asyncDisposables, disposables);
         disposables.push(jupyterServerUriStorage.onDidRemove(this.handleServerRemoval.bind(this)));
@@ -115,7 +118,14 @@ export class KernelProvider extends BaseCoreKernelProvider {
 
         this.executions.set(
             kernel,
-            new NotebookKernelExecution(kernel, this.context, this.formatters, notebook, this.snapshotService)
+            new NotebookKernelExecution(
+                kernel,
+                this.context,
+                this.formatters,
+                notebook,
+                this.snapshotService,
+                this.federatedAuthSqlBlockCodeGenerator
+            )
         );
         this.asyncDisposables.push(kernel);
         this.storeKernel(notebook, options, kernel);

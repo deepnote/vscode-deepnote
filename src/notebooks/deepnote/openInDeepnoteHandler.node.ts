@@ -4,6 +4,7 @@
 import { injectable, inject } from 'inversify';
 import { commands, window, Uri, env, l10n } from 'vscode';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IExtensionContext } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { logger } from '../../platform/logging';
@@ -13,15 +14,26 @@ import { initImport, uploadFile, getErrorMessage, MAX_FILE_SIZE, getDeepnoteDoma
 
 @injectable()
 export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
-    constructor(@inject(IExtensionContext) private readonly extensionContext: IExtensionContext) {}
+    constructor(
+        @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService
+    ) {}
 
     public activate(): void {
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.OpenInDeepnote, () => this.handleOpenInDeepnote())
+            commands.registerCommand(Commands.OpenInDeepnote, async () => {
+                // Every falsy return from the handler is preceded by an error message; there is no
+                // user-cancel path, so `false` maps to 'failed' rather than 'cancelled'.
+                const completed = await this.handleOpenInDeepnote();
+                this.analytics.trackEvent({
+                    eventName: 'open_in_deepnote',
+                    properties: { outcome: completed ? 'completed' : 'failed' }
+                });
+            })
         );
     }
 
-    private async handleOpenInDeepnote(): Promise<void> {
+    private async handleOpenInDeepnote(): Promise<boolean> {
         try {
             let fileUri: Uri | undefined;
             let isNotebook = false;
@@ -39,7 +51,8 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                 const activeEditor = window.activeTextEditor;
                 if (!activeEditor) {
                     void window.showErrorMessage('Please open a .deepnote file first');
-                    return;
+
+                    return false;
                 }
 
                 fileUri = activeEditor.document.uri;
@@ -47,7 +60,8 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
 
             if (!fileUri.fsPath.endsWith('.deepnote')) {
                 void window.showErrorMessage('This command only works with .deepnote files');
-                return;
+
+                return false;
             }
 
             if (isNotebook) {
@@ -58,7 +72,8 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                     const saved = await activeEditor.document.save();
                     if (!saved) {
                         void window.showErrorMessage('Please save the file before opening in Deepnote');
-                        return;
+
+                        return false;
                     }
                 }
             }
@@ -71,12 +86,13 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
             const stats = await fs.promises.stat(filePath);
             if (stats.size > MAX_FILE_SIZE) {
                 void window.showErrorMessage(`File exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`);
-                return;
+
+                return false;
             }
 
             const fileBuffer = await fs.promises.readFile(filePath);
 
-            await window.withProgress(
+            return await window.withProgress(
                 {
                     location: { viewId: 'workbench.view.extension.deepnoteExplorer' },
                     title: l10n.t('Opening in Deepnote'),
@@ -87,7 +103,7 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                         progress.report({ message: l10n.t('Preparing upload...') });
                         logger.debug(`Initializing import for ${fileName} (${stats.size} bytes)`);
 
-                        const initResponse = await initImport(fileName, stats.size);
+                        const initResponse = await initImport(fileName, stats.size, fileUri);
                         logger.debug(`Import initialized: ${initResponse.importId}`);
 
                         progress.report({ message: l10n.t('Uploading file...') });
@@ -99,16 +115,20 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
                         logger.debug('File uploaded successfully');
 
                         progress.report({ message: l10n.t('Opening in Deepnote...') });
-                        const domain = getDeepnoteDomain();
+                        const domain = getDeepnoteDomain(fileUri);
                         const deepnoteUrl = `https://${domain}/launch?importId=${initResponse.importId}`;
                         await env.openExternal(Uri.parse(deepnoteUrl));
 
                         void window.showInformationMessage('Opening in Deepnote...');
                         logger.info('Successfully opened file in Deepnote');
+
+                        return true;
                     } catch (error) {
                         logger.error('Failed to open in Deepnote', error);
                         const errorMessage = getErrorMessage(error);
                         void window.showErrorMessage(`Failed to open in Deepnote: ${errorMessage}`);
+
+                        return false;
                     }
                 }
             );
@@ -116,6 +136,8 @@ export class OpenInDeepnoteHandler implements IExtensionSyncActivationService {
             logger.error('Error in handleOpenInDeepnote', error);
             const errorMessage = getErrorMessage(error);
             void window.showErrorMessage(`Failed to open in Deepnote: ${errorMessage}`);
+
+            return false;
         }
     }
 }

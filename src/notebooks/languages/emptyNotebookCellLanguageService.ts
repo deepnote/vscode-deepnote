@@ -79,12 +79,14 @@ export class EmptyNotebookCellLanguageService implements IExtensionSyncActivatio
 
         const monacoLanguage = translateKernelLanguageToMonaco(language);
         chainWithPendingUpdates(editor.notebook, async () => {
-            await emptyCodeCells.map(async (cell) => {
-                if (monacoLanguage.toLowerCase() === cell.document.languageId) {
-                    return;
-                }
-                return languages.setTextDocumentLanguage(cell.document, monacoLanguage).then(noop, noop);
-            });
+            await Promise.all(
+                emptyCodeCells.map(async (cell) => {
+                    if (monacoLanguage.toLowerCase() === cell.document.languageId) {
+                        return;
+                    }
+                    return languages.setTextDocumentLanguage(cell.document, monacoLanguage).then(noop, noop);
+                })
+            );
         }).then(noop, noop);
     }
 }

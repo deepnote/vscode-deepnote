@@ -1,0 +1,26 @@
+environment: {}
+execution: {}
+metadata:
+  createdAt: 2026-06-01T09:00:00.000Z
+  modifiedAt: 2026-06-15T14:30:00.000Z
+project:
+  id: bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb
+  initNotebookId: b-nb-init
+  name: ETL Pipeline
+  notebooks:
+    - blocks:
+        - id: blk-0007
+          blockGroup: grp-0007
+          sortingKey: "000000"
+          type: code
+          content: >-
+            # Runs automatically (hidden) in every kernel for this project
+
+            INIT_MARKER = "init-ran"
+
+            print("init notebook executed")
+          metadata: {}
+      executionMode: block
+      id: b-nb-init
+      name: Init
+version: 1.0.0

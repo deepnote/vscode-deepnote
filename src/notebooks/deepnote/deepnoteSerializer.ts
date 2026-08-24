@@ -1,11 +1,13 @@
 import type { DeepnoteBlock, DeepnoteFile, DeepnoteSnapshot } from '@deepnote/blocks';
 import { deserializeDeepnoteFile, isExecutableBlock, serializeDeepnoteSnapshot } from '@deepnote/blocks';
+import { computeSnapshotHash } from '@deepnote/convert';
 import { inject, injectable, optional } from 'inversify';
-import { l10n, window, workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
+import { workspace, type CancellationToken, type NotebookData, type NotebookSerializer } from 'vscode';
 
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
+import { getBlockId, isEphemeralCell } from './dataConversionUtils';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
 import { SnapshotService } from './snapshots/snapshotService';
 import { computeHash } from '../../platform/common/crypto';
@@ -62,7 +64,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     /**
      * Deserializes a Deepnote YAML file into VS Code notebook format.
      * Parses YAML and converts the selected notebook's blocks to cells.
-     * The notebook to deserialize must be pre-selected and stored in the manager.
      * @param content Raw file content as bytes
      * @param token Cancellation token (unused)
      * @returns Promise resolving to notebook data
@@ -90,21 +91,19 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             const projectId = deepnoteFile.project.id;
-            const notebookId = this.findCurrentNotebookId(projectId);
-
-            logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${notebookId}`);
 
             if (deepnoteFile.project.notebooks.length === 0) {
                 throw new Error('Deepnote project contains no notebooks.');
             }
 
-            const selectedNotebook = notebookId
-                ? deepnoteFile.project.notebooks.find((nb) => nb.id === notebookId)
-                : this.findDefaultNotebook(deepnoteFile);
+            // A .deepnote file holds a single notebook; render it.
+            const selectedNotebook = this.findDefaultNotebook(deepnoteFile);
 
             if (!selectedNotebook) {
-                throw new Error(l10n.t('No notebook selected or found'));
+                throw new Error('No notebook found in Deepnote file');
             }
+
+            logger.debug(`DeepnoteSerializer: Project ID: ${projectId}, Selected notebook ID: ${selectedNotebook.id}`);
 
             // Log block IDs from source file
             for (let i = 0; i < (selectedNotebook.blocks ?? []).length; i++) {
@@ -125,7 +124,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             if (this.snapshotService?.isSnapshotsEnabled()) {
                 logger.debug(`[Snapshot] Snapshots enabled, reading snapshot for project ${projectId}`);
                 try {
-                    const snapshotOutputs = await this.snapshotService.readSnapshot(projectId);
+                    const snapshotOutputs = await this.snapshotService.readSnapshot(projectId, selectedNotebook.id);
 
                     if (snapshotOutputs && snapshotOutputs.size > 0) {
                         logger.debug(`[Snapshot] Merging ${snapshotOutputs.size} block outputs from snapshot`);
@@ -157,7 +156,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 );
             }
 
-            this.notebookManager.storeOriginalProject(deepnoteFile.project.id, deepnoteFile, selectedNotebook.id);
+            this.notebookManager.storeOriginalProject(deepnoteFile.project.id, selectedNotebook.id, deepnoteFile);
             logger.debug(`DeepnoteSerializer: Stored project ${projectId} in notebook manager`);
 
             return {
@@ -179,39 +178,6 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 `Failed to parse Deepnote file: ${error instanceof Error ? error.message : 'Unknown error'}`
             );
         }
-    }
-
-    /**
-     * Finds the notebook ID to deserialize by checking the manager's stored selection.
-     * The notebook ID should be set via selectNotebookForProject before opening the document.
-     * @param projectId The project ID to find a notebook for
-     * @returns The notebook ID to deserialize, or undefined if none found
-     */
-    findCurrentNotebookId(projectId: string): string | undefined {
-        // Prefer the active notebook editor when it matches the project
-        const activeEditorNotebook = window.activeNotebookEditor?.notebook;
-
-        if (
-            activeEditorNotebook?.notebookType === 'deepnote' &&
-            activeEditorNotebook.metadata?.deepnoteProjectId === projectId &&
-            activeEditorNotebook.metadata?.deepnoteNotebookId
-        ) {
-            return activeEditorNotebook.metadata.deepnoteNotebookId;
-        }
-
-        // Check the manager's stored selection - this should be set when opening from explorer
-        const storedNotebookId = this.notebookManager.getTheSelectedNotebookForAProject(projectId);
-
-        if (storedNotebookId) {
-            return storedNotebookId;
-        }
-
-        // Fallback: Check if there's an active notebook document for this project
-        const openNotebook = workspace.notebookDocuments.find(
-            (doc) => doc.notebookType === 'deepnote' && doc.metadata?.deepnoteProjectId === projectId
-        );
-
-        return openNotebook?.metadata?.deepnoteNotebookId;
     }
 
     /**
@@ -238,34 +204,26 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             logger.debug('SerializeNotebook: Starting serialization');
 
             const projectId = data.metadata?.deepnoteProjectId;
+            const notebookId = data.metadata?.deepnoteNotebookId;
 
-            if (!projectId) {
-                throw new Error('Missing Deepnote project ID in notebook metadata');
+            if (!projectId || !notebookId) {
+                throw new Error('Cannot determine which notebook to save');
             }
 
-            logger.debug(`SerializeNotebook: Project ID: ${projectId}`);
+            logger.debug(`SerializeNotebook: Project ID: ${projectId}, Notebook ID: ${notebookId}`);
 
-            // Clone the project before modifying to prevent state corruption
-            // This is critical for multi-notebook projects where the stored project
-            // is shared between notebook serialization calls
-            const storedProject = this.notebookManager.getOriginalProject(projectId) as DeepnoteFile | undefined;
+            // Fetch the cached project with an exact (projectId, notebookId) lookup. Sibling files
+            // share a project.id, so a project-only lookup could return a different sibling's project.
+            const storedProject = this.notebookManager.getProjectForNotebook(projectId, notebookId);
 
             if (!storedProject) {
                 throw new Error('Original Deepnote project not found. Cannot save changes.');
             }
 
+            // Clone the project before modifying to prevent state corruption.
             const originalProject = structuredClone(storedProject);
 
             logger.debug('SerializeNotebook: Got and cloned original project');
-
-            const notebookId =
-                data.metadata?.deepnoteNotebookId || this.notebookManager.getTheSelectedNotebookForAProject(projectId);
-
-            if (!notebookId) {
-                throw new Error('Cannot determine which notebook to save');
-            }
-
-            logger.debug(`SerializeNotebook: Notebook ID: ${notebookId}`);
 
             const notebook = originalProject.project.notebooks.find((nb: { id: string }) => nb.id === notebookId);
 
@@ -273,11 +231,16 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
                 throw new Error(`Notebook with ID ${notebookId} not found in project`);
             }
 
-            logger.debug(`SerializeNotebook: Found notebook, converting ${data.cells.length} cells to blocks`);
+            const nonEphemeralCells = data.cells.filter((cell) => !isEphemeralCell(cell));
+
+            logger.debug(
+                `SerializeNotebook: Found notebook, converting ${nonEphemeralCells.length} cells to blocks ` +
+                    `(${data.cells.length - nonEphemeralCells.length} ephemeral excluded)`
+            );
 
             // Log cell metadata IDs before conversion
-            for (let i = 0; i < data.cells.length; i++) {
-                const cell = data.cells[i];
+            for (let i = 0; i < nonEphemeralCells.length; i++) {
+                const cell = nonEphemeralCells[i];
                 logger.trace(
                     `SerializeNotebook: cell[${i}] metadata.id=${cell.metadata?.id}, metadata keys=${
                         cell.metadata ? Object.keys(cell.metadata).join(',') : 'none'
@@ -287,13 +250,17 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             // Clone blocks while removing circular references that may have been
             // introduced by VS Code's notebook cell/output handling
-            const blocks = this.converter.convertCellsToBlocks(data.cells);
+            const blocks = this.converter.convertCellsToBlocks(nonEphemeralCells);
 
             logger.debug(`SerializeNotebook: Converted to ${blocks.length} blocks`);
 
+            // An id the cell still carries is its real identity, so only cells that arrived without one may be
+            // re-identified. convertCellsToBlocks maps 1:1 in order, so index i lines up with nonEphemeralCells[i].
+            const recoverableBlocks = new Set(blocks.filter((_, index) => !getBlockId(nonEphemeralCells[index])));
+
             // Try to recover block IDs from original blocks when VS Code fails to preserve metadata
             // This uses content-based matching as a fallback when metadata.id is missing
-            this.recoverBlockIdsFromOriginal(blocks, notebook.blocks ?? []);
+            this.recoverBlockIdsFromOriginal(blocks, notebook.blocks ?? [], recoverableBlocks);
 
             // Log block IDs after conversion and recovery
             for (let i = 0; i < blocks.length; i++) {
@@ -301,7 +268,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             // Add snapshot metadata to blocks (contentHash and execution timing)
-            await this.addSnapshotMetadataToBlocks(blocks, data);
+            await this.addSnapshotMetadataToBlocks(blocks, { ...data, cells: nonEphemeralCells });
 
             // Handle snapshot mode: strip outputs and execution metadata from main file
             if (this.snapshotService?.isSnapshotsEnabled()) {
@@ -325,15 +292,13 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
 
             logger.debug('SerializeNotebook: Cloned blocks, computing snapshotHash');
 
-            // Compute snapshot hash from all execution-affecting factors
-            (originalProject.metadata as { snapshotHash?: string }).snapshotHash = await this.computeSnapshotHash(
-                originalProject
-            );
+            // snapshotHash is transient: stripped on serialize and recomputed here each save.
+            (originalProject.metadata as { snapshotHash?: string }).snapshotHash = computeSnapshotHash(originalProject);
 
             // Update modifiedAt conditionally based on snapshot mode
             if (this.snapshotService?.isSnapshotsEnabled()) {
                 // In snapshot mode, only update modifiedAt if content actually changed
-                const hasContentChanges = this.detectContentChanges(originalProject, storedProject);
+                const hasContentChanges = this.detectContentChanges(originalProject, storedProject, notebookId);
 
                 if (hasContentChanges) {
                     originalProject.metadata.modifiedAt = new Date().toISOString();
@@ -347,7 +312,7 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
             }
 
             // Store the updated project back so subsequent saves start from correct state
-            this.notebookManager.storeOriginalProject(projectId, originalProject, notebookId);
+            this.notebookManager.storeOriginalProject(projectId, notebookId, originalProject);
 
             logger.debug('SerializeNotebook: Serializing to YAML');
 
@@ -458,92 +423,49 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Computes a deterministic hash of all factors that affect notebook execution and outputs.
-     * Includes contentHashes from all blocks, environment hash, version, and integrations.
-     * Excludes temporal fields to ensure identical snapshots produce identical hashes.
-     */
-    private async computeSnapshotHash(project: DeepnoteFile): Promise<string> {
-        // Collect all block contentHashes (sorted for determinism)
-        const contentHashes: string[] = [];
-
-        for (const notebook of project.project.notebooks) {
-            for (const block of notebook.blocks ?? []) {
-                if (block.contentHash) {
-                    contentHashes.push(block.contentHash);
-                }
-            }
-        }
-
-        contentHashes.sort();
-
-        // Build deterministic hash input
-        const hashInput = {
-            contentHashes,
-            environmentHash: project.environment?.hash ?? null,
-            integrations: (project.project.integrations ?? [])
-                .map((i) => ({ id: i.id, name: i.name, type: i.type }))
-                .sort((a, b) => a.id.localeCompare(b.id)),
-            version: project.version
-        };
-
-        const hashData = JSON.stringify(hashInput);
-        const hash = await computeHash(hashData, 'SHA-256');
-
-        return `sha256:${hash}`;
-    }
-
-    /**
-     * Detects whether actual content has changed between two project versions.
-     * Compares notebook content (block sources, types, and IDs) while ignoring
-     * outputs, execution metadata, and timestamps.
+     * Detects whether actual content has changed for the edited notebook: notebook-level fields
+     * and block content (sources, types, IDs), ignoring outputs, execution metadata, and timestamps.
      * @param newProject The project with potential changes
      * @param originalProject The stored original project
      * @returns true if content has changed, false otherwise
      */
-    private detectContentChanges(newProject: DeepnoteFile, originalProject: DeepnoteFile): boolean {
-        for (const originalNotebook of originalProject.project.notebooks) {
-            const newNotebook = newProject.project.notebooks.find((nb) => nb.id === originalNotebook.id);
+    private detectContentChanges(newProject: DeepnoteFile, originalProject: DeepnoteFile, notebookId: string): boolean {
+        // Match the edited notebook by id, not a fixed [0] slot: in a legacy [init, main] file the
+        // edited notebook isn't at index 0, so comparing [0] would miss edits and preserve modifiedAt.
+        const newNotebook = newProject.project.notebooks.find((nb) => nb.id === notebookId);
+        const originalNotebook = originalProject.project.notebooks.find((nb) => nb.id === notebookId);
 
-            if (!newNotebook) {
-                return true; // Notebook removed
-            }
+        if (!newNotebook || !originalNotebook) {
+            return newNotebook !== originalNotebook;
         }
 
-        for (const newNotebook of newProject.project.notebooks) {
-            const originalNotebook = originalProject.project.notebooks.find((nb) => nb.id === newNotebook.id);
+        if (
+            newNotebook.id !== originalNotebook.id ||
+            newNotebook.name !== originalNotebook.name ||
+            newNotebook.executionMode !== originalNotebook.executionMode ||
+            newNotebook.isModule !== originalNotebook.isModule ||
+            newNotebook.workingDirectory !== originalNotebook.workingDirectory
+        ) {
+            return true;
+        }
 
-            if (!originalNotebook) {
-                return true; // New notebook added
-            }
+        const newBlocks = newNotebook.blocks ?? [];
+        const originalBlocks = originalNotebook.blocks ?? [];
+
+        if (newBlocks.length !== originalBlocks.length) {
+            return true;
+        }
+
+        for (let i = 0; i < newBlocks.length; i++) {
+            const newBlock = newBlocks[i];
+            const originalBlock = originalBlocks[i];
 
             if (
-                newNotebook.name !== originalNotebook.name ||
-                newNotebook.executionMode !== originalNotebook.executionMode ||
-                newNotebook.isModule !== originalNotebook.isModule ||
-                newNotebook.workingDirectory !== originalNotebook.workingDirectory
+                newBlock.content !== originalBlock.content ||
+                newBlock.type !== originalBlock.type ||
+                newBlock.id !== originalBlock.id
             ) {
                 return true;
-            }
-
-            const newBlocks = newNotebook.blocks ?? [];
-            const originalBlocks = originalNotebook.blocks ?? [];
-
-            if (newBlocks.length !== originalBlocks.length) {
-                return true;
-            }
-
-            for (let i = 0; i < newBlocks.length; i++) {
-                const newBlock = newBlocks[i];
-                const originalBlock = originalBlocks[i];
-
-                // Compare content and type (the things that matter for actual changes)
-                if (
-                    newBlock.content !== originalBlock.content ||
-                    newBlock.type !== originalBlock.type ||
-                    newBlock.id !== originalBlock.id
-                ) {
-                    return true;
-                }
             }
         }
 
@@ -551,25 +473,13 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
     }
 
     /**
-     * Finds the default notebook to open when no selection is made.
-     * @param file
-     * @returns
+     * Finds the notebook to render: the first non-init notebook, falling back to the first
+     * notebook when the only one in the file is the init notebook.
      */
     private findDefaultNotebook(file: DeepnoteFile): DeepnoteNotebook | undefined {
-        if (file.project.notebooks.length === 0) {
-            return undefined;
-        }
+        const { notebooks, initNotebookId } = file.project;
 
-        const sortedNotebooks = file.project.notebooks.slice().sort((a, b) => a.name.localeCompare(b.name));
-        const sortedNotebooksWithoutInit = file.project.initNotebookId
-            ? sortedNotebooks.filter((nb) => nb.id !== file.project.initNotebookId)
-            : sortedNotebooks;
-
-        if (sortedNotebooksWithoutInit.length > 0) {
-            return sortedNotebooksWithoutInit[0];
-        }
-
-        return sortedNotebooks[0];
+        return notebooks.find((nb) => nb.id !== initNotebookId) ?? notebooks[0];
     }
 
     /**
@@ -598,8 +508,13 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
      * Uses content-based matching as a fallback strategy to recover id, sortingKey, and blockGroup.
      * @param blocks Blocks converted from cells (may have generated values if metadata was lost)
      * @param originalBlocks Original blocks from the stored project
+     * @param recoverableBlocks Blocks whose cell carried no id; only these may take an original's identity
      */
-    private recoverBlockIdsFromOriginal(blocks: DeepnoteBlock[], originalBlocks: DeepnoteBlock[]): void {
+    private recoverBlockIdsFromOriginal(
+        blocks: DeepnoteBlock[],
+        originalBlocks: DeepnoteBlock[],
+        recoverableBlocks: Set<DeepnoteBlock>
+    ): void {
         // Build a map of original blocks by content for quick lookup
         // Key: content (trimmed), Value: array of blocks with that content (in case of duplicates)
         const contentToOriginalBlocks = new Map<string, DeepnoteBlock[]>();
@@ -627,6 +542,12 @@ export class DeepnoteNotebookSerializer implements NotebookSerializer {
         let recoveredCount = 0;
 
         for (const block of blocks) {
+            // A cell that carried an id already owns its identity - an agent block mints one when it is inserted -
+            // so it must never adopt the id of a block deleted in the same save.
+            if (!recoverableBlocks.has(block)) {
+                continue;
+            }
+
             // Skip if this block already has an original ID
             if (claimedIds.has(block.id)) {
                 continue;

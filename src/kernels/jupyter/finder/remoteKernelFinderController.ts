@@ -71,7 +71,7 @@ export class RemoteKernelFinderController implements IRemoteKernelFinderControll
     }
     private buildListOfFinders() {
         // Add in the URIs that we already know about
-        this.serverUriStorage.all.map((server) => this.validateAndCreateFinder(server).catch(noop));
+        void this.serverUriStorage.all.map((server) => this.validateAndCreateFinder(server).catch(noop));
     }
     private handleProviderHandleChanges() {
         this.jupyterServerProviderRegistry.jupyterCollections.forEach((collection) => {

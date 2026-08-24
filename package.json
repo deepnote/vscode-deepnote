@@ -1,7 +1,7 @@
 {
     "name": "vscode-deepnote",
     "displayName": "Deepnote",
-    "version": "1.4.0",
+    "version": "1.6.0",
     "description": "Deepnote notebook support.",
     "publisher": "Deepnote",
     "author": {
@@ -145,6 +145,11 @@
                 "icon": "$(plug)"
             },
             {
+                "command": "deepnote.authenticateIntegration",
+                "title": "%deepnote.commands.authenticateIntegration.title%",
+                "category": "Deepnote"
+            },
+            {
                 "command": "deepnote.openInDeepnote",
                 "title": "Open in Deepnote",
                 "category": "Deepnote",
@@ -167,6 +172,12 @@
                 "title": "%deepnote.commands.importJupyterNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(notebook)"
+            },
+            {
+                "command": "deepnote.addAgentBlock",
+                "title": "%deepnote.commands.addAgentBlock.title%",
+                "category": "Deepnote",
+                "icon": "$(hubot)"
             },
             {
                 "command": "deepnote.addSqlBlock",
@@ -289,12 +300,6 @@
                 "icon": "$(edit)"
             },
             {
-                "command": "deepnote.deleteProject",
-                "title": "%deepnote.commands.deleteProject.title%",
-                "category": "Deepnote",
-                "icon": "$(trash)"
-            },
-            {
                 "command": "deepnote.renameNotebook",
                 "title": "%deepnote.commands.renameNotebook.title%",
                 "category": "Deepnote",
@@ -319,16 +324,16 @@
                 "icon": "$(add)"
             },
             {
-                "command": "deepnote.exportProject",
-                "title": "%deepnote.commands.exportProject.title%",
-                "category": "Deepnote",
-                "icon": "$(export)"
-            },
-            {
                 "command": "deepnote.exportNotebook",
                 "title": "%deepnote.commands.exportNotebook.title%",
                 "category": "Deepnote",
                 "icon": "$(export)"
+            },
+            {
+                "command": "deepnote.copyNotebookDetails",
+                "title": "%deepnote.commands.copyNotebookDetails.title%",
+                "category": "Deepnote",
+                "icon": "$(copy)"
             },
             {
                 "command": "dataScience.ClearCache",
@@ -340,6 +345,16 @@
                 "command": "deepnote.manageAccessToKernels",
                 "title": "%deepnote.command.manageAccessToKernels%",
                 "category": "Jupyter"
+            },
+            {
+                "command": "deepnote.setOpenAiApiKey",
+                "title": "%deepnote.command.setOpenAiApiKey%",
+                "category": "Deepnote"
+            },
+            {
+                "command": "deepnote.clearOpenAiApiKey",
+                "title": "%deepnote.command.clearOpenAiApiKey%",
+                "category": "Deepnote"
             },
             {
                 "command": "dataScience.ClearUserProviderJupyterServerCache",
@@ -1023,28 +1038,33 @@
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addSqlBlock",
+                    "command": "deepnote.addAgentBlock",
                     "group": "navigation@3",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addChartBlock",
+                    "command": "deepnote.addSqlBlock",
                     "group": "navigation@4",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addBigNumberChartBlock",
+                    "command": "deepnote.addChartBlock",
                     "group": "navigation@5",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addInputBlock",
+                    "command": "deepnote.addBigNumberChartBlock",
                     "group": "navigation@6",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
-                    "command": "deepnote.addTextBlock",
+                    "command": "deepnote.addInputBlock",
                     "group": "navigation@7",
+                    "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.addTextBlock",
+                    "group": "navigation@8",
                     "when": "notebookType == 'deepnote'"
                 },
                 {
@@ -1198,6 +1218,10 @@
                     "command": "deepnote.replayPylanceLog",
                     "title": "%deepnote.commandPalette.deepnote.replayPylanceLog.title%",
                     "when": "deepnote.development && isWorkspaceTrusted"
+                },
+                {
+                    "command": "deepnote.authenticateIntegration",
+                    "when": "false"
                 },
                 {
                     "command": "deepnote.manageAccessToKernels",
@@ -1594,42 +1618,32 @@
                 },
                 {
                     "command": "deepnote.addNotebookToProject",
-                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "when": "view == deepnoteExplorer && viewItem == projectGroup",
                     "group": "1_add@1"
                 },
                 {
                     "command": "deepnote.renameProject",
-                    "when": "view == deepnoteExplorer && viewItem == projectFile",
+                    "when": "view == deepnoteExplorer && viewItem == projectGroup",
                     "group": "2_manage@1"
                 },
                 {
-                    "command": "deepnote.exportProject",
-                    "when": "view == deepnoteExplorer && viewItem == projectFile",
-                    "group": "2_manage@2"
-                },
-                {
-                    "command": "deepnote.deleteProject",
-                    "when": "view == deepnoteExplorer && viewItem == projectFile",
-                    "group": "3_delete@1"
-                },
-                {
                     "command": "deepnote.renameNotebook",
-                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "when": "view == deepnoteExplorer && (viewItem == notebookFile || viewItem == notebook)",
                     "group": "1_edit@1"
                 },
                 {
                     "command": "deepnote.duplicateNotebook",
-                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "when": "view == deepnoteExplorer && (viewItem == notebookFile || viewItem == notebook)",
                     "group": "1_edit@2"
                 },
                 {
                     "command": "deepnote.exportNotebook",
-                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "when": "view == deepnoteExplorer && (viewItem == notebookFile || viewItem == notebook)",
                     "group": "2_export@1"
                 },
                 {
                     "command": "deepnote.deleteNotebook",
-                    "when": "view == deepnoteExplorer && viewItem == notebook",
+                    "when": "view == deepnoteExplorer && (viewItem == notebookFile || viewItem == notebook)",
                     "group": "3_delete@1"
                 }
             ]
@@ -1642,7 +1656,7 @@
                     "type": "string",
                     "default": "deepnote.com",
                     "description": "Deepnote domain (e.g., 'deepnote.com' or 'ra-18838.deepnote-staging.com')",
-                    "scope": "application"
+                    "scope": "resource"
                 },
                 "deepnote.disableSSLVerification": {
                     "type": "boolean",
@@ -1650,10 +1664,22 @@
                     "description": "Disable SSL certificate verification (for development only)",
                     "scope": "application"
                 },
+                "deepnote.telemetry.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "%deepnote.configuration.deepnote.telemetry.enabled.description%",
+                    "scope": "application"
+                },
                 "deepnote.snapshots.enabled": {
                     "type": "boolean",
                     "default": true,
                     "description": "When enabled, outputs are saved to separate snapshot files in a 'snapshots' folder instead of the main .deepnote file.",
+                    "scope": "resource"
+                },
+                "deepnote.integrations.envFile.enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "When enabled, integration credentials are also loaded from a '.deepnote.env.yaml' file (with 'env:' references resolved against '.env' and environment variables) next to the .deepnote file or at the workspace root.",
                     "scope": "resource"
                 },
                 "deepnote.experiments.enabled": {
@@ -2627,7 +2653,7 @@
         "build:prerelease": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=true npm run build",
         "build:stable": "cross-env IS_PRE_RELEASE_VERSION_OF_JUPYTER_EXTENSION=false npm run build",
         "build": "concurrently npm:compile-release npm:updatePackageJsonForBundle",
-        "check-licenses": "npx license-checker-rseidelsohn --onlyAllow 'MIT;Apache-2.0;Apache v2;ISC;BSD;BSD-2-Clause;BSD-3-Clause;0BSD;Python-2.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;BlueOak-1.0.0;MPL-2.0' --excludePrivatePackages --excludePackages 'bootstrap-less@3.3.8;chai-as-promised@7.1.1;esbuild-plugin-less@1.3.19;eslint-plugin-local-rules@1.0.0;truncate-utf8-bytes@1.0.2;utf8-byte-length@1.0.4;@cspell/dict-en-common-misspellings@2.1.6'",
+        "check-licenses": "npx license-checker-rseidelsohn --onlyAllow 'MIT;Apache-2.0;Apache v2;ISC;BSD;BSD-2-Clause;BSD-3-Clause;0BSD;Python-2.0;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;BlueOak-1.0.0;MPL-2.0;WTFPL;Artistic-2.0' --excludePrivatePackages --excludePackages 'bootstrap-less@3.3.8;chai-as-promised@7.1.1;esbuild-plugin-less@1.3.19;eslint-plugin-local-rules@1.0.0;truncate-utf8-bytes@1.0.2;utf8-byte-length@1.0.4;@cspell/dict-en-common-misspellings@2.2.0' --excludePackagesStartingWith '@vscode/vsce-sign'",
         "checkDependencies": "gulp checkDependencies",
         "clean": "gulp clean",
         "compile-esbuild-watch": "npx tsx build/esbuild/build.ts --watch",
@@ -2641,8 +2667,8 @@
         "format-fix": "prettier --write *.js *.json 'src/**/*.ts*' 'build/**/*.js' '.github/**/*.yml' 'build/**/*.yml' 'build/**/*.ts' 'build/**/*.json' gulpfile.js",
         "format": "prettier --check *.js *.json 'src/**/*.ts*' 'build/**/*.js' '.github/**/*.yml' 'build/**/*.yml' 'build/**/*.ts' 'build/**/*.json' gulpfile.js",
         "generateTelemetry": "gulp generateTelemetry",
-        "lint-fix": "eslint --fix --ext .ts,.js src build pythonExtensionApi gulpfile.js",
-        "lint": "eslint --ext .ts,.js src",
+        "lint-fix": "oxlint --fix src",
+        "lint": "oxlint src",
         "openInBrowser": "vscode-test-web --extensionDevelopmentPath=. ./src/test/datascience",
         "package": "gulp clean && npm run build && vsce package --no-dependencies -o vscode-deepnote-insiders.vsix",
         "postdownload-api": "npx vscode-dts main",
@@ -2663,6 +2689,14 @@
         "test:performance:execution": "cross-env VSC_JUPYTER_CI_TEST_GREP=@executionPerformance CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test VSC_JUPYTER_FORCE_LOGGING= node ./out/test/standardTest.node.js",
         "test:performance:notebook": "cross-env VSC_JUPYTER_CI_TEST_GREP=@notebookPerformance VSC_JUPYTER_CI_TEST_DO_NOT_INSTALL_PYTHON_EXT=true CODE_TESTS_WORKSPACE=src/test/datascience TEST_FILES_SUFFIX=*.vscode.test,*.vscode.common.test node ./out/test/standardTest.node.js",
         "test:smoke": "cross-env VSC_JUPYTER_FORCE_LOGGING=true node --no-force-async-hooks-checks ./out/test/smokeTest.node.js",
+        "compile-e2e": "tsc -p ./test/e2e/tsconfig.json",
+        "compile-e2e-watch": "tsc -p ./test/e2e/tsconfig.json --watch",
+        "setup:e2e:vscode": "extest get-vscode -c max && extest get-chromedriver -c max",
+        "setup:e2e:deps": "extest install-from-marketplace ms-python.python -e .test-extensions",
+        "setup:e2e:mock": "npx -y -p @copilotkit/aimock@1.37.4 llmock --help",
+        "setup:e2e": "npm run setup:e2e:vscode && npm run setup:e2e:deps && npm run setup:e2e:mock",
+        "test:e2e": "extest setup-and-run \"./out/e2e/suite/*.e2e.test.js\" -c max -o ./test/e2e/settings.json -e .test-extensions -m ./test/e2e/.mocharc.js -i",
+        "test:e2e:prebuilt": "extest run-tests \"./out/e2e/suite/*.e2e.test.js\" -c max -o ./test/e2e/settings.json -e .test-extensions -m ./test/e2e/.mocharc.js",
         "test:unittests": "mocha --config ./build/.mocha.unittests.js.json ./out/**/*.unit.test.js",
         "test": "npm run test:unittests",
         "typecheck": "tsc -p ./ --noEmit",
@@ -2673,10 +2707,10 @@
     },
     "dependencies": {
         "@c4312/evt": "^0.1.1",
-        "@deepnote/blocks": "^4.3.0",
-        "@deepnote/convert": "^3.2.0",
-        "@deepnote/database-integrations": "^1.4.3",
-        "@deepnote/runtime-core": "^0.2.0",
+        "@deepnote/blocks": "^4.6.0",
+        "@deepnote/convert": "^4.0.0",
+        "@deepnote/database-integrations": "^1.5.0",
+        "@deepnote/runtime-core": "^0.5.0",
         "@deepnote/sql-language-server": "^3.0.0",
         "@enonic/fnv-plus": "^1.3.0",
         "@jupyter-widgets/base": "^6.0.8",
@@ -2686,14 +2720,14 @@
         "@jupyterlab/nbformat": "^4.2.4",
         "@jupyterlab/services": "^7.2.4",
         "@loadable/component": "^5.16.4",
-        "@lumino/widgets": "^2.4.0",
+        "@lumino/widgets": "^2.9.0",
         "@nteract/messaging": "^7.0.0",
         "@nteract/transform-geojson": "^3.2.3",
         "@nteract/transform-model-debug": "^3.2.3",
         "@nteract/transform-plotly": "^7.0.0",
         "@nteract/transform-vega": "^7.0.6",
         "@nteract/transforms": "^3.2.0",
-        "@vscode/extension-telemetry": "^0.7.7",
+        "@vscode/extension-telemetry": "^1.5.2",
         "@vscode/jupyter-ipywidgets7": "^2.0.4",
         "@vscode/jupyter-ipywidgets8": "^1.0.9",
         "@vscode/python-extension": "^1.0.4",
@@ -2703,7 +2737,9 @@
         "clsx": "^2.1.1",
         "cross-fetch": "^3.1.5",
         "d3-format": "^3.1.0",
+        "dotenv": "^17.2.3",
         "encoding": "^0.1.13",
+        "express": "^5.2.1",
         "fast-deep-equal": "^2.0.1",
         "format-util": "^1.0.5",
         "fs-extra": "^4.0.3",
@@ -2713,9 +2749,9 @@
         "inversify": "^6.0.1",
         "isomorphic-ws": "^4.0.1",
         "jquery": "^3.6.0",
-        "js-yaml": "^4.1.1",
+        "js-yaml": "^4.3.0",
         "jsonc-parser": "3.3.1",
-        "lodash": "^4.17.23",
+        "lodash": "^4.18.1",
         "marked": "^4.0.10",
         "node-fetch": "^2.6.7",
         "node-gyp-build": "^4.6.0",
@@ -2725,7 +2761,8 @@
         "pidtree": "^0.6.0",
         "plotly.js-dist": "^3.0.1",
         "portfinder": "^1.0.25",
-        "re-resizable": "^6.5.5",
+        "posthog-node": "^4.18.0",
+        "re-resizable": "^6.11.2",
         "react": "^16.5.2",
         "react-data-grid": "^6.0.2-0",
         "react-dom": "^16.5.2",
@@ -2738,7 +2775,7 @@
         "react-virtualized": "^9.21.1",
         "redux": "^4.0.4",
         "redux-logger": "^3.0.6",
-        "reflect-metadata": "^0.1.12",
+        "reflect-metadata": "^0.2.0",
         "safe-buffer": "^5.2.1",
         "sanitize-filename": "^1.6.3",
         "semver": "^5.7.2",
@@ -2749,16 +2786,17 @@
         "svg-to-pdfkit": "^0.1.8",
         "tailwind-merge": "^3.3.1",
         "tcp-port-used": "^1.0.1",
-        "tmp": "^0.2.4",
+        "tmp": "^0.2.7",
+        "ts-dedent": "^2.2.0",
         "url-parse": "^1.5.10",
-        "uuid": "^13.0.0",
+        "uuid": "^13.0.2",
         "vega": "^6.2.0",
         "vega-embed": "^7.1.0",
         "vega-lite": "^6.4.1",
         "vscode-debugprotocol": "^1.41.0",
         "vscode-languageclient": "^9.0.1",
         "vscode-tas-client": "^0.1.84",
-        "ws": "^6.2.3",
+        "ws": "^6.2.4",
         "zeromq": "^6.5.0",
         "zeromqold": "npm:zeromq@^6.0.0-beta.6",
         "zod": "^4.1.12"
@@ -2766,7 +2804,7 @@
     "devDependencies": {
         "@actions/core": "^2.0.3",
         "@actions/github": "^8.0.1",
-        "@actions/glob": "^0.5.1",
+        "@actions/glob": "^0.7.0",
         "@aminya/node-gyp-build": "^4.8.1-aminya.1",
         "@istanbuljs/nyc-config-typescript": "^1.0.2",
         "@sinonjs/fake-timers": "^6.0.1",
@@ -2781,6 +2819,7 @@
         "@types/dedent": "^0.7.0",
         "@types/del": "^4.0.0",
         "@types/event-stream": "^3.3.33",
+        "@types/express": "^5.0.6",
         "@types/format-util": "^1.0.2",
         "@types/fs-extra": "^5.0.1",
         "@types/get-port": "^3.2.0",
@@ -2794,33 +2833,31 @@
         "@types/nock": "^10.0.3",
         "@types/node": "^22.15.1",
         "@types/node-fetch": "^2.6.12",
-        "@types/pdfkit": "^0.11.0",
+        "@types/pdfkit": "^0.17.0",
         "@types/promisify-node": "^0.4.0",
         "@types/react": "^16.4.14",
         "@types/react-dom": "^16.0.8",
-        "@types/react-json-tree": "^0.6.8",
+        "@types/react-json-tree": "^0.13.0",
         "@types/react-redux": "^7.1.5",
         "@types/react-virtualized": "^9.21.2",
         "@types/redux-logger": "^3.0.7",
         "@types/semver": "^5.5.0",
         "@types/sinon": "^10.0.15",
         "@types/sinonjs__fake-timers": "^6.0.1",
-        "@types/stack-trace": "0.0.29",
+        "@types/stack-trace": "0.0.33",
         "@types/strip-comments": "^2.0.1",
         "@types/svg-to-pdfkit": "^0.1.0",
         "@types/tcp-port-used": "^1.0.0",
-        "@types/temp": "^0.8.32",
+        "@types/temp": "^0.9.0",
         "@types/tmp": "^0.2.3",
         "@types/url-parse": "^1.4.8",
         "@types/vscode-notebook-renderer": "^1.60.0",
         "@types/ws": "^6.0.1",
-        "@typescript-eslint/eslint-plugin": "^6.9.0",
-        "@typescript-eslint/eslint-plugin-tslint": "^6.9.0",
-        "@typescript-eslint/parser": "^6.9.0",
         "@vscode/dts": "^0.4.0",
-        "@vscode/test-cli": "^0.0.8",
+        "@vscode/test-cli": "^0.0.15",
         "@vscode/test-electron": "^2.3.9",
-        "@vscode/test-web": "^0.0.71",
+        "@vscode/test-web": "^0.0.81",
+        "@vscode/vsce": "3.9.2",
         "@vscode/zeromq": "^0.2.3",
         "acorn": "^8.9.0",
         "autoprefixer": "^10.4.21",
@@ -2835,29 +2872,18 @@
         "colors": "^1.4.0",
         "concurrently": "^8.2.2",
         "cross-env": "^7.0.3",
-        "cspell": "9.2.1",
+        "cspell": "9.8.0",
         "dedent": "^0.7.0",
         "del": "^3.0.0",
         "es-abstract": "^1.19.1",
         "es5-ext": "^0.10.63",
-        "esbuild": "^0.25.1",
+        "esbuild": "^0.28.1",
         "esbuild-plugin-import-glob": "^0.1.1",
-        "esbuild-plugin-less": "^1.3.19",
+        "esbuild-plugin-less": "^1.3.39",
         "esbuild-postcss": "^0.0.4",
-        "eslint": "^8.52.0",
-        "eslint-config-airbnb": "^19.0.4",
-        "eslint-config-prettier": "^9.0.0",
-        "eslint-plugin-header": "^3.1.1",
-        "eslint-plugin-import": "^2.29.0",
-        "eslint-plugin-jsdoc": "^46.8.2",
-        "eslint-plugin-jsx-a11y": "^6.7.1",
+        "eslint-plugin-import": "^2.32.0",
         "eslint-plugin-local-rules": "file:build/eslint-rules",
-        "eslint-plugin-no-null": "^1.0.2",
         "eslint-plugin-no-only-tests": "^3.1.0",
-        "eslint-plugin-prefer-arrow": "^1.2.3",
-        "eslint-plugin-prettier": "^5.0.1",
-        "eslint-plugin-react": "^7.33.2",
-        "eslint-plugin-react-hooks": "^4.6.0",
         "esmock": "^2.7.3",
         "flat": "^5.0.1",
         "get-port": "^3.2.0",
@@ -2871,10 +2897,10 @@
         "keyv": "^4.1.0",
         "less": "^4.1.3",
         "less-plugin-inline-urls": "^1.2.0",
-        "lint-staged": "16.2.3",
+        "lint-staged": "16.4.0",
         "lolex": "^6.0.0",
         "lru-cache": "^10.0.0",
-        "mocha": "^11.0.1",
+        "mocha": "11.0.1",
         "mocha-junit-reporter": "^2.2.0",
         "mocha-multi-reporters": "^1.5.1",
         "nock": "^13.3.1",
@@ -2882,32 +2908,38 @@
         "node-html-parser": "^6.1.13",
         "node-stdlib-browser": "^1.3.1",
         "nyc": "^15.1.0",
-        "postcss": "^8.5.6",
+        "oxlint": "1.77.0",
+        "oxlint-tsgolint": "7.0.2001",
+        "postcss": "^8.5.18",
         "prettier": "^3.0.0",
         "relative": "^3.0.2",
         "rimraf": "^5.0.1",
         "screenshot-desktop": "^1.15.2",
         "sinon": "^15.2.0",
-        "source-map": "^0.7.4",
+        "source-map": "^0.8.0",
         "source-map-support": "^0.5.21",
         "tailwindcss": "^4.1.14",
         "ts-mock-imports": "^1.3.0",
         "ts-mockito": "^2.6.1",
-        "tsx": "^4.19.4",
+        "tsx": "^4.23.1",
         "typemoq": "^2.1.0",
         "typescript": "^5.8.3",
         "unicode-properties": "^1.3.1",
+        "untildify": "^4.0.0",
         "utf-8-validate": "^5.0.8",
-        "util": "^0.12.4"
+        "util": "^0.12.4",
+        "vscode-extension-tester": "^8.23.0"
     },
     "lint-staged": {
         "src/**/*.{ts,tsx}": [
-            "eslint --cache --fix",
+            "oxlint --fix",
             "prettier --write"
         ]
     },
     "optionalDependencies": {
-        "fsevents": "^2.3.2"
+        "@tailwindcss/oxide-linux-x64-gnu": "4.1.14",
+        "fsevents": "^2.3.2",
+        "lightningcss-linux-x64-gnu": "1.30.1"
     },
     "overrides": {
         "braces": "3.0.3",
@@ -2929,13 +2961,22 @@
             "url-parse": "$url-parse"
         },
         "@jupyterlab/services": {
-            "ws": "7.5.10"
+            "ws": "7.5.11"
+        },
+        "@deepnote/runtime-core": {
+            "ws": "8.21.0"
+        },
+        "@jupyterlab/filebrowser": {
+            "ws": "8.21.0"
+        },
+        "@deepnote/sql-language-server": {
+            "ws": "7.5.11"
         },
         "d3-color": "3.1.0",
-        "flatted": "3.4.2",
+        "flatted": "3.4.4",
         "vega-embed": "^7.1.0",
         "@mermaid-js/layout-elk": "npm:empty-pkg@1.0.0",
-        "tar": "7.5.11",
+        "tar": "7.5.21",
         "mocha": {
             "diff": "5.2.2"
         },
@@ -2951,14 +2992,33 @@
         "tslint": {
             "diff": "4.0.4"
         },
-        "lodash-es": "^4.17.23",
+        "lodash": "^4.18.1",
+        "lodash-es": "^4.18.1",
         "minimatch@>=8.0.0 <8.0.6": "8.0.7",
         "bn.js@<4.12.3": "4.12.3",
         "serialize-javascript@<7.0.5": "7.0.5",
-        "undici@<6.24.0": "6.24.1",
+        "undici@<6.28.0": "6.28.0",
+        "undici@>=7.0.0 <7.29.0": "7.29.0",
         "flatted@<3.4.2": "3.4.2",
-        "brace-expansion@<1.1.13": "1.1.13",
-        "brace-expansion@>=2.0.0 <2.0.3": "2.0.3",
-        "yaml": "2.8.3"
+        "brace-expansion@<1.1.18": "1.1.18",
+        "brace-expansion@>=2.0.0 <2.1.4": "2.1.4",
+        "brace-expansion@>=5.0.0 <5.0.9": "5.0.9",
+        "yaml": "2.8.3",
+        "dompurify": "3.4.13",
+        "fast-uri": "3.1.5",
+        "ip-address": "10.4.0",
+        "mermaid": "11.16.1",
+        "postcss": "^8.5.18",
+        "qs@<6.15.2": "6.15.2",
+        "sanitize-html": "2.17.6",
+        "shell-quote@<1.9.0": "1.9.0",
+        "@babel/core@<7.29.6": "7.29.6",
+        "form-data@>=3.0.0 <3.0.5": "3.0.5",
+        "form-data@>=4.0.0 <4.0.6": "4.0.6",
+        "body-parser": "2.3.0",
+        "immutable": "4.3.9",
+        "js-yaml@3": "3.15.1",
+        "@tootallnate/once": "2.0.1",
+        "uuid@8": "11.1.1"
     }
 }

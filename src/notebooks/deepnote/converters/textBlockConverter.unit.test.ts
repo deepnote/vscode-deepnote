@@ -463,4 +463,155 @@ suite('TextBlockConverter', () => {
             assert.strictEqual(block.content, '');
         });
     });
+
+    suite('round trip through real @deepnote/blocks library', () => {
+        type TextBlockType = Extract<
+            DeepnoteBlock,
+            {
+                type:
+                    | 'text-cell-h1'
+                    | 'text-cell-h2'
+                    | 'text-cell-h3'
+                    | 'text-cell-p'
+                    | 'text-cell-bullet'
+                    | 'text-cell-todo'
+                    | 'text-cell-callout';
+            }
+        >;
+
+        function assertRoundTrip(fixture: Pick<TextBlockType, 'type' | 'content' | 'metadata'>): DeepnoteBlock {
+            // Constant identity fields; the fixture supplies the correlated type/content/metadata.
+            const base = { blockGroup: 'group-123', id: 'block-123', sortingKey: 'a0' };
+
+            const block: DeepnoteBlock = { ...base, ...fixture };
+
+            const cell = converter.convertToCell(block);
+
+            // A separate object for applyChangesToBlock to mutate, so the assertion
+            // compares the stripped result against the original fixture content.
+            const clone: DeepnoteBlock = { ...base, ...fixture };
+
+            converter.applyChangesToBlock(clone, cell);
+
+            assert.strictEqual(clone.content, fixture.content, `content must round-trip for ${fixture.type}`);
+
+            return clone;
+        }
+
+        const specialContents = ['a_b * c', 'price: $5 (USD).', 'has `code` and #hash', 'Revenue grew 20% (great!).'];
+
+        for (const content of specialContents) {
+            test(`text-cell-h1 round-trips special content ${JSON.stringify(content)}`, () => {
+                assertRoundTrip({ type: 'text-cell-h1', content, metadata: {} });
+            });
+
+            test(`text-cell-h2 round-trips special content ${JSON.stringify(content)}`, () => {
+                assertRoundTrip({ type: 'text-cell-h2', content, metadata: {} });
+            });
+
+            test(`text-cell-h3 round-trips special content ${JSON.stringify(content)}`, () => {
+                assertRoundTrip({ type: 'text-cell-h3', content, metadata: {} });
+            });
+
+            test(`text-cell-p round-trips special content ${JSON.stringify(content)}`, () => {
+                assertRoundTrip({ type: 'text-cell-p', content, metadata: {} });
+            });
+
+            test(`text-cell-bullet round-trips special content ${JSON.stringify(content)}`, () => {
+                assertRoundTrip({ type: 'text-cell-bullet', content, metadata: {} });
+            });
+
+            test(`text-cell-todo round-trips special content ${JSON.stringify(content)}`, () => {
+                assertRoundTrip({ type: 'text-cell-todo', content, metadata: {} });
+            });
+
+            test(`text-cell-callout round-trips special content ${JSON.stringify(content)}`, () => {
+                assertRoundTrip({ type: 'text-cell-callout', content, metadata: {} });
+            });
+        }
+
+        test('literal backslash content round-trips exactly (tripwire)', () => {
+            // Content contains a literal backslash followed by an underscore.
+            // createMarkdown escapes both: `a\_b` -> `a\\\_b`. unescapeMarkdown must
+            // consume exactly those pairs back to `a\_b`. If a future @deepnote/blocks
+            // ever unescapes inside stripMarkdown while this wrapper is still present,
+            // the content would be double-unescaped to `a_b` and this fails loudly.
+            const content = String.raw`a\_b`;
+
+            assertRoundTrip({ type: 'text-cell-p', content, metadata: {} });
+            assertRoundTrip({ type: 'text-cell-h1', content, metadata: {} });
+            assertRoundTrip({ type: 'text-cell-bullet', content, metadata: {} });
+        });
+
+        test('double round trip is stable (content is a fixed point)', () => {
+            // Applying create -> strip twice must equal applying it once.
+            const content = 'has `code` and #hash';
+            const block: DeepnoteBlock = {
+                blockGroup: 'group-123',
+                content,
+                id: 'block-123',
+                metadata: {},
+                sortingKey: 'a0',
+                type: 'text-cell-p'
+            };
+
+            const cellOnce = converter.convertToCell(block);
+            const afterOnce: DeepnoteBlock = { ...block, content: 'overwrite' };
+            converter.applyChangesToBlock(afterOnce, cellOnce);
+
+            const cellTwice = converter.convertToCell(afterOnce);
+            const afterTwice: DeepnoteBlock = { ...afterOnce, content: 'overwrite' };
+            converter.applyChangesToBlock(afterTwice, cellTwice);
+
+            assert.strictEqual(afterOnce.content, content, 'first round-trip restores content');
+            assert.strictEqual(afterTwice.content, afterOnce.content, 'second round-trip is a no-op (fixed point)');
+        });
+
+        test('text-cell-todo round-trips with metadata.checked: true', () => {
+            assertRoundTrip({ type: 'text-cell-todo', content: 'a_b * c', metadata: { checked: true } });
+        });
+
+        test('text-cell-todo round-trips with metadata.checked: false', () => {
+            assertRoundTrip({ type: 'text-cell-todo', content: 'a_b * c', metadata: { checked: false } });
+        });
+
+        test('text-cell-bullet round-trips with metadata.indent_level: 1', () => {
+            // indent_level travels through metadata, not content. @deepnote/blocks@4.6.0+
+            // renders two leading spaces per indent level before the bullet marker.
+            const cell = converter.convertToCell({
+                blockGroup: 'group-123',
+                content: 'a_b * c',
+                id: 'block-123',
+                metadata: { indent_level: 1 },
+                sortingKey: 'a0',
+                type: 'text-cell-bullet'
+            });
+
+            assert.strictEqual(cell.value, '  - a\\_b \\* c');
+
+            assertRoundTrip({ type: 'text-cell-bullet', content: 'a_b * c', metadata: { indent_level: 1 } });
+        });
+
+        test('leading/trailing whitespace is trimmed and then stable (pre-existing trim)', () => {
+            const block: DeepnoteBlock = {
+                blockGroup: 'group-123',
+                content: '  a_b  ',
+                id: 'block-123',
+                metadata: {},
+                sortingKey: 'a0',
+                type: 'text-cell-p'
+            };
+
+            const cell = converter.convertToCell(block);
+            const stripped: DeepnoteBlock = { ...block, content: 'overwrite' };
+            converter.applyChangesToBlock(stripped, cell);
+
+            // Pre-existing trim: surrounding whitespace is removed by stripMarkdown's trim.
+            assert.strictEqual(stripped.content, 'a_b', 'leading/trailing whitespace is trimmed');
+
+            // Once trimmed, the content is stable across further round-trips.
+            const trimmedRoundTrip = assertRoundTrip({ type: 'text-cell-p', content: 'a_b', metadata: {} });
+            assert.strictEqual(trimmedRoundTrip.content, 'a_b');
+        });
+    });
 });

@@ -1,13 +1,16 @@
 import * as React from 'react';
+
 import { getLocString } from '../react-common/locReactSide';
-import { ConfigurableDatabaseIntegrationType, IntegrationWithStatus } from './types';
+import { ConfigurableDatabaseIntegrationType, DetectedIntegration } from './types';
 import { integrationTypeIcons } from './integrationUtils';
 
 export interface IIntegrationItemProps {
-    integration: IntegrationWithStatus;
+    integration: DetectedIntegration;
     onConfigure: (integrationId: string) => void;
     onReset: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
+    onAuthenticate: (integrationId: string) => void;
+    onSignOut: (integrationId: string) => void;
 }
 
 const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): string => {
@@ -20,6 +23,8 @@ const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): str
             return getLocString('integrationsBigQueryTypeLabel', 'Google BigQuery');
         case 'clickhouse':
             return getLocString('integrationsClickHouseTypeLabel', 'ClickHouse');
+        case 'cloud-sql':
+            return getLocString('integrationsCloudSqlTypeLabel', 'Google Cloud SQL');
         case 'databricks':
             return getLocString('integrationsDatabricksTypeLabel', 'Databricks');
         case 'dremio':
@@ -51,12 +56,25 @@ const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): str
     }
 };
 
-export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, onConfigure, onReset, onDelete }) => {
-    const statusClass = integration.status === 'connected' ? 'status-connected' : 'status-disconnected';
-    const statusText =
-        integration.status === 'connected'
-            ? getLocString('integrationsConnected', 'Connected')
-            : getLocString('integrationsNotConfigured', 'Not Configured');
+export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
+    integration,
+    onConfigure,
+    onReset,
+    onDelete,
+    onAuthenticate,
+    onSignOut
+}) => {
+    // Credentials the panel can edit live in SecretStorage, which is exactly what `config` holds. A
+    // `.deepnote.env.yaml`-configured integration is read-only here: the panel writes SecretStorage only and the
+    // file wins the merge, so configuring, resetting or deleting it would be a silent no-op at runtime. It still
+    // counts as configured — it works — so it gets the connected styling.
+    const isFileConfigured = Boolean(integration.isFileConfigured);
+    const statusClass = integration.config || isFileConfigured ? 'status-connected' : 'status-disconnected';
+    const statusText = isFileConfigured
+        ? getLocString('integrationsConfiguredInFile', 'Configured in file')
+        : integration.config
+        ? getLocString('integrationsConnected', 'Connected')
+        : getLocString('integrationsNotConfigured', 'Not Configured');
     const configureText = integration.config
         ? getLocString('integrationsReconfigure', 'Reconfigure')
         : getLocString('integrationsConfigure', 'Configure');
@@ -71,6 +89,22 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
     const typeLabel = type ? getIntegrationTypeLabel(type) : undefined;
     const typeIcon = type ? integrationTypeIcons[type] : undefined;
 
+    // Federated-auth UI: `tokenStatus` alone decides. The extension gates on its candidate set, which also
+    // covers integrations declared in `.deepnote.env.yaml` — those have no `config` here, so re-deriving
+    // eligibility from `config` would hide the action for exactly the case that needs it.
+    const tokenStatus = integration.tokenStatus;
+    const showFederatedAuth = tokenStatus && tokenStatus !== 'unsupported';
+
+    const tokenStatusText =
+        tokenStatus === 'authenticated'
+            ? getLocString('integrationsTokenStatusAuthenticated', 'Authenticated')
+            : getLocString('integrationsTokenStatusDisconnected', 'Not authenticated');
+    const tokenStatusPillClass = tokenStatus === 'authenticated' ? 'status-connected' : 'status-disconnected';
+    const authenticateButtonText =
+        tokenStatus === 'authenticated'
+            ? getLocString('integrationsReauthenticate', 'Re-authenticate with Google')
+            : getLocString('integrationsAuthenticate', 'Authenticate with Google');
+
     return (
         <div className="integration-item">
             {typeIcon && (
@@ -84,18 +118,38 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({ integration, 
                     {typeLabel && <span className="integration-type">{typeLabel}</span>}
                     {typeLabel && <span className="integration-meta-separator"> • </span>}
                     <span className={`integration-status ${statusClass}`}>{statusText}</span>
+                    {showFederatedAuth && (
+                        <>
+                            <span className="integration-meta-separator"> • </span>
+                            <span className={`integration-status ${tokenStatusPillClass}`}>{tokenStatusText}</span>
+                        </>
+                    )}
                 </div>
             </div>
             <div className="integration-actions">
-                <button type="button" onClick={() => onConfigure(integration.id)}>
-                    {configureText}
-                </button>
-                {integration.config && (
+                {!isFileConfigured && (
+                    <button type="button" onClick={() => onConfigure(integration.id)}>
+                        {configureText}
+                    </button>
+                )}
+                {showFederatedAuth && (
+                    <button type="button" onClick={() => onAuthenticate(integration.id)}>
+                        {authenticateButtonText}
+                    </button>
+                )}
+                {/* Allowed for file-configured rows too: this clears the stored token, not the file's config. */}
+                {showFederatedAuth && tokenStatus === 'authenticated' && (
+                    <button type="button" className="secondary" onClick={() => onSignOut(integration.id)}>
+                        {getLocString('integrationsSignOut', 'Sign out')}
+                    </button>
+                )}
+                {/* An id can live in both SecretStorage and the file; the file wins at runtime, so hide these there too. */}
+                {integration.config && !isFileConfigured && (
                     <button type="button" className="secondary" onClick={() => onReset(integration.id)}>
                         {getLocString('integrationsReset', 'Reset')}
                     </button>
                 )}
-                {integration.config && (
+                {integration.config && !isFileConfigured && (
                     <button
                         type="button"
                         className="secondary"

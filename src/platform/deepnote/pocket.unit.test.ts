@@ -121,7 +121,8 @@ suite('Pocket', () => {
                     sortingKey: 'a0',
                     executionCount: 5
                 },
-                id: 'block-123',
+                __deepnoteBlockId: 'block-123',
+                id: 'rewritten-by-vscode',
                 custom: 'value'
             };
 

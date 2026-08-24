@@ -282,6 +282,102 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(new TextDecoder().decode(outputs[0].items[0].data), 'Hello world\n');
         });
 
+        test('joins every streamed stdout item into one stream output', () => {
+            const cells: NotebookCellData[] = [
+                {
+                    kind: NotebookCellKind.Code,
+                    value: 'summarize the data',
+                    languageId: 'plaintext',
+                    metadata: {
+                        __deepnotePocket: {
+                            type: 'agent',
+                            sortingKey: 'a0'
+                        },
+                        id: 'agent-block-1'
+                    },
+                    outputs: [
+                        new NotebookCellOutput([
+                            NotebookCellOutputItem.stdout('[Agent] Planning next steps...'),
+                            NotebookCellOutputItem.stdout('\n\n[Agent] Tool called: add_code'),
+                            NotebookCellOutputItem.stdout('\n\n[Agent] Text:\nDone.')
+                        ])
+                    ]
+                }
+            ];
+
+            const blocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual((blocks[0] as ExecutableBlock).outputs, [
+                {
+                    name: 'stdout',
+                    output_type: 'stream',
+                    text: '[Agent] Planning next steps...\n\n[Agent] Tool called: add_code\n\n[Agent] Text:\nDone.'
+                }
+            ]);
+        });
+
+        test('converts a single stderr item to a stderr stream output', () => {
+            const cells: NotebookCellData[] = [
+                {
+                    kind: NotebookCellKind.Code,
+                    value: 'raise ValueError()',
+                    languageId: 'python',
+                    metadata: {
+                        __deepnotePocket: {
+                            type: 'code',
+                            sortingKey: 'a0'
+                        },
+                        id: 'block-1'
+                    },
+                    outputs: [new NotebookCellOutput([NotebookCellOutputItem.stderr('Agent execution failed: boom')])]
+                }
+            ];
+
+            const blocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual((blocks[0] as ExecutableBlock).outputs, [
+                {
+                    name: 'stderr',
+                    output_type: 'stream',
+                    text: 'Agent execution failed: boom'
+                }
+            ]);
+        });
+
+        test('keeps every item of a mixed stdout/stderr output and labels it by the first', () => {
+            const cells: NotebookCellData[] = [
+                {
+                    kind: NotebookCellKind.Code,
+                    value: 'print("a")',
+                    languageId: 'python',
+                    metadata: {
+                        __deepnotePocket: {
+                            type: 'code',
+                            sortingKey: 'a0'
+                        },
+                        id: 'block-1'
+                    },
+                    outputs: [
+                        new NotebookCellOutput([
+                            NotebookCellOutputItem.stdout('out-1\n'),
+                            NotebookCellOutputItem.stderr('err-1\n'),
+                            NotebookCellOutputItem.stdout('out-2\n')
+                        ])
+                    ]
+                }
+            ];
+
+            const blocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual((blocks[0] as ExecutableBlock).outputs, [
+                {
+                    name: 'stdout',
+                    output_type: 'stream',
+                    text: 'out-1\nerr-1\nout-2\n'
+                }
+            ]);
+        });
+
         test('converts error output', () => {
             const deepnoteOutputs: DeepnoteOutput[] = [
                 {
@@ -627,6 +723,73 @@ suite('DeepnoteDataConverter', () => {
             assert.deepStrictEqual(roundTripBlocks, originalBlocks);
         });
 
+        test('text-cell blocks with special characters round-trip without backslash accumulation', () => {
+            // These contents contain characters from the markdown escape class
+            // (_ * ( ) . ! ` #). Without the unescape inverse in TextBlockConverter,
+            // each round-trip would accumulate backslashes; the round-trip must be a no-op.
+            const originalBlocks: DeepnoteBlock[] = [
+                {
+                    blockGroup: 'group-1',
+                    id: 'b1',
+                    type: 'text-cell-h1',
+                    content: 'Revenue grew 20% (great!).',
+                    sortingKey: 'a0',
+                    metadata: {}
+                },
+                {
+                    blockGroup: 'group-2',
+                    id: 'b2',
+                    type: 'text-cell-h2',
+                    content: 'has `code` and #hash',
+                    sortingKey: 'a1',
+                    metadata: {}
+                },
+                {
+                    blockGroup: 'group-3',
+                    id: 'b3',
+                    type: 'text-cell-p',
+                    content: 'a_b * c',
+                    sortingKey: 'a2',
+                    metadata: {}
+                },
+                {
+                    blockGroup: 'group-4',
+                    id: 'b4',
+                    type: 'text-cell-bullet',
+                    content: 'price: $5 (USD).',
+                    sortingKey: 'a3',
+                    metadata: {}
+                },
+                {
+                    blockGroup: 'group-5',
+                    id: 'b5',
+                    type: 'text-cell-todo',
+                    content: 'buy milk (2%) & eggs.',
+                    sortingKey: 'a4',
+                    metadata: { checked: true }
+                },
+                {
+                    blockGroup: 'group-6',
+                    id: 'b6',
+                    type: 'text-cell-callout',
+                    content: 'note: see [docs] for details.',
+                    sortingKey: 'a5',
+                    metadata: {}
+                }
+            ];
+
+            const cells = converter.convertBlocksToCells(originalBlocks);
+            const roundTripBlocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual(roundTripBlocks, originalBlocks);
+
+            // Applying the round-trip a second time must remain a no-op (fixed point).
+            const cellsAgain = converter.convertBlocksToCells(roundTripBlocks);
+            const roundTripBlocksAgain = converter.convertCellsToBlocks(cellsAgain);
+
+            assert.deepStrictEqual(roundTripBlocksAgain, originalBlocks);
+        });
+
         test('SQL metadata output round-trips correctly', () => {
             const sqlMetadata = {
                 status: 'read_from_cache_success',
@@ -736,8 +899,7 @@ suite('DeepnoteDataConverter', () => {
 
         test('real deepnote notebook round-trips without losing data', () => {
             // Inline test data representing a real Deepnote notebook with various block types
-            // blockGroup is an optional field not in the DeepnoteBlock interface, so we cast as any
-            const originalBlocks = [
+            const originalBlocks: DeepnoteBlock[] = [
                 {
                     blockGroup: '1a4224497bcd499ba180e5795990aaa8',
                     content: '# Data Exploration\n\nThis notebook demonstrates basic data exploration.',
@@ -801,7 +963,7 @@ suite('DeepnoteDataConverter', () => {
                     sortingKey: 'yj',
                     type: 'code'
                 }
-            ] as unknown as DeepnoteBlock[];
+            ];
 
             // Convert blocks -> cells -> blocks
             const cells = converter.convertBlocksToCells(originalBlocks);

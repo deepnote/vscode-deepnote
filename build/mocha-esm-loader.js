@@ -13,6 +13,7 @@ const projectRoot = path.join(__dirname, '..');
 const projectOutUrl = pathToFileURL(path.join(projectRoot, 'out')).href + '/';
 const vscodeMockPath = pathToFileURL(path.join(projectRoot, 'out/test/vscode-mock.js')).href;
 const telemetryMockPath = pathToFileURL(path.join(projectRoot, 'out/test/mocks/vsc/telemetryReporter.js')).href;
+const runtimeCoreMockPath = pathToFileURL(path.join(projectRoot, 'out/test/mocks/deepnoteRuntimeCore.js')).href;
 
 // Mock source for @vscode/python-extension - used in multiple places
 const PYTHON_EXTENSION_MOCK = `
@@ -104,11 +105,12 @@ export async function resolve(specifier, context, nextResolve) {
         };
     }
 
-    // Intercept @deepnote/convert - needed because the real package performs file I/O
-    // that we need to control in tests
-    if (specifier === '@deepnote/convert') {
+    // Intercept @deepnote/runtime-core - the real startServer/stopServer spawn/kill Python
+    // processes. Resolves to the compiled typed mock (src/test/mocks/deepnoteRuntimeCore.ts)
+    // so the code under test and tests importing its __ helpers share one module instance.
+    if (specifier === '@deepnote/runtime-core') {
         return {
-            url: 'vscode-mock:///deepnote-convert',
+            url: runtimeCoreMockPath,
             shortCircuit: true
         };
     }
@@ -328,6 +330,7 @@ export async function load(url, context, nextLoad) {
                 export const NotebookRendererMessaging = createClassProxy('NotebookRendererMessaging');
                 export const NotebookRendererScript = createClassProxy('NotebookRendererScript');
                 export const NotebookVariableProvider = createClassProxy('NotebookVariableProvider');
+                export const TabInputNotebook = createClassProxy('TabInputNotebook');
                 export const ColorThemeKind = createClassProxy('ColorThemeKind');
                 export const UIKind = createClassProxy('UIKind');
                 export const ThemeIcon = createClassProxy('ThemeIcon');
@@ -346,46 +349,7 @@ export async function load(url, context, nextLoad) {
                 format: 'module',
                 source: `
                     import { vscMockTelemetryReporter } from '${telemetryMockPath}';
-                    export default vscMockTelemetryReporter;
-                `,
-                shortCircuit: true
-            };
-        }
-
-        // Handle deepnote convert mock - needed because the real package performs file I/O
-        if (moduleName === 'deepnote-convert') {
-            return {
-                format: 'module',
-                source: `
-                    export const convertIpynbFilesToDeepnoteFile = async () => {
-                        // Mock implementation - does nothing in tests
-                    };
-
-                    export const convertDeepnoteToJupyterNotebooks = (deepnoteFile) => {
-                        // Mock implementation that converts Deepnote notebooks to Jupyter format
-                        const notebooks = deepnoteFile?.project?.notebooks || [];
-                        return notebooks.map(nb => ({
-                            filename: nb.name.replace(/[<>:"/\\\\|?*]/g, '_').replace(/\\s+/g, '-') + '.ipynb',
-                            notebook: {
-                                cells: (nb.blocks || []).map(block => ({
-                                    cell_type: block.type === 'markdown' ? 'markdown' : 'code',
-                                    source: block.content || '',
-                                    metadata: {
-                                        deepnote_cell_type: block.type,
-                                        cell_id: block.id
-                                    },
-                                    outputs: block.outputs || []
-                                })),
-                                metadata: {
-                                    deepnote_notebook_id: nb.id,
-                                    deepnote_notebook_name: nb.name,
-                                    deepnote_execution_mode: nb.executionMode
-                                },
-                                nbformat: 4,
-                                nbformat_minor: 5
-                            }
-                        }));
-                    };
+                    export const TelemetryReporter = vscMockTelemetryReporter;
                 `,
                 shortCircuit: true
             };

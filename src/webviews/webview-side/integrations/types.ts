@@ -4,14 +4,17 @@ export type ConfigurableDatabaseIntegrationType = Exclude<DatabaseIntegrationTyp
 
 export type ConfigurableDatabaseIntegrationConfig = Exclude<DatabaseIntegrationConfig, { type: 'pandas-dataframe' }>;
 
-export type IntegrationStatus = 'connected' | 'disconnected' | 'error';
+/** Federated-auth token status; mirrors `FederatedAuthTokenStatus` in platform/integrationTypes.ts (duplicated because the webview bundles separately). */
+export type FederatedAuthTokenStatus = 'authenticated' | 'disconnected' | 'unsupported';
 
-export interface IntegrationWithStatus {
+export interface DetectedIntegration {
     id: string;
     config: ConfigurableDatabaseIntegrationConfig | null;
-    status: IntegrationStatus;
     integrationName?: string;
     integrationType?: ConfigurableDatabaseIntegrationType;
+    /** `.deepnote.env.yaml` configures this integration; the panel cannot write that layer, so the row is read-only. */
+    isFileConfigured?: boolean;
+    tokenStatus?: FederatedAuthTokenStatus;
 }
 
 export interface IVsCodeMessage {
@@ -22,7 +25,7 @@ export interface IVsCodeMessage {
 
 export interface UpdateMessage {
     type: 'update';
-    integrations: IntegrationWithStatus[];
+    integrations: DetectedIntegration[];
     projectName?: string;
 }
 
@@ -44,4 +47,19 @@ export interface LocInitMessage {
     locStrings: Partial<import('../../../messageTypes').LocalizedMessages>;
 }
 
+// Inbound (extension -> webview). Consumed by `MessageEvent<WebviewMessage>` in the webview.
 export type WebviewMessage = UpdateMessage | ShowFormMessage | StatusMessage | LocInitMessage;
+
+export interface AuthenticateMessage {
+    type: 'authenticate';
+    integrationId: string;
+}
+
+// Outbound (webview -> extension); dispatched in `integrationWebview.ts:handleMessage`. Keep exhaustive.
+export type WebviewOutboundMessage =
+    | { type: 'configure'; integrationId: string }
+    | { type: 'save'; integrationId: string; config: ConfigurableDatabaseIntegrationConfig }
+    | { type: 'reset'; integrationId: string }
+    | { type: 'delete'; integrationId: string }
+    | { type: 'signOut'; integrationId: string }
+    | AuthenticateMessage;

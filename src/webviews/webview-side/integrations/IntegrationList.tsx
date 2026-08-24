@@ -1,16 +1,25 @@
 import * as React from 'react';
 import { getLocString } from '../react-common/locReactSide';
 import { IntegrationItem } from './IntegrationItem';
-import { IntegrationWithStatus } from './types';
+import { DetectedIntegration } from './types';
 
 export interface IIntegrationListProps {
-    integrations: IntegrationWithStatus[];
+    integrations: DetectedIntegration[];
     onConfigure: (integrationId: string) => void;
     onReset: (integrationId: string) => void;
     onDelete: (integrationId: string) => void;
+    onAuthenticate: (integrationId: string) => void;
+    onSignOut: (integrationId: string) => void;
 }
 
-export const IntegrationList: React.FC<IIntegrationListProps> = ({ integrations, onConfigure, onReset, onDelete }) => {
+export const IntegrationList: React.FC<IIntegrationListProps> = ({
+    integrations,
+    onConfigure,
+    onReset,
+    onDelete,
+    onAuthenticate,
+    onSignOut
+}) => {
     if (integrations.length === 0) {
         return (
             <p className="no-integrations">
@@ -28,6 +37,8 @@ export const IntegrationList: React.FC<IIntegrationListProps> = ({ integrations,
                     onConfigure={onConfigure}
                     onReset={onReset}
                     onDelete={onDelete}
+                    onAuthenticate={onAuthenticate}
+                    onSignOut={onSignOut}
                 />
             ))}
         </div>

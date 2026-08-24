@@ -3,8 +3,14 @@ import * as sinon from 'sinon';
 import { anything, capture, instance, mock, when, verify, deepEqual, resetCalls } from 'ts-mockito';
 import { CancellationToken, Disposable, NotebookDocument, ProgressOptions, Uri } from 'vscode';
 import { DeepnoteEnvironmentsView } from './deepnoteEnvironmentsView.node';
-import { IDeepnoteEnvironmentManager, IDeepnoteKernelAutoSelector, IDeepnoteNotebookEnvironmentMapper } from '../types';
+import {
+    IDeepnoteEnvironmentManager,
+    IDeepnoteKernelAutoSelector,
+    IDeepnoteNotebookEnvironmentMapper,
+    IDeepnoteServerStarter
+} from '../types';
 import { IPythonApiProvider } from '../../../platform/api/types';
+import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposableRegistry, IOutputChannel } from '../../../platform/common/types';
 import { IKernelProvider } from '../../../kernels/types';
 import { DeepnoteEnvironment } from './deepnoteEnvironment';
@@ -25,6 +31,8 @@ suite('DeepnoteEnvironmentsView', () => {
     let mockNotebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper;
     let mockKernelProvider: IKernelProvider;
     let mockOutputChannel: IOutputChannel;
+    let mockTelemetryService: ITelemetryService;
+    let mockServerStarter: IDeepnoteServerStarter;
     let disposables: Disposable[] = [];
     let pythonEnvironments: PythonExtension['environments'];
 
@@ -43,6 +51,11 @@ suite('DeepnoteEnvironmentsView', () => {
         mockNotebookEnvironmentMapper = mock<IDeepnoteNotebookEnvironmentMapper>();
         mockKernelProvider = mock<IKernelProvider>();
         mockOutputChannel = mock<IOutputChannel>();
+        mockTelemetryService = mock<ITelemetryService>();
+        mockServerStarter = mock<IDeepnoteServerStarter>();
+
+        // stopServer is a safe no-op when a notebook has no running server
+        when(mockServerStarter.stopServer(anything(), anything())).thenResolve();
 
         // Mock onDidChangeEnvironments to return a disposable event
         when(mockConfigManager.onDidChangeEnvironments).thenReturn((_listener: () => void) => {
@@ -61,7 +74,9 @@ suite('DeepnoteEnvironmentsView', () => {
             instance(mockKernelAutoSelector),
             instance(mockNotebookEnvironmentMapper),
             instance(mockKernelProvider),
-            instance(mockOutputChannel)
+            instance(mockOutputChannel),
+            instance(mockServerStarter),
+            instance(mockTelemetryService)
         );
     });
 
@@ -741,6 +756,134 @@ suite('DeepnoteEnvironmentsView', () => {
                 1,
                 'Kernel using deleted external environment should be disposed'
             );
+        });
+    });
+
+    suite('deleteEnvironmentCommand - stop servers before removing mappings (the load-bearing fix)', () => {
+        const envId = 'env-to-delete';
+        const testInterpreter: PythonEnvironment = {
+            id: 'test-python-id',
+            uri: Uri.file('/usr/bin/python3.11')
+        };
+
+        const environment: DeepnoteEnvironment = {
+            id: envId,
+            name: 'Environment to Delete',
+            pythonInterpreter: testInterpreter,
+            venvPath: Uri.file('/path/to/venv'),
+            managedVenv: true,
+            createdAt: new Date(),
+            lastUsedAt: new Date()
+        };
+
+        // One notebook is OPEN; the other is CLOSED but its server is still running.
+        const openNotebookUri = Uri.file('/workspace/open.deepnote');
+        const closedNotebookUri = Uri.file('/workspace/closed-but-running.deepnote');
+
+        setup(() => {
+            resetCalls(mockConfigManager);
+            resetCalls(mockNotebookEnvironmentMapper);
+            resetCalls(mockServerStarter);
+            resetCalls(mockedVSCodeNamespaces.window);
+            resetCalls(mockedVSCodeNamespaces.workspace);
+        });
+
+        // Wire a shared, ordered call log so we can assert that every stopServer happens BEFORE
+        // any removeEnvironmentForNotebook, and both happen before deleteEnvironment.
+        const wireOrderedDeletion = (callLog: string[], options?: { stopRejectsFor?: Uri }): void => {
+            when(mockConfigManager.getEnvironment(envId)).thenReturn(environment);
+            when(mockedVSCodeNamespaces.window.showWarningMessage(anything(), anything(), anything())).thenReturn(
+                Promise.resolve('Delete')
+            );
+            when(mockNotebookEnvironmentMapper.getNotebooksUsingEnvironment(envId)).thenReturn([
+                openNotebookUri,
+                closedNotebookUri
+            ]);
+
+            // Only the OPEN notebook is present in workspace.notebookDocuments — the other is closed.
+            const mockOpenNotebookDoc = mock<NotebookDocument>();
+            when(mockOpenNotebookDoc.uri).thenReturn(openNotebookUri);
+            when(mockOpenNotebookDoc.notebookType).thenReturn('deepnote');
+            when(mockOpenNotebookDoc.isClosed).thenReturn(false);
+            const openNotebookDoc = instance(mockOpenNotebookDoc);
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([openNotebookDoc]);
+            when(mockKernelProvider.get(openNotebookDoc)).thenReturn(undefined);
+
+            when(mockServerStarter.stopServer(anything(), anything())).thenCall((uri: Uri) => {
+                callLog.push(`stop:${uri.toString()}`);
+                if (options?.stopRejectsFor && uri.toString() === options.stopRejectsFor.toString()) {
+                    return Promise.reject(new Error('stop failed'));
+                }
+                return Promise.resolve();
+            });
+            when(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(anything())).thenCall((uri: Uri) => {
+                callLog.push(`remove:${uri.toString()}`);
+                return Promise.resolve();
+            });
+            when(mockConfigManager.deleteEnvironment(envId, anything())).thenCall(() => {
+                callLog.push('deleteEnvironment');
+                return Promise.resolve();
+            });
+
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                (_options: ProgressOptions, callback: Function) => {
+                    const mockProgress = { report: () => undefined };
+                    const mockToken: CancellationToken = {
+                        isCancellationRequested: false,
+                        onCancellationRequested: () => ({ dispose: () => undefined })
+                    };
+                    return callback(mockProgress, mockToken);
+                }
+            );
+            when(mockedVSCodeNamespaces.window.showInformationMessage(anything())).thenResolve(undefined);
+        };
+
+        test('every stopServer precedes every removeEnvironmentForNotebook, and both precede deleteEnvironment (catches inverted order)', async () => {
+            const callLog: string[] = [];
+            wireOrderedDeletion(callLog);
+
+            await view.deleteEnvironmentCommand(envId);
+
+            const stopIndexes = callLog.map((entry, i) => (entry.startsWith('stop:') ? i : -1)).filter((i) => i >= 0);
+            const removeIndexes = callLog
+                .map((entry, i) => (entry.startsWith('remove:') ? i : -1))
+                .filter((i) => i >= 0);
+            const deleteIndex = callLog.indexOf('deleteEnvironment');
+
+            assert.strictEqual(stopIndexes.length, 2, 'both servers stopped');
+            assert.strictEqual(removeIndexes.length, 2, 'both mappings removed');
+            assert.isAtLeast(deleteIndex, 0, 'environment deleted');
+
+            const lastStop = Math.max(...stopIndexes);
+            const firstRemove = Math.min(...removeIndexes);
+            const lastRemove = Math.max(...removeIndexes);
+
+            assert.isBelow(
+                lastStop,
+                firstRemove,
+                'all stopServer calls must come BEFORE any removeEnvironmentForNotebook (else the mapper list would already be empty when stopping)'
+            );
+            assert.isBelow(lastRemove, deleteIndex, 'mappings must be removed before the environment is deleted');
+        });
+
+        test('a stopServer rejection for one URI does NOT abort the deletion — the other still stops and deletion proceeds (per-iteration try/catch)', async () => {
+            const callLog: string[] = [];
+            wireOrderedDeletion(callLog, { stopRejectsFor: openNotebookUri });
+
+            await view.deleteEnvironmentCommand(envId);
+
+            // The failing stop was attempted, the other still ran, and deletion completed.
+            verify(mockServerStarter.stopServer(openNotebookUri, anything())).once();
+            verify(mockServerStarter.stopServer(closedNotebookUri, anything())).once();
+            assert.include(
+                callLog,
+                `stop:${closedNotebookUri.toString()}`,
+                'second server still stopped after first threw'
+            );
+            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(openNotebookUri)).once();
+            verify(mockNotebookEnvironmentMapper.removeEnvironmentForNotebook(closedNotebookUri)).once();
+            verify(mockConfigManager.deleteEnvironment(envId, anything())).once();
+            assert.include(callLog, 'deleteEnvironment', 'environment deletion still proceeds after a stop failure');
         });
     });
 

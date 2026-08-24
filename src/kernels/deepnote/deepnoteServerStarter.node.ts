@@ -6,7 +6,7 @@
  */
 
 import * as fs from 'fs-extra';
-import { inject, injectable, named, optional } from 'inversify';
+import { inject, injectable, named } from 'inversify';
 import * as os from 'os';
 import { CancellationToken, CancellationTokenSource, l10n, Uri } from 'vscode';
 
@@ -20,14 +20,15 @@ import { IAsyncDisposableRegistry, IDisposable, IOutputChannel } from '../../pla
 import { sleep } from '../../platform/common/utils/async';
 import { generateUuid } from '../../platform/common/uuid';
 import { DeepnoteServerStartupError } from '../../platform/errors/deepnoteKernelErrors';
-import { logger } from '../../platform/logging';
-import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
-import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
-import * as path from '../../platform/vscode-path/path';
-import { DeepnoteServerInfo, IDeepnoteServerStarter } from './types';
-import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 import { getCachedEnvironment } from '../../platform/interpreter/helpers';
 import { IInstaller, InstallerResponse, Product } from '../../platform/interpreter/installer/types';
+import { logger } from '../../platform/logging';
+import { IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
+import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
+import * as path from '../../platform/vscode-path/path';
+import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
+import { applyIntegrationEndpointEnv } from './deepnoteIntegrationEndpointEnv';
+import { DeepnoteServerInfo, IDeepnoteServerStarter } from './types';
 
 const MAX_OUTPUT_TRACKING_LENGTH = 5000;
 const SERVER_STARTUP_TIMEOUT_MS = 120_000;
@@ -59,8 +60,8 @@ interface ProjectContext {
  *
  * Uses @deepnote/runtime-core's `startServer`/`stopServer` for the core server
  * lifecycle (process spawn, port discovery, health checks, shutdown), and layers
- * extension-specific concerns on top: lock files, orphan cleanup, SQL integration
- * env vars, output channel logging, and multi-server concurrency control.
+ * extension-specific concerns on top: lock files, orphan cleanup, integration
+ * endpoint env vars, output channel logging, and multi-server concurrency control.
  */
 @injectable()
 export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtensionSyncActivationService {
@@ -77,9 +78,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         @inject(DeepnoteAgentSkillsManager) private readonly agentSkillsManager: DeepnoteAgentSkillsManager,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry,
-        @inject(ISqlIntegrationEnvVarsProvider)
-        @optional()
-        private readonly sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider
+        @inject(IUserpodApiEndpoints)
+        private readonly userpodApiEndpoints: IUserpodApiEndpoints
     ) {
         asyncRegistry.push(this);
     }
@@ -215,7 +215,8 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      *
      * Extension-specific layers:
      * - Toolkit check/install via IInstaller (before start)
-     * - SQL integration env var injection (via ServerOptions.env)
+     * - Integration endpoint env var injection (via ServerOptions.env) — these point the toolkit at the
+     *   extension's loopback `userpod-api` endpoint, which is how it fetches SQL credentials at kernel init
      * - Lock file creation (after start, using returned PID)
      * - Output channel logging (via process stdout/stderr streams)
      */
@@ -267,7 +268,13 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         logger.info(`Starting deepnote-toolkit server for ${fileKey} (interpreter ${interpreterId})`);
         this.outputChannel.appendLine(l10n.t('Starting Deepnote server...'));
 
-        const extraEnv = await this.gatherSqlIntegrationEnvVars(deepnoteFileUri, interpreterId, token);
+        const extraEnv: Record<string, string> = {};
+
+        await applyIntegrationEndpointEnv({
+            deepnoteFileUri,
+            endpoint: this.userpodApiEndpoints,
+            extraEnv
+        });
 
         // Initialize output tracking for error reporting
         this.serverOutputByFile.set(fileKey, { stdout: '', stderr: '' });
@@ -389,41 +396,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         } catch {
             return false;
         }
-    }
-
-    /**
-     * Gather SQL integration environment variables for the deepnote-toolkit server.
-     */
-    private async gatherSqlIntegrationEnvVars(
-        deepnoteFileUri: Uri,
-        environmentId: string,
-        token?: CancellationToken
-    ): Promise<Record<string, string>> {
-        const extraEnv: Record<string, string> = {};
-
-        if (!this.sqlIntegrationEnvVars) {
-            logger.debug('DeepnoteServerStarter: SqlIntegrationEnvironmentVariablesProvider not available');
-            return extraEnv;
-        }
-
-        const fileKey = deepnoteFileUri.fsPath;
-
-        logger.debug(
-            `DeepnoteServerStarter: Injecting SQL integration env vars for ${fileKey} with environmentId ${environmentId}`
-        );
-        try {
-            const sqlEnvVars = await this.sqlIntegrationEnvVars.getEnvironmentVariables(deepnoteFileUri, token);
-            if (sqlEnvVars && Object.keys(sqlEnvVars).length > 0) {
-                logger.debug(`DeepnoteServerStarter: Injecting ${Object.keys(sqlEnvVars).length} SQL env vars`);
-                Object.assign(extraEnv, sqlEnvVars);
-            } else {
-                logger.debug('DeepnoteServerStarter: No SQL integration env vars to inject');
-            }
-        } catch (error) {
-            logger.error('DeepnoteServerStarter: Failed to get SQL integration env vars', error);
-        }
-
-        return extraEnv;
     }
 
     /**

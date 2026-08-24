@@ -35,6 +35,8 @@ import { KernelStartupCodeProviders } from './kernelStartupCodeProviders.web';
 import { LastCellExecutionTracker } from './execution/lastCellExecutionTracker';
 import { ClearJupyterServersCommand } from './jupyter/clearJupyterServersCommand';
 import { KernelChatStartupCodeProvider } from './chat/kernelStartupCodeProvider';
+import { SqlIntegrationEnvironmentVariablesProviderWeb } from '../platform/notebooks/deepnote/sqlIntegrationEnvironmentVariablesProvider.web';
+import { ISqlIntegrationEnvVarsProvider } from '../platform/notebooks/deepnote/types';
 
 @injectable()
 class RawNotebookSupportedService implements IRawNotebookSupportedService {
@@ -83,6 +85,10 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     );
     serviceManager.addSingleton<IKernelFinder>(IKernelFinder, KernelFinder);
     serviceManager.addSingleton<IKernelDependencyService>(IKernelDependencyService, KernelDependencyService);
+    serviceManager.addSingleton<ISqlIntegrationEnvVarsProvider>(
+        ISqlIntegrationEnvVarsProvider,
+        SqlIntegrationEnvironmentVariablesProviderWeb
+    );
 
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

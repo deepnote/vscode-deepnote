@@ -17,6 +17,7 @@ import z from 'zod';
 
 import { logger } from '../../platform/logging';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
+import { ITelemetryService } from '../../platform/analytics/types';
 import { IConfigurationService, IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
 import { notebookUpdaterUtils } from '../../kernels/execution/notebookUpdater';
@@ -37,6 +38,8 @@ import {
 } from './deepnoteSchemas';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { Pocket } from '../../platform/deepnote/pocket';
+import { AGENT_MODEL_AUTO, AGENT_MODEL_METADATA_KEY } from './agentCellStatusBarProvider';
+import { generateBlockId, isAgentCell } from './dataConversionUtils';
 
 export const INPUT_BLOCK_TYPES = [
     'input-text',
@@ -151,6 +154,7 @@ export function getNextDeepnoteVariableName(cells: NotebookCell[], prefix: 'df' 
 @injectable()
 export class DeepnoteNotebookCommandListener implements IExtensionSyncActivationService {
     constructor(
+        @inject(ITelemetryService) private readonly analytics: ITelemetryService,
         @inject(IConfigurationService) private readonly configurationService: IConfigurationService,
         @inject(IDisposableRegistry) private readonly disposableRegistry: IDisposableRegistry
     ) {}
@@ -163,6 +167,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     private registerCommands(): void {
+        this.disposableRegistry.push(commands.registerCommand(Commands.AddAgentBlock, () => this.addAgentBlock()));
         this.disposableRegistry.push(commands.registerCommand(Commands.AddSqlBlock, () => this.addSqlBlock()));
         this.disposableRegistry.push(
             commands.registerCommand(Commands.AddBigNumberChartBlock, () => this.addBigNumberChartBlock())
@@ -227,6 +232,76 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         );
     }
 
+    /**
+     * Appends an empty agent block to the end of the notebook, matching Deepnote Cloud, regardless
+     * of the selection. A notebook may hold at most one; a second request reports that and leaves
+     * the notebook untouched.
+     *
+     * Unlike the other block commands this mints the block id up front: an agent block without one
+     * gets a fresh random id on every `convertCellToBlock`, so each run would stamp its generated
+     * cells with a different owner and the stale-run cleanup would never match them.
+     */
+    public async addAgentBlock(): Promise<void> {
+        const editor = window.activeNotebookEditor;
+        if (!editor) {
+            throw new Error(l10n.t('No active notebook editor found'));
+        }
+        const document = editor.notebook;
+        const agentBlockExistsMessage = l10n.t('This notebook already contains an agent block.');
+
+        if (document.getCells().some(isAgentCell)) {
+            void window.showInformationMessage(agentBlockExistsMessage);
+
+            return;
+        }
+
+        const blockId = generateBlockId();
+
+        let alreadyHasAgentBlock = false;
+        let insertIndex = 0;
+
+        const result = await notebookUpdaterUtils.chainWithPendingUpdates(document, (edit) => {
+            // Repeated inside the serialized callback: a concurrent invocation passes the check above
+            // while its edit is still queued, and only here has that edit already applied.
+            if (document.getCells().some(isAgentCell)) {
+                alreadyHasAgentBlock = true;
+
+                return;
+            }
+
+            insertIndex = document.cellCount;
+
+            const newCell = new NotebookCellData(NotebookCellKind.Code, '', 'plaintext');
+            newCell.metadata = {
+                __deepnotePocket: {
+                    type: 'agent'
+                },
+                id: blockId,
+                __deepnoteBlockId: blockId,
+                [AGENT_MODEL_METADATA_KEY]: AGENT_MODEL_AUTO
+            };
+            const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
+            edit.set(document.uri, [nbEdit]);
+        });
+
+        if (alreadyHasAgentBlock) {
+            void window.showInformationMessage(agentBlockExistsMessage);
+
+            return;
+        }
+
+        if (result !== true) {
+            throw new Error(l10n.t('Failed to insert agent block'));
+        }
+
+        this.trackAddBlock('agent');
+
+        const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+        editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+        editor.selection = notebookRange;
+        await commands.executeCommand('notebook.cell.edit');
+    }
+
     public async addSqlBlock(): Promise<void> {
         const editor = window.activeNotebookEditor;
         if (!editor) {
@@ -263,6 +338,8 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         if (result !== true) {
             throw new Error(l10n.t('Failed to insert SQL block'));
         }
+
+        this.trackAddBlock('sql');
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
@@ -304,6 +381,8 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         if (result !== true) {
             throw new Error(l10n.t('Failed to insert big number chart block'));
         }
+
+        this.trackAddBlock('big-number');
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
@@ -359,6 +438,8 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             throw new WrappedError(l10n.t('Failed to insert chart block'));
         }
 
+        this.trackAddBlock('visualization');
+
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
 
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
@@ -405,6 +486,8 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         if (result !== true) {
             throw new Error(l10n.t('Failed to insert input block'));
         }
+
+        this.trackAddBlock(blockType);
 
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
@@ -539,6 +622,8 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             throw new Error(l10n.t('Failed to insert text block'));
         }
 
+        this.trackAddBlock(textBlockType);
+
         const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
         editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
         editor.selection = notebookRange;
@@ -554,6 +639,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
                 undefined,
                 ConfigurationTarget.Workspace
             );
+            this.analytics.trackEvent({ eventName: 'toggle_snapshots', properties: { enabled: false } });
             void window.showInformationMessage(l10n.t('Snapshots disabled for this workspace.'));
         } catch (error) {
             logger.error('Failed to disable snapshots', error);
@@ -569,9 +655,14 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
                 undefined,
                 ConfigurationTarget.Workspace
             );
+            this.analytics.trackEvent({ eventName: 'toggle_snapshots', properties: { enabled: true } });
         } catch (error) {
             logger.error('Failed to enable snapshots', error);
             void window.showErrorMessage(l10n.t('Failed to enable snapshots.'));
         }
+    }
+
+    private trackAddBlock(blockType: string): void {
+        this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType, isEphemeral: false } });
     }
 }

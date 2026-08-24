@@ -1,8 +1,9 @@
 import { CancellationToken, Event, NotebookDocument, Uri } from 'vscode';
 import { IDisposable, Resource } from '../../common/types';
 import { EnvironmentVariables } from '../../common/variables/types';
-import { DeepnoteProject } from '../../deepnote/deepnoteTypes';
 import { ConfigurableDatabaseIntegrationConfig } from './integrationTypes';
+import { DeepnoteFile } from '@deepnote/blocks';
+import { DatabaseIntegrationConfig, ValidationIssue } from '@deepnote/database-integrations';
 
 /**
  * Settings for select input blocks
@@ -96,6 +97,53 @@ export interface ISqlIntegrationEnvVarsProvider {
      * Get environment variables for SQL integrations used in the given notebook.
      */
     getEnvironmentVariables(resource: Resource, token?: CancellationToken): Promise<EnvironmentVariables>;
+
+    /**
+     * Ids that can be federated-authenticated for this notebook — BigQuery + `google-oauth`, from either
+     * source. Derived state only: it exposes **no config**, so the integrations panel (an editor) can offer an
+     * Authenticate action without receiving credentials it cannot write back.
+     */
+    getFederatedAuthCandidates(resource: Resource, token?: CancellationToken): Promise<ReadonlySet<string>>;
+
+    /**
+     * Ids that `.deepnote.env.yaml` configures for this notebook. Derived state only — it exposes **no
+     * config and no credentials** — so the integrations panel (a SecretStorage editor) can render them
+     * read-only without receiving values it could never write back.
+     */
+    getFileConfiguredIntegrationIds(resource: Resource, token?: CancellationToken): Promise<ReadonlySet<string>>;
+
+    /**
+     * What actually applies for this notebook: project SecretStorage integrations merged with
+     * `.deepnote.env.yaml` file configs (file wins, additive file-only), so integration detection, the SQL
+     * status bar, and the SQL LSP agree with kernel execution. **Read-only** — the file layer cannot be
+     * written back, so these must never reach `IIntegrationStorage.save`, which only ever edits SecretStorage.
+     */
+    getMergedIntegrationConfigs(resource: Resource, token?: CancellationToken): Promise<DatabaseIntegrationConfig[]>;
+}
+
+export const IUserpodApiEndpoints = Symbol('IUserpodApiEndpoints');
+export interface IUserpodApiEndpoints {
+    /** Loopback base URL the toolkit fetches integration env vars from; `undefined` until the server is listening. */
+    readonly baseUrl: string | undefined;
+
+    /** Settles (never rejects) once the initial bind attempt completes, so callers can await readiness before reading `baseUrl`. */
+    readonly ready: Promise<void>;
+
+    /** Per-project bearer token the endpoint requires (it serves credentials); injected into the toolkit as `DEEPNOTE_RUNTIME__PROJECT_SECRET`. */
+    getAuthToken(projectId: string): string;
+}
+
+export const IIntegrationsFileConfigProvider = Symbol('IIntegrationsFileConfigProvider');
+export interface IIntegrationsFileConfigProvider {
+    /**
+     * Loads integration configs from a `.deepnote.env.yaml` file located next to the given `.deepnote`
+     * project file (or at the workspace-folder root), resolving `env:` references against a sibling
+     * `.env` file and `process.env`. Returns the accepted configs plus any validation issues; a missing
+     * file yields an empty result and this never throws.
+     */
+    getConfigsForFile(
+        deepnoteFileUri: Uri
+    ): Promise<{ configs: DatabaseIntegrationConfig[]; issues: ValidationIssue[] }>;
 }
 
 /**
@@ -115,5 +163,10 @@ export interface IPlatformNotebookEditorProvider {
  */
 export const IPlatformDeepnoteNotebookManager = Symbol('IPlatformDeepnoteNotebookManager');
 export interface IPlatformDeepnoteNotebookManager {
-    getOriginalProject(projectId: string): DeepnoteProject | undefined;
+    /**
+     * Returns the cached project for an exact (projectId, notebookId) pair, or undefined if
+     * that precise entry is not cached. Performs an exact match only and never falls back to
+     * another sibling's project.
+     */
+    getProjectForNotebook(projectId: string, notebookId: string): DeepnoteFile | undefined;
 }

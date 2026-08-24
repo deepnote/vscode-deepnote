@@ -1,8 +1,9 @@
 import { isExecutableBlock, type DeepnoteBlock } from '@deepnote/blocks';
 import { NotebookCellData, NotebookCellKind, NotebookCellOutput, NotebookCellOutputItem } from 'vscode';
 
-import { generateBlockId, generateSortingKey } from './dataConversionUtils';
+import { generateBlockId, generateSortingKey, getBlockId } from './dataConversionUtils';
 import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
+import { AgentBlockConverter } from './converters/agentBlockConverter';
 import { ConverterRegistry } from './converters/converterRegistry';
 import { BlockConverter } from './converters/blockConverter';
 import { CodeBlockConverter } from './converters/codeBlockConverter';
@@ -38,6 +39,7 @@ export class DeepnoteDataConverter {
     private readonly registry = new ConverterRegistry();
 
     constructor() {
+        this.registry.register(new AgentBlockConverter());
         this.registry.register(new CodeBlockConverter());
         this.registry.register(new MarkdownBlockConverter());
         this.registry.register(new ChartBigNumberBlockConverter());
@@ -437,7 +439,7 @@ export class DeepnoteDataConverter {
 
     private createFallbackBlock(cell: NotebookCellData, index: number): DeepnoteBlock {
         const meta = cell.metadata as Record<string, unknown> | undefined;
-        const preservedId = (meta?.__deepnoteBlockId ?? meta?.id ?? meta?.deepnoteBlockId) as string | undefined;
+        const preservedId = getBlockId(cell);
         const preservedSortingKey = (meta?.sortingKey ?? meta?.deepnoteSortingKey) as string | undefined;
         const preservedBlockGroup = meta?.blockGroup as string | undefined;
 
@@ -494,19 +496,22 @@ export class DeepnoteDataConverter {
                 }
             }
 
-            // Check if this is a stream output
-            const stdoutItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.stdout');
-            const stderrItem = output.items.find((item) => item.mime === 'application/vnd.code.notebook.stderr');
+            // Streamed deltas are appended as new items on one output, so every item must be joined.
+            const streamItems = output.items.filter(
+                (item) =>
+                    item.mime === 'application/vnd.code.notebook.stdout' ||
+                    item.mime === 'application/vnd.code.notebook.stderr'
+            );
 
-            if (stdoutItem || stderrItem) {
-                const item = stdoutItem || stderrItem;
-                const text = new TextDecoder().decode(item!.data);
-
-                return {
-                    name: stderrItem ? 'stderr' : 'stdout',
+            if (streamItems.length > 0) {
+                const decoder = new TextDecoder();
+                const streamOutput: DeepnoteOutput = {
+                    name: streamItems[0].mime === 'application/vnd.code.notebook.stderr' ? 'stderr' : 'stdout',
                     output_type: 'stream',
-                    text
-                } as DeepnoteOutput;
+                    text: streamItems.map((item) => decoder.decode(item.data)).join('')
+                };
+
+                return streamOutput;
             }
 
             // Rich output (execute_result or display_data)

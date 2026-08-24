@@ -461,6 +461,12 @@ export interface INotebookKernelExecution {
      * Total execution count on this kernel
      */
     readonly executionCount: number;
+    /**
+     * Whether the cell execution queue stopped early: a cell failed, or queued cells were cancelled
+     * (interrupt/restart). Cancelled cell executions resolve rather than reject, so this is the only
+     * way to tell an interrupted run from a clean one.
+     */
+    readonly failed: boolean;
     readonly onDidReceiveDisplayUpdate: Event<NotebookCellOutput>;
     /**
      * Cells that are still being executed (or pending).

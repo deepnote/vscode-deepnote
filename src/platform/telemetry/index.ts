@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import TelemetryReporter from '@vscode/extension-telemetry';
+import { TelemetryReporter } from '@vscode/extension-telemetry';
 import { AppinsightsKey, Telemetry, isTestExecution, isUnitTestExecution } from '../common/constants';
 import { logger } from '../logging';
 import { StopWatch } from '../common/utils/stopWatch';

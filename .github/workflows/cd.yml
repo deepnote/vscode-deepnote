@@ -21,24 +21,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
 
       - name: Install dependencies
-        run: |
-          npm ci --no-audit
-          # Verify Tailwind CSS native modules are installed for Linux (npm optional deps bug)
-          # See: https://github.com/npm/cli/issues/4828
-          node -e "try { require('lightningcss'); } catch { process.exit(1); }" 2>/dev/null || npm install lightningcss-linux-x64-gnu
-          node -e "try { require('@tailwindcss/oxide'); } catch { process.exit(1); }" 2>/dev/null || npm install @tailwindcss/oxide-linux-x64-gnu
-
-      - name: Install vsce
-        run: npm install -g @vscode/vsce
+        run: npm ci --no-audit
 
       - name: Extract version from package.json
         id: package-version
@@ -66,6 +60,11 @@ jobs:
 
       - name: Package extension
         run: npm run package
+        env:
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          # workflow_dispatch accepts any ref, so gate `stable` on the ref rather than the event to keep
+          # manually packaged feature branches out of stable analytics.
+          POSTHOG_CHANNEL: ${{ github.event_name == 'pull_request' && 'pr' || (github.ref == 'refs/heads/main' && 'stable' || 'development') }}
 
       - name: Rename VSIX file
         run: |
@@ -75,7 +74,7 @@ jobs:
           ls -lh *.vsix
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vscode-deepnote-${{ steps.package-version.outputs.version }}-${{ steps.branch-name.outputs.branch }}
           path: vscode-deepnote-*.vsix

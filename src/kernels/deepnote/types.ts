@@ -198,6 +198,23 @@ export interface IDeepnoteServerProvider {
     unregisterServer(handle: string): void;
 }
 
+export const IServerHandleRegistry = Symbol('IServerHandleRegistry');
+export interface IServerHandleRegistry {
+    /**
+     * Get the server handle tracked for a notebook.
+     * @param notebookKey The notebook key (see getNotebookKey())
+     * @returns The server handle, or undefined if none is tracked
+     */
+    get(notebookKey: string): string | undefined;
+
+    /**
+     * Track the server handle for a notebook.
+     * @param notebookKey The notebook key (see getNotebookKey())
+     * @param handle The server provider handle
+     */
+    set(notebookKey: string, handle: string): void;
+}
+
 export const IDeepnoteKernelAutoSelector = Symbol('IDeepnoteKernelAutoSelector');
 export interface IDeepnoteKernelAutoSelector {
     /**

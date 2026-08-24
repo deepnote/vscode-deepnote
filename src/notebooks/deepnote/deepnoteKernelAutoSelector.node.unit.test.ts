@@ -2,6 +2,7 @@ import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
+import { ServerHandleRegistry } from '../../kernels/deepnote/deepnoteServerHandleRegistry.node';
 import {
     IDeepnoteLspClientManager,
     IDeepnoteServerProvider,
@@ -12,13 +13,20 @@ import { IDisposableRegistry, IOutputChannel } from '../../platform/common/types
 import { IPythonExtensionChecker } from '../../platform/api/types';
 import { IJupyterRequestCreator } from '../../kernels/jupyter/types';
 import { IConfigurationService } from '../../platform/common/types';
-import { IDeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import { IDeepnoteNotebookManager } from '../types';
-import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
+import { IKernelProvider, IKernel, IJupyterKernelSpec, KernelConnectionMetadata } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
+import {
+    CancellationError,
+    NotebookDocument,
+    NotebookEditor,
+    Uri,
+    NotebookController,
+    CancellationToken
+} from 'vscode';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IInterpreterService } from '../../platform/interpreter/contracts';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 
@@ -31,13 +39,13 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockLspClientManager: IDeepnoteLspClientManager;
     let mockRequestCreator: IJupyterRequestCreator;
     let mockConfigService: IConfigurationService;
-    let mockInitNotebookRunner: IDeepnoteInitNotebookRunner;
     let mockNotebookManager: IDeepnoteNotebookManager;
     let mockKernelProvider: IKernelProvider;
     let mockRequirementsHelper: IDeepnoteRequirementsHelper;
     let mockServerStarter: IDeepnoteServerStarter;
     let mockOutputChannel: IOutputChannel;
     let mockInterpreterService: IInterpreterService;
+    let registry: ServerHandleRegistry;
 
     let mockProgress: { report(value: { message?: string; increment?: number }): void };
     let mockCancellationToken: CancellationToken;
@@ -59,13 +67,13 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockLspClientManager = mock<IDeepnoteLspClientManager>();
         mockRequestCreator = mock<IJupyterRequestCreator>();
         mockConfigService = mock<IConfigurationService>();
-        mockInitNotebookRunner = mock<IDeepnoteInitNotebookRunner>();
         mockNotebookManager = mock<IDeepnoteNotebookManager>();
         mockKernelProvider = mock<IKernelProvider>();
         mockRequirementsHelper = mock<IDeepnoteRequirementsHelper>();
         mockServerStarter = mock<IDeepnoteServerStarter>();
         mockOutputChannel = mock<IOutputChannel>();
         mockInterpreterService = mock<IInterpreterService>();
+        registry = new ServerHandleRegistry();
 
         mockProgress = { report: sandbox.stub() };
         mockCancellationToken = mock<CancellationToken>();
@@ -123,13 +131,13 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockRequestCreator),
             undefined, // requestAgentCreator is optional
             instance(mockConfigService),
-            instance(mockInitNotebookRunner),
             instance(mockNotebookManager),
             instance(mockKernelProvider),
             instance(mockRequirementsHelper),
             instance(mockServerStarter),
             instance(mockOutputChannel),
-            instance(mockInterpreterService)
+            instance(mockInterpreterService),
+            registry
         );
     });
 
@@ -278,30 +286,111 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 'ensureKernelSelected should be called with the notebook'
             );
             assert.strictEqual(
-                ensureKernelSelectedWithInterpreterStub.firstCall.args[6],
+                ensureKernelSelectedWithInterpreterStub.firstCall.args[4],
                 instance(mockCancellationToken),
                 'ensureKernelSelected should be called with the cancellation token'
             );
         });
+
+        test('should keep the old server handle registered when the interpreter switch fails', async () => {
+            // Old handle already tracked; setup fails so no new handle is ever registered.
+            const notebookKey = getNotebookKey(mockNotebook.uri);
+            const oldServerHandle = 'old-server-handle';
+            registry.set(notebookKey, oldServerHandle);
+
+            const mockInterpreter: PythonEnvironment = {
+                id: '/usr/bin/python3',
+                uri: Uri.parse('/usr/bin/python3')
+            };
+            when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(mockInterpreter);
+            sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').rejects(new Error('startServer failed'));
+
+            await assert.isRejected(
+                selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken))
+            );
+
+            // The old handle must remain registered so the selected controller keeps resolving.
+            verify(mockServerProvider.unregisterServer(oldServerHandle)).never();
+        });
+
+        test('should unregister the old server handle after switching to a different interpreter', async () => {
+            const notebookKey = getNotebookKey(mockNotebook.uri);
+            const oldServerHandle = 'old-server-handle';
+            const newServerHandle = 'new-server-handle';
+            registry.set(notebookKey, oldServerHandle);
+
+            const mockInterpreter: PythonEnvironment = {
+                id: '/usr/bin/python3',
+                uri: Uri.parse('/usr/bin/python3')
+            };
+            when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(mockInterpreter);
+            // Real setup registers a new handle for the notebook - emulate that side effect.
+            sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').callsFake(async () => {
+                registry.set(notebookKey, newServerHandle);
+            });
+
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
+
+            verify(mockServerProvider.unregisterServer(oldServerHandle)).once();
+            verify(mockServerProvider.unregisterServer(newServerHandle)).never();
+            assert.strictEqual(
+                registry.get(notebookKey),
+                newServerHandle,
+                'registry should track the new handle after a successful switch'
+            );
+        });
     });
 
-    suite('onKernelStarted', () => {
-        test('should return early and not call initNotebookRunner for non-deepnote notebooks', async () => {
-            // Arrange
-            const mockKernel = mock<IKernel>();
-            const mockJupyterNotebook = mock<NotebookDocument>();
+    suite('ensureControllerSelectedForNotebook', () => {
+        // Every Deepnote controller for one notebook carries the same id, derived from the notebook URI.
+        const CONTROLLER_ID = 'deepnote-notebook-/test/notebook.deepnote';
 
-            when(mockJupyterNotebook.notebookType).thenReturn('jupyter-notebook');
-            when(mockKernel.notebook).thenReturn(instance(mockJupyterNotebook));
+        function createController(): IVSCodeNotebookController {
+            const controller = mock<IVSCodeNotebookController>();
+            when(controller.id).thenReturn(CONTROLLER_ID);
+            when(controller.connection).thenReturn({ id: CONTROLLER_ID } as KernelConnectionMetadata);
+            when(controller.controller).thenReturn({
+                updateNotebookAffinity: sandbox.stub()
+            } as unknown as NotebookController);
 
-            // Mock initNotebookRunner to track if it gets called
-            when(mockInitNotebookRunner.runInitNotebookIfNeeded(anything(), anything(), anything())).thenResolve();
+            return instance(controller);
+        }
 
-            // Act
-            await selector.onKernelStarted(instance(mockKernel));
+        setup(() => {
+            when(mockCancellationToken.isCancellationRequested).thenReturn(false);
+            when(mockedVSCodeNamespaces.window.visibleNotebookEditors).thenReturn([
+                { notebook: mockNotebook } as NotebookEditor
+            ]);
+            when(mockedVSCodeNamespaces.commands.executeCommand('notebook.selectKernel', anything())).thenResolve();
+        });
 
-            // Assert - verify initNotebookRunner was never called
-            verify(mockInitNotebookRunner.runInitNotebookIfNeeded(anything(), anything(), anything())).never();
+        test('selects the kernel when the recorded controller was replaced by one with the same id', async () => {
+            // The recorded controller was disposed and rebuilt; only object identity tells the two apart,
+            // and skipping selectKernel here leaves the notebook bound to the dead one.
+            when(mockControllerRegistration.getSelected(anything())).thenReturn(createController());
+
+            await selector.ensureControllerSelectedForNotebook(
+                mockNotebook,
+                createController(),
+                instance(mockCancellationToken)
+            );
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand('notebook.selectKernel', anything())).once();
+        });
+
+        test('skips the kernel picker when the recorded controller is the one being selected', async () => {
+            const controller = createController();
+            when(mockControllerRegistration.getSelected(anything())).thenReturn(controller);
+
+            await selector.ensureControllerSelectedForNotebook(
+                mockNotebook,
+                controller,
+                instance(mockCancellationToken)
+            );
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand('notebook.selectKernel', anything())).never();
         });
     });
 
@@ -331,9 +420,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
         test('should return true and call ensureKernelSelectedWithInterpreter when interpreter is found', async () => {
             // Arrange
-            const baseFileUri = mockNotebook.uri.with({ query: '', fragment: '' });
-            const notebookKey = mockNotebook.uri.toString();
-            const projectKey = baseFileUri.fsPath;
+            const notebookKey = getNotebookKey(mockNotebook.uri);
             const mockInterpreter: PythonEnvironment = {
                 id: '/usr/bin/python3',
                 uri: Uri.parse('/usr/bin/python3')
@@ -364,11 +451,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             const callArgs = ensureKernelSelectedStub.firstCall.args;
             assert.strictEqual(callArgs[0], mockNotebook, 'First arg should be notebook');
             assert.deepStrictEqual(callArgs[1], mockInterpreter, 'Second arg should be interpreter');
-            assert.strictEqual(callArgs[2].toString(), baseFileUri.toString(), 'Third arg should be baseFileUri');
-            assert.strictEqual(callArgs[3], notebookKey, 'Fourth arg should be notebookKey');
-            assert.strictEqual(callArgs[4], projectKey, 'Fifth arg should be projectKey');
-            assert.strictEqual(callArgs[5], mockProgress, 'Sixth arg should be progress');
-            assert.strictEqual(callArgs[6], instance(mockCancellationToken), 'Seventh arg should be token');
+            assert.strictEqual(callArgs[2], notebookKey, 'Third arg should be notebookKey');
+            assert.strictEqual(callArgs[3], mockProgress, 'Fourth arg should be progress');
+            assert.strictEqual(callArgs[4], instance(mockCancellationToken), 'Fifth arg should be token');
         });
     });
 
@@ -1101,6 +1186,20 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 (mockNativeController.updateNotebookAffinity as sinon.SinonStub).called,
                 'Should NOT unselect a non-Deepnote kernel'
             );
+        });
+    });
+
+    suite('cancellation is not reported as a failure', () => {
+        test('a cancelled kernel selection does not show an error message', async () => {
+            await selector.handleKernelSelectionError(new CancellationError(), mockNotebook);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).never();
+        });
+
+        test('a generic kernel selection failure still shows an error message', async () => {
+            await selector.handleKernelSelectionError(new Error('kernel did not start'), mockNotebook);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).once();
         });
     });
 });

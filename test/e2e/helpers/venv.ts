@@ -6,7 +6,7 @@ import { PREBAKED_VENV_DIR_NAME } from './constants';
 
 const REPO_ROOT = process.cwd();
 const VENV_DIR = path.join(REPO_ROOT, PREBAKED_VENV_DIR_NAME);
-const TOOLKIT_SPEC_SOURCE = path.join(REPO_ROOT, 'src', 'kernels', 'deepnote', 'types.ts');
+const TOOLKIT_SPEC_SOURCE = path.join(REPO_ROOT, 'src', 'kernels', 'deepnote', 'constants.ts');
 
 function venvPython(): string {
     return process.platform === 'win32'
@@ -15,8 +15,9 @@ function venvPython(): string {
 }
 
 /**
- * The pip specs deepnoteToolkitInstaller installs, read from source so they cannot drift. The
- * installer itself needs `vscode`, which does not resolve in the Mocha process.
+ * The pip specs deepnoteToolkitInstaller installs, read from the extension's own constants so they
+ * cannot drift. Read rather than imported: these sources compile under their own tsconfig, whose
+ * rootDir is this directory, so a file from `src` cannot enter the program (TS6059).
  */
 function toolkitPipSpecs(): string[] {
     const source = fs.readFileSync(TOOLKIT_SPEC_SOURCE, 'utf8');

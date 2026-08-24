@@ -10,7 +10,7 @@ import { IOutputChannel, IExtensionContext } from '../../platform/common/types';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
 import { Cancellation } from '../../platform/common/cancellation';
-import { DEEPNOTE_TOOLKIT_VERSION } from './types';
+import { DEEPNOTE_TOOLKIT_VERSION } from './constants';
 
 /**
  * Manages a shared installation of deepnote-toolkit in a versioned extension directory.

@@ -30,7 +30,7 @@ import {
 } from './types';
 import { VSCodeNotebookController } from './vscodeNotebookController';
 import { IJupyterVariablesProvider } from '../../kernels/variables/types';
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/constants';
 
 /**
  * Keeps track of registered controllers and available KernelConnectionMetadatas.

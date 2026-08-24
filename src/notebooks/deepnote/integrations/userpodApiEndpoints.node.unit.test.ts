@@ -4,7 +4,7 @@ import { assert } from 'chai';
 import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { Disposable, NotebookDocument, Uri } from 'vscode';
 
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/constants';
 import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposable } from '../../../platform/common/types';
 import { dispose } from '../../../platform/common/utils/lifecycle';

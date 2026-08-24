@@ -1,7 +1,7 @@
 import { inject, injectable } from 'inversify';
 import { NotebookDocumentChangeEvent, workspace } from 'vscode';
 
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/constants';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';

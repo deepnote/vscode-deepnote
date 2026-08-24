@@ -121,7 +121,7 @@
             // emits its graphical report, which the `$oxlint` matcher can't parse. The script
             // stays format-free so CI keeps oxlint's automatic GitHub-annotation output.
             "type": "shell",
-            "command": "npx oxlint --format=agent src",
+            "command": "npm exec --no -- oxlint --format=agent src",
             "problemMatcher": "$oxlint",
             "label": "Lint",
             "detail": "oxlint --format=agent src",

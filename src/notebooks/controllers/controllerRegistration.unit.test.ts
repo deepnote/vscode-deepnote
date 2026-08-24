@@ -6,7 +6,7 @@ import * as sinon from 'sinon';
 import { assert } from 'chai';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { Disposable, EventEmitter, NotebookController, NotebookDocument, Uri } from 'vscode';
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/constants';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 import { IContributedKernelFinder } from '../../kernels/internalTypes';
 import { IJupyterServerUriStorage, JupyterServerProviderHandle } from '../../kernels/jupyter/types';
 import {

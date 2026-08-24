@@ -16,7 +16,7 @@ import { IDisposable } from '../../platform/common/types';
 import { JupyterServerCollection } from '../../api';
 import { EnvironmentPath } from '@vscode/python-extension';
 import type { VSCodeNotebookController } from './vscodeNotebookController';
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/constants';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 
 export const InteractiveControllerIdSuffix = ' (Interactive)';
 

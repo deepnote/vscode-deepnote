@@ -4,7 +4,7 @@ import * as http from 'http';
 import { inject, injectable } from 'inversify';
 import { commands, l10n, window, workspace } from 'vscode';
 
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/constants';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { ITelemetryService } from '../../../platform/analytics/types';
 import { IDisposableRegistry } from '../../../platform/common/types';

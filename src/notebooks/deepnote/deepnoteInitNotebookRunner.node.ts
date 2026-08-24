@@ -15,7 +15,7 @@ import {
 import { logger } from '../../platform/logging';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import type { DeepnoteNotebook } from '../../platform/deepnote/deepnoteTypes';
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/constants';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 import { IKernel, IKernelProvider } from '../../kernels/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';

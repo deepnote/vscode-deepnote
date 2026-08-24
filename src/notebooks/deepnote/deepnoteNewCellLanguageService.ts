@@ -1,7 +1,7 @@
 import { inject, injectable } from 'inversify';
 import { languages, NotebookCellKind, NotebookDocumentChangeEvent, workspace } from 'vscode';
 
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/constants';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { PYTHON_LANGUAGE } from '../../platform/common/constants';
 import { IDisposableRegistry } from '../../platform/common/types';

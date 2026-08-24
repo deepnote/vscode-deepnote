@@ -86,9 +86,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pip
-          key: pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/constants.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}-${{ github.run_id }}
+          key: pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}-${{ github.run_id }}
           restore-keys: |
-            pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/constants.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}-
+            pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}-
             pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-
 
       - name: Cache the managed Deepnote toolkit venv
@@ -97,7 +97,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .venv-e2e
-          key: e2e-venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/constants.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
+          key: e2e-venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
 
       - name: Warm the managed venv
         run: npm run setup:e2e:venv

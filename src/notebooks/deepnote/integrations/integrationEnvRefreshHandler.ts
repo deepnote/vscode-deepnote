@@ -4,7 +4,7 @@ import { workspace } from 'vscode';
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { IDisposableRegistry } from '../../../platform/common/types';
 import { logger } from '../../../platform/logging';
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/constants';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IIntegrationEnvLiveRefresher, IIntegrationStorage } from './types';
 
 /** Live-refreshes integration env in open Deepnote kernels when integration configs change (no restart). */

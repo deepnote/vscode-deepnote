@@ -11,7 +11,7 @@ import {
     isIntegrationsEnvFileEnabled
 } from '../../../platform/notebooks/deepnote/integrationsEnvFileSettings';
 import { logger } from '../../../platform/logging';
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/constants';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../../kernels/deepnote/types';
 import { IIntegrationEnvLiveRefresher } from './types';
 
 /** Trailing-edge debounce so a burst of edits (e.g. .env and .deepnote.env.yaml both saved) is handled once. */

@@ -21,9 +21,10 @@ import {
     window,
     workspace
 } from 'vscode';
-import { DEEPNOTE_NOTEBOOK_TYPE, DEEPNOTE_TOOLKIT_VERSION } from '../../kernels/deepnote/constants';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import {
+    DEEPNOTE_NOTEBOOK_TYPE,
+    DEEPNOTE_TOOLKIT_VERSION,
     DeepnoteKernelConnectionMetadata,
     IDeepnoteEnvironmentManager,
     IDeepnoteKernelAutoSelector,

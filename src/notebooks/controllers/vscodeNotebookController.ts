@@ -93,8 +93,7 @@ import { KernelConnector } from './kernelConnector';
 import { RemoteKernelReconnectBusyIndicator } from './remoteKernelReconnectBusyIndicator';
 import { IConnectionDisplayData, IConnectionDisplayDataProvider, IVSCodeNotebookController } from './types';
 import { notebookPathToDeepnoteProjectFilePath } from '../../platform/deepnote/deepnoteProjectUtils';
-import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/constants';
-import { IDeepnoteKernelAutoSelector } from '../../kernels/deepnote/types';
+import { DEEPNOTE_NOTEBOOK_TYPE, IDeepnoteKernelAutoSelector } from '../../kernels/deepnote/types';
 import { executeAgentCell, removeEphemeralCellsForAgentBlocks } from '../deepnote/agentCellExecutionHandler';
 import { isAgentCell } from '../deepnote/dataConversionUtils';
 

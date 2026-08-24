@@ -1,6 +1,7 @@
 import { assert } from 'chai';
 import sinon from 'sinon';
-import { EventEmitter } from 'vscode';
+import { EventEmitter, Uri } from 'vscode';
+import type { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 
 import {
     FederatedAuthTokenEntry,
@@ -9,7 +10,9 @@ import {
     OAuthClientMisconfiguredError
 } from '../types';
 import { FederatedAuthSqlBlockCodeGenerator } from './federatedAuthSqlBlockCodeGenerator.node';
-import { IIntegrationStorage } from '../../../../platform/notebooks/deepnote/types';
+import { ISqlIntegrationEnvVarsProvider } from '../../../../platform/notebooks/deepnote/types';
+import { Resource } from '../../../../platform/common/types';
+import { EnvironmentVariables } from '../../../../platform/common/variables/types';
 import { InvalidClientError, InvalidGrantError, computeMetadataFingerprint } from './federatedAuthTokenStorage.node';
 import {
     FED_AUTH_FIXTURE,
@@ -21,12 +24,17 @@ import {
     buildTokenEntry,
     parsePythonSingleQuoted
 } from './federatedAuthTestHelpers';
-import type { ConfigurableDatabaseIntegrationConfig } from '../../../../platform/notebooks/deepnote/integrationTypes';
 
 type FetcherFn = (
     entry: FederatedAuthTokenEntry,
     oauthConfig: { tokenUrl: string; clientId: string; clientSecret: string }
 ) => Promise<{ accessToken: string; newRefreshToken?: string }>;
+
+/** The OAuth-client metadata the fingerprint is computed over; derived from the library so it cannot drift. */
+type GoogleOauthMetadata = Extract<
+    Extract<DatabaseIntegrationConfig, { type: 'big-query' }>['metadata'],
+    { authMethod: 'google-oauth' }
+>;
 
 suite('FederatedAuthSqlBlockCodeGenerator', () => {
     const { INTEGRATION_ID, PROJECT, CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, ACCESS_TOKEN } = FED_AUTH_FIXTURE;
@@ -35,55 +43,53 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         clientSecret: CLIENT_SECRET,
         project: PROJECT
     });
+    const NOTEBOOK_URI = Uri.file('/workspace/project.deepnote');
+    const OTHER_NOTEBOOK_URI = Uri.file('/workspace/other/project.deepnote');
 
-    let integrations: Map<string, ConfigurableDatabaseIntegrationConfig>;
+    /** Merged (`.deepnote.env.yaml` over SecretStorage) configs keyed by the notebook they resolve for. */
+    let mergedIntegrationConfigs: Map<string, DatabaseIntegrationConfig[]>;
     let tokens: Map<string, FederatedAuthTokenEntry>;
     let onDidChangeTokens: EventEmitter<string>;
-    let onDidChangeIntegrations: EventEmitter<void>;
+    let onDidChangeEnvironmentVariables: EventEmitter<Resource>;
     let saveSpy: sinon.SinonSpy<[FederatedAuthTokenEntry, { silent?: boolean }?], Promise<void>>;
     let deleteSpy: sinon.SinonSpy<[string], Promise<void>>;
-    let integrationStorage: IIntegrationStorage;
+    let getMergedIntegrationConfigsSpy: sinon.SinonSpy<[Resource], Promise<DatabaseIntegrationConfig[]>>;
+    let sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider;
     let tokenStorage: IFederatedAuthTokenStorage;
     let fetcher: sinon.SinonStub<Parameters<FetcherFn>, ReturnType<FetcherFn>>;
     let generator: FederatedAuthSqlBlockCodeGenerator;
 
     setup(() => {
-        integrations = new Map();
+        mergedIntegrationConfigs = new Map();
         tokens = new Map();
         onDidChangeTokens = new EventEmitter<string>();
-        onDidChangeIntegrations = new EventEmitter<void>();
+        onDidChangeEnvironmentVariables = new EventEmitter<Resource>();
         saveSpy = sinon.spy(async (entry: FederatedAuthTokenEntry, _options?: { silent?: boolean }) => {
             tokens.set(entry.integrationId, entry);
         });
         deleteSpy = sinon.spy(async (id: string) => {
             tokens.delete(id);
         });
+        getMergedIntegrationConfigsSpy = sinon.spy(async (resource: Resource) =>
+            resource ? mergedIntegrationConfigs.get(resource.toString()) ?? [] : []
+        );
 
-        integrationStorage = {
-            onDidChangeIntegrations: onDidChangeIntegrations.event,
-            dispose: () => onDidChangeIntegrations.dispose(),
-            async clear() {
-                integrations.clear();
+        // Declared as a plain object (not a typed literal) so the extra members the provider grows for other
+        // consumers stay assignable here; the generator only ever calls `getMergedIntegrationConfigs`.
+        const envVarsProvider = {
+            onDidChangeEnvironmentVariables: onDidChangeEnvironmentVariables.event,
+            async getEnvironmentVariables(): Promise<EnvironmentVariables> {
+                return {};
             },
-            async delete(id) {
-                integrations.delete(id);
+            async getFederatedAuthCandidates(): Promise<ReadonlySet<string>> {
+                return new Set<string>();
             },
-            async exists(id) {
-                return integrations.has(id);
+            async getFileConfiguredIntegrationIds(): Promise<ReadonlySet<string>> {
+                return new Set<string>();
             },
-            async getAll() {
-                return Array.from(integrations.values());
-            },
-            async getIntegrationConfig(id) {
-                return integrations.get(id);
-            },
-            async getProjectIntegrationConfig() {
-                return undefined;
-            },
-            async save(config) {
-                integrations.set(config.id, config);
-            }
+            getMergedIntegrationConfigs: getMergedIntegrationConfigsSpy
         };
+        sqlIntegrationEnvVars = envVarsProvider;
 
         tokenStorage = {
             onDidChangeTokens: onDidChangeTokens.event,
@@ -91,11 +97,10 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             delete: deleteSpy,
             get: async (id) => tokens.get(id),
             has: async (id) => tokens.has(id),
-            listIntegrationIds: async () => Array.from(tokens.keys()),
             save: saveSpy
         };
 
-        generator = new FederatedAuthSqlBlockCodeGenerator(integrationStorage, tokenStorage);
+        generator = new FederatedAuthSqlBlockCodeGenerator(sqlIntegrationEnvVars, tokenStorage);
 
         fetcher = sinon.stub(generator, 'fetchFreshAccessToken');
         fetcher.resolves({ accessToken: ACCESS_TOKEN });
@@ -104,11 +109,16 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     teardown(() => {
         sinon.restore();
         onDidChangeTokens.dispose();
-        onDidChangeIntegrations.dispose();
+        onDidChangeEnvironmentVariables.dispose();
     });
 
+    /** Publishes `configs` as what `.deepnote.env.yaml` + SecretStorage merge to for `uri`. */
+    function setMergedIntegrationsConfigs(uri: Uri, ...configs: DatabaseIntegrationConfig[]) {
+        mergedIntegrationConfigs.set(uri.toString(), configs);
+    }
+
     function setupValidFederatedIntegration() {
-        integrations.set(INTEGRATION_ID, buildGoogleOauthIntegration());
+        setMergedIntegrationsConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
         tokens.set(
             INTEGRATION_ID,
             buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: VALID_FINGERPRINT })
@@ -152,19 +162,30 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         test(`returns undefined for ${label}`, async () => {
             const integration = buildIntegration();
             if (integration) {
-                integrations.set(integration.id, integration);
+                setMergedIntegrationsConfigs(NOTEBOOK_URI, integration);
             }
-            const result = await generator.generate(buildBlock());
+            const result = await generator.generate(buildBlock(), NOTEBOOK_URI);
             assert.strictEqual(result, undefined);
             sinon.assert.notCalled(fetcher);
         });
     });
 
+    test('returns undefined when the supplied notebook resolves no config for the id, even if another notebook does', async () => {
+        // Catches: resolving against an ambient/active notebook instead of the one the cell belongs to.
+        setupValidFederatedIntegration();
+
+        const result = await generator.generate(buildSqlBlock(), OTHER_NOTEBOOK_URI);
+
+        assert.strictEqual(result, undefined);
+        sinon.assert.calledOnceWithExactly(getMergedIntegrationConfigsSpy, OTHER_NOTEBOOK_URI);
+        sinon.assert.notCalled(fetcher);
+    });
+
     test('throws NotAuthenticatedError when federated integration has no stored token', async () => {
-        integrations.set(INTEGRATION_ID, buildGoogleOauthIntegration());
+        setMergedIntegrationsConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
 
         try {
-            await generator.generate(buildSqlBlock());
+            await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
             assert.fail('Expected NotAuthenticatedError');
         } catch (err) {
             assert(err instanceof NotAuthenticatedError);
@@ -173,28 +194,68 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         sinon.assert.notCalled(fetcher);
     });
 
-    test('throws NotAuthenticatedError and deletes the token when the metadata fingerprint is stale', async () => {
-        setupValidFederatedIntegration();
+    test('a .deepnote.env.yaml edit to clientId throws NotAuthenticatedError and keeps the stored token', async () => {
+        // A mismatch means "unusable by this notebook", not "dead": deleting would evict a sibling notebook that
+        // declares the same id with its own OAuth client. Sign out is the supported way to clear a stale entry.
+        // One perturbed field is enough: the generator hashes clientId/clientSecret/project through a single
+        // `computeMetadataFingerprint` call, and per-field sensitivity is covered in the token-storage suite.
+        const metadata: GoogleOauthMetadata = {
+            authMethod: 'google-oauth',
+            clientId: 'edited-in-yaml',
+            clientSecret: CLIENT_SECRET,
+            project: PROJECT
+        };
+        setMergedIntegrationsConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration({ metadata }));
         tokens.set(
             INTEGRATION_ID,
-            buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: 'stale-fingerprint' })
+            buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: VALID_FINGERPRINT })
         );
 
         try {
-            await generator.generate(buildSqlBlock());
+            await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
             assert.fail('Expected NotAuthenticatedError');
         } catch (err) {
             assert.instanceOf(err, NotAuthenticatedError);
         }
-        sinon.assert.calledOnceWithExactly(deleteSpy, INTEGRATION_ID);
+        sinon.assert.notCalled(deleteSpy);
         sinon.assert.notCalled(fetcher);
+    });
+
+    test('a second notebook with a different OAuth client does not evict the first notebook’s token', async () => {
+        setMergedIntegrationsConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration());
+        setMergedIntegrationsConfigs(
+            OTHER_NOTEBOOK_URI,
+            buildGoogleOauthIntegration({
+                metadata: {
+                    authMethod: 'google-oauth',
+                    clientId: 'other-notebook-client',
+                    clientSecret: CLIENT_SECRET,
+                    project: PROJECT
+                }
+            })
+        );
+        tokens.set(
+            INTEGRATION_ID,
+            buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: VALID_FINGERPRINT })
+        );
+
+        try {
+            await generator.generate(buildSqlBlock(), OTHER_NOTEBOOK_URI);
+            assert.fail('Expected NotAuthenticatedError');
+        } catch (err) {
+            assert.instanceOf(err, NotAuthenticatedError);
+        }
+
+        // Deleting here would also fire onDidChangeTokens, restarting the first notebook's kernel mid-session.
+        sinon.assert.notCalled(deleteSpy);
+        assert.strictEqual(tokens.get(INTEGRATION_ID)?.refreshToken, REFRESH_TOKEN);
     });
 
     test('returns a single Python string embedding the access token in the execute call for a valid federated SQL block', async () => {
         // Mirrors deepnote-internal: one `_dntk.execute_sql_with_connection_json(...)` call with the connection JSON as a literal containing the fresh access token. Token is expected in the single execute payload, same as cloud.
         setupValidFederatedIntegration();
 
-        const result = await generator.generate(buildSqlBlock());
+        const result = await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
         if (typeof result !== 'string') {
             throw new Error(`expected a string result, got ${typeof result}`);
         }
@@ -213,18 +274,13 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
     test('connection JSON literal round-trips through Python+json.loads when integration name contains backslash, newline, and single quote', async () => {
         // Catches: regressing `escapePythonString` (e.g. swapping in a single-char `\\'` escape) would leave `\\`/`\n` undecoded and break `json.loads` at the kernel. The literal lives inside the execute call now (no separate prelude assignment).
         const hostileProject = "gcp-with-\\-and-\n-and-'-project";
-        integrations.set(
-            INTEGRATION_ID,
-            buildGoogleOauthIntegration({
-                metadata: {
-                    authMethod: 'google-oauth',
-                    project: hostileProject,
-                    clientId: CLIENT_ID,
-                    clientSecret: CLIENT_SECRET
-                }
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any)
-        );
+        const metadata: GoogleOauthMetadata = {
+            authMethod: 'google-oauth',
+            clientId: CLIENT_ID,
+            clientSecret: CLIENT_SECRET,
+            project: hostileProject
+        };
+        setMergedIntegrationsConfigs(NOTEBOOK_URI, buildGoogleOauthIntegration({ metadata }));
         const hostileFingerprint = computeMetadataFingerprint({
             clientId: CLIENT_ID,
             clientSecret: CLIENT_SECRET,
@@ -235,7 +291,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             buildTokenEntry({ refreshToken: REFRESH_TOKEN, metadataFingerprint: hostileFingerprint })
         );
 
-        const result = await generator.generate(buildSqlBlock());
+        const result = await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
         if (typeof result !== 'string') {
             throw new Error(`expected a string result, got ${typeof result}`);
         }
@@ -255,8 +311,8 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         fetcher.onFirstCall().resolves({ accessToken: 'token-1' });
         fetcher.onSecondCall().resolves({ accessToken: 'token-2' });
 
-        const first = await generator.generate(buildSqlBlock());
-        const second = await generator.generate(buildSqlBlock());
+        const first = await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
+        const second = await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
 
         sinon.assert.calledTwice(fetcher);
         assert.notStrictEqual(first, second);
@@ -269,7 +325,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         fetcher.rejects(new InvalidGrantError());
 
         try {
-            await generator.generate(buildSqlBlock());
+            await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
             assert.fail('Expected NotAuthenticatedError');
         } catch (err) {
             assert.instanceOf(err, NotAuthenticatedError);
@@ -283,7 +339,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         fetcher.rejects(new InvalidClientError());
 
         try {
-            await generator.generate(buildSqlBlock());
+            await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
             assert.fail('Expected OAuthClientMisconfiguredError');
         } catch (err) {
             assert(err instanceof OAuthClientMisconfiguredError);
@@ -299,7 +355,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         setupValidFederatedIntegration();
         fetcher.resolves({ accessToken: ACCESS_TOKEN, newRefreshToken: 'new-refresh-token' });
 
-        await generator.generate(buildSqlBlock());
+        await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
 
         sinon.assert.calledOnce(saveSpy);
         const [savedEntry, options] = saveSpy.firstCall.args;
@@ -315,14 +371,14 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         setupValidFederatedIntegration();
         fetcher.resolves({ accessToken: ACCESS_TOKEN, newRefreshToken: REFRESH_TOKEN });
 
-        await generator.generate(buildSqlBlock());
+        await generator.generate(buildSqlBlock(), NOTEBOOK_URI);
 
         sinon.assert.notCalled(saveSpy);
     });
 
     test('honors deepnote_variable_name by emitting an assignment in the generated code', async () => {
         setupValidFederatedIntegration();
-        const result = await generator.generate(buildSqlBlock({ deepnote_variable_name: 'my_df' }));
+        const result = await generator.generate(buildSqlBlock({ deepnote_variable_name: 'my_df' }), NOTEBOOK_URI);
         if (typeof result !== 'string') {
             throw new Error(`expected a string result, got ${typeof result}`);
         }

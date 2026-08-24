@@ -316,13 +316,33 @@ export class ControllerRegistration implements IControllerRegistration, IExtensi
                     this.disposables.push(controller);
                     this.registeredControllers.set(controller.id, controller);
                     added.push(controller);
+                    // Track the selection from VS Code's own event, not the re-emit below.
+                    // `onNotebookControllerSelectionChanged` only fires for jupyter-notebook and
+                    // interactive documents, so for a Deepnote notebook this map stayed empty and every
+                    // command resolving a controller through `getSelected` — Interrupt, Restart — failed
+                    // with "No kernel associated with the notebook" while a kernel was plainly running.
+                    // A controller only receives this event for its own view type, so the map stays
+                    // scoped to notebooks we created a controller for.
+                    controller.controller.onDidChangeSelectedNotebooks(
+                        (e) => {
+                            if (!e.selected) {
+                                if (this.selectedControllers.get(e.notebook) === controller) {
+                                    this.selectedControllers.delete(e.notebook);
+                                }
+
+                                return;
+                            }
+                            logger.ci(`Controller ${controller.id} selected for ${e.notebook.uri.toString()}`);
+                            this.selectedControllers.set(e.notebook, controller);
+                        },
+                        this,
+                        controllerDisposables
+                    );
                     controller.onNotebookControllerSelectionChanged(
                         (e) => {
                             if (!e.selected) {
                                 return;
                             }
-                            logger.ci(`Controller ${e.controller?.id} selected for ${e.notebook.uri.toString()}`);
-                            this.selectedControllers.set(e.notebook, e.controller);
                             // Now notify out that we have updated a notebooks controller
                             this.selectedEmitter.fire(e);
                         },

@@ -191,6 +191,7 @@ export function createMockedNotebookDocument(
         when(cell.document).thenReturn(mockedDocument);
         when(cell.index).thenReturn(index);
         when(cell.kind).thenReturn(data.kind);
+        when(cell.metadata).thenReturn(data.metadata ?? {});
         const cellOutput: NotebookCellOutput[] = [];
         when(cell.outputs).thenReturn(cellOutput);
         when(cell.notebook).thenReturn(instance(notebook));

@@ -1,11 +1,10 @@
 import { inject, injectable } from 'inversify';
-import { commands, l10n, window, workspace } from 'vscode';
+import { commands, l10n, NotebookDocument, window, workspace } from 'vscode';
 
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import { logger } from '../../../platform/logging';
 import { IIntegrationDetector, IIntegrationManager, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
-import { IntegrationStatus } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../../types';
 import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 
@@ -14,10 +13,6 @@ import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/dat
  */
 @injectable()
 export class IntegrationManager implements IIntegrationManager {
-    private hasIntegrationsContext = 'deepnote.hasIntegrations';
-
-    private hasUnconfiguredIntegrationsContext = 'deepnote.hasUnconfiguredIntegrations';
-
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
         @inject(IIntegrationDetector) private readonly integrationDetector: IIntegrationDetector,
@@ -38,90 +33,71 @@ export class IntegrationManager implements IIntegrationManager {
                 // Find the integration ID from the arguments
                 // It could be the first arg (if called directly) or in the args array (if called from UI)
                 let integrationId: string | undefined;
+                let notebookUri: string | undefined;
 
                 for (const arg of args) {
                     if (typeof arg === 'string') {
-                        integrationId = arg;
-                        break;
+                        integrationId ??= arg;
+                        continue;
                     }
+                    notebookUri ??= this.extractNotebookUri(arg);
                 }
 
-                logger.debug(`IntegrationManager: Extracted integrationId: ${integrationId}`);
-                return this.showIntegrationsUI(integrationId);
+                logger.debug(`IntegrationManager: Extracted integrationId: ${integrationId}, notebook: ${notebookUri}`);
+
+                return this.showIntegrationsUI(integrationId, notebookUri);
             })
-        );
-
-        // Listen for active notebook changes to update context
-        this.extensionContext.subscriptions.push(
-            window.onDidChangeActiveNotebookEditor(() =>
-                this.updateContext().catch((err) =>
-                    logger.error('IntegrationManager: Failed to update context on notebook editor change', err)
-                )
-            )
-        );
-
-        // Listen for notebook document changes
-        this.extensionContext.subscriptions.push(
-            workspace.onDidOpenNotebookDocument(() =>
-                this.updateContext().catch((err) =>
-                    logger.error('IntegrationManager: Failed to update context on notebook open', err)
-                )
-            )
-        );
-
-        this.extensionContext.subscriptions.push(
-            workspace.onDidCloseNotebookDocument(() =>
-                this.updateContext().catch((err) =>
-                    logger.error('IntegrationManager: Failed to update context on notebook close', err)
-                )
-            )
-        );
-
-        // Initial context update
-        this.updateContext().catch((err) =>
-            logger.error('IntegrationManager: Failed to update context on activation', err)
         );
     }
 
+    /** The notebook URI a menu contribution passed; `notebook/toolbar` sends `{ notebookEditor: { notebookUri } }`. */
+    private extractNotebookUri(arg: unknown): string | undefined {
+        if (!arg || typeof arg !== 'object') {
+            return undefined;
+        }
+
+        const candidate = arg as { notebookUri?: unknown; notebookEditor?: { notebookUri?: unknown } };
+        const uri = candidate.notebookEditor?.notebookUri ?? candidate.notebookUri;
+
+        return uri ? String(uri) : undefined;
+    }
+
     /**
-     * Update the context keys based on the active notebook
+     * The Deepnote notebook to act on: `window.activeNotebookEditor` is unset until an editor is focused, so a
+     * restored but not yet focused notebook resolves via the menu's URI or the one visible editor instead.
      */
-    private async updateContext(): Promise<void> {
-        const activeNotebook = window.activeNotebookEditor?.notebook;
-
-        if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
-            await commands.executeCommand('setContext', this.hasIntegrationsContext, false);
-            await commands.executeCommand('setContext', this.hasUnconfiguredIntegrationsContext, false);
-            return;
+    private resolveDeepnoteNotebook(notebookUri: string | undefined): NotebookDocument | undefined {
+        if (notebookUri) {
+            const fromUri = workspace.notebookDocuments.find(
+                (notebook) => notebook.notebookType === 'deepnote' && notebook.uri.toString() === notebookUri
+            );
+            if (fromUri) {
+                return fromUri;
+            }
         }
 
-        const projectId = activeNotebook.metadata?.deepnoteProjectId;
-        const notebookId = activeNotebook.metadata?.deepnoteNotebookId;
-        if (!projectId || !notebookId) {
-            await commands.executeCommand('setContext', this.hasIntegrationsContext, false);
-            await commands.executeCommand('setContext', this.hasUnconfiguredIntegrationsContext, false);
-            return;
+        const active = window.activeNotebookEditor?.notebook;
+        if (active?.notebookType === 'deepnote') {
+            return active;
         }
 
-        // Detect integrations in the project
-        const integrations = await this.integrationDetector.detectIntegrations(projectId, notebookId);
-        const hasIntegrations = integrations.size > 0;
-        const hasUnconfigured = Array.from(integrations.values()).some(
-            (integration) => integration.status === IntegrationStatus.Disconnected
-        );
+        // Only when unambiguous: several visible Deepnote editors give no basis for a guess.
+        const visible = window.visibleNotebookEditors
+            .map((editor) => editor.notebook)
+            .filter((notebook) => notebook.notebookType === 'deepnote');
 
-        await commands.executeCommand('setContext', this.hasIntegrationsContext, hasIntegrations);
-        await commands.executeCommand('setContext', this.hasUnconfiguredIntegrationsContext, hasUnconfigured);
+        return visible.length === 1 ? visible[0] : undefined;
     }
 
     /**
      * Show the integrations management UI
      * @param selectedIntegrationId Optional integration ID to select/configure immediately
+     * @param notebookUri Optional notebook URI passed by the invoking menu contribution
      */
-    private async showIntegrationsUI(selectedIntegrationId?: string): Promise<void> {
-        const activeNotebook = window.activeNotebookEditor?.notebook;
+    private async showIntegrationsUI(selectedIntegrationId?: string, notebookUri?: string): Promise<void> {
+        const activeNotebook = this.resolveDeepnoteNotebook(notebookUri);
 
-        if (!activeNotebook || activeNotebook.notebookType !== 'deepnote') {
+        if (!activeNotebook) {
             void window.showErrorMessage(l10n.t('No active Deepnote notebook'));
             return;
         }
@@ -137,7 +113,11 @@ export class IntegrationManager implements IIntegrationManager {
         logger.trace(`IntegrationManager: Notebook metadata:`, activeNotebook.metadata);
 
         // First try to detect integrations from the stored project
-        let integrations = await this.integrationDetector.detectIntegrations(projectId, notebookId);
+        let integrations = await this.integrationDetector.detectIntegrations({
+            notebookId,
+            notebookUri: activeNotebook.uri,
+            projectId
+        });
         logger.debug(`IntegrationManager: Found ${integrations.size} integrations`);
 
         // If a specific integration was requested (e.g., from status bar click),
@@ -167,7 +147,6 @@ export class IntegrationManager implements IIntegrationManager {
             } else {
                 integrations.set(selectedIntegrationId, {
                     config: config || null,
-                    status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
                     integrationName,
                     integrationType
                 });

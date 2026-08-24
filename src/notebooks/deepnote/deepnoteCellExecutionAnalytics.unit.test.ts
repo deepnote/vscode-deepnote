@@ -31,6 +31,17 @@ suite('DeepnoteCellExecutionAnalytics', () => {
         } as unknown as NotebookCell;
     }
 
+    /** Agent scratch cells go through the converter, so they carry a pocket like any typed block. */
+    function ephemeralCell(kind: NotebookCellKind): NotebookCell {
+        return {
+            kind,
+            metadata: {
+                __deepnotePocket: { type: kind === NotebookCellKind.Code ? 'code' : 'markdown' },
+                is_ephemeral: true
+            }
+        } as unknown as NotebookCell;
+    }
+
     function executingCell(languageId: string, sqlIntegrationId?: string, notebookType = 'deepnote'): NotebookCell {
         return {
             document: { languageId },
@@ -106,7 +117,9 @@ suite('DeepnoteCellExecutionAnalytics', () => {
 
                 row.expected.forEach((blockType) =>
                     verify(
-                        telemetry.trackEvent(deepEqual({ eventName: 'add_block', properties: { blockType } }))
+                        telemetry.trackEvent(
+                            deepEqual({ eventName: 'add_block', properties: { blockType, isEphemeral: false } })
+                        )
                     ).once()
                 );
                 verify(telemetry.trackEvent(anything())).times(row.expected.length);
@@ -117,6 +130,22 @@ suite('DeepnoteCellExecutionAnalytics', () => {
             fireContentChange([addedCell(NotebookCellKind.Code)], [], JUPYTER);
 
             verify(telemetry.trackEvent(anything())).never();
+        });
+
+        test('counts agent scratch cells, which no command reports, as ephemeral', () => {
+            fireContentChange([ephemeralCell(NotebookCellKind.Code), ephemeralCell(NotebookCellKind.Markup)], []);
+
+            verify(
+                telemetry.trackEvent(
+                    deepEqual({ eventName: 'add_block', properties: { blockType: 'code', isEphemeral: true } })
+                )
+            ).once();
+            verify(
+                telemetry.trackEvent(
+                    deepEqual({ eventName: 'add_block', properties: { blockType: 'markdown', isEphemeral: true } })
+                )
+            ).once();
+            verify(telemetry.trackEvent(anything())).twice();
         });
     });
 
@@ -171,10 +200,28 @@ suite('DeepnoteCellExecutionAnalytics', () => {
                 );
 
                 verify(
-                    telemetry.trackEvent(deepEqual({ eventName: 'execute_cell', properties: { ...row.expected } }))
+                    telemetry.trackEvent(
+                        deepEqual({
+                            eventName: 'execute_cell',
+                            properties: { ...row.expected, isEphemeral: false }
+                        })
+                    )
                 ).once();
                 verify(telemetry.trackEvent(anything())).once();
             });
+        });
+
+        test('an agent-generated cell reports isEphemeral true', () => {
+            const cell = { ...executingCell('python'), metadata: { is_ephemeral: true } } as unknown as NotebookCell;
+
+            notebookCellExecutions.changeCellState(cell, NotebookCellExecutionState.Executing);
+
+            verify(
+                telemetry.trackEvent(
+                    deepEqual({ eventName: 'execute_cell', properties: { cellType: 'code', isEphemeral: true } })
+                )
+            ).once();
+            verify(telemetry.trackEvent(anything())).once();
         });
 
         test('ignores Pending and Idle transitions, and non-Deepnote notebooks', () => {

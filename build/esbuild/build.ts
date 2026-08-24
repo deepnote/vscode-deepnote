@@ -83,7 +83,7 @@ const extensionFolder = path.join(__dirname, '..', '..');
 
 // Security pins copied from the root `overrides` into the generated sql-lsp-modules package.json,
 // which npm installs in isolation and would otherwise resolve to vulnerable versions.
-const sqlLspOverridesToPropagate = ['ip-address', 'ssh2', 'tar'];
+const sqlLspOverridesToPropagate = ['ip-address', 'ssh2', 'tar', '@tootallnate/once'];
 
 interface StylePluginOptions {
     /**
@@ -273,6 +273,17 @@ function createConfig(
     // Use ESM entry for jsonc-parser to avoid UMD internal require() issues when bundling
     if (target === 'desktop') {
         alias['jsonc-parser'] = path.join(extensionFolder, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js');
+    }
+    // @deepnote/runtime-core needs Node built-ins (net, child_process) and is excluded from the VSIX;
+    // externalizing it (like desktop) would leave an unresolvable bare import in the web bundle.
+    if (target === 'web') {
+        alias['@deepnote/runtime-core'] = path.join(
+            extensionFolder,
+            'src',
+            'notebooks',
+            'deepnote',
+            'runtimeCore.web.ts'
+        );
     }
     // Desktop builds use CommonJS for VS Code/Cursor compatibility
     // Web builds use ESM for browser compatibility

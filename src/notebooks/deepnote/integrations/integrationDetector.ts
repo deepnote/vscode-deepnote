@@ -1,14 +1,16 @@
 import { inject, injectable } from 'inversify';
+import { Uri } from 'vscode';
+
+import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 
 import { logger } from '../../../platform/logging';
 import { IDeepnoteNotebookManager } from '../../types';
 import {
-    ConfigurableDatabaseIntegrationType,
-    IntegrationStatus,
-    IntegrationWithStatus
+    DetectedIntegration,
+    isConfigurableDatabaseIntegrationType
 } from '../../../platform/notebooks/deepnote/integrationTypes';
-import { IIntegrationDetector, IIntegrationStorage } from './types';
-import { databaseIntegrationTypes } from '@deepnote/database-integrations';
+import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
+import { IIntegrationDetector, IIntegrationStorage, IntegrationDetectionInput } from './types';
 
 /**
  * Service for detecting integrations used in Deepnote notebooks
@@ -17,54 +19,56 @@ import { databaseIntegrationTypes } from '@deepnote/database-integrations';
 export class IntegrationDetector implements IIntegrationDetector {
     constructor(
         @inject(IIntegrationStorage) private readonly integrationStorage: IIntegrationStorage,
-        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager
+        @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
+        @inject(ISqlIntegrationEnvVarsProvider)
+        private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider
     ) {}
 
     /**
-     * Detect all integrations used in the given project.
-     * Uses the project's integrations field as the source of truth.
+     * Detect all integrations for the notebook's project. Three inputs, three roles:
+     * - `project.integrations` is the roster (ids, names and types only — never credentials), so it decides
+     *   the order and the names the panel shows.
+     * - SecretStorage supplies the editable config for each one; integrations configured only in
+     *   `.deepnote.env.yaml` stay `null` here, since those configs are never persisted through it.
+     * - `.deepnote.env.yaml` entries missing from the roster are appended, matching what actually applies at
+     *   execution time. Without this a file-only integration works but is invisible, and a federated one is
+     *   unusable outright — its Authenticate action exists only as a row in this panel.
      */
-    async detectIntegrations(projectId: string, notebookId: string): Promise<Map<string, IntegrationWithStatus>> {
-        // Get the project
+    async detectIntegrations(input: IntegrationDetectionInput): Promise<Map<string, DetectedIntegration>> {
+        const { projectId, notebookId } = input;
+
         const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
         if (!project) {
             logger.warn(
                 `IntegrationDetector: No project found for ID: ${projectId}. The project may not have been loaded yet.`
             );
+
             return new Map();
         }
 
-        logger.debug(`IntegrationDetector: Scanning project ${projectId} for integrations`);
+        const projectIntegrations = project.project.integrations ?? [];
 
-        const integrations = new Map<string, IntegrationWithStatus>();
+        logger.debug(`IntegrationDetector: Project ${projectId} declares ${projectIntegrations.length} integrations`);
 
-        // Use the project's integrations field as the source of truth
-        const projectIntegrations = project.project.integrations?.slice() ?? [];
-        logger.debug(`IntegrationDetector: Found ${projectIntegrations.length} integrations in project.integrations`);
+        const integrations = new Map<string, DetectedIntegration>();
 
         for (const projectIntegration of projectIntegrations) {
-            const integrationId = projectIntegration.id;
             const integrationType = projectIntegration.type;
-            if (
-                !(databaseIntegrationTypes as readonly string[]).includes(integrationType) ||
-                integrationType === 'pandas-dataframe'
-            ) {
+            if (!isConfigurableDatabaseIntegrationType(integrationType)) {
                 logger.debug(`IntegrationDetector: Skipping unsupported integration type: ${integrationType}`);
                 continue;
             }
 
-            // Check if the integration is configured
-            const config = await this.integrationStorage.getIntegrationConfig(integrationId);
-            const status: IntegrationWithStatus = {
-                config: config ?? null,
-                status: config ? IntegrationStatus.Connected : IntegrationStatus.Disconnected,
-                // Include integration metadata from project for prefilling when config is null
-                integrationName: projectIntegration.name,
-                integrationType: integrationType as ConfigurableDatabaseIntegrationType
-            };
+            const storedConfig = await this.integrationStorage.getIntegrationConfig(projectIntegration.id);
 
-            integrations.set(integrationId, status);
+            integrations.set(projectIntegration.id, {
+                config: storedConfig ?? null,
+                integrationName: projectIntegration.name,
+                integrationType
+            });
         }
+
+        await this.appendFileOnlyIntegrations(input.notebookUri, integrations);
 
         logger.debug(`IntegrationDetector: Found ${integrations.size} integrations`);
 
@@ -72,17 +76,36 @@ export class IntegrationDetector implements IIntegrationDetector {
     }
 
     /**
-     * Check if a project has any unconfigured integrations
+     * Adds `.deepnote.env.yaml` integrations the roster omits. `config` stays `null` because the panel edits
+     * SecretStorage only and the file layer cannot be written back; the name and type are carried so the row
+     * renders. A failed lookup leaves the roster-only result rather than blocking the panel.
      */
-    async hasUnconfiguredIntegrations(projectId: string, notebookId: string): Promise<boolean> {
-        const integrations = await this.detectIntegrations(projectId, notebookId);
+    private async appendFileOnlyIntegrations(
+        notebookUri: Uri,
+        integrations: Map<string, DetectedIntegration>
+    ): Promise<void> {
+        let mergedIntegrationConfigs: DatabaseIntegrationConfig[];
 
-        for (const integration of integrations.values()) {
-            if (integration.status === IntegrationStatus.Disconnected) {
-                return true;
-            }
+        try {
+            mergedIntegrationConfigs = await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(notebookUri);
+        } catch (error) {
+            logger.error('IntegrationDetector: failed to read file integrations; listing the roster only', error);
+
+            return;
         }
 
-        return false;
+        for (const config of mergedIntegrationConfigs) {
+            // Anything merged but absent here came from the file alone — the merge resolves roster ids first.
+            if (integrations.has(config.id) || !isConfigurableDatabaseIntegrationType(config.type)) {
+                continue;
+            }
+
+            logger.debug(`IntegrationDetector: Adding file-only integration ${config.id}`);
+            integrations.set(config.id, {
+                config: null,
+                integrationName: config.name,
+                integrationType: config.type
+            });
+        }
     }
 }

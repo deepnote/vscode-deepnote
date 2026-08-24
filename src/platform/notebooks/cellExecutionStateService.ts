@@ -57,6 +57,7 @@ const STATE_NAMES: Record<NotebookCellExecutionState, string> = {
 export namespace notebookCellExecutions {
     const eventEmitter = trackDisposable(new EventEmitter<NotebookCellExecutionStateChangeEvent>());
     const queueCompletionEmitter = trackDisposable(new EventEmitter<NotebookQueueCompletionEvent>());
+    const queueStartEmitter = trackDisposable(new EventEmitter<NotebookQueueCompletionEvent>());
 
     /**
      * An {@link Event} which fires when the execution state of a cell has changed.
@@ -72,12 +73,28 @@ export namespace notebookCellExecutions {
     export const onDidCompleteQueueExecution = queueCompletionEmitter.event;
 
     /**
+     * An {@link Event} which fires when a user-initiated run begins, before any cell executes.
+     * A run that executes no cells at all still fires it, which is what separates it from the
+     * first cell going Executing.
+     */
+    export const onDidStartQueueExecution = queueStartEmitter.event;
+
+    /**
      * Notify listeners that a notebook's cell execution queue has completed.
      * @param notebookUri The URI of the notebook whose queue completed
      */
     export function notifyQueueComplete(notebookUri: string) {
         logger.debug(`[CellExecState] Queue execution complete for ${notebookUri}`);
         queueCompletionEmitter.fire({ notebookUri });
+    }
+
+    /**
+     * Notify listeners that a user-initiated run is starting.
+     * @param notebookUri The URI of the notebook whose run is starting
+     */
+    export function notifyQueueStart(notebookUri: string) {
+        logger.debug(`[CellExecState] Queue execution starting for ${notebookUri}`);
+        queueStartEmitter.fire({ notebookUri });
     }
 
     export function changeCellState(cell: NotebookCell, state: NotebookCellExecutionState, executionOrder?: number) {

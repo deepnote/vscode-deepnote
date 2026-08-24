@@ -16,8 +16,10 @@ export type TelemetryEventName =
     | 'execute_notebook'
     | 'export_notebook'
     | 'import_notebook'
+    | 'integration_endpoint_failed'
     | 'open_in_deepnote'
     | 'open_notebook'
+    | 'refresh_integration_env'
     | 'rename_notebook'
     | 'rename_project'
     | 'reset_integration'
@@ -33,7 +35,7 @@ export type CommandOutcome = 'completed' | 'cancelled' | 'failed';
 
 /** Caller-supplied properties per event; `undefined` means none beyond the common properties the service attaches. */
 export interface TelemetryEventProperties {
-    add_block: { blockType: string };
+    add_block: { blockType: string; isEphemeral: boolean };
     authenticate_integration: { integrationType: string; outcome: CommandOutcome };
     configure_integration: { integrationType: string };
     copy_notebook_details: undefined;
@@ -44,19 +46,34 @@ export interface TelemetryEventProperties {
     delete_integration: { integrationType: string };
     delete_notebook: { outcome: CommandOutcome };
     duplicate_notebook: { outcome: CommandOutcome };
-    execute_cell: { cellType: 'sql' | 'markdown' | 'code'; integrationType?: string };
+    execute_cell: { cellType: 'sql' | 'markdown' | 'code'; isEphemeral: boolean; integrationType?: string };
     execute_notebook: undefined;
     export_notebook: { outcome: CommandOutcome; format?: string };
     import_notebook: { outcome: CommandOutcome; source: 'deepnote' | 'jupyter' };
+    integration_endpoint_failed: { phase: 'running' | 'startup' };
     open_in_deepnote: { outcome: CommandOutcome };
     open_notebook: { outcome: CommandOutcome };
+    /**
+     * No `outcome`: nothing here is a command the user waits on — there is no progress UI and no cancel, so
+     * `'cancelled'` is unreachable and a partial pass has no defensible single value. The counts carry it.
+     */
+    refresh_integration_env: {
+        /** Notebooks the refresh ran over, including ones skipped for having no started kernel. */
+        attemptedCount: number;
+        failedCount: number;
+        refreshedCount: number;
+        trigger: 'env_file' | 'integration_config';
+        /** How the first failing notebook failed; absent when `failedCount` is 0. */
+        failureKind?: 'execution_failed' | 'snippet_error';
+    };
     rename_notebook: { outcome: CommandOutcome };
     rename_project: { outcome: CommandOutcome };
     reset_integration: { integrationType: string };
     save_integration: { integrationType: string; authMethod?: 'service-account' | 'google-oauth' };
     select_environment: undefined;
     split_notebook: { notebookCount: number; outcome: CommandOutcome };
-    switch_sql_integration: { integrationType: string };
+    /** `fromEnvFile` is file-ONLY, not file-configured: false when the id is also in the project roster. */
+    switch_sql_integration: { fromEnvFile: boolean; integrationType: string };
     toggle_snapshots: { enabled: boolean };
     update_environment: { field: 'name' | 'packages'; packageCount?: number };
 }

@@ -44,6 +44,9 @@ export const FOLDER_OPEN_TIMEOUT = 45_000;
 export const RELOAD_POLL_TIMEOUT = 2_500;
 export const FOLDER_OK_RETRY_DELAY = 400;
 
+// How long a file opened through Quick Open gets to become the active editor.
+export const EDITOR_ACTIVE_TIMEOUT = 15_000;
+
 // Selectors that only exist inside the notebook output iframe (`#active-frame`),
 // so reading them cannot accidentally match the cell's source in the editor.
 export const OUTPUT_SELECTOR = '.output_container, .output, .rendered-output';

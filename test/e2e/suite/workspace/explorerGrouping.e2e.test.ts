@@ -4,7 +4,7 @@
  */
 
 import { expect } from 'chai';
-import { ActivityBar, EditorView, SideBarView, VSBrowser, WebView, type ViewItem } from 'vscode-extension-tester';
+import { EditorView, SideBarView, VSBrowser, WebView, type ViewItem } from 'vscode-extension-tester';
 
 import {
     SUITE_TIMEOUT,
@@ -12,6 +12,7 @@ import {
     copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
+    openActivityBarView,
     openFolderViaDialog
 } from '../../helpers';
 
@@ -93,8 +94,7 @@ describe('Deepnote — the Explorer groups sibling files by project', function (
         await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        const control = await new ActivityBar().getViewControl('Deepnote');
-        await control?.openView();
+        await openActivityBarView('Deepnote');
         await driver.sleep(2000);
         const section = await getExplorerSection();
 

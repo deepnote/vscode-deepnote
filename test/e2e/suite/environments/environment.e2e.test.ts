@@ -7,7 +7,6 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-    ActivityBar,
     By,
     EditorView,
     InputBox,
@@ -29,6 +28,7 @@ import {
     copyFixtureToTempDir,
     createEnvironment,
     createScreenshotter,
+    openActivityBarView,
     openFolderViaDialog,
     openWorkspaceFile,
     runOnceAndAwaitOutput,
@@ -261,8 +261,7 @@ function isAlive(pid: number): boolean {
 
 /** Opens the Deepnote view container and returns its "Environments" tree section. */
 async function getDeepnoteEnvironmentsSection() {
-    const control = await new ActivityBar().getViewControl('Deepnote');
-    await control?.openView();
+    await openActivityBarView('Deepnote');
     await VSBrowser.instance.driver.sleep(1200);
 
     const content = new SideBarView().getContent();

@@ -25,6 +25,9 @@ comment:
   behavior: default
   require_changes: no
 
-fixes:
-  # Remove prefix in coverage report
-  - '/home/runner/work/vscode-jupyter/::'
+ignore:
+  - 'src/test/**'
+  - '**/*.unit.test.ts'
+  - '**/*.vscode.test.ts'
+  - '**/*.vscode.common.test.ts'
+  - 'test/**'

@@ -37,7 +37,7 @@
             "fileLocation": "relative",
             "pattern": [
                 {
-                    "regexp": "^\\s*(.*):(\\d+):(\\d+):\\s+(error|warning)\\s+(.*)$",
+                    "regexp": "^\\s*(.*):(\\d+):(\\d+):\\s+(error|warning):?\\s+(.*)$",
                     "file": 1,
                     "line": 2,
                     "column": 3,
@@ -117,11 +117,14 @@
             }
         },
         {
-            "type": "npm",
-            "script": "lint",
+            // Not `"type": "npm"` running the `lint` script: that omits `--format`, so oxlint
+            // emits its graphical report, which the `$oxlint` matcher can't parse. The script
+            // stays format-free so CI keeps oxlint's automatic GitHub-annotation output.
+            "type": "shell",
+            "command": "npx oxlint --format=agent src",
             "problemMatcher": "$oxlint",
-            "label": "npm: lint",
-            "detail": "oxlint src",
+            "label": "Lint",
+            "detail": "oxlint --format=agent src",
             "group": {
                 "kind": "build"
             }

@@ -22,7 +22,6 @@ import {
     FIRST_RUN_OUTPUT_TIMEOUT,
     KERNEL_CONNECT_TIMEOUT,
     QUICK_PICK_TIMEOUT,
-    SHARED_ENV_NAME,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     assertNotNull,
@@ -41,7 +40,7 @@ import {
 const FIXTURE = 'sales-analytics.deepnote';
 const CHILD = 'sales-analytics-overview.deepnote';
 const PROJECT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const ENV_NAME = SHARED_ENV_NAME;
+const ENV_NAME = 'E2E Split Migration Env';
 const SPLIT_PROMPT = /multiple notebooks/i;
 const SPLIT_ACTION = 'Split into separate files';
 const SPLIT_DONE = /Split into \d+ files\./i;
@@ -226,7 +225,6 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
 // shares os.tmpdir() with the extension host, so reading the dir is the only cross-process stop signal.
 const LOCK_DIR = path.join(os.tmpdir(), 'vscode-deepnote-locks');
 
-// A dedicated env name so deleting it never disturbs the shared `E2E Hello Env` other suites reuse.
 const DELETE_ENV_NAME = 'E2E Delete Env';
 const G2_FIXTURE = 'marketing-overview.deepnote';
 

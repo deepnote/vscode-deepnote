@@ -48,10 +48,6 @@ export const FOLDER_OK_RETRY_DELAY = 400;
 // so reading them cannot accidentally match the cell's source in the editor.
 export const OUTPUT_SELECTOR = '.output_container, .output, .rendered-output';
 
-// Shared by every suite so only one venv is ever provisioned; the deletion suite is the one
-// exception, since it deletes what it creates.
-export const SHARED_ENV_NAME = 'E2E Hello Env';
-
 // Where the managed venv lives, and the substring that identifies it in the interpreter quick pick.
 // The marker matches both the real directory and the `.venv` link the workspace exposes it through.
 export const PREBAKED_VENV_DIR_NAME = '.venv-e2e';

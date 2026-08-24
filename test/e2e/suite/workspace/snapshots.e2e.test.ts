@@ -8,7 +8,6 @@ import * as path from 'path';
 import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 import {
     FIRST_RUN_OUTPUT_TIMEOUT,
-    SHARED_ENV_NAME,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     copyFixtureIntoDir,
@@ -88,7 +87,7 @@ describe('Deepnote — a legacy project-scoped snapshot still loads its saved ou
 describe('Deepnote — new snapshots are notebook-scoped and do not bleed between siblings', function () {
     this.timeout(SUITE_TIMEOUT);
 
-    const ENV_NAME = SHARED_ENV_NAME;
+    const ENV_NAME = 'E2E Snapshots Env';
     const SIBLINGS = [
         { file: 'marketing-overview.deepnote', output: 'overview', notebookId: 'e-nb-overview' },
         { file: 'marketing-campaigns.deepnote', output: 'campaigns', notebookId: 'e-nb-campaigns' }

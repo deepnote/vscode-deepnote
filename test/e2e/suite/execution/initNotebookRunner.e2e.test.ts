@@ -9,7 +9,6 @@ import { EditorView, InputBox, VSBrowser, WebView, Workbench } from 'vscode-exte
 import {
     FIRST_RUN_OUTPUT_TIMEOUT,
     OUTPUT_POLL_INTERVAL,
-    SHARED_ENV_NAME,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     clickRunAll,
@@ -94,7 +93,7 @@ async function confirmKernelPickerIfPresent(): Promise<void> {
 describe('Deepnote — running the sibling init notebook in a main notebook kernel', function () {
     this.timeout(SUITE_TIMEOUT);
 
-    const environmentName = SHARED_ENV_NAME;
+    const environmentName = 'E2E Init Runner Env';
     let cleanupTempDir: (() => void) | undefined;
     let screenshot: (label: string) => Promise<string>;
 

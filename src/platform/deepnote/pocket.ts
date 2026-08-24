@@ -2,7 +2,7 @@ import type { DeepnoteBlock, ExecutableBlock } from '@deepnote/blocks';
 import { isExecutableBlockType } from '@deepnote/blocks';
 import { NotebookCellKind, type NotebookCellData } from 'vscode';
 
-import { generateBlockId, generateSortingKey } from '../../notebooks/deepnote/dataConversionUtils';
+import { generateBlockId, generateSortingKey, getBlockId } from '../../notebooks/deepnote/dataConversionUtils';
 import { logger } from '../logging';
 import { generateUuid } from '../common/uuid';
 
@@ -74,9 +74,8 @@ export function createBlockFromPocket(cell: NotebookCellData, index: number): De
     const pocket = extractPocketFromCellMetadata(cell);
 
     const metadata = cell.metadata ? { ...cell.metadata } : undefined;
-    // Get id from top-level metadata before cleaning it up
-    // Check both 'id' and backup '__deepnoteBlockId' in case VS Code modifies 'id'
-    const cellId = (metadata?.__deepnoteBlockId as string | undefined) || (metadata?.id as string | undefined);
+    // Read the id before the copy below is stripped of it
+    const cellId = getBlockId(cell);
 
     logger.debug(
         `[Pocket] createBlockFromPocket index=${index}: cell.metadata.id=${metadata?.id}, __deepnoteBlockId=${metadata?.__deepnoteBlockId}, using cellId=${cellId}, metadata keys=${

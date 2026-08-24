@@ -109,7 +109,7 @@ export class AsyncEmitter<T extends IWaitUntil> {
 
             // freeze thenables-collection to enforce sync-calls to
             // wait until and then wait for all thenables to resolve
-            Object.freeze(thenables);
+            void Object.freeze(thenables);
 
             await Promise.allSettled(thenables).then((values) => {
                 for (const value of values) {

@@ -50,7 +50,11 @@ import {
     IIntegrationWebviewProvider
 } from './deepnote/integrations/types';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
+import { AgentCellStatusBarProvider } from './deepnote/agentCellStatusBarProvider';
+import { AgentOpenAiApiKeyCommandHandler } from './deepnote/agentOpenAiApiKeyCommandHandler';
 import { DeepnoteBigNumberCellStatusBarProvider } from './deepnote/deepnoteBigNumberCellStatusBarProvider';
+import { EphemeralCellStatusBarProvider } from './deepnote/ephemeralCellStatusBarProvider';
+import { OrphanedEphemeralCellCleaner } from './deepnote/orphanedEphemeralCellCleaner';
 import { DeepnoteNewCellLanguageService } from './deepnote/deepnoteNewCellLanguageService';
 import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 import { FederatedAuthCommandHandlerWeb } from './deepnote/integrations/federatedAuth/federatedAuthCommandHandler.web';
@@ -125,6 +129,22 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteBigNumberCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        AgentOpenAiApiKeyCommandHandler
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        AgentCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        EphemeralCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        OrphanedEphemeralCellCleaner
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

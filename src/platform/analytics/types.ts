@@ -35,7 +35,7 @@ export type CommandOutcome = 'completed' | 'cancelled' | 'failed';
 
 /** Caller-supplied properties per event; `undefined` means none beyond the common properties the service attaches. */
 export interface TelemetryEventProperties {
-    add_block: { blockType: string };
+    add_block: { blockType: string; isEphemeral: boolean };
     authenticate_integration: { integrationType: string; outcome: CommandOutcome };
     configure_integration: { integrationType: string };
     copy_notebook_details: undefined;
@@ -46,7 +46,7 @@ export interface TelemetryEventProperties {
     delete_integration: { integrationType: string };
     delete_notebook: { outcome: CommandOutcome };
     duplicate_notebook: { outcome: CommandOutcome };
-    execute_cell: { cellType: 'sql' | 'markdown' | 'code'; integrationType?: string };
+    execute_cell: { cellType: 'sql' | 'markdown' | 'code'; isEphemeral: boolean; integrationType?: string };
     execute_notebook: undefined;
     export_notebook: { outcome: CommandOutcome; format?: string };
     import_notebook: { outcome: CommandOutcome; source: 'deepnote' | 'jupyter' };

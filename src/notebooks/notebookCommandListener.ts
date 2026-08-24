@@ -31,7 +31,6 @@ import { chainWithPendingUpdates } from '../kernels/execution/notebookUpdater';
 import { IDataScienceErrorHandler } from '../kernels/errors/types';
 import { getNotebookMetadata } from '../platform/common/utils';
 import { KernelConnector } from './controllers/kernelConnector';
-import { IControllerRegistration } from './controllers/types';
 import { IExtensionSyncActivationService } from '../platform/activation/types';
 import { IKernelStatusProvider } from '../kernels/kernelStatusProvider';
 
@@ -50,7 +49,6 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         @inject(NotebookCellLanguageService) private readonly languageService: NotebookCellLanguageService,
         @inject(IConfigurationService) private configurationService: IConfigurationService,
         @inject(IKernelProvider) private kernelProvider: IKernelProvider,
-        @inject(IControllerRegistration) private controllerRegistration: IControllerRegistration,
         @inject(IDataScienceErrorHandler) private errorHandler: IDataScienceErrorHandler,
         @inject(INotebookEditorProvider) private notebookEditorProvider: INotebookEditorProvider,
         @inject(IServiceContainer) private serviceContainer: IServiceContainer,
@@ -244,24 +242,23 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
             return pendingPromise;
         }
         const promise = (async () => {
-            // Get currently executing cell and controller
             const currentCell = this.kernelProvider.getKernelExecution(kernel).pendingCells[0];
-            const controller = this.controllerRegistration.getSelected(notebook);
             const disposable =
                 disableUI && currentContext === 'restart'
                     ? this.kernelStatusProvider.hideRestartProgress(kernel)
                     : new Disposable(noop);
             try {
-                if (!controller) {
-                    throw new Error('No kernel associated with the notebook');
-                }
                 // Wrap the restart/interrupt in a loop that allows the user to switch
                 await KernelConnector.wrapKernelMethod(
-                    controller.connection,
+                    // The kernel's own connection, not the selected controller's: the two diverge once
+                    // the selection moves while this kernel runs, and getOrCreate disposes a kernel
+                    // whose metadata id does not match — so interrupting would replace the very kernel
+                    // it was asked to interrupt.
+                    kernel.kernelConnectionMetadata,
                     currentContext,
                     kernel.creator,
                     this.serviceContainer,
-                    { resource: kernel.resourceUri, notebook, controller: controller.controller },
+                    { resource: kernel.resourceUri, notebook, controller: kernel.controller },
                     new DisplayOptions(disableUI),
                     this.disposableRegistry
                 );

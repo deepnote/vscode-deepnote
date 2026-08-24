@@ -3,7 +3,6 @@ __pycache__
 !src/test/pythonEnvironments/**/*.*
 !yarn.lock
 .DS_Store
-.eslintcache
 .github_token
 .huskyrc.json
 .nyc_output

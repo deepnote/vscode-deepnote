@@ -3,6 +3,7 @@ import * as sinon from 'sinon';
 import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import { createMockChildProcess } from '../../kernels/deepnote/deepnoteTestHelpers.node';
+import { createMockCell } from './deepnoteTestHelpers';
 import { ServerHandleRegistry } from '../../kernels/deepnote/deepnoteServerHandleRegistry.node';
 import {
     IDeepnoteEnvironmentManager,
@@ -19,9 +20,17 @@ import { IPythonExtensionChecker } from '../../platform/api/types';
 import { IJupyterRequestCreator } from '../../kernels/jupyter/types';
 import { IConfigurationService } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
-import { IKernelProvider, IKernel, IJupyterKernelSpec } from '../../kernels/types';
+import { IKernelProvider, IKernel, IJupyterKernelSpec, KernelConnectionMetadata } from '../../kernels/types';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
-import { CancellationError, NotebookDocument, Uri, NotebookController, CancellationToken } from 'vscode';
+import {
+    CancellationError,
+    EventEmitter,
+    NotebookDocument,
+    NotebookEditor,
+    Uri,
+    NotebookController,
+    CancellationToken
+} from 'vscode';
 import { DeepnoteToolkitMissingError } from '../../platform/errors/deepnoteKernelErrors';
 import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
@@ -544,6 +553,57 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             verify(mockNotebookEnvironmentMapper.getEnvironmentForNotebook(anything())).once();
             verify(mockEnvironmentManager.getEnvironment(environmentId)).once();
+        });
+    });
+
+    suite('ensureControllerSelectedForNotebook', () => {
+        // Every Deepnote controller for one notebook carries the same id, derived from the notebook URI.
+        const CONTROLLER_ID = 'deepnote-notebook-/test/notebook.deepnote';
+
+        function createController(): IVSCodeNotebookController {
+            const controller = mock<IVSCodeNotebookController>();
+            when(controller.id).thenReturn(CONTROLLER_ID);
+            when(controller.connection).thenReturn({ id: CONTROLLER_ID } as KernelConnectionMetadata);
+            when(controller.controller).thenReturn({
+                updateNotebookAffinity: sandbox.stub()
+            } as unknown as NotebookController);
+
+            return instance(controller);
+        }
+
+        setup(() => {
+            when(mockCancellationToken.isCancellationRequested).thenReturn(false);
+            when(mockedVSCodeNamespaces.window.visibleNotebookEditors).thenReturn([
+                { notebook: mockNotebook } as NotebookEditor
+            ]);
+            when(mockedVSCodeNamespaces.commands.executeCommand('notebook.selectKernel', anything())).thenResolve();
+        });
+
+        test('selects the kernel when the recorded controller was replaced by one with the same id', async () => {
+            // The recorded controller was disposed and rebuilt; only object identity tells the two apart,
+            // and skipping selectKernel here leaves the notebook bound to the dead one.
+            when(mockControllerRegistration.getSelected(anything())).thenReturn(createController());
+
+            await selector.ensureControllerSelectedForNotebook(
+                mockNotebook,
+                createController(),
+                instance(mockCancellationToken)
+            );
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand('notebook.selectKernel', anything())).once();
+        });
+
+        test('skips the kernel picker when the recorded controller is the one being selected', async () => {
+            const controller = createController();
+            when(mockControllerRegistration.getSelected(anything())).thenReturn(controller);
+
+            await selector.ensureControllerSelectedForNotebook(
+                mockNotebook,
+                controller,
+                instance(mockCancellationToken)
+            );
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand('notebook.selectKernel', anything())).never();
         });
     });
 
@@ -1091,6 +1151,67 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 // Should have filtered and sorted correctly
                 assert.strictEqual(hash, 'numpy|pandas|scipy');
             });
+        });
+    });
+
+    suite('Placeholder controller execution', () => {
+        function createPlaceholder() {
+            const placeholder = {
+                supportsExecutionOrder: false,
+                supportedLanguages: [] as string[],
+                updateNotebookAffinity: sandbox.stub(),
+                dispose: sandbox.stub(),
+                createNotebookCellExecution: sandbox.stub()
+            } as unknown as NotebookController;
+
+            when(
+                mockedVSCodeNamespaces.notebooks!.createNotebookController(anything(), anything(), anything())
+            ).thenReturn(placeholder);
+
+            const onDidCloseNotebookDocument = new EventEmitter<NotebookDocument>();
+            when(mockedVSCodeNamespaces.workspace.onDidCloseNotebookDocument).thenReturn(
+                onDidCloseNotebookDocument.event
+            );
+
+            const internals = selector as unknown as {
+                createPlaceholderController(notebook: NotebookDocument): NotebookController;
+            };
+
+            internals.createPlaceholderController(mockNotebook);
+
+            return placeholder;
+        }
+
+        const agentCell = createMockCell({ index: 0, metadata: { __deepnotePocket: { type: 'agent' } } });
+        const codeCell = createMockCell({ index: 1 });
+
+        test('configures the environment and executes nothing', async () => {
+            when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(true);
+            const placeholder = createPlaceholder();
+            const ensureEnvironment = sandbox
+                .stub(selector, 'ensureEnvironmentConfiguredBeforeExecution')
+                .resolves(true);
+
+            await placeholder.executeHandler!([agentCell, codeCell], mockNotebook, placeholder);
+
+            assert.isTrue(ensureEnvironment.calledOnce, 'should prompt for an environment');
+            assert.isTrue(
+                (placeholder.createNotebookCellExecution as sinon.SinonStub).notCalled,
+                'placeholder must not create executions'
+            );
+            verify(mockKernelProvider.getOrCreate(anything(), anything())).never();
+        });
+
+        test('does nothing at all in an untrusted workspace', async () => {
+            when(mockedVSCodeNamespaces.workspace.isTrusted).thenReturn(false);
+            const placeholder = createPlaceholder();
+            const ensureEnvironment = sandbox
+                .stub(selector, 'ensureEnvironmentConfiguredBeforeExecution')
+                .resolves(true);
+
+            await placeholder.executeHandler!([agentCell, codeCell], mockNotebook, placeholder);
+
+            assert.isTrue(ensureEnvironment.notCalled, 'should not prompt in an untrusted workspace');
         });
     });
 

@@ -71,6 +71,10 @@ jobs:
       - name: Install the Python extension into the test instance
         run: npm run setup:e2e:deps
 
+      - name: Pre-download the mock LLM server
+        # aimock is npx-only (not in lockfile), so setup-node never restores ~/.npm/_npx.
+        run: npm run setup:e2e:mock
+
       - name: Cache pip wheel downloads
         # Provisioning the Deepnote environment pip-installs the toolkit dependency tree into a
         # fresh venv on first kernel connect — the bulk of the E2E runtime. Caching pip's wheel

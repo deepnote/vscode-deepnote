@@ -1,14 +1,13 @@
 {
     "extends": "./tsconfig.base.json",
     "compilerOptions": {
-        "baseUrl": ".",
         "rootDir": "src",
         "outDir": "out",
 
         // Types
         "lib": ["es6", "es2018", "dom", "ES2019", "ES2020", "ES2021", "ES2022"],
         "paths": {
-            "*": ["types/*"]
+            "*": ["./types/*"]
         },
         "typeRoots": ["./node_modules/@types"]
     },

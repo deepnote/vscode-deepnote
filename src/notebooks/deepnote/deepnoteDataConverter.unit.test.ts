@@ -282,6 +282,102 @@ suite('DeepnoteDataConverter', () => {
             assert.strictEqual(new TextDecoder().decode(outputs[0].items[0].data), 'Hello world\n');
         });
 
+        test('joins every streamed stdout item into one stream output', () => {
+            const cells: NotebookCellData[] = [
+                {
+                    kind: NotebookCellKind.Code,
+                    value: 'summarize the data',
+                    languageId: 'plaintext',
+                    metadata: {
+                        __deepnotePocket: {
+                            type: 'agent',
+                            sortingKey: 'a0'
+                        },
+                        id: 'agent-block-1'
+                    },
+                    outputs: [
+                        new NotebookCellOutput([
+                            NotebookCellOutputItem.stdout('[Agent] Planning next steps...'),
+                            NotebookCellOutputItem.stdout('\n\n[Agent] Tool called: add_code'),
+                            NotebookCellOutputItem.stdout('\n\n[Agent] Text:\nDone.')
+                        ])
+                    ]
+                }
+            ];
+
+            const blocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual((blocks[0] as ExecutableBlock).outputs, [
+                {
+                    name: 'stdout',
+                    output_type: 'stream',
+                    text: '[Agent] Planning next steps...\n\n[Agent] Tool called: add_code\n\n[Agent] Text:\nDone.'
+                }
+            ]);
+        });
+
+        test('converts a single stderr item to a stderr stream output', () => {
+            const cells: NotebookCellData[] = [
+                {
+                    kind: NotebookCellKind.Code,
+                    value: 'raise ValueError()',
+                    languageId: 'python',
+                    metadata: {
+                        __deepnotePocket: {
+                            type: 'code',
+                            sortingKey: 'a0'
+                        },
+                        id: 'block-1'
+                    },
+                    outputs: [new NotebookCellOutput([NotebookCellOutputItem.stderr('Agent execution failed: boom')])]
+                }
+            ];
+
+            const blocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual((blocks[0] as ExecutableBlock).outputs, [
+                {
+                    name: 'stderr',
+                    output_type: 'stream',
+                    text: 'Agent execution failed: boom'
+                }
+            ]);
+        });
+
+        test('keeps every item of a mixed stdout/stderr output and labels it by the first', () => {
+            const cells: NotebookCellData[] = [
+                {
+                    kind: NotebookCellKind.Code,
+                    value: 'print("a")',
+                    languageId: 'python',
+                    metadata: {
+                        __deepnotePocket: {
+                            type: 'code',
+                            sortingKey: 'a0'
+                        },
+                        id: 'block-1'
+                    },
+                    outputs: [
+                        new NotebookCellOutput([
+                            NotebookCellOutputItem.stdout('out-1\n'),
+                            NotebookCellOutputItem.stderr('err-1\n'),
+                            NotebookCellOutputItem.stdout('out-2\n')
+                        ])
+                    ]
+                }
+            ];
+
+            const blocks = converter.convertCellsToBlocks(cells);
+
+            assert.deepStrictEqual((blocks[0] as ExecutableBlock).outputs, [
+                {
+                    name: 'stdout',
+                    output_type: 'stream',
+                    text: 'out-1\nerr-1\nout-2\n'
+                }
+            ]);
+        });
+
         test('converts error output', () => {
             const deepnoteOutputs: DeepnoteOutput[] = [
                 {

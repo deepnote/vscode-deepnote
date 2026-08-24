@@ -5,7 +5,8 @@ import * as fakeTimers from '@sinonjs/fake-timers';
 import * as sinon from 'sinon';
 import { assert } from 'chai';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
-import { Disposable, EventEmitter, Uri } from 'vscode';
+import { Disposable, EventEmitter, NotebookController, NotebookDocument, Uri } from 'vscode';
+import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 import { IContributedKernelFinder } from '../../kernels/internalTypes';
 import { IJupyterServerUriStorage, JupyterServerProviderHandle } from '../../kernels/jupyter/types';
 import {
@@ -72,6 +73,21 @@ suite('Controller Registration', () => {
     });
     let clock: fakeTimers.InstalledClock;
     let disposables: IDisposable[] = [];
+    /**
+     * The registration tracks the selected controller from VS Code's own
+     * `NotebookController.onDidChangeSelectedNotebooks`, so a controller mock has to carry one.
+     */
+    function stubSelectionEvent(
+        controller: VSCodeNotebookController
+    ): EventEmitter<{ notebook: NotebookDocument; selected: boolean }> {
+        const emitter = new EventEmitter<{ notebook: NotebookDocument; selected: boolean }>();
+        disposables.push(emitter);
+        when(controller.controller).thenReturn({
+            onDidChangeSelectedNotebooks: emitter.event
+        } as unknown as NotebookController);
+
+        return emitter;
+    }
     let kernelFinder: IKernelFinder;
     let extensionChecker: IPythonExtensionChecker;
     let interpreters: IInterpreterService;
@@ -286,10 +302,13 @@ suite('Controller Registration', () => {
 
                 const activeInterpreterController = mock<VSCodeNotebookController>();
                 when(activeInterpreterController.connection).thenReturn(activePythonConnection);
+                stubSelectionEvent(activeInterpreterController);
                 const condaController = mock<VSCodeNotebookController>();
                 when(condaController.connection).thenReturn(condaPythonConnection);
+                stubSelectionEvent(condaController);
                 const javaController = mock<VSCodeNotebookController>();
                 when(javaController.connection).thenReturn(javaKernelConnection);
+                stubSelectionEvent(javaController);
 
                 const stubCtor = sinon.stub(VSCodeNotebookController, 'create');
                 stubCtor.callsFake(
@@ -362,10 +381,13 @@ suite('Controller Registration', () => {
 
                 const activeInterpreterController = mock<VSCodeNotebookController>();
                 when(activeInterpreterController.connection).thenReturn(activePythonConnection);
+                stubSelectionEvent(activeInterpreterController);
                 const condaController = mock<VSCodeNotebookController>();
                 when(condaController.connection).thenReturn(condaPythonConnection);
+                stubSelectionEvent(condaController);
                 const javaController = mock<VSCodeNotebookController>();
                 when(javaController.connection).thenReturn(javaKernelConnection);
+                stubSelectionEvent(javaController);
 
                 const stubCtor = sinon.stub(VSCodeNotebookController, 'create');
                 stubCtor.callsFake(
@@ -430,6 +452,45 @@ suite('Controller Registration', () => {
                 verify(activeInterpreterController.dispose()).never();
                 verify(condaController.dispose()).atLeast(1);
                 verify(javaController.dispose()).atLeast(1);
+            });
+            /** Registers one Deepnote controller and hands back the pieces a selection test drives. */
+            function registerDeepnoteController() {
+                const controller = mock<VSCodeNotebookController>();
+                when(controller.connection).thenReturn(activePythonConnection);
+                const selection = stubSelectionEvent(controller);
+                sinon.stub(VSCodeNotebookController, 'create').callsFake((_connection, id) => {
+                    when(controller.id).thenReturn(id);
+                    return instance(controller);
+                });
+                const notebook = {
+                    uri: Uri.file('sample.deepnote'),
+                    notebookType: DEEPNOTE_NOTEBOOK_TYPE
+                } as NotebookDocument;
+
+                registration.addOrUpdate(activePythonConnection, [DEEPNOTE_NOTEBOOK_TYPE]);
+
+                return { controller: instance(controller), notebook, selection };
+            }
+            test('Selecting a controller for a Deepnote notebook records it as the selected controller', () => {
+                const { controller, notebook, selection } = registerDeepnoteController();
+
+                assert.isUndefined(registration.getSelected(notebook), 'Nothing is selected before VS Code says so');
+
+                // VS Code reports the selection on the controller itself; `VSCodeNotebookController`
+                // re-emits it only for jupyter-notebook and interactive documents. A registration that
+                // waits for that re-emit leaves `getSelected` empty for a Deepnote notebook, which is
+                // what broke Interrupt and Restart.
+                selection.fire({ notebook, selected: true });
+
+                assert.strictEqual(registration.getSelected(notebook), controller);
+            });
+            test('Deselecting a controller for a Deepnote notebook clears the selected controller', () => {
+                const { notebook, selection } = registerDeepnoteController();
+                selection.fire({ notebook, selected: true });
+
+                selection.fire({ notebook, selected: false });
+
+                assert.isUndefined(registration.getSelected(notebook));
             });
         });
     });

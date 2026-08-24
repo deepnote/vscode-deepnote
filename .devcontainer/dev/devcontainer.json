@@ -11,7 +11,7 @@
             "extensions": [
                 "ms-toolsai.jupyter-renderers",
                 "amodio.tsl-problem-matcher",
-                "dbaeumer.vscode-eslint",
+                "oxc.oxc-vscode",
                 "editorconfig.editorconfig",
                 "esbenp.prettier-vscode",
                 "hbenl.vscode-mocha-test-adapter"]

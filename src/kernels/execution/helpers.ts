@@ -273,7 +273,7 @@ function translateDisplayDataOutput(
     const items: NotebookCellOutputItem[] = [];
     if (output.data) {
         // eslint-disable-next-line no-restricted-syntax
-        for (const key in output.data) {
+        for (const key in output.data /* oxlint-disable-line local-rules/no-for-in */) {
             // TODO - remove this once this is handled in the deepnote-toolkit
             let effectiveKey = deepnoteBlockType === 'big-number' ? CHART_BIG_NUMBER_MIME_TYPE : key;
             items.push(convertJupyterOutputToBuffer(effectiveKey, output.data[key] ?? output.data[effectiveKey]));

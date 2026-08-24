@@ -195,7 +195,7 @@ export class LocalPythonEnvNotebookKernelSourceSelector
         if (!api) {
             return;
         }
-        api.environments.known.map((e) => this.buildDummyEnvironment(e).catch(noop));
+        void api.environments.known.map((e) => this.buildDummyEnvironment(e).catch(noop));
         const removedEnvironments = this._register(new DisposableMap<string, IDisposable>());
         this._register(
             api.environments.onDidChangeEnvironments((e) => {

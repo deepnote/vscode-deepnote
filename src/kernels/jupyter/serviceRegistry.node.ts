@@ -25,7 +25,6 @@ import { JupyterServerProvider } from './launcher/jupyterServerProvider.node';
 import { JupyterServerStarter } from './launcher/jupyterServerStarter.node';
 import { JupyterServerUriStorage } from './connection/serverUriStorage';
 import { LiveRemoteKernelConnectionUsageTracker } from './connection/liveRemoteKernelConnectionTracker';
-// eslint-disable-next-line import/no-restricted-paths
 import { CodespacesJupyterServerSelector } from '../../codespaces/codeSpacesServerSelector';
 import { JupyterRequestCreator } from './session/jupyterRequestCreator.node';
 import { RequestAgentCreator } from './session/requestAgentCreator.node';
@@ -49,7 +48,6 @@ import { RemoteKernelFinderController } from './finder/remoteKernelFinderControl
 import { KernelSessionFactory } from '../common/kernelSessionFactory';
 import { JupyterKernelSessionFactory } from './session/jupyterKernelSessionFactory';
 import { IRemoteKernelFinderController } from './finder/types';
-// eslint-disable-next-line import/no-restricted-paths
 import { JupyterServerProviderRegistry } from '../../codespaces';
 
 export function registerTypes(serviceManager: IServiceManager, _isDevMode: boolean) {

@@ -1,11 +1,9 @@
-const { isBuiltin } = require('node:module');
-
 // Force everything to use the custom vscode-path instead. General Node-builtin detection is
 // handled by oxlint's native `import/no-nodejs-modules` rule (see oxlint.config.mts); this rule
 // only still covers `path`, since that ban applies unconditionally, including in .node.ts files,
 // which no-nodejs-modules can't express (it's turned off there for legitimate Node builtins).
 function reportIfPath(context, node, name) {
-    if (isBuiltin(name) && name === 'path') {
+    if (name === 'path' || name === 'node:path') {
         context.report({ node, message: `Do not import path builtin module. Use the custom vscode-path instead.` });
     }
 }

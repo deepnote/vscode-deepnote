@@ -1148,6 +1148,7 @@ project:
     suite('deferred snapshot save timing', () => {
         const notebookUri = activatedServiceNotebookUri;
         let clock: fakeTimers.InstalledClock;
+        let activatedService: SnapshotService;
         let changeEmitter: EventEmitter<NotebookDocumentChangeEvent>;
         let closeEmitter: EventEmitter<NotebookDocument>;
         let flush: sinon.SinonStub;
@@ -1158,6 +1159,7 @@ project:
             clock = fakeTimers.install();
 
             const built = buildActivatedSnapshotService();
+            activatedService = built.service;
             changeEmitter = built.changeEmitter;
             closeEmitter = built.closeEmitter;
 
@@ -1277,6 +1279,90 @@ project:
             // Well past the max-wait bound: had the change armed a save, it would have flushed by now.
             await clock.tickAsync(3000);
             assert.isFalse(flush.called, 'an output change with no pending save must not arm a deferred save');
+        });
+
+        test('keeps the run metadata readable after the deferred save flushes (catches wiping the state the next file save serializes)', async () => {
+            await arm();
+            await clock.tickAsync(150);
+
+            assert.isTrue(flush.calledOnce, 'the deferred save must have flushed');
+            // deepnoteSerializer reads this on every save; wiping it at flush time meant a Ctrl+S a
+            // moment later wrote the .deepnote file with no execution metadata at all.
+            assert.isDefined(activatedService.getExecutionMetadata(notebookUri));
+        });
+
+        test('a run that opens no kernel queue still clears the finished run (an agent run generating no cells)', async () => {
+            await arm();
+            await clock.tickAsync(150);
+
+            // Nothing calls captureEnvironmentBeforeExecution here: an agent cell runs off the kernel,
+            // so without the run-start signal the finished run's counters would be what gets saved.
+            notebookCellExecutions.notifyQueueStart(notebookUri);
+
+            assert.isUndefined(
+                activatedService.getExecutionMetadata(notebookUri),
+                "a run that executes nothing must not report the previous run's counters"
+            );
+        });
+
+        test('a run start with no completion before it keeps the run alive', async () => {
+            notebookCellExecutions.notifyQueueStart(notebookUri);
+
+            assert.strictEqual(
+                activatedService.getExecutionMetadata(notebookUri)?.summary?.blocksExecuted,
+                1,
+                'only a finished run may be retired'
+            );
+        });
+
+        test("the next run's first queue clears the finished run (catches counters accumulating across runs)", async () => {
+            await arm();
+            await clock.tickAsync(150);
+
+            // A queue opening after the completion belongs to the next run.
+            await activatedService.captureEnvironmentBeforeExecution(notebookUri);
+
+            assert.isUndefined(
+                activatedService.getExecutionMetadata(notebookUri),
+                "a new run must not inherit the previous run's counters"
+            );
+        });
+
+        test('a second queue inside the same run keeps the run alive (catches clearing per queue, which an agent run opens one of per generated cell)', async () => {
+            // No completion since the fixture recorded its executed cell: still the same run.
+            await activatedService.captureEnvironmentBeforeExecution(notebookUri);
+
+            assert.strictEqual(
+                activatedService.getExecutionMetadata(notebookUri)?.summary?.blocksExecuted,
+                1,
+                'a mid-run queue must not reset the session'
+            );
+        });
+
+        test("the run's own captured environment survives its first executing cell (catches clearing on Executing, which lands after capture)", async () => {
+            const capturedEnvironment: Environment = {
+                hash: 'sha256:abc',
+                packages: {},
+                platform: 'linux-x64',
+                python: { environment: 'venv', version: '3.12.0' }
+            };
+            when(mockEnvironmentCapture.captureEnvironment(anything())).thenResolve(capturedEnvironment);
+
+            await arm();
+            await clock.tickAsync(150);
+
+            await activatedService.captureEnvironmentBeforeExecution(notebookUri);
+
+            const cellNotebook = mock<NotebookDocument>();
+            when(cellNotebook.uri).thenReturn(Uri.parse(notebookUri));
+
+            const cell = mock<NotebookCell>();
+            when(cell.notebook).thenReturn(instance(cellNotebook));
+            when(cell.metadata).thenReturn({ id: 'cell-1' });
+
+            notebookCellExecutions.changeCellState(instance(cell), NotebookCellExecutionState.Executing);
+
+            assert.deepStrictEqual(await activatedService.getEnvironmentMetadata(notebookUri), capturedEnvironment);
         });
     });
 
@@ -1845,6 +1931,64 @@ project:
                     writtenUris.length,
                     1,
                     'exactly one snapshot write — the deferred save must not double-flush'
+                );
+            });
+
+            // An agent block is a Code-kind cell (agentBlockConverter) that runs off the kernel, so the
+            // tracker never sees it — this is the shape executeAgentCell left behind before it started
+            // reporting to the execution-state shim.
+            test('an untracked Code cell (an agent block) blocks Run-All even though every kernel cell executed', async () => {
+                const mockConfig = mock<WorkspaceConfiguration>();
+                when(mockConfig.get<boolean>('snapshots.enabled', true)).thenReturn(true);
+                when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote')).thenReturn(instance(mockConfig));
+
+                const projectId = 'test-project-id';
+                const notebookId = 'test-notebook-id';
+
+                const mockNotebook = mockNotebookDoc({
+                    uri: Uri.parse(notebookUri),
+                    projectId,
+                    notebookId,
+                    cells: [mockCell({ id: 'cell-1', source: 'print(1)' }), mockCell({ id: 'agent-cell' })]
+                });
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([mockNotebook]);
+
+                const originalProject: DeepnoteFile = {
+                    metadata: { createdAt: '2025-01-01T00:00:00Z' },
+                    version: '1.0.0',
+                    project: {
+                        id: projectId,
+                        name: 'Test Project',
+                        notebooks: [{ id: notebookId, name: 'Test Notebook', blocks: [] }]
+                    }
+                };
+                const mockNotebookManager = mock<IDeepnoteNotebookManager>();
+                when(mockNotebookManager.getProjectForNotebook(projectId, notebookId)).thenReturn(originalProject);
+
+                const testService = new SnapshotService(
+                    instance(mockEnvironmentCapture),
+                    mockDisposables,
+                    instance(mockNotebookManager),
+                    tracker
+                );
+
+                // Only cell-1 is tracked as executed — agent-cell never reaches recordCellExecutionStart/End.
+                const startTime = Date.now();
+                tracker.recordCellExecutionStart(notebookUri, 'cell-1', startTime);
+                tracker.recordCellExecutionEnd(notebookUri, 'cell-1', startTime + 100, true);
+
+                const writtenUris = captureSnapshotWrites();
+
+                testService.activate();
+                await flushDeferredSave(notebookUri);
+
+                assert.isFalse(
+                    wroteTimestampedSnapshot(writtenUris),
+                    'a Code-kind cell the tracker never saw must keep the run off the Run-All branch'
+                );
+                assert.isTrue(
+                    wroteLatestSnapshot(writtenUris),
+                    'the run instead falls back to the partial-run (latest-only) path'
                 );
             });
 

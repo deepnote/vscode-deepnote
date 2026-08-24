@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [environments, execution, files, workspace]
+        group: [agent, environments, execution, files, workspace]
     env:
       # Keep ExTester's downloads (test VS Code, ChromeDriver, settings, screenshots) inside the
       # workspace so the artifact-upload paths are predictable. Both this and .test-extensions are
@@ -75,6 +75,10 @@ jobs:
 
       - name: Install the Python extension into the test instance
         run: npm run setup:e2e:deps
+
+      - name: Pre-download the mock LLM server
+        # aimock is npx-only (not in lockfile), so setup-node never restores ~/.npm/_npx.
+        run: npm run setup:e2e:mock
 
       - name: Cache pip wheel downloads
         # github.run_id in the key because actions/cache only writes on a miss — a bare content hash

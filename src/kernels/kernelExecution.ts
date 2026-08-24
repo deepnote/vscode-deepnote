@@ -135,6 +135,10 @@ export class NotebookKernelExecution implements INotebookKernelExecution {
             }
         });
     }
+    public get failed(): boolean {
+        return this.documentExecutions.get(this.notebook)?.failed === true;
+    }
+
     public get pendingCells(): readonly NotebookCell[] {
         return this.documentExecutions.get(this.notebook)?.queue || [];
     }
@@ -156,6 +160,8 @@ export class NotebookKernelExecution implements INotebookKernelExecution {
             .waitForCompletion(cell)
             .then(() => true)
             .catch(() => false);
+
+        notebookCellExecutions.notifyQueueComplete(cell.notebook.uri.toString());
 
         traceCellMessage(
             cell,

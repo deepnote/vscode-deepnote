@@ -38,6 +38,8 @@ import {
 } from './deepnoteSchemas';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { Pocket } from '../../platform/deepnote/pocket';
+import { AGENT_MODEL_AUTO, AGENT_MODEL_METADATA_KEY } from './agentCellStatusBarProvider';
+import { generateBlockId, isAgentCell } from './dataConversionUtils';
 
 export const INPUT_BLOCK_TYPES = [
     'input-text',
@@ -165,6 +167,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     private registerCommands(): void {
+        this.disposableRegistry.push(commands.registerCommand(Commands.AddAgentBlock, () => this.addAgentBlock()));
         this.disposableRegistry.push(commands.registerCommand(Commands.AddSqlBlock, () => this.addSqlBlock()));
         this.disposableRegistry.push(
             commands.registerCommand(Commands.AddBigNumberChartBlock, () => this.addBigNumberChartBlock())
@@ -227,6 +230,76 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
         this.disposableRegistry.push(
             commands.registerCommand(Commands.DisableSnapshots, () => this.disableSnapshots())
         );
+    }
+
+    /**
+     * Appends an empty agent block to the end of the notebook, matching Deepnote Cloud, regardless
+     * of the selection. A notebook may hold at most one; a second request reports that and leaves
+     * the notebook untouched.
+     *
+     * Unlike the other block commands this mints the block id up front: an agent block without one
+     * gets a fresh random id on every `convertCellToBlock`, so each run would stamp its generated
+     * cells with a different owner and the stale-run cleanup would never match them.
+     */
+    public async addAgentBlock(): Promise<void> {
+        const editor = window.activeNotebookEditor;
+        if (!editor) {
+            throw new Error(l10n.t('No active notebook editor found'));
+        }
+        const document = editor.notebook;
+        const agentBlockExistsMessage = l10n.t('This notebook already contains an agent block.');
+
+        if (document.getCells().some(isAgentCell)) {
+            void window.showInformationMessage(agentBlockExistsMessage);
+
+            return;
+        }
+
+        const blockId = generateBlockId();
+
+        let alreadyHasAgentBlock = false;
+        let insertIndex = 0;
+
+        const result = await notebookUpdaterUtils.chainWithPendingUpdates(document, (edit) => {
+            // Repeated inside the serialized callback: a concurrent invocation passes the check above
+            // while its edit is still queued, and only here has that edit already applied.
+            if (document.getCells().some(isAgentCell)) {
+                alreadyHasAgentBlock = true;
+
+                return;
+            }
+
+            insertIndex = document.cellCount;
+
+            const newCell = new NotebookCellData(NotebookCellKind.Code, '', 'plaintext');
+            newCell.metadata = {
+                __deepnotePocket: {
+                    type: 'agent'
+                },
+                id: blockId,
+                __deepnoteBlockId: blockId,
+                [AGENT_MODEL_METADATA_KEY]: AGENT_MODEL_AUTO
+            };
+            const nbEdit = NotebookEdit.insertCells(insertIndex, [newCell]);
+            edit.set(document.uri, [nbEdit]);
+        });
+
+        if (alreadyHasAgentBlock) {
+            void window.showInformationMessage(agentBlockExistsMessage);
+
+            return;
+        }
+
+        if (result !== true) {
+            throw new Error(l10n.t('Failed to insert agent block'));
+        }
+
+        this.trackAddBlock('agent');
+
+        const notebookRange = new NotebookRange(insertIndex, insertIndex + 1);
+        editor.revealRange(notebookRange, NotebookEditorRevealType.Default);
+        editor.selection = notebookRange;
+        await commands.executeCommand('notebook.cell.edit');
     }
 
     public async addSqlBlock(): Promise<void> {
@@ -590,6 +663,6 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     private trackAddBlock(blockType: string): void {
-        this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType } });
+        this.analytics.trackEvent({ eventName: 'add_block', properties: { blockType, isEphemeral: false } });
     }
 }

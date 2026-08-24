@@ -2,7 +2,7 @@ import { inject, injectable } from 'inversify';
 import { Disposable, NotebookCellKind, workspace } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { ITelemetryService } from '../../platform/analytics/types';
+import { ITelemetryService, TelemetryEventProperties } from '../../platform/analytics/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { isDeepnoteNotebook } from '../../platform/common/utils';
 import { NotebookCellExecutionState, notebookCellExecutions } from '../../platform/notebooks/cellExecutionStateService';
@@ -11,10 +11,12 @@ import {
     toTelemetryIntegrationType
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { IDeepnoteNotebookManager } from '../types';
+import { isEphemeralCell } from './dataConversionUtils';
 
 /**
  * Tracks cell executions, plus the plain code/markdown insertions from VS Code's built-in
- * "+ Code" / "+ Markdown" controls that never reach an extension command.
+ * "+ Code" / "+ Markdown" controls that never reach an extension command, plus the scratch
+ * cells the agent writes and runs on the user's behalf.
  */
 @injectable()
 export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationService {
@@ -39,6 +41,18 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
                     }
 
                     for (const cell of change.addedCells) {
+                        const blockType = cell.kind === NotebookCellKind.Code ? 'code' : 'markdown';
+
+                        // Agent scratch cells stamp a pocket like any typed block, but no command
+                        // inserts them, so this is the only place they can be counted.
+                        if (isEphemeralCell(cell)) {
+                            this.analytics.trackEvent({
+                                eventName: 'add_block',
+                                properties: { blockType, isEphemeral: true }
+                            });
+                            continue;
+                        }
+
                         // Typed Deepnote blocks stamp a pocket on insert and are already counted by
                         // DeepnoteNotebookCommandListener.
                         if (cell.metadata?.__deepnotePocket?.type) {
@@ -47,7 +61,7 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
 
                         this.analytics.trackEvent({
                             eventName: 'add_block',
-                            properties: { blockType: cell.kind === NotebookCellKind.Code ? 'code' : 'markdown' }
+                            properties: { blockType, isEphemeral: false }
                         });
                     }
                 }
@@ -67,7 +81,12 @@ export class DeepnoteCellExecutionAnalytics implements IExtensionSyncActivationS
                 const languageId = e.cell.document.languageId;
                 const cellType = languageId === 'sql' ? 'sql' : languageId === 'markdown' ? 'markdown' : 'code';
 
-                const properties: { cellType: 'sql' | 'markdown' | 'code'; integrationType?: string } = { cellType };
+                // The agent runs its generated cells through `notebook.cell.execute`, which re-enters the
+                // kernel path; unmarked they are indistinguishable here from a user pressing Run.
+                const properties: TelemetryEventProperties['execute_cell'] = {
+                    cellType,
+                    isEphemeral: isEphemeralCell(e.cell)
+                };
 
                 if (cellType === 'sql') {
                     // The status-bar switch updates only this key, so the __deepnotePocket copy can go stale.

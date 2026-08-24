@@ -1,0 +1,29 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-agent-stop-project
+  name: E2E Agent Stop
+  notebooks:
+    - id: e2e-agent-stop-notebook
+      name: Agent Stop
+      blocks:
+        - id: e2e-agent-stop-agent-block
+          blockGroup: e2e-agent-stop-group
+          type: agent
+          content: |-
+            Run some Python, then add a markdown block summarizing this notebook.
+          sortingKey: a0
+          metadata:
+            deepnote_agent_model: 'gpt-5.6-sol'
+        - id: e2e-agent-stop-trailing-block
+          blockGroup: e2e-agent-stop-group
+          type: code
+          content: |-
+            print("e2e-stop-trailing-ran")
+          sortingKey: a1
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

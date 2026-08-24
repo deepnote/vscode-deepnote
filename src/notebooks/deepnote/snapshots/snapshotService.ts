@@ -118,6 +118,7 @@ function generateTimestamp(): string {
 @injectable()
 export class SnapshotService implements ISnapshotMetadataService, IExtensionSyncActivationService {
     private readonly converter = new DeepnoteDataConverter();
+    private readonly endedExecutionSessions = new Set<string>();
     private readonly environmentStates = new Map<string, EnvironmentCaptureState>();
     private readonly fileWrittenCallbacks: ((uri: Uri) => void)[] = [];
     private readonly pendingSnapshotSaves = new Map<
@@ -193,10 +194,20 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             this,
             this.disposables
         );
+
+        notebookCellExecutions.onDidStartQueueExecution(
+            (e) => this.retireFinishedExecutionSession(e.notebookUri),
+            this,
+            this.disposables
+        );
     }
 
     async captureEnvironmentBeforeExecution(notebookUri: string): Promise<void> {
         logger.info(`[Snapshot] captureEnvironmentBeforeExecution called for ${notebookUri}`);
+
+        // Covers queues opened outside a controller run — the interactive window, execution resumed
+        // after a reload — which never signal a run start.
+        this.retireFinishedExecutionSession(notebookUri);
 
         // Seed the session start at capture time so `startedAt` reflects capture, not the first cell.
         this.tracker.ensureExecutionState(notebookUri, Date.now());
@@ -216,6 +227,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     }
 
     clearExecutionState(notebookUri: string): void {
+        this.endedExecutionSessions.delete(notebookUri);
         this.tracker.clear(notebookUri);
         this.environmentStates.delete(notebookUri);
 
@@ -701,6 +713,10 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
     private async onExecutionComplete(notebookUri: string): Promise<void> {
         logger.debug(`[Snapshot] onExecutionComplete called for ${notebookUri}`);
 
+        // The run is over, but its metadata stays readable — the deferred save and any file save that
+        // follows still serialize it. The next run's first queue resets it.
+        this.endedExecutionSessions.add(notebookUri);
+
         // Wait for any pending cell state change events to be processed.
         // This is needed because the queue completion event can fire before the
         // last cell's Idle state change event has been processed (race condition).
@@ -836,8 +852,15 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         } catch (error) {
             // Fire-and-forget save: swallow so a failure never becomes an unhandled rejection.
             logger.error(`[Snapshot] Failed to save deferred snapshot for ${notebookUri}`, error);
-        } finally {
-            // Clear execution state so the next run starts fresh, even if the save above failed.
+        }
+    }
+
+    /**
+     * Drops the previous run's metadata once a new run begins. Deferred until then so the save that
+     * follows a run — and any file save after it — still serializes what that run did.
+     */
+    private retireFinishedExecutionSession(notebookUri: string): void {
+        if (this.endedExecutionSessions.delete(notebookUri)) {
             this.clearExecutionState(notebookUri);
         }
     }

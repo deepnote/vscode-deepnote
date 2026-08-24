@@ -1,6 +1,6 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
-import { when, reset, anything, mock, instance } from 'ts-mockito';
+import { when, reset, anything, deepEqual, mock, instance, verify } from 'ts-mockito';
 import {
     NotebookCell,
     NotebookDocument,
@@ -8,8 +8,7 @@ import {
     NotebookRange,
     NotebookCellKind,
     NotebookCellData,
-    WorkspaceEdit,
-    Uri
+    WorkspaceEdit
 } from 'vscode';
 
 import {
@@ -21,11 +20,10 @@ import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlock
 import { ITelemetryService } from '../../platform/analytics/types';
 import { IConfigurationService, IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
-import { createMockedNotebookDocument } from '../../test/datascience/editor-integration/helpers';
 import { WrappedError } from '../../platform/errors/types';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
-import { createMockCell } from './deepnoteTestHelpers';
+import { createMockCell, createMockNotebookWithCells } from './deepnoteTestHelpers';
 
 suite('DeepnoteNotebookCommandListener', () => {
     let commandListener: DeepnoteNotebookCommandListener;
@@ -362,9 +360,9 @@ suite('DeepnoteNotebookCommandListener', () => {
         });
 
         /**
-         * Helper to create mock NotebookCell with metadata
+         * Helper to create NotebookCellData with metadata, for seeding createMockEditor.
          */
-        function createMockCell(content: string, metadata?: Record<string, any>): NotebookCellData {
+        function createMockCellData(content: string, metadata?: Record<string, any>): NotebookCellData {
             const cell = new NotebookCellData(NotebookCellKind.Code, content, 'json');
             if (metadata != null) {
                 cell.metadata = metadata;
@@ -373,22 +371,32 @@ suite('DeepnoteNotebookCommandListener', () => {
         }
 
         /**
-         * Helper to create mock NotebookEditor and NotebookDocument
+         * Helper to create mock NotebookEditor and NotebookDocument.
+         *
+         * Built on createMockNotebookWithCells rather than createMockedNotebookDocument because the
+         * latter drops NotebookCellData.metadata, which the block commands read.
          */
         function createMockEditor(
             cellDataArray: NotebookCellData[],
             selection?: NotebookRange
         ): {
-            editor: NotebookEditor;
+            // revealRange is narrowed to the stub it actually is, so assertions on it need no cast.
+            editor: NotebookEditor & { revealRange: sinon.SinonStub };
             document: NotebookDocument;
         } {
-            const uri = Uri.file('/test/notebook.ipynb');
-            const document = createMockedNotebookDocument(cellDataArray, {}, uri);
+            const { notebook: document } = createMockNotebookWithCells(
+                cellDataArray.map((data) => ({
+                    kind: data.kind,
+                    languageId: data.languageId,
+                    text: data.value,
+                    metadata: data.metadata
+                }))
+            );
 
             const editorSelection =
                 selection != null ? selection : new NotebookRange(0, cellDataArray.length > 0 ? 1 : 0);
 
-            const editor: NotebookEditor = {
+            const editor: NotebookEditor & { revealRange: sinon.SinonStub } = {
                 notebook: document,
                 selection: editorSelection,
                 selections: [editorSelection],
@@ -454,7 +462,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should add input-text block after selection when selection exists',
                 blockType: 'input-text',
-                existingCells: [createMockCell('{}')],
+                existingCells: [createMockCellData('{}')],
                 selection: new NotebookRange(0, 1),
                 expectedInsertIndex: 1,
                 expectedVariableName: 'input_1',
@@ -563,8 +571,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                 description: 'should generate correct variable name when existing inputs exist',
                 blockType: 'input-text',
                 existingCells: [
-                    createMockCell('{ "deepnote_variable_name": "input_1" }'),
-                    createMockCell('{ "deepnote_variable_name": "input_2" }')
+                    createMockCellData('{ "deepnote_variable_name": "input_1" }'),
+                    createMockCellData('{ "deepnote_variable_name": "input_2" }')
                 ],
                 selection: new NotebookRange(1, 2),
                 expectedInsertIndex: 2,
@@ -574,7 +582,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should insert at selection.end when selection is in the middle',
                 blockType: 'input-text',
-                existingCells: [createMockCell('{}'), createMockCell('{}'), createMockCell('{}')],
+                existingCells: [createMockCellData('{}'), createMockCellData('{}'), createMockCellData('{}')],
                 selection: new NotebookRange(1, 2),
                 expectedInsertIndex: 2,
                 expectedVariableName: 'input_1',
@@ -583,7 +591,7 @@ suite('DeepnoteNotebookCommandListener', () => {
             {
                 description: 'should handle large variable numbers correctly',
                 blockType: 'input-text',
-                existingCells: [createMockCell('{ "deepnote_variable_name": "input_99" }')],
+                existingCells: [createMockCellData('{ "deepnote_variable_name": "input_99" }')],
                 selection: undefined,
                 expectedInsertIndex: 1,
                 expectedVariableName: 'input_100',
@@ -664,11 +672,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                     });
 
                     // Verify reveal and selection were set
-                    assert.isTrue(
-                        (editor.revealRange as sinon.SinonStub).calledOnce,
-                        'Should reveal the new cell range'
-                    );
-                    const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                    assert.isTrue(editor.revealRange.calledOnce, 'Should reveal the new cell range');
+                    const revealCall = editor.revealRange.firstCall;
                     assert.equal(revealCall.args[0].start, expectedInsertIndex, 'Should reveal correct range start');
                     assert.equal(revealCall.args[0].end, expectedInsertIndex + 1, 'Should reveal correct range end');
                 });
@@ -755,8 +760,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                 );
 
                 // Verify reveal and selection were set
-                assert.isTrue((editor.revealRange as sinon.SinonStub).calledOnce, 'Should reveal the new cell range');
-                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                assert.isTrue(editor.revealRange.calledOnce, 'Should reveal the new cell range');
+                const revealCall = editor.revealRange.firstCall;
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
@@ -764,7 +769,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should add SQL block after selection when selection exists', async () => {
                 // Setup mocks
-                const existingCells = [createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}')];
                 const selection = new NotebookRange(1, 2);
                 const { editor } = createMockEditor(existingCells, selection);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -787,8 +792,8 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should generate correct variable name when existing df variables exist', async () => {
                 // Setup mocks with existing df variables
                 const existingCells = [
-                    createMockCell('{ "deepnote_variable_name": "df_1" }'),
-                    createMockCell('{ "deepnote_variable_name": "df_2" }')
+                    createMockCellData('{ "deepnote_variable_name": "df_1" }'),
+                    createMockCellData('{ "deepnote_variable_name": "df_2" }')
                 ];
                 const { editor } = createMockEditor(existingCells, undefined);
                 const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -807,8 +812,8 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should ignore input variables when generating df variable name', async () => {
                 // Setup mocks with input variables (should not affect df numbering)
                 const existingCells = [
-                    createMockCell('{ "deepnote_variable_name": "input_10" }'),
-                    createMockCell('{ "deepnote_variable_name": "df_2" }')
+                    createMockCellData('{ "deepnote_variable_name": "input_10" }'),
+                    createMockCellData('{ "deepnote_variable_name": "df_2" }')
                 ];
                 const { editor } = createMockEditor(existingCells, undefined);
                 const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -846,6 +851,204 @@ suite('DeepnoteNotebookCommandListener', () => {
 
                 // Call the method and expect rejection
                 await assert.isRejected(commandListener.addSqlBlock(), Error, 'Failed to insert SQL block');
+            });
+        });
+
+        suite('addAgentBlock', () => {
+            function insertedCell(getCapturedNotebookEdits: () => any[] | null) {
+                const edits = getCapturedNotebookEdits()!;
+                assert.equal(edits.length, 1, 'Should have one notebook edit');
+
+                const notebookEdit = edits[0] as any;
+                assert.equal(notebookEdit.newCells.length, 1, 'Should insert one cell');
+
+                return notebookEdit.newCells[0];
+            }
+
+            test('should add an empty plaintext agent block at the end when no selection exists', async () => {
+                const { editor, document } = createMockEditor([], undefined);
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                assert.isTrue(chainStub.calledOnce, 'chainWithPendingUpdates should be called once');
+                assert.equal(chainStub.firstCall.args[0], document, 'Should be called with correct document');
+
+                const newCell = insertedCell(getCapturedNotebookEdits);
+                assert.equal(newCell.kind, NotebookCellKind.Code, 'Should be a code cell');
+                assert.equal(newCell.languageId, 'plaintext', 'Should have plaintext language');
+                assert.equal(newCell.value, '', 'Should have empty content');
+                assert.equal(newCell.metadata.__deepnotePocket.type, 'agent', 'Should have agent pocket type');
+
+                assert.isTrue(editor.revealRange.calledOnce, 'Should reveal the new cell range');
+                const revealCall = editor.revealRange.firstCall;
+                assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
+                assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
+            });
+
+            test('should append the agent block to the end even when an earlier cell is selected', async () => {
+                // Catches: a selection-relative insert, which drops the agent between the user's
+                // cells and then interleaves its generated cells through the rest of the notebook.
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}'), createMockCellData('{}')];
+                const { editor, document } = createMockEditor(existingCells, new NotebookRange(0, 1));
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                insertedCell(getCapturedNotebookEdits);
+                assert.equal(chainStub.firstCall.args[0], document, 'Should edit the active document');
+
+                const revealCall = editor.revealRange.firstCall;
+                assert.equal(revealCall.args[0].start, 3, 'Should append to the end, not below the selection');
+                assert.equal(revealCall.args[0].end, 4, 'Should select only the new cell');
+            });
+
+            test('should mint a block id under both keys so runs keep a stable owner', async () => {
+                // Catches: an id-less agent block, which gets a fresh random id on every
+                // convertCellToBlock — its generated cells would never be matched back to it.
+                const { editor } = createMockEditor([], undefined);
+                const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                const { metadata } = insertedCell(getCapturedNotebookEdits);
+                assert.match(metadata.id, /^[0-9a-f]{32}$/, 'Should mint a 32-char hex block id');
+                assert.equal(metadata.__deepnoteBlockId, metadata.id, 'Backup id key must match id');
+            });
+
+            test('should give each notebook its own agent block id', async () => {
+                // Catches: a hoisted/constant id, which would make two agent blocks fight over the
+                // same generated cells. Two notebooks, because one notebook only ever gets one block.
+                const { editor } = createMockEditor([], undefined);
+                const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+                const first = insertedCell(getCapturedNotebookEdits).metadata.id;
+
+                const { editor: otherEditor } = createMockEditor([], undefined);
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(otherEditor);
+
+                await commandListener.addAgentBlock();
+                const second = insertedCell(getCapturedNotebookEdits).metadata.id;
+
+                assert.notEqual(first, second, 'Each agent block needs its own id');
+            });
+
+            test('should persist the default model rather than leaving the key absent', async () => {
+                // Catches: omitting deepnote_agent_model, which reaches openai() as undefined.
+                const { editor } = createMockEditor([], undefined);
+                const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                const { metadata } = insertedCell(getCapturedNotebookEdits);
+                assert.equal(metadata.deepnote_agent_model, 'auto', 'Should persist the auto default');
+            });
+
+            test('should refuse a second agent block and leave the notebook untouched', async () => {
+                const { editor } = createMockEditor([
+                    createMockCellData('existing agent', { __deepnotePocket: { type: 'agent' }, id: 'agent-block-1' }),
+                    createMockCellData('user code')
+                ]);
+                const { chainStub } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                assert.isFalse(chainStub.called, 'Must not edit a notebook that already has an agent block');
+                verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+                assert.isFalse(editor.revealRange.called, 'Must not reveal anything');
+                verify(mockTelemetryService.trackEvent(anything())).never();
+            });
+
+            test('should report the added agent block to analytics', async () => {
+                const { editor } = createMockEditor([], undefined);
+                mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                verify(
+                    mockTelemetryService.trackEvent(
+                        deepEqual({ eventName: 'add_block', properties: { blockType: 'agent', isEphemeral: false } })
+                    )
+                ).once();
+            });
+
+            test('should insert only one agent block when two invocations race', async () => {
+                // Catches: an existence check that runs before the queued update — both invocations
+                // pass it while neither edit has applied yet.
+                const { editor, document } = createMockEditor([], undefined);
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
+                when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenResolve(undefined as any);
+
+                const cells = document.getCells();
+                const insertedCells: NotebookCellData[] = [];
+                let pending: Promise<unknown> = Promise.resolve();
+
+                // Mirrors chainWithPendingUpdates: a callback runs only once the previous edit applied.
+                sandbox
+                    .stub(notebookUpdater.notebookUpdaterUtils, 'chainWithPendingUpdates')
+                    .callsFake((_doc: NotebookDocument, callback: (edit: WorkspaceEdit) => void) => {
+                        const applied = pending.then(() => {
+                            const edit = new WorkspaceEdit();
+                            sandbox.stub(edit, 'set').callsFake((_uri, edits) => {
+                                for (const newCell of (edits[0] as any).newCells as NotebookCellData[]) {
+                                    insertedCells.push(newCell);
+                                    cells.push(
+                                        createMockCell({
+                                            metadata: newCell.metadata,
+                                            index: cells.length,
+                                            notebook: document
+                                        })
+                                    );
+                                }
+                            });
+                            callback(edit);
+
+                            return true;
+                        });
+                        pending = applied;
+
+                        return applied;
+                    });
+
+                await Promise.all([commandListener.addAgentBlock(), commandListener.addAgentBlock()]);
+
+                assert.equal(insertedCells.length, 1, 'Should insert exactly one agent block');
+                assert.equal(cells.length, 1, 'Notebook should end up with a single cell');
+            });
+
+            test('should still add the block when other cells carry no agent pocket', async () => {
+                // Catches: a guard that trips on any cell, blocking the first agent block outright.
+                const { editor } = createMockEditor([
+                    createMockCellData('user code', { __deepnotePocket: { type: 'code' }, id: 'code-block-1' }),
+                    createMockCellData('scratch', { is_ephemeral: true, agent_source_block_id: 'agent-block-1' })
+                ]);
+                const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
+
+                await commandListener.addAgentBlock();
+
+                assert.isTrue(chainStub.calledOnce, 'Should insert the first agent block');
+                assert.equal(insertedCell(getCapturedNotebookEdits).metadata.__deepnotePocket.type, 'agent');
+                verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).never();
+            });
+
+            test('should throw error when no active editor exists', async () => {
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+
+                await assert.isRejected(commandListener.addAgentBlock(), Error, 'No active notebook editor found');
+            });
+
+            test('should throw error when chainWithPendingUpdates fails', async () => {
+                const { editor } = createMockEditor([], undefined);
+                when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(editor);
+
+                sandbox.replace(
+                    notebookUpdater.notebookUpdaterUtils,
+                    'chainWithPendingUpdates',
+                    sinon.stub().resolves(false)
+                );
+
+                await assert.isRejected(commandListener.addAgentBlock(), Error, 'Failed to insert agent block');
             });
         });
 
@@ -887,8 +1090,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(newCell.metadata.__deepnotePocket.type, 'big-number', 'Should have big-number type');
 
                 // Verify reveal and selection were set
-                assert.isTrue((editor.revealRange as sinon.SinonStub).calledOnce, 'Should reveal the new cell range');
-                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                assert.isTrue(editor.revealRange.calledOnce, 'Should reveal the new cell range');
+                const revealCall = editor.revealRange.firstCall;
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
@@ -896,7 +1099,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should add big number block after selection when selection exists', async () => {
                 // Setup mocks
-                const existingCells = [createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}')];
                 const selection = new NotebookRange(0, 1);
                 const { editor } = createMockEditor(existingCells, selection);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -918,7 +1121,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should insert at correct position in the middle of notebook', async () => {
                 // Setup mocks
-                const existingCells = [createMockCell('{}'), createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}'), createMockCellData('{}')];
                 const selection = new NotebookRange(1, 2);
                 const { editor } = createMockEditor(existingCells, selection);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -1023,8 +1226,8 @@ suite('DeepnoteNotebookCommandListener', () => {
                 assert.equal(newCell.metadata.__deepnotePocket.type, 'visualization', 'Should have visualization type');
 
                 // Verify reveal and selection were set
-                assert.isTrue((editor.revealRange as sinon.SinonStub).calledOnce, 'Should reveal the new cell range');
-                const revealCall = (editor.revealRange as sinon.SinonStub).firstCall;
+                assert.isTrue(editor.revealRange.calledOnce, 'Should reveal the new cell range');
+                const revealCall = editor.revealRange.firstCall;
                 assert.equal(revealCall.args[0].start, 0, 'Should reveal correct range start');
                 assert.equal(revealCall.args[0].end, 1, 'Should reveal correct range end');
                 assert.equal(revealCall.args[1], 0, 'Should use NotebookEditorRevealType.Default (value 0)');
@@ -1032,7 +1235,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should add chart block after selection when selection exists', async () => {
                 // Setup mocks
-                const existingCells = [createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}')];
                 const selection = new NotebookRange(0, 1);
                 const { editor } = createMockEditor(existingCells, selection);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -1055,8 +1258,8 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should use hardcoded variable name df_1', async () => {
                 // Setup mocks with existing df variables
                 const existingCells = [
-                    createMockCell('{ "deepnote_variable_name": "df_1" }'),
-                    createMockCell('{ "variable": "df_2" }')
+                    createMockCellData('{ "deepnote_variable_name": "df_1" }'),
+                    createMockCellData('{ "variable": "df_2" }')
                 ];
                 const { editor } = createMockEditor(existingCells, undefined);
                 const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -1076,9 +1279,9 @@ suite('DeepnoteNotebookCommandListener', () => {
             test('should always use df_1 regardless of existing variables', async () => {
                 // Setup mocks with various existing variables
                 const existingCells = [
-                    createMockCell('{ "deepnote_variable_name": "input_10" }'),
-                    createMockCell('{ "deepnote_variable_name": "df_5" }'),
-                    createMockCell('{ "variable": "df_2" }')
+                    createMockCellData('{ "deepnote_variable_name": "input_10" }'),
+                    createMockCellData('{ "deepnote_variable_name": "df_5" }'),
+                    createMockCellData('{ "variable": "df_2" }')
                 ];
                 const { editor } = createMockEditor(existingCells, undefined);
                 const { getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);
@@ -1097,7 +1300,7 @@ suite('DeepnoteNotebookCommandListener', () => {
 
             test('should insert at correct position in the middle of notebook', async () => {
                 // Setup mocks
-                const existingCells = [createMockCell('{}'), createMockCell('{}'), createMockCell('{}')];
+                const existingCells = [createMockCellData('{}'), createMockCellData('{}'), createMockCellData('{}')];
                 const selection = new NotebookRange(1, 2);
                 const { editor } = createMockEditor(existingCells, selection);
                 const { chainStub, getCapturedNotebookEdits } = mockNotebookUpdateAndExecute(editor);

@@ -74,7 +74,7 @@ describe('Deepnote — splitting a legacy multi-notebook .deepnote file into sin
 
         // Open the workspace folder FIRST: the serializer reads snapshots relative to it, and
         // without one deserialization blocks on a warning that never resolves headlessly.
-        await openFolderViaDialog(copy.tempDir);
+        await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await showView('Deepnote', '[split]');

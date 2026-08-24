@@ -71,7 +71,9 @@ async function readRows(section: Awaited<ReturnType<typeof getDeepnoteExplorerSe
     return rows;
 }
 
-async function findGroup(section: Awaited<ReturnType<typeof getDeepnoteExplorerSection>>): Promise<ViewItem | undefined> {
+async function findGroup(
+    section: Awaited<ReturnType<typeof getDeepnoteExplorerSection>>
+): Promise<ViewItem | undefined> {
     return (await readRows(section)).find((row) => row.label === GROUP && row.isGroup)?.item;
 }
 
@@ -153,7 +155,7 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(copy.tempDir);
+        await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         const section = await getDeepnoteExplorerSection();

@@ -106,7 +106,7 @@ describe('Deepnote — renaming a project fans the new name out to every sibling
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(copy.tempDir);
+        await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         let section = await getDeepnoteExplorerSection();

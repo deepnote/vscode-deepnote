@@ -125,7 +125,7 @@ describe('Deepnote — deleting an init-only leaf removes the whole file', funct
         filePath = copy.filePath;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(copy.tempDir);
+        await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         const section = await getDeepnoteExplorerSection();

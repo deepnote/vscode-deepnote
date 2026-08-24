@@ -52,7 +52,6 @@ export const EDITOR_ACTIVE_TIMEOUT = 15_000;
 export const OUTPUT_SELECTOR = '.output_container, .output, .rendered-output';
 
 // Where the managed venv lives, and the substring that identifies it in the interpreter quick pick.
-// The marker matches both the real directory and the `.venv` link the workspace exposes it through.
 export const PREBAKED_VENV_DIR_NAME = '.venv-e2e';
 export const PREBAKED_VENV_MARKER = '.venv';
 

@@ -94,14 +94,23 @@ export function ensureManagedVenv(): string {
 }
 
 /**
- * Links the venv into a workspace as `.venv`, where the Python extension finds it with no settings,
- * while the venv itself stays at a fixed cacheable path.
+ * Points a workspace at the venv through `python.venvPath`, which makes the Python extension offer
+ * it by its real path.
+ *
+ * Deliberately not a `.venv` symlink inside the workspace: the extension names the kernel spec after
+ * the venv directory and writes it INTO the venv, keeping the first one it finds
+ * (deepnoteToolkitInstaller.installKernelSpec). Every workspace reaching one shared venv through its
+ * own `.venv` link therefore inherits the absolute interpreter path of whichever workspace got there
+ * first — a path that is deleted the moment that suite cleans up.
  */
-export function linkManagedVenvInto(workspaceFolder: string): void {
-    const target = path.join(workspaceFolder, '.venv');
-    if (fs.existsSync(target)) {
-        return;
-    }
+export function pointWorkspaceAtManagedVenv(workspaceFolder: string): void {
+    const settingsDir = path.join(workspaceFolder, '.vscode');
+    fs.mkdirSync(settingsDir, { recursive: true });
 
-    fs.symlinkSync(ensureManagedVenv().replace(/[/\\]bin[/\\]python$/, ''), target, 'dir');
+    ensureManagedVenv();
+    fs.writeFileSync(
+        path.join(settingsDir, 'settings.json'),
+        `${JSON.stringify({ 'python.venvPath': REPO_ROOT }, undefined, 4)}\n`,
+        'utf8'
+    );
 }

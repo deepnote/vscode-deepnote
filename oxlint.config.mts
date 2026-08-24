@@ -126,7 +126,9 @@ const baseRules: Rules = {
     'import-plugin/no-restricted-paths': restrictedPathZones,
     // Node-builtin detection now runs through oxlint's native rule (see overrides below for
     // the .node.ts/.test.ts exceptions); the custom rule only still handles the `path` ban.
-    'import/no-nodejs-modules': ['error', { allow: ['events'] }],
+    // `path`/`node:path` are allowed here so that ban is reported exactly once, by the custom
+    // rule — it names vscode-path and, unlike the native rule, stays on in .node.ts/.test.ts.
+    'import/no-nodejs-modules': ['error', { allow: ['events', 'path', 'node:path'] }],
     'local-rules/node-imports': 'error',
     'local-rules/dont-use-process': ['error'],
     'local-rules/dont-use-fspath': ['error'],

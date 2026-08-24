@@ -99,7 +99,6 @@ export class InteractiveWindowTracebackFormatter implements ITracebackFormatter 
             // Find the cell that matches the execution count in group 1
             let matchUri: Uri | undefined;
             let match: IGeneratedCode | undefined;
-            // eslint-disable-next-line no-restricted-syntax
             for (let entry of generatedCodes) {
                 match = entry.generatedCodes.find((h) => h.executionCount === executionCount);
                 if (match) {

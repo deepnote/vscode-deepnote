@@ -390,7 +390,7 @@ suite('Kernel Execution @kernelCore', function () {
         await notebook.appendCodeCell('import sys');
         const cell3 = await notebook.appendCodeCell('print(sys.executable)');
 
-        notebook.cells.map((cell) => kernelExecution.executeCell(cell).catch(noop));
+        void notebook.cells.map((cell) => kernelExecution.executeCell(cell).catch(noop));
 
         // Basically anything such as `!which python` and the like should point to the right executable.
         // For that to work, the first directory in the PATH must be the Python environment.
@@ -746,7 +746,7 @@ suite('Kernel Execution @kernelCore', function () {
 
         // Run the whole document.
         // Verify all have been queued.
-        notebook.cells.map((cell) => kernelExecution.executeCell(cell).catch(noop));
+        void notebook.cells.map((cell) => kernelExecution.executeCell(cell).catch(noop));
         await Promise.all(cells.map((item) => item.cell).map((cell) => waitForQueuedForExecutionOrExecuting(cell)));
 
         // let all cells run to completion & validate their execution orders match the order of the queue.
@@ -795,7 +795,7 @@ suite('Kernel Execution @kernelCore', function () {
         const cells = await insertRandomCells(notebook, { count: 15, addMarkdownCells: true });
 
         const queuedCells = cells.filter((item) => item.cell.kind === NotebookCellKind.Code).map((item) => item.cell);
-        notebook.cells.map((cell) => kernelExecution.executeCell(cell).catch(noop));
+        void notebook.cells.map((cell) => kernelExecution.executeCell(cell).catch(noop));
         await Promise.all(queuedCells.map((cell) => waitForQueuedForExecutionOrExecuting(cell)));
 
         // Add a new cell to the document, this should not get executed.
@@ -817,7 +817,7 @@ suite('Kernel Execution @kernelCore', function () {
 
         const queuedCells = codeCells.map((item) => item.cell);
         // Run entire notebook & verify all cells are queued for execution.
-        notebook.cells.map((cell) => kernelExecution.executeCell(cell).catch(noop));
+        void notebook.cells.map((cell) => kernelExecution.executeCell(cell).catch(noop));
         await Promise.all(queuedCells.map((cell) => waitForQueuedForExecutionOrExecuting(cell)));
 
         // Insert new cell & run it, & verify that too is queued for execution.

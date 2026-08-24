@@ -30,8 +30,7 @@ import {
     copyFixtureToTempDir,
     createEnvironment,
     createScreenshotter,
-    enterFixturesWorkspace,
-    fixturesWorkspaceRoot,
+    openFolderViaDialog,
     openWorkspaceFile,
     runOnceAndAwaitOutput,
     selectDeepnoteContextMenu,
@@ -99,7 +98,7 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         const tempDir = copy.tempDir;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await createEnvironment(ENV_NAME);
@@ -167,10 +166,8 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         await screenshot('split-done');
 
         // Delete the sidecar so only a child's migrated mapping can rewrite it (proves migration, not
-        // a stale pre-split entry). It is written to workspace.workspaceFolders[0]
-        // (deepnoteExtensionSidecarWriter.node.ts:300), which is the shared fixtures root rather than
-        // this suite's directory, so the delete also drops whatever earlier suites left in it.
-        const sidecarPath = path.join(fixturesWorkspaceRoot(), '.vscode', 'deepnote.json');
+        // a stale pre-split entry).
+        const sidecarPath = path.join(tempDir, '.vscode', 'deepnote.json');
         fs.rmSync(sidecarPath, { force: true });
 
         await new EditorView().closeAllEditors().catch(() => undefined);
@@ -199,7 +196,7 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         }
 
         if (!sidecarEnvId) {
-            const vscodeDir = path.join(fixturesWorkspaceRoot(), '.vscode');
+            const vscodeDir = path.join(tempDir, '.vscode');
             const listing = fs.existsSync(vscodeDir) ? fs.readdirSync(vscodeDir) : '(.vscode missing)';
             console.log('[G1] .vscode listing after opening child:', JSON.stringify(listing));
             if (fs.existsSync(sidecarPath)) {
@@ -314,7 +311,7 @@ describe('Deepnote — deleting an environment stops even a closed-but-running n
         cleanupTempDir = copy.cleanup;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         // Servers already running from earlier suites — exclude these when isolating THIS PID.

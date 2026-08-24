@@ -12,7 +12,7 @@ import {
     copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
-    enterFixturesWorkspace,
+    openFolderViaDialog,
     openWorkspaceFile
 } from '../../helpers';
 
@@ -100,7 +100,7 @@ describe('Deepnote — the integrations UI', function () {
         copyFixtureIntoDir(copy.tempDir, PLAIN_FILE);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
     });
 

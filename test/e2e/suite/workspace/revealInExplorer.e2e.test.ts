@@ -11,9 +11,9 @@ import {
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
     createScreenshotter,
-    enterFixturesWorkspace,
     findDeepnoteLeaf,
     getDeepnoteExplorerSection,
+    openFolderViaDialog,
     openWorkspaceFile,
     waitForNotification
 } from '../../helpers';
@@ -51,7 +51,7 @@ describe('Deepnote — Reveal in Explorer', function () {
         cleanupTempDir = copy.cleanup;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         // Open the single-notebook file so there is an active Deepnote notebook editor to reveal.

@@ -16,9 +16,9 @@ import {
     copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
-    enterFixturesWorkspace,
     findDeepnoteGroup,
     getDeepnoteExplorerSection,
+    openFolderViaDialog,
     openWorkspaceFile,
     readDeepnoteTreeRows,
     selectDeepnoteContextMenu,
@@ -106,7 +106,7 @@ describe('Deepnote — renaming a project fans the new name out to every sibling
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         let section = await getDeepnoteExplorerSection();

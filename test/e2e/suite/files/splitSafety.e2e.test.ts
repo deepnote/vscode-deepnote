@@ -14,7 +14,7 @@ import {
     assertNotNull,
     copyFixtureToTempDir,
     createScreenshotter,
-    enterFixturesWorkspace,
+    openFolderViaDialog,
     openWorkspaceFile,
     waitForNotification
 } from '../../helpers';
@@ -34,7 +34,7 @@ describe('Deepnote — split-prompt safety', function () {
         tempDir = copy.tempDir;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
     });
 

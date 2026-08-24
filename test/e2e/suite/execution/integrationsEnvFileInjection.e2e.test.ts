@@ -15,7 +15,7 @@ import {
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
     createEnvironment,
-    enterFixturesWorkspace,
+    openFolderViaDialog,
     openWorkspaceFile,
     runOnceAndAwaitOutput,
     selectEnvironmentForNotebook
@@ -72,7 +72,7 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         // Open the folder as the workspace FIRST (the serializer's snapshot read blocks headlessly without one).
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await openWorkspaceFile(NOTEBOOK_FILE_NAME);

@@ -28,7 +28,7 @@ import {
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
     createEnvironment,
-    enterFixturesWorkspace,
+    openFolderViaDialog,
     openWorkspaceFile,
     runOnceAndAwaitOutput,
     selectEnvironmentForNotebook
@@ -62,7 +62,7 @@ describe('Deepnote E2E — run "hello world"', function () {
         // resolves headlessly — leaving the notebook blank. A workspace folder also provides the
         // requirements.txt path the kernel auto-selector needs. (Opening a folder reloads the
         // window, so we re-wait for the workbench afterwards.)
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         // Now that the containing folder is the workspace, the notebook is reachable by name.

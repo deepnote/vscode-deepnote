@@ -18,7 +18,7 @@ import {
     createEnvironment,
     createScreenshotter,
     dismissAllNotifications,
-    enterFixturesWorkspace,
+    openFolderViaDialog,
     openWorkspaceFile,
     readRenderedOutput,
     runOnceAndAwaitOutput,
@@ -108,7 +108,7 @@ describe('Deepnote — running the sibling init notebook in a main notebook kern
         copyFixtureIntoDir(copy.tempDir, INIT_SIBLING_FILE);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await openWorkspaceFile(MAIN_FILE);

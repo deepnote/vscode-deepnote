@@ -11,7 +11,7 @@ import {
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
     createScreenshotter,
-    enterFixturesWorkspace,
+    openFolderViaDialog,
     openWorkspaceFile,
     readStatusBarText,
     waitForNotification
@@ -42,7 +42,7 @@ describe('Deepnote — opening a plain single-notebook .deepnote file', function
 
         // Open the temp dir as workspace root first: the serializer reads snapshots relative to a
         // workspace folder, else deserialization blocks headlessly. Opening a folder reloads the window.
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await openWorkspaceFile(FIXTURE);

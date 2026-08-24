@@ -9,43 +9,26 @@ export interface FixtureCopy {
     cleanup: () => void;
     /** The absolute path to the copied fixture file inside `tempDir`. */
     filePath: string;
-    /** The throwaway directory the fixture was copied into, a child of the shared workspace root. */
+    /** The throwaway temp directory the fixture was copied into (suitable as a workspace folder). */
     tempDir: string;
 }
 
 const FIXTURES_DIR = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures');
 
-let workspaceRoot: string | undefined;
-
 /**
- * The single directory every fixture copy lives under. openFolderViaDialog opens it once, on the
- * first suite that asks, rather than once per suite: opening a folder reloads the workbench, and
- * that reload dominated suite setup. Each suite still removes its own subdirectory in `after`.
- */
-export function fixturesWorkspaceRoot(): string {
-    if (!workspaceRoot) {
-        workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-e2e-root-'));
-        // Exposed as `.venv` so the Python extension discovers it with no configuration, which is
-        // what lets the suites run without a settings file written ahead of the window opening.
-        linkManagedVenvInto(workspaceRoot);
-    }
-
-    return workspaceRoot;
-}
-
-/**
- * Copies a fixture from `test/e2e/fixtures` into a fresh directory under the shared workspace root
- * and returns the paths plus a `cleanup` callback. Execution dirties the notebook, so working on a
- * throwaway copy keeps the committed fixture pristine and avoids save prompts.
+ * Copies a fixture from `test/e2e/fixtures` into a fresh throwaway temp directory and returns the
+ * paths plus a `cleanup` callback that removes the dir. Execution dirties the notebook, so working
+ * on a throwaway copy keeps the committed fixture pristine and avoids save prompts.
  *
- * Copies keep their committed ids: what isolates one suite from the next is the window reload in
- * enterFixturesWorkspace(), which restarts the extension host, plus this directory being removed in
- * `after` — so no two copies of a fixture are ever in the workspace at the same time.
+ * The directory is opened as the suite's workspace folder, so the pre-baked venv is linked into it
+ * as `.venv`, which is where the Python extension discovers it with no configuration. `cleanup`
+ * unlinks that symlink rather than following it, leaving the venv itself intact.
  */
 export function copyFixtureToTempDir(fixtureName: string): FixtureCopy {
-    const tempDir = fs.mkdtempSync(path.join(fixturesWorkspaceRoot(), 'suite-'));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-e2e-'));
     const filePath = path.join(tempDir, fixtureName);
     fs.copyFileSync(path.join(FIXTURES_DIR, fixtureName), filePath);
+    linkManagedVenvInto(tempDir);
 
     const cleanup = () => fs.rmSync(tempDir, { recursive: true, force: true });
 

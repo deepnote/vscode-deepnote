@@ -27,7 +27,7 @@ import {
     copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
-    enterFixturesWorkspace,
+    openFolderViaDialog,
     openWorkspaceFile,
     waitForNotification
 } from '../../helpers';
@@ -163,7 +163,7 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         const section = await getExplorerSection();

@@ -13,7 +13,7 @@ import {
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
     createScreenshotter,
-    enterFixturesWorkspace,
+    openFolderViaDialog,
     openWorkspaceFile,
     waitForNotification
 } from '../../helpers';
@@ -73,7 +73,7 @@ describe('Deepnote — the active-notebook status bar item', function () {
         fs.writeFileSync(path.join(copy.tempDir, SCRATCH_FILE), '');
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await enterFixturesWorkspace();
+        await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await openWorkspaceFile(FIXTURE);

@@ -5,20 +5,9 @@ import {
     FOLDER_OK_RETRY_DELAY,
     FOLDER_OPEN_TIMEOUT,
     QUICK_PICK_TIMEOUT,
-    RELOAD_POLL_TIMEOUT,
-    WORKBENCH_TIMEOUT
+    RELOAD_POLL_TIMEOUT
 } from './constants';
-import { fixturesWorkspaceRoot } from './fixtures';
 import { clickDialogOkButton } from './quickInput';
-
-// Whether the shared fixtures root has been opened yet. Tracked here rather than opened from a Mocha
-// root hook: ExTester's runner does not fire `mochaHooks.beforeAll`, so a root hook silently never
-// runs and every suite ends up with no workspace at all.
-let fixturesRootOpened = false;
-
-// Exact palette labels (category + title) the way `Workbench.executeCommand` matches them.
-const CLOSE_ALL_EDITORS_COMMAND = 'View: Close All Editors';
-const RELOAD_WINDOW_COMMAND = 'Developer: Reload Window';
 
 /**
  * Opens a file that lives in the currently-open workspace folder via Quick Open ("Go to File..."),
@@ -49,7 +38,7 @@ export async function openWorkspaceFile(fileName: string): Promise<void> {
  * the path once and re-click OK in the SAME dialog until the pre-open workbench detaches (= accepted).
  * Re-opening the dialog per attempt instead would reset navigation and fail on 2nd+ opens.
  */
-async function openFolderViaDialog(folder: string): Promise<void> {
+export async function openFolderViaDialog(folder: string): Promise<void> {
     const driver = VSBrowser.instance.driver;
     const previousWorkbench = await driver.findElement(By.css('.monaco-workbench'));
 
@@ -94,53 +83,4 @@ async function openFolderViaDialog(folder: string): Promise<void> {
     });
 
     throw new Error(`Failed to open folder "${folder}": the dialog never accepted the target`);
-}
-
-/**
- * Puts the window into the state a suite expects: the shared fixtures workspace open and nothing left
- * over from the suite before it. Every suite calls this in `before()`.
- *
- * The folder is opened once; after that each suite gets a window reload. Reloading restarts the
- * extension host, which is the only thing that reliably clears everything a previous suite can leave
- * behind — open editors, the Deepnote Explorer's cached project groups, cached project data keyed by
- * id, and the Python extension's interpreter discovery. Clearing those individually was possible but
- * open-ended; every fix uncovered another.
- *
- * The reload is not what made the old per-suite setup slow. That was `File: Open Folder...`, whose
- * simple dialog navigates one level per OK click, so opening a path meant re-clicking for up to
- * FOLDER_OPEN_TIMEOUT. Keeping one workspace and reloading inside it drops that cost while keeping
- * the isolation.
- */
-export async function enterFixturesWorkspace(): Promise<void> {
-    if (!fixturesRootOpened) {
-        await openFolderViaDialog(fixturesWorkspaceRoot());
-        fixturesRootOpened = true;
-
-        return;
-    }
-
-    const driver = VSBrowser.instance.driver;
-
-    // Close before reloading: a reload restores whatever was open, so a suite that renamed or deleted
-    // notebooks would hand its dead tabs straight to the next one. Driven through the palette rather
-    // than `EditorView.closeAllEditors`, which clicks each tab's close button and fails on notebook
-    // tabs with ElementNotInteractableError.
-    await new Workbench().executeCommand(CLOSE_ALL_EDITORS_COMMAND);
-
-    const previousWorkbench = await driver.findElement(By.css('.monaco-workbench'));
-    await new Workbench().executeCommand(RELOAD_WINDOW_COMMAND);
-
-    // Same staleness probe openFolderViaDialog uses: the old workbench detaching is the signal that
-    // the reload actually started, rather than a fixed sleep.
-    await driver.wait(async () => {
-        try {
-            await previousWorkbench.getTagName();
-
-            return false;
-        } catch {
-            return true;
-        }
-    }, WORKBENCH_TIMEOUT);
-
-    await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 }

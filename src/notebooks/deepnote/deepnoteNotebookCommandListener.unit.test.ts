@@ -35,7 +35,6 @@ import {
     createMockNotebookWithCells
 } from './deepnoteTestHelpers';
 
-
 suite('DeepnoteNotebookCommandListener', () => {
     let commandListener: DeepnoteNotebookCommandListener;
     let disposables: IDisposable[];

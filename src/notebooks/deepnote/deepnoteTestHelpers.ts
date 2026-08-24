@@ -4,7 +4,10 @@ import {
     NotebookCellKind,
     NotebookCellOutput,
     NotebookDocument,
+    Position,
     TextDocument,
+    Range,
+    TextLine,
     Uri,
     WorkspaceFolder
 } from 'vscode';
@@ -29,6 +32,8 @@ export interface CreateMockCellOptions {
     notebookUri?: Uri;
     notebookMetadata?: Record<string, unknown>;
     index?: number;
+    mime?: string;
+    notebook?: NotebookDocument;
 }
 
 /**
@@ -47,6 +52,7 @@ export interface CreateMockNotebookOptions {
     notebookType?: string;
     uri?: Uri;
     metadata?: Record<string, unknown>;
+    cells?: NotebookCell[];
 }
 
 /**
@@ -56,13 +62,45 @@ export interface CreateMockNotebookOptions {
  * @returns A mock NotebookDocument
  */
 export function createMockNotebook(options?: CreateMockNotebookOptions): NotebookDocument {
-    const { notebookType = 'deepnote', uri = Uri.file('/test/notebook.deepnote'), metadata = {} } = options ?? {};
+    const {
+        notebookType = 'deepnote',
+        uri = Uri.file('/test/notebook.deepnote'),
+        metadata = {},
+        cells = []
+    } = options ?? {};
 
     return {
         uri,
         notebookType,
-        metadata
-    } as NotebookDocument;
+        metadata,
+        get cellCount() {
+            return cells.length;
+        },
+        // Mirrors VS Code: the index is clamped to the notebook rather than throwing.
+        cellAt: (index: number) => cells[Math.min(Math.max(index, 0), cells.length - 1)] ?? ({} as NotebookCell),
+        getCells: () => cells,
+        version: 1,
+        isDirty: false,
+        isUntitled: false,
+        isClosed: false,
+        save: async () => true
+    } satisfies NotebookDocument;
+}
+
+/**
+ * Builds one mock notebook and cells that share it (correct `index` and `notebook` references).
+ */
+export function createMockNotebookWithCells(
+    cellOptions: Omit<CreateMockCellOptions, 'index' | 'notebook' | 'notebookUri'>[]
+): { cells: NotebookCell[]; notebook: NotebookDocument } {
+    const cells: NotebookCell[] = [];
+    const notebook = createMockNotebook({ cells });
+
+    for (let index = 0; index < cellOptions.length; index++) {
+        cells.push(createMockCell({ ...cellOptions[index], index, notebook }));
+    }
+
+    return { cells, notebook };
 }
 
 /**
@@ -101,24 +139,28 @@ export function createMockCell(options?: CreateMockCellOptions): NotebookCell {
         outputs = [],
         notebookType = 'deepnote',
         notebookUri = Uri.file('/test/notebook.deepnote'),
-        index = 0
+        index = 0,
+        mime = 'text/plain'
     } = opts;
 
     // Preserve explicit undefined for metadata fields
-    const metadata = Object.prototype.hasOwnProperty.call(opts, 'metadata') ? opts.metadata : {};
+    const metadata = 'metadata' in opts ? opts.metadata ?? {} : {};
     const notebookMetadata = Object.prototype.hasOwnProperty.call(opts, 'notebookMetadata')
         ? opts.notebookMetadata
         : {};
 
-    const notebook = createMockNotebook({
-        notebookType,
-        uri: notebookUri,
-        metadata: notebookMetadata
-    });
+    const notebook =
+        opts.notebook ??
+        createMockNotebook({
+            notebookType,
+            uri: notebookUri,
+            metadata: notebookMetadata
+        });
+    const resolvedUri = notebook.uri;
 
-    const cellPath = `${notebookUri.path}#cell${index}`;
+    const cellPath = `${resolvedUri.path}#cell${index}`;
 
-    const document = {
+    const document: TextDocument = {
         uri: Uri.file(cellPath),
         fileName: cellPath,
         isUntitled: false,
@@ -130,23 +172,25 @@ export function createMockCell(options?: CreateMockCellOptions): NotebookCell {
         save: async () => true,
         eol: 1,
         lineCount: 1,
-        lineAt: () => ({ text: '' }) as unknown,
+        lineAt: () => ({ text: '' }) as unknown as TextLine,
         offsetAt: () => 0,
-        positionAt: () => ({}) as unknown,
-        validateRange: () => ({}) as unknown,
-        validatePosition: () => ({}) as unknown,
-        getWordRangeAtPosition: () => undefined
-    } as unknown as TextDocument;
+        positionAt: () => new Position(0, 0),
+        validateRange: () => new Range(new Position(0, 0), new Position(0, 0)),
+        validatePosition: () => new Position(0, 0),
+        getWordRangeAtPosition: () => undefined,
+        encoding: 'utf-8'
+    };
 
     return {
         index,
+        mime,
         notebook,
         kind,
         document,
         metadata,
         outputs,
         executionSummary: undefined
-    } as unknown as NotebookCell;
+    };
 }
 
 /** A Deepnote code block (whole-file YAML shape); override any field. */

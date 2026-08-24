@@ -325,10 +325,5 @@ export class CellExecutionQueue implements Disposable {
                 break;
             }
         }
-
-        // Notify listeners that execution queue is complete
-        if (this.notebook) {
-            notebookCellExecutions.notifyQueueComplete(this.notebook.uri.toString());
-        }
     }
 }

@@ -1,0 +1,22 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-agent-height-project
+  name: E2E Agent Height
+  notebooks:
+    - id: e2e-agent-height-notebook
+      name: Agent Height
+      blocks:
+        - id: e2e-agent-height-block
+          blockGroup: e2e-agent-height-group
+          type: agent
+          content: |-
+            Answer at length (e2e-agent-height-prompt).
+          sortingKey: a0
+          metadata:
+            deepnote_agent_model: 'gpt-5.6-sol'
+      executionMode: block
+      isModule: false
+  settings: {}

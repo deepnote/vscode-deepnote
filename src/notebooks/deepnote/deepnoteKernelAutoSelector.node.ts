@@ -621,8 +621,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     ): Promise<void> {
         Cancellation.throwIfCanceled(token);
 
-        const alreadySelected = this.controllerRegistration.getSelected(notebook);
-        if (alreadySelected?.id === controller.id) {
+        // Identity, not id: a Deepnote controller id is derived from the notebook URI, so a disposed
+        // controller and the one replacing it share one. Matching on id would skip selectKernel and
+        // leave the notebook bound to the dead controller.
+        if (this.controllerRegistration.getSelected(notebook) === controller) {
             logger.info(`Controller ${controller.id} already selected for ${getDisplayPath(notebook.uri)}`);
             controller.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
             return;
@@ -1105,15 +1107,21 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         );
 
         controller.supportsExecutionOrder = true;
-        controller.supportedLanguages = ['python', 'sql', 'markdown'];
+        controller.supportedLanguages = ['python', 'sql', 'markdown', 'plaintext'];
 
-        // Execution handler that shows environment picker when user tries to run without an environment
+        // Environment picker only; execution goes through the real controller on retry.
         controller.executeHandler = async (cells, doc) => {
             logger.info(
                 `Placeholder controller execute handler called for ${getDisplayPath(doc.uri)} with ${
                     cells.length
                 } cells`
             );
+
+            if (!workspace.isTrusted) {
+                logger.info(`Workspace is not trusted, skipping environment setup for ${getDisplayPath(doc.uri)}`);
+
+                return;
+            }
 
             // Create a cancellation token that cancels when the notebook is closed
             const cts = new CancellationTokenSource();
@@ -1133,38 +1141,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                     return;
                 }
 
-                // Environment is now configured, execute the cells through the kernel
-                const docNotebookKey = getNotebookKey(doc.uri);
-                const realController = this.notebookControllers.get(docNotebookKey);
-
-                if (!realController) {
-                    logger.error(`No controller found after environment configuration for ${docNotebookKey}`);
-
-                    return;
-                }
-
-                logger.info(`Executing ${cells.length} cells through kernel after environment configuration`);
-
-                // Get or create a kernel for this notebook with the new connection
-                const kernel = this.kernelProvider.getOrCreate(doc, {
-                    metadata: realController.connection,
-                    controller: realController.controller,
-                    resourceUri: doc.uri
-                });
-
-                // Execute cells through the kernel
-                const kernelExecution = this.kernelProvider.getKernelExecution(kernel);
-
-                for (const cell of cells) {
-                    try {
-                        await kernelExecution.executeCell(cell);
-                    } catch (cellError) {
-                        logger.error(`Error executing cell ${cell.index}`, cellError);
-                        // Continue with remaining cells
-                    }
-                }
-
-                logger.info(`Finished executing ${cells.length} cells`);
+                void window.showInformationMessage(l10n.t('Environment ready. Run the cells again to execute them.'));
             } catch (error) {
                 if (isCancellationError(error)) {
                     logger.info(`Environment setup cancelled for ${getDisplayPath(doc.uri)}`);

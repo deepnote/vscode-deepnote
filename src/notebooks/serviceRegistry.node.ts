@@ -98,7 +98,11 @@ import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environme
 import { DeepnoteCellExecutionAnalytics } from './deepnote/deepnoteCellExecutionAnalytics';
 import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookCommandListener';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
+import { AgentCellStatusBarProvider } from './deepnote/agentCellStatusBarProvider';
+import { AgentOpenAiApiKeyCommandHandler } from './deepnote/agentOpenAiApiKeyCommandHandler';
 import { DeepnoteBigNumberCellStatusBarProvider } from './deepnote/deepnoteBigNumberCellStatusBarProvider';
+import { EphemeralCellStatusBarProvider } from './deepnote/ephemeralCellStatusBarProvider';
+import { OrphanedEphemeralCellCleaner } from './deepnote/orphanedEphemeralCellCleaner';
 import { DeepnoteNewCellLanguageService } from './deepnote/deepnoteNewCellLanguageService';
 import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
 import { DeepnoteEnvironmentTreeDataProvider } from '../kernels/deepnote/environments/deepnoteEnvironmentTreeDataProvider.node';
@@ -276,6 +280,22 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteBigNumberCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        AgentOpenAiApiKeyCommandHandler
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        AgentCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        EphemeralCellStatusBarProvider
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        OrphanedEphemeralCellCleaner
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

@@ -1,0 +1,36 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-agent-batch-project
+  name: E2E Agent Batch
+  notebooks:
+    - id: e2e-agent-batch-notebook
+      name: Agent Batch
+      blocks:
+        - id: e2e-agent-batch-failing-block
+          blockGroup: e2e-agent-batch-group
+          type: code
+          content: |-
+            raise ValueError("e2e-batch-boom")
+          sortingKey: a0
+          metadata: {}
+        - id: e2e-agent-batch-agent-block
+          blockGroup: e2e-agent-batch-group
+          type: agent
+          content: |-
+            Run some Python, then add a markdown block summarizing this notebook.
+          sortingKey: a1
+          metadata:
+            deepnote_agent_model: 'gpt-5.6-sol'
+        - id: e2e-agent-batch-trailing-block
+          blockGroup: e2e-agent-batch-group
+          type: code
+          content: |-
+            print("e2e-batch-trailing-ran")
+          sortingKey: a2
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

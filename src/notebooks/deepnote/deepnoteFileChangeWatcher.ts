@@ -12,12 +12,14 @@ import {
 } from 'vscode';
 import { inject, injectable, optional } from 'inversify';
 import type { DeepnoteBlock } from '@deepnote/blocks';
+import fastDeepEqual from 'fast-deep-equal';
 
 import { IControllerRegistration } from '../controllers/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { logger } from '../../platform/logging';
 import { IDeepnoteNotebookManager } from '../types';
+import { getBlockId, isEphemeralCell } from './dataConversionUtils';
 import { DeepnoteDataConverter } from './deepnoteDataConverter';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
@@ -158,21 +160,34 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
     }
 
     /**
-     * Checks whether the source code content has actually changed between the
-     * live notebook and the new cells from disk. If only outputs differ (disk
-     * has fewer/no outputs), it's an auto-save of stripped content — skip reload.
+     * Checks whether anything the file carries has actually changed between the live notebook and
+     * the new cells from disk. Outputs and execution state are ignored: in snapshot mode the main
+     * file has them stripped, so our own auto-save would otherwise look like an external edit.
      */
     private contentActuallyChanged(notebook: NotebookDocument, newCells: NotebookCellData[]): boolean {
-        const liveCells = notebook.getCells();
+        // Ephemeral cells aren't persisted; counting them looks like an external delete.
+        const liveCells = notebook.getCells().filter((cell) => !isEphemeralCell(cell));
         if (liveCells.length !== newCells.length) {
             return true;
         }
-        return liveCells.some(
-            (live, i) =>
-                live.kind !== newCells[i].kind ||
-                live.document.languageId !== newCells[i].languageId ||
-                live.document.getText() !== newCells[i].value
-        );
+
+        return liveCells.some((live, i) => {
+            const fromDisk = newCells[i];
+
+            if (
+                live.kind !== fromDisk.kind ||
+                live.document.languageId !== fromDisk.languageId ||
+                live.document.getText() !== fromDisk.value ||
+                getBlockId(live) !== getBlockId(fromDisk)
+            ) {
+                return true;
+            }
+
+            const liveBlock = this.persistedBlock(live, i);
+            const diskBlock = this.persistedBlock(fromDisk, i);
+
+            return liveBlock.type !== diskBlock.type || !fastDeepEqual(liveBlock.metadata, diskBlock.metadata);
+        });
     }
 
     /**
@@ -279,14 +294,14 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         const liveCells = notebook.getCells();
         const liveOutputsByBlockId = new Map<string, readonly NotebookCellOutput[]>();
         for (const liveCell of liveCells) {
-            const blockId = this.getBlockIdFromMetadata(liveCell.metadata);
+            const blockId = getBlockId(liveCell);
             if (blockId && liveCell.outputs.length > 0) {
                 liveOutputsByBlockId.set(blockId, liveCell.outputs);
             }
         }
 
         for (const cell of newCells) {
-            const blockId = this.getBlockIdFromMetadata(cell.metadata);
+            const blockId = getBlockId(cell);
             if (blockId && (!cell.outputs || cell.outputs.length === 0)) {
                 const liveOutputs = liveOutputsByBlockId.get(blockId);
                 if (liveOutputs) {
@@ -300,7 +315,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         edits.push(NotebookEdit.replaceCells(new NotebookRange(0, notebook.cellCount), newCells));
 
         for (let i = 0; i < newCells.length; i++) {
-            const blockId = this.getBlockIdFromMetadata(newCells[i].metadata);
+            const blockId = getBlockId(newCells[i]);
             if (blockId) {
                 edits.push(
                     NotebookEdit.updateCellMetadata(i, {
@@ -373,15 +388,20 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             blockIdFromFallback: boolean;
         }> = [];
 
+        // Ephemeral cells live in the document but are stripped from the file, so a live index cannot
+        // address originalBlocks. Track the file's own cursor, advanced only by persisted cells.
+        let fileBlockIndex = 0;
+
         for (let i = 0; i < liveCells.length; i++) {
             try {
                 const cell = liveCells[i];
-                let blockId = this.getBlockIdFromMetadata(cell.metadata);
+                const originalBlock = isEphemeralCell(cell) ? undefined : originalBlocks?.[fileBlockIndex++];
+                let blockId = getBlockId(cell);
                 let blockIdFromFallback = false;
 
                 // Fallback to original project blocks when metadata was lost
-                if (!blockId && originalBlocks) {
-                    blockId = originalBlocks[i]?.id;
+                if (!blockId && originalBlock) {
+                    blockId = originalBlock.id;
                     blockIdFromFallback = true;
                 }
 
@@ -389,7 +409,7 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
                     continue;
                 }
 
-                const fallbackType = originalBlocks?.[i]?.type;
+                const fallbackType = originalBlock?.type;
                 const blockType = ((cell.metadata?.type as string) ?? fallbackType ?? 'code') as DeepnoteBlock['type'];
                 const newOutputs = this.converter.transformOutputsForVsCode(
                     snapshotOutputs.get(blockId)!,
@@ -500,10 +520,6 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
         }
 
         logger.info(`[FileChangeWatcher] Updated notebook outputs from external snapshot: ${notebook.uri.path}`);
-    }
-
-    private getBlockIdFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
-        return (metadata?.__deepnoteBlockId ?? metadata?.id) as string | undefined;
     }
 
     private handleFileChange(uri: Uri): void {
@@ -644,6 +660,26 @@ export class DeepnoteFileChangeWatcher implements IExtensionSyncActivationServic
             }
         }
         return true;
+    }
+
+    /**
+     * The block a cell would be written as, produced by the very conversion the serializer runs on
+     * save. Comparing that instead of raw cell metadata keeps the check honest in both directions:
+     * whatever the write path derives, normalizes or strips ends up on the block rather than in
+     * `block.metadata`, while everything an external editor can put in the file survives.
+     * Outputs are left out — they are deliberately not compared and converting them is the
+     * expensive part.
+     */
+    private persistedBlock(cell: NotebookCell | NotebookCellData, index: number): DeepnoteBlock {
+        const isLiveCell = 'document' in cell;
+        const projection = new NotebookCellData(
+            cell.kind,
+            isLiveCell ? cell.document.getText() : cell.value,
+            isLiveCell ? cell.document.languageId : cell.languageId
+        );
+        projection.metadata = { ...cell.metadata };
+
+        return this.converter.convertCellToBlock(projection, index);
     }
 
     private selfWriteKey(uri: Uri): string {

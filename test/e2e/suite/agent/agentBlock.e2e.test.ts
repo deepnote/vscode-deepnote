@@ -24,6 +24,7 @@ import {
     clickInterrupt,
     clickRunAll,
     confirmModalDialog,
+    copyFixtureIntoDir,
     copyFixtureToTempDir,
     createEnvironment,
     createScreenshotter,
@@ -238,10 +239,7 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
         workspaceDir = copy.tempDir;
 
         for (const fixture of [BATCH_FILE, HEIGHT_FILE, STOP_FILE]) {
-            fs.copyFileSync(
-                path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', fixture),
-                path.join(copy.tempDir, fixture)
-            );
+            copyFixtureIntoDir(copy.tempDir, fixture);
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);

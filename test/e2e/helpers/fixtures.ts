@@ -25,8 +25,7 @@ const FIXTURES_DIR = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures');
  */
 export function copyFixtureToTempDir(fixtureName: string): FixtureCopy {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-e2e-'));
-    const filePath = path.join(tempDir, fixtureName);
-    fs.copyFileSync(path.join(FIXTURES_DIR, fixtureName), filePath);
+    const filePath = copyFixtureIntoDir(tempDir, fixtureName);
     pointWorkspaceAtManagedVenv(tempDir);
 
     const cleanup = () => fs.rmSync(tempDir, { recursive: true, force: true });

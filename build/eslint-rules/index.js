@@ -1,20 +1,10 @@
 const { isBuiltin } = require('node:module');
-const path = require('path');
 
-const testFolder = path.join('src', 'test');
-
-function reportIfMissing(context, node, allowed, name) {
-    const fileName = context.filename;
-    if (
-        allowed.indexOf(name) === -1 &&
-        isBuiltin(name) &&
-        !fileName.endsWith('.node.ts') &&
-        !fileName.endsWith('.test.ts') &&
-        !fileName.includes(testFolder)
-    ) {
-        context.report({ node, message: `Do not import Node.js builtin module "${name}"` });
-    }
-    // Special case 'path'. Force everything to use the custom path
+// Force everything to use the custom vscode-path instead. General Node-builtin detection is
+// handled by oxlint's native `import/no-nodejs-modules` rule (see oxlint.config.mts); this rule
+// only still covers `path`, since that ban applies unconditionally, including in .node.ts files,
+// which no-nodejs-modules can't express (it's turned off there for legitimate Node builtins).
+function reportIfPath(context, node, name) {
     if (isBuiltin(name) && name === 'path') {
         context.report({ node, message: `Do not import path builtin module. Use the custom vscode-path instead.` });
     }
@@ -26,33 +16,15 @@ module.exports = {
             meta: {
                 type: 'problem',
                 docs: {
-                    description: 'Check for node.js builtins in non-node files',
+                    description: 'Force use of the custom vscode-path module instead of the builtin `path`',
                     category: 'import'
-                },
-                schema: [
-                    {
-                        type: 'object',
-                        properties: {
-                            allow: {
-                                type: 'array',
-                                uniqueItems: true,
-                                items: {
-                                    type: 'string'
-                                }
-                            }
-                        },
-                        additionalProperties: false
-                    }
-                ]
+                }
             },
             create: function (context) {
-                const options = context.options[0] || {};
-                const allowed = options.allow || [];
-
                 // `export { x }` and `export const x = 1` carry no source to check.
                 function checkSource(node) {
                     if (node.source) {
-                        reportIfMissing(context, node, allowed, node.source.value);
+                        reportIfPath(context, node, node.source.value);
                     }
                 }
 
@@ -62,7 +34,7 @@ module.exports = {
                     ExportAllDeclaration: checkSource,
                     ImportExpression(node) {
                         if (node.source.type === 'Literal' && typeof node.source.value === 'string') {
-                            reportIfMissing(context, node, allowed, node.source.value);
+                            reportIfPath(context, node, node.source.value);
                         }
                     },
                     CallExpression(node) {
@@ -73,7 +45,7 @@ module.exports = {
                             node.arguments[0].type === 'Literal' &&
                             typeof node.arguments[0].value === 'string'
                         ) {
-                            reportIfMissing(context, node, allowed, node.arguments[0].value);
+                            reportIfPath(context, node, node.arguments[0].value);
                         }
                     }
                 };

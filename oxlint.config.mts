@@ -49,14 +49,15 @@ const restrictedPathZones: Rules['import-plugin/no-restricted-paths'] = [
             },
             {
                 target: './src/kernels/**/*[!.unit].ts',
-                from: './src/**[!platform,telemetry,kernels]**/**/*.ts',
-                message: 'Only modules from ./src/platform and ./src/telemetry can be imported into ./src/kernels.'
+                from: './src/**[!platform,telemetry,kernels,codespaces]**/**/*.ts',
+                message:
+                    'Only modules from ./src/platform, ./src/telemetry and ./src/codespaces can be imported into ./src/kernels.'
             },
             {
                 target: './src/notebooks/**/*[!.unit].ts',
-                from: './src/**[!platform,telemetry,kernels,notebooks]**/**/*.ts',
+                from: './src/**[!platform,telemetry,kernels,notebooks,codespaces]**/**/*.ts',
                 message:
-                    'Only modules from ./src/platform, ./src/telemetry and ./src/kernels can be imported into ./src/notebooks.'
+                    'Only modules from ./src/platform, ./src/telemetry, ./src/kernels and ./src/codespaces can be imported into ./src/notebooks.'
             },
             {
                 target: './src/interactive-window/**/*[!.unit].ts',
@@ -123,14 +124,17 @@ const baseRules: Rules = {
         }
     ],
     'import-plugin/no-restricted-paths': restrictedPathZones,
-    'local-rules/node-imports': ['error', { allow: ['events'] }],
+    // Node-builtin detection now runs through oxlint's native rule (see overrides below for
+    // the .node.ts/.test.ts exceptions); the custom rule only still handles the `path` ban.
+    'import/no-nodejs-modules': ['error', { allow: ['events'] }],
+    'local-rules/node-imports': 'error',
     'local-rules/dont-use-process': ['error'],
     'local-rules/dont-use-fspath': ['error'],
     'local-rules/dont-use-filename': ['error']
 };
 
 export default defineConfig({
-    plugins: ['eslint', 'typescript', 'react'],
+    plugins: ['eslint', 'typescript', 'react', 'import'],
     // Only rules listed below run. Without pinning every category off, naming a plugin
     // pulls in its whole `correctness` set — far wider than the 21 rules ESLint enforced.
     categories: {
@@ -179,8 +183,13 @@ export default defineConfig({
             rules: {
                 'typescript/no-explicit-any': 'off',
                 'no-restricted-imports': 'off',
-                'no-empty-function': 'off'
+                'no-empty-function': 'off',
+                'import/no-nodejs-modules': 'off'
             }
+        },
+        {
+            files: ['**/*.node.ts'],
+            rules: { 'import/no-nodejs-modules': 'off' }
         },
         {
             files: ['src/*.d.ts'],

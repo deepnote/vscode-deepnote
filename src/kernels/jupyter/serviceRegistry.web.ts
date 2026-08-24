@@ -26,10 +26,8 @@ import { RemoteKernelFinderController } from './finder/remoteKernelFinderControl
 import { KernelSessionFactory } from '../common/kernelSessionFactory';
 import { JupyterKernelSessionFactory } from './session/jupyterKernelSessionFactory';
 import { IRemoteKernelFinderController } from './finder/types';
-// eslint-disable-next-line import/no-restricted-paths
-import { JupyterServerProviderRegistry } from '../../codespaces'; // oxlint-disable-line import-plugin/no-restricted-paths
-// eslint-disable-next-line import/no-restricted-paths
-import { CodespacesJupyterServerSelector } from '../../codespaces/codeSpacesServerSelector'; // oxlint-disable-line import-plugin/no-restricted-paths
+import { JupyterServerProviderRegistry } from '../../codespaces';
+import { CodespacesJupyterServerSelector } from '../../codespaces/codeSpacesServerSelector';
 
 export function registerTypes(serviceManager: IServiceManager, _isDevMode: boolean) {
     serviceManager.addSingleton<CodespacesJupyterServerSelector>(

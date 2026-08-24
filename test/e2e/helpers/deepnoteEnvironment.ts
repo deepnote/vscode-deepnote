@@ -96,16 +96,10 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
 
 /**
  * Drives `deepnote.environments.create`: pick interpreter -> name -> skip packages -> skip
- * description. Retries when the Python extension has not finished discovering an interpreter yet
- * (the command shows an error and returns instead of opening a quick pick). Idempotent — the
- * "already exists" guard is treated as success so a retried attempt reuses what the first one
- * created rather than colliding.
+ * description. Retries while the Python extension is still discovering interpreters, and treats
+ * "already exists" as success so a retry reuses the environment instead of colliding with it.
  *
- * Every suite passes its OWN name. The interpreter an environment adopts is the `.venv` in that
- * suite's workspace directory, which the suite removes in `after`, so a name shared across suites
- * would hand the next one an environment whose interpreter no longer exists — as would a leftover
- * environment from an earlier local run, which is why repeat local runs want a clean
- * test-resources directory.
+ * Each suite passes its own name, so no suite inherits an environment another one set up.
  */
 export async function createEnvironment(name: string, options: { useManagedVenv?: boolean } = {}): Promise<void> {
     const driver = VSBrowser.instance.driver;

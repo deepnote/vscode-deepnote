@@ -12,6 +12,7 @@
         "forceConsistentCasingInFileNames": true,
         "outDir": "../../../dist/renderers/client",
         "rootDir": "..",
+        "noEmit": true,
         "typeRoots": ["./types", "../../../node_modules/@types"]
     },
     "include": ["./**/*.ts", "./**/*.tsx"],

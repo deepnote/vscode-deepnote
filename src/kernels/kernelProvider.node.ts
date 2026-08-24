@@ -32,9 +32,7 @@ import { IReplNotebookTrackerService } from '../platform/notebooks/replNotebookT
 import { logger } from '../platform/logging';
 import { getDisplayPath } from '../platform/common/platform/fs-paths.node';
 import { IRawNotebookSupportedService } from './raw/types';
-// eslint-disable-next-line import/no-restricted-paths
 import { ISnapshotMetadataService } from '../notebooks/deepnote/snapshots/snapshotService'; // oxlint-disable-line import-plugin/no-restricted-paths
-// eslint-disable-next-line import/no-restricted-paths
 import { IFederatedAuthSqlBlockCodeGenerator } from '../notebooks/deepnote/integrations/types'; // oxlint-disable-line import-plugin/no-restricted-paths
 
 /**

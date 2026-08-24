@@ -15,8 +15,8 @@ function venvPython(): string {
 }
 
 /**
- * The pip specs deepnoteToolkitInstaller installs, read from source so they cannot drift. The
- * installer itself needs `vscode`, which does not resolve in the Mocha process.
+ * The pip specs deepnoteToolkitInstaller installs, read from source so they cannot drift.
+ * Not imported: `src` is outside this tsconfig's rootDir (TS6059), and types.ts needs `vscode`.
  */
 function toolkitPipSpecs(): string[] {
     const source = fs.readFileSync(TOOLKIT_SPEC_SOURCE, 'utf8');

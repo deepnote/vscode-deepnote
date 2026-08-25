@@ -23,11 +23,12 @@ import { expect } from 'chai';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
+import { EditorView, VSBrowser, WebView, Workbench } from 'vscode-extension-tester';
 
 import {
     FIRST_RUN_OUTPUT_TIMEOUT,
     KERNEL_CONNECT_TIMEOUT,
+    QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     clickRunAll,
@@ -38,6 +39,7 @@ import {
     openFolderViaDialog,
     openWorkspaceFile,
     runOnceAndAwaitOutput,
+    tryOpenInputBox,
     waitForNotification
 } from '../helpers';
 
@@ -176,5 +178,16 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
         // The cell printed sys.prefix: the kernel must be the venv this test created, which is what
         // separates "active interpreter" from the old Deepnote-managed environment.
         expect(renderedOutput).to.contain(venvDir);
+
+        // The kernel picker is the only place the description is rendered, so open it to capture
+        // both halves of the entry: the environment name as the label, its path as the description.
+        await new Workbench().executeCommand('notebook.selectKernel');
+
+        const picker = await tryOpenInputBox(QUICK_PICK_TIMEOUT);
+
+        expect(picker, 'the kernel picker should open').to.not.equal(undefined);
+
+        await shot('kernel-picker');
+        await picker?.cancel();
     });
 });

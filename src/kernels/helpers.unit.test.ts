@@ -5,7 +5,7 @@ import * as sinon from 'sinon';
 import { assert } from 'chai';
 import { when, instance, mock, anything } from 'ts-mockito';
 import { Uri } from 'vscode';
-import { getDisplayNameOrNameOfKernelConnection } from './helpers';
+import { getDisplayNameOrNameOfKernelConnection, getKernelDisplayPathFromKernelConnection } from './helpers';
 import { DeepnoteKernelConnectionMetadata } from './deepnote/types';
 import {
     IJupyterKernelSpec,
@@ -294,6 +294,22 @@ suite('Kernel Connection Helpers', () => {
             const name = getDisplayNameOrNameOfKernelConnection(deepnoteConnection(venv as PythonEnvironment));
 
             assert.strictEqual(name, '.venv (Python 3.12.13)');
+        });
+
+        test('describes the interpreter, resolving a relative kernelspec executable via the environment', () => {
+            whenKnownEnvironments(environments).thenReturn([
+                {
+                    id: venv.id,
+                    path: venv.uri.fsPath,
+                    environment: { name: '.venv', type: 'VirtualEnvironment', folderUri: Uri.file('/work/.venv') },
+                    version: { major: 3, minor: 12, micro: 13, sysVersion: '3.12.13' }
+                }
+            ]);
+
+            // The toolkit server serves the stock ipykernel spec, whose executable is a bare "python".
+            const displayPath = getKernelDisplayPathFromKernelConnection(deepnoteConnection(venv as PythonEnvironment));
+
+            assert.strictEqual(displayPath?.fsPath, Uri.file('/work/.venv').fsPath);
         });
 
         test('falls back to the kernelspec name when there is no interpreter', () => {

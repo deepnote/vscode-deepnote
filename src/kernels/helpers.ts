@@ -381,7 +381,8 @@ export function getKernelDisplayPathFromKernelConnection(kernelConnection?: Kern
     if (
         kernelConnection.kind === 'startUsingPythonInterpreter' ||
         ((kernelConnection.kind === 'startUsingRemoteKernelSpec' ||
-            kernelConnection.kind === 'startUsingLocalKernelSpec') &&
+            kernelConnection.kind === 'startUsingLocalKernelSpec' ||
+            kernelConnection.kind === 'startUsingDeepnoteKernel') &&
             kernelConnection.kernelSpec.language === PYTHON_LANGUAGE)
     ) {
         const pathValue =

@@ -18,7 +18,16 @@ const OUT_DIR = path.join(PROJECT_ROOT, 'out');
 const COVERAGE_DIR = path.join(PROJECT_ROOT, 'coverage');
 
 // Paths (relative to `out/`, posix separators) that are test scaffolding rather than shipped code.
-const EXCLUDED_PATHS = [/^test\//, /^e2e\//, /\/ipywidgets\//, /\.test\.js$/, /\.testvirtualenvs\.js$/];
+// `*.bundle.js` is the esbuild output `npm run compile` leaves beside the tsc files; its source map
+// points at every bundled dependency, so instrumenting it charges all of node_modules to us.
+const EXCLUDED_PATHS = [
+    /^test\//,
+    /^e2e\//,
+    /\/ipywidgets\//,
+    /\.test\.js$/,
+    /\.testvirtualenvs\.js$/,
+    /\.bundle\.js$/
+];
 
 let instrumenter;
 

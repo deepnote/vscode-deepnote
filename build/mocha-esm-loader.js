@@ -393,8 +393,10 @@ export async function load(url, context, nextLoad) {
 
     // For .js files in the project's out/ directory, inject CJS globals shims
     // This is needed because source files use native __dirname, __filename, require which don't exist in ESM
-    if (url.startsWith(projectOutUrl) && url.endsWith('.js')) {
-        const filePath = fileURLToPath(url);
+    // Match on the path, not the url - esmock re-imports the module under test as `<url>?esmk=N`.
+    const filePath = url.startsWith(projectOutUrl) ? fileURLToPath(url) : undefined;
+
+    if (filePath && filePath.endsWith('.js')) {
         const fs = await import('node:fs/promises');
         let source = await fs.readFile(filePath, 'utf8');
 

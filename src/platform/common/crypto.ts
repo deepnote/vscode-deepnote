@@ -31,7 +31,7 @@ async function initCryptoProvider(): Promise<Crypto> {
     }
     // Node
     else {
-        // eslint-disable-next-line local-rules/node-imports
+        // eslint-disable-next-line import/no-nodejs-modules
         const nodeCrypto = await import('node:crypto');
         return nodeCrypto.webcrypto as Crypto;
     }

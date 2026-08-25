@@ -19,7 +19,7 @@ Thank you for your interest in contributing to the Deepnote VS Code extension! T
 4. Windows, macOS, or Linux
 5. [Visual Studio Code](https://code.visualstudio.com/)
 6. The following VS Code extensions:
-   - [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
+   - [Oxc](https://marketplace.visualstudio.com/items?itemName=oxc.oxc-vscode)
    - [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
    - [EditorConfig for VS Code](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig)
    - [Python Extension for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-python.python)

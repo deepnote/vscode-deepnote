@@ -255,7 +255,7 @@ export class SliceControl extends React.Component<ISliceControlProps, ISliceCont
                 } else {
                     // Unset dropdowns
                     // eslint-disable-next-line no-restricted-syntax
-                    for (const key in this.state) {
+                    for (const key in this.state /* oxlint-disable-line local-rules/no-for-in */) {
                         if (key.startsWith('selected')) {
                             (state as any)[key] = null;
                         }
@@ -303,7 +303,7 @@ export class SliceControl extends React.Component<ISliceControlProps, ISliceCont
     private generateAxisDropdownOptions = () => {
         const selectedAxes = new Set();
         // eslint-disable-next-line no-restricted-syntax
-        for (const key in this.state) {
+        for (const key in this.state /* oxlint-disable-line local-rules/no-for-in */) {
             if (key.startsWith('selectedAxis')) {
                 selectedAxes.add(this.state[key]);
             }

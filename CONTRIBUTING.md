@@ -340,7 +340,6 @@ A few things worth knowing before you debug a failure:
 The extension has a number of scripts in ./pythonFiles. Tests for these
 scripts are found in ./pythonFiles/tests. To run those tests:
 
-- `python2.7 pythonFiles/tests/run_all.py`
 - `python3 -m pythonFiles.tests`
 
 By default, functional tests are included. To exclude them:

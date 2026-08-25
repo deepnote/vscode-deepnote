@@ -21,6 +21,7 @@ import { sleep } from '../../platform/common/utils/async';
 import { generateUuid } from '../../platform/common/uuid';
 import { DeepnoteServerStartupError } from '../../platform/errors/deepnoteKernelErrors';
 import { getCachedEnvironment } from '../../platform/interpreter/helpers';
+import { getFilePath } from '../../platform/common/platform/fs-paths.node';
 import { logger } from '../../platform/logging';
 import { IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
@@ -298,8 +299,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      */
     private deriveEnvPath(interpreter: PythonEnvironment): string {
         const cachedEnv = getCachedEnvironment(interpreter);
-        // eslint-disable-next-line local-rules/dont-use-fspath
-        const folderPath = cachedEnv?.environment?.folderUri?.fsPath;
+        const folderPath = getFilePath(cachedEnv?.environment?.folderUri);
 
         if (folderPath) {
             return folderPath;

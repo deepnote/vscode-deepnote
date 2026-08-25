@@ -19,7 +19,7 @@ const SELECT_INTERPRETER_COMMAND = 'python.setInterpreter';
  *
  * It cannot reuse that service directly: `installMissingDependencies` is keyed on a
  * `KernelConnectionMetadata`, and a Deepnote connection cannot exist until the toolkit server is
- * running and has reported its kernelspecs — which is precisely what this check gates.
+ * running and has reported the kernels it offers — which is precisely what this check gates.
  */
 @injectable()
 export class DeepnoteToolkitDependencyService implements IDeepnoteToolkitDependencyService {

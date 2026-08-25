@@ -15,7 +15,7 @@ import { Environment } from '@vscode/python-extension';
 import { getEnvironmentType } from '../helpers';
 import { workspace } from 'vscode';
 
-import { DEEPNOTE_TOOLKIT_VERSION } from '../../../kernels/deepnote/types';
+import { DEEPNOTE_TOOLKIT_VERSION } from '../../common/constants';
 
 /**
  * Installer for pip. Default installer for most everything.

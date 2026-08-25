@@ -107,7 +107,7 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
         copyFixtureIntoDir(tempDir, SIBLINGS[1].file);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(copy.tempDir);
+        await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
         await createEnvironment(ENV_NAME);

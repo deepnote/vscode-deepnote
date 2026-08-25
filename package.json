@@ -2696,7 +2696,7 @@
         "setup:e2e:mock": "npx -y -p @copilotkit/aimock@1.37.4 llmock --help",
         "setup:e2e:venv": "node ./build/setupE2eVenv.js",
         "setup:e2e": "npm run setup:e2e:vscode && npm run setup:e2e:deps && npm run setup:e2e:mock && npm run setup:e2e:venv",
-        "test:e2e": "extest setup-and-run \"./out/e2e/suite/**/*.e2e.test.js\" -c max -o ./test/e2e/settings.json -e .test-extensions -m ./test/e2e/.mocharc.js -i",
+        "test:e2e": "extest setup-and-run \"./out/e2e/suite/*/*.e2e.test.js\" -c max -o ./test/e2e/settings.json -e .test-extensions -m ./test/e2e/.mocharc.js -i",
         "test:e2e:ci": "extest run-tests \"./out/e2e/suite/$E2E_GROUP/*.e2e.test.js\" -c max -o ./test/e2e/settings.json -e .test-extensions -m ./test/e2e/.mocharc.js",
         "test:unittests": "mocha --config ./build/.mocha.unittests.js.json ./out/**/*.unit.test.js",
         "test": "npm run test:unittests",

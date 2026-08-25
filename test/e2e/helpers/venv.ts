@@ -84,7 +84,9 @@ export function ensureManagedVenv(): string {
     }
 
     console.log(`[e2e-venv] creating ${VENV_DIR} — this only happens once`);
-    execFileSync(process.env.PYTHON ?? 'python3', ['-m', 'venv', VENV_DIR], { stdio: 'inherit' });
+    execFileSync(process.env.PYTHON ?? (process.platform === 'win32' ? 'py' : 'python3'), ['-m', 'venv', VENV_DIR], {
+        stdio: 'inherit'
+    });
 
     // Mirrors deepnoteToolkitInstaller.installVenvAndToolkit.
     execFileSync(venvPython(), ['-m', 'pip', 'install', '--upgrade', 'pip'], { stdio: 'inherit' });

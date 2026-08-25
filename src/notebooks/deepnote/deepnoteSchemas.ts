@@ -117,9 +117,8 @@ export const DeepnoteSelectInputMetadataSchema = DeepnoteBaseInputWithLabelMetad
         .transform((val) => val ?? DEEPNOTE_SELECT_INPUT_DEFAULT_OPTIONS),
     deepnote_variable_select_type: z
         .enum(['from-options', 'from-variable'])
-        // .string()
         .nullish()
-        .transform((val) => val ?? null),
+        .transform((val) => val ?? 'from-options'),
     deepnote_allow_multiple_values: z
         .boolean()
         .nullish()
@@ -208,7 +207,7 @@ export const DeepnoteFileInputMetadataSchema = DeepnoteBaseInputWithLabelMetadat
     deepnote_allowed_file_extensions: z
         .string()
         .nullish()
-        .transform((val) => val ?? null)
+        .transform((val) => val ?? undefined)
 });
 
 export const DeepnoteButtonMetadataSchema = DeepnoteBaseInputMetadataSchema.extend({

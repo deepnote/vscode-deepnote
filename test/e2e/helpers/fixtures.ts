@@ -2,8 +2,6 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { pointWorkspaceAtManagedVenv } from './venv';
-
 export interface FixtureCopy {
     /** Removes the throwaway temp directory and its contents. Idempotent; safe to call more than once. */
     cleanup: () => void;
@@ -19,14 +17,10 @@ const FIXTURES_DIR = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures');
  * Copies a fixture from `test/e2e/fixtures` into a fresh throwaway temp directory and returns the
  * paths plus a `cleanup` callback that removes the dir. Execution dirties the notebook, so working
  * on a throwaway copy keeps the committed fixture pristine and avoids save prompts.
- *
- * The directory is opened as the suite's workspace folder, so it also carries the workspace settings
- * that point the Python extension at the pre-baked venv.
  */
 export function copyFixtureToTempDir(fixtureName: string): FixtureCopy {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-e2e-'));
     const filePath = copyFixtureIntoDir(tempDir, fixtureName);
-    pointWorkspaceAtManagedVenv(tempDir);
 
     const cleanup = () => fs.rmSync(tempDir, { recursive: true, force: true });
 

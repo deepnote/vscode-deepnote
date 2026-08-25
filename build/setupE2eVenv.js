@@ -2,9 +2,10 @@
 // Exits explicitly so a handle left open by the pip subprocesses cannot hold the step open.
 
 try {
-    const { ensureManagedVenv } = require('../out/e2e/helpers/venv');
+    const { ensureManagedVenv, writeGeneratedSettings } = require('../out/e2e/helpers/venv');
 
     console.log(`[e2e-venv] ready: ${ensureManagedVenv()}`);
+    console.log(`[e2e-venv] settings: ${writeGeneratedSettings()}`);
     process.exit(0);
 } catch (error) {
     console.error('[e2e-venv] could not prepare the toolkit venv:', error);

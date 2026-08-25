@@ -114,19 +114,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         // Mock disposable registry - push returns the index
         when(mockDisposableRegistry.push(anything())).thenReturn(0);
 
-        // Mock notebooks.createNotebookController to return a mock controller for the loading kernel
-        const mockLoadingController = {
-            id: 'deepnote-loading-kernel',
-            supportsExecutionOrder: false,
-            supportedLanguages: ['python'],
-            executeHandler: undefined as unknown,
-            updateNotebookAffinity: sandbox.stub(),
-            dispose: sandbox.stub()
-        } as unknown as NotebookController;
-        when(mockedVSCodeNamespaces.notebooks!.createNotebookController(anything(), anything(), anything())).thenReturn(
-            mockLoadingController
-        );
-
         // Create selector instance
         selector = new DeepnoteKernelAutoSelector(
             instance(mockDisposableRegistry),
@@ -526,6 +513,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             const selectorAny = selector as any;
             selectorAny.notebookControllers.set(notebookKey, instance(mockController));
             selectorAny.notebookInterpreterIds.set(notebookKey, interpreterA.id);
+            selectorAny.notebookConnectionMetadata.set(notebookKey, { baseUrl: 'http://127.0.0.1:8888' });
 
             // Active interpreter is still A
             when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(interpreterA);
@@ -537,6 +525,29 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             assert.strictEqual(result, true, 'Should return true (fast path)');
             assert.strictEqual(ensureStub.called, false, 'Should NOT call ensureKernelSelectedWithInterpreter');
+        });
+
+        test('does NOT treat the controller registered at open as ready (it has no server yet)', async () => {
+            const notebookKey = mockNotebook.uri.toString();
+            const interpreterA: PythonEnvironment = {
+                id: '/usr/bin/python3.10',
+                uri: Uri.parse('/usr/bin/python3.10')
+            };
+
+            // What registerControllerForNotebook leaves behind: a controller whose connection has no
+            // baseUrl. Short-circuiting here would run cells against a server that was never started.
+            const selectorAny = selector as any;
+            selectorAny.notebookControllers.set(notebookKey, instance(mockController));
+            selectorAny.notebookInterpreterIds.set(notebookKey, interpreterA.id);
+            selectorAny.notebookConnectionMetadata.set(notebookKey, { baseUrl: '' });
+
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(interpreterA);
+
+            const ensureStub = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            await selector.ensureEnvironmentConfiguredBeforeExecution(mockNotebook, nonCancelledToken);
+
+            assert.strictEqual(ensureStub.called, true, 'must set the kernel up before executing');
         });
     });
 

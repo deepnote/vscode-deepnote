@@ -1,10 +1,11 @@
 /**
  * End-to-end UI test for kernel setup WITHOUT Deepnote environments, following the Jupyter
  * extension's mechanism for a missing Python dependency:
- *   1. opening a `.deepnote` file only OFFERS a kernel — nothing is installed and no server starts
+ *   1. opening a `.deepnote` file registers a controller named after the interpreter — nothing is
+ *      installed and no server starts
  *   2. running a cell detects that deepnote-toolkit is missing and asks for consent (modal prompt)
  *   3. on "Install" the toolkit goes into the workspace's *active interpreter*, not a managed venv
- *   4. the server starts, the real controller binds, and a re-run executes the cell
+ *   4. the server starts, the connection is updated in place, and that same run executes the cell
  *
  * The workspace's active interpreter is a bare venv this test creates, so the install path runs on
  * every execution rather than only on a machine that happens to be missing the package. The cell
@@ -26,8 +27,8 @@ import * as path from 'path';
 import { EditorView, VSBrowser, WebView, Workbench } from 'vscode-extension-tester';
 
 import {
-    FIRST_RUN_OUTPUT_TIMEOUT,
     KERNEL_CONNECT_TIMEOUT,
+    OUTPUT_POLL_INTERVAL,
     QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
@@ -38,7 +39,7 @@ import {
     dismissAllNotifications,
     openFolderViaDialog,
     openWorkspaceFile,
-    runOnceAndAwaitOutput,
+    readRenderedOutput,
     tryOpenInputBox,
     waitForNotification
 } from '../helpers';
@@ -127,8 +128,6 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
             'Deepnote notebook editor did not open'
         );
 
-        await shot('notebook-open');
-
         // The load-bearing half of "detect on kernel start, not notebook open". Watching the install
         // toast rather than only the venv is what makes this catch a regression: an open-time install
         // announces itself within seconds, long before the package would actually land on disk.
@@ -137,6 +136,10 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
             NO_INSTALL_OBSERVATION_MS,
             false
         );
+
+        // Taken after that window so the notebook has rendered: it shows the kernel already named
+        // after the interpreter while nothing has been installed and no server is running.
+        await shot('notebook-open');
 
         expect(installStartedOnOpen, 'opening the notebook must not start an install').to.equal(undefined);
         expect(isToolkitInstalled(interpreter)).to.equal(
@@ -161,14 +164,19 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
             'deepnote-toolkit was never installed into the active interpreter'
         );
 
-        // The first run only sets the kernel up; the cells themselves run on the re-run.
-        await waitForNotification(/Run the cells again/i, KERNEL_CONNECT_TIMEOUT, true);
-        await shot('kernel-ready');
+        // No second click: consent updates the existing controller's connection in place, so the run
+        // that triggered the prompt is the run that executes.
+        let renderedOutput = '';
 
-        const renderedOutput = await runOnceAndAwaitOutput(
-            NOTEBOOK_FILE_NAME,
-            EXPECTED_OUTPUT,
-            FIRST_RUN_OUTPUT_TIMEOUT
+        await driver.wait(
+            async () => {
+                renderedOutput = await readRenderedOutput();
+
+                return renderedOutput.includes(EXPECTED_OUTPUT);
+            },
+            KERNEL_CONNECT_TIMEOUT,
+            `the run that triggered the prompt never rendered "${EXPECTED_OUTPUT}"`,
+            OUTPUT_POLL_INTERVAL
         );
 
         await shot('cell-output');

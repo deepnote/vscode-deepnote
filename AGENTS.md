@@ -73,8 +73,8 @@ npm run typecheck
 ### Linting, Formatting & Spelling
 
 ```bash
-npm run lint            # ESLint check
-npm run lint-fix        # ESLint autofix
+npm run lint            # Oxlint check
+npm run lint-fix        # Oxlint autofix
 npm run format          # Prettier check
 npm run format-fix      # Prettier write
 npm run spell-check     # cspell
@@ -97,10 +97,10 @@ Always run `npm run format-fix`.
 
 1. **Tests** - `npm test` - all tests must pass
 2. **Type check** - `npm run typecheck` - no TypeScript errors
-3. **Lint** - `npm run lint` - must pass ESLint
+3. **Lint** - `npm run lint` - must pass Oxlint
 4. **Format** - `npm run format` - must pass Prettier
 
-The `pre-commit` hook already runs `lint-staged` (ESLint + Prettier on staged files) and `pre-push` blocks direct pushes to `main` — running the full checks yourself catches issues earlier.
+The `pre-commit` hook already runs `lint-staged` (Oxlint + Prettier on staged files) and `pre-push` blocks direct pushes to `main` — running the full checks yourself catches issues earlier.
 
 ### TypeScript & Code Style
 

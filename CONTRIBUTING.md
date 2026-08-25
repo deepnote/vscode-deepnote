@@ -293,6 +293,48 @@ setting a single variable for a subprocess:
 VSC_JUPYTER_CI_TEST_GREP=Sorting npm run test:integration
 ```
 
+### Running end-to-end tests (ExTester)
+
+Note: E2E tests are those in files with extension `*.e2e.test.ts`, under `test/e2e/suite/<group>/`.
+Unlike the integration tests, these drive a downloaded VS Code build through chromedriver rather than
+running inside the Extension Development Host.
+
+1. Run the one-time setup. It fetches the test VS Code build, chromedriver, the Python extension and
+   the mock LLM server, then bakes the `deepnote-toolkit` venv into `.venv-e2e` and writes
+   `test/e2e/settings.generated.json`.
+1. Compile the E2E sources — like the unit tests, they run from compiled JS in `out/`.
+1. Run the suites.
+
+```shell
+npm run setup:e2e       # one-time, but re-run it after changing the toolkit version or install set
+npm run compile-e2e
+npm run test:e2e        # every group
+```
+
+To run a single group, or a single suite:
+
+```shell
+E2E_GROUP=execution npm run test:e2e:ci
+npx extest run-tests "./out/e2e/suite/execution/helloWorld.e2e.test.js" \
+  -c max -o ./test/e2e/settings.generated.json -e .test-extensions -m ./test/e2e/.mocharc.js
+```
+
+On a headless machine, wrap the command in `xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24'`.
+
+A few things worth knowing before you debug a failure:
+
+- **`setup:e2e` is not optional.** `test:e2e` fails immediately without `test/e2e/settings.generated.json`.
+  That file carries `python.venvPath`, which is a machine-scoped setting and therefore only takes effect
+  from user settings — a workspace `.vscode/settings.json` is silently ignored. `npm run setup:e2e:venv`
+  regenerates it on its own.
+- **The suites adopt `.venv-e2e` rather than provisioning their own venv**, which is most of the runtime.
+  If the Python extension does not offer it, the run still passes but takes several minutes longer and
+  logs `no interpreter under .venv-e2e was offered` — grep for that first when a run is unexpectedly slow.
+- **Screenshots of failures** are written to `<test-resources>/screenshots/` and uploaded as CI artifacts.
+- **CI shards by directory**, one job per group, so a new group directory must also be added to the matrix
+  in `.github/workflows/e2e.yml` — the `verify-coverage` job fails the build if a group ran nowhere, or if
+  a suite sits directly in `test/e2e/suite/`.
+
 ### Testing Python scripts
 
 The extension has a number of scripts in ./pythonFiles. Tests for these

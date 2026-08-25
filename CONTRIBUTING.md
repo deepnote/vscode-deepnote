@@ -227,7 +227,7 @@ Note: Integration tests are those in files with extension `*.vscode.test*.ts`.
 You can also run the tests from the command-line (after compiling):
 
 ```shell
-npm run testVSCode  # will launch the VSC UI
+npm run test:integration  # will launch the VSC UI
 ```
 
 #### Customising the test run
@@ -290,7 +290,7 @@ on your system, however most systems support a syntax like the following for
 setting a single variable for a subprocess:
 
 ```shell
-VSC_JUPYTER_CI_TEST_GREP=Sorting npm run testVSCode
+VSC_JUPYTER_CI_TEST_GREP=Sorting npm run test:integration
 ```
 
 ### Testing Python scripts

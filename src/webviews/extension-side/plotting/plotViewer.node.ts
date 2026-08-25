@@ -70,7 +70,6 @@ export async function saveSvgToPdf(svg: string, fs: IFileSystemNode, file: Uri) 
     // Import here since pdfkit is so huge.
     const SVGtoPDF = (await import('svg-to-pdfkit')).default;
     const deferred = createDeferred<void>();
-    // @ts-expect-error - pdfkit/js/pdfkit.standalone doesn't have type declarations
     const pdfkit = (await import('pdfkit/js/pdfkit.standalone')).default as typeof import('pdfkit');
     const doc = new pdfkit();
     const ws = fs.createLocalWriteStream(file.fsPath);

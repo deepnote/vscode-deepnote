@@ -1,3 +1,4 @@
+import { serializeDeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { when, reset, anything, deepEqual, mock, instance, verify } from 'ts-mockito';
@@ -13,7 +14,9 @@ import {
 
 import {
     DeepnoteNotebookCommandListener,
+    getInputBlockMetadata,
     getNextDeepnoteVariableName,
+    INPUT_BLOCK_TYPES,
     InputBlockType
 } from './deepnoteNotebookCommandListener';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
@@ -21,9 +24,16 @@ import { ITelemetryService } from '../../platform/analytics/types';
 import { IConfigurationService, IDisposable } from '../../platform/common/types';
 import * as notebookUpdater from '../../kernels/execution/notebookUpdater';
 import { WrappedError } from '../../platform/errors/types';
+import { createBlockFromPocket } from '../../platform/deepnote/pocket';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces } from '../../test/vscode-mock';
-import { createMockCell, createMockNotebookWithCells } from './deepnoteTestHelpers';
+import {
+    createDeepnoteFile,
+    createDeepnoteNotebook,
+    createDeepnoteProject,
+    createMockCell,
+    createMockNotebookWithCells
+} from './deepnoteTestHelpers';
 
 suite('DeepnoteNotebookCommandListener', () => {
     let commandListener: DeepnoteNotebookCommandListener;
@@ -345,6 +355,23 @@ suite('DeepnoteNotebookCommandListener', () => {
         });
     });
 
+    suite('getInputBlockMetadata', () => {
+        INPUT_BLOCK_TYPES.forEach((blockType) => {
+            test(`default ${blockType} metadata is accepted by the @deepnote/blocks serializer`, () => {
+                const metadata = getInputBlockMetadata(blockType, 'input_1');
+                const cell = new NotebookCellData(NotebookCellKind.Code, '', 'python');
+                cell.metadata = { __deepnotePocket: { type: blockType, ...metadata }, ...metadata };
+
+                const block = createBlockFromPocket(cell, 0);
+                const file = createDeepnoteFile({
+                    project: createDeepnoteProject({ notebooks: [createDeepnoteNotebook({ blocks: [block] })] })
+                });
+
+                assert.doesNotThrow(() => serializeDeepnoteFile(file));
+            });
+        });
+    });
+
     suite('addBlock', () => {
         let sandbox: sinon.SinonSandbox;
 
@@ -546,12 +573,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 selection: undefined,
                 expectedInsertIndex: 0,
                 expectedVariableName: 'input_1',
-                expectedMetadataKeys: [
-                    'deepnote_variable_name',
-                    'deepnote_input_label',
-                    'deepnote_variable_value',
-                    'deepnote_allowed_file_extensions'
-                ]
+                expectedMetadataKeys: ['deepnote_variable_name', 'deepnote_input_label', 'deepnote_variable_value']
             },
             {
                 description: 'should add button block with correct metadata',

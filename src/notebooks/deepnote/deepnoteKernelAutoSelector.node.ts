@@ -361,9 +361,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // controller instead of creating a new one, avoiding the DISPOSED error.
         const controllerId = `deepnote-notebook-${notebookKey}`;
 
-        // Extract project and notebook titles from metadata for display
-        const projectTitle = notebook.metadata?.deepnoteProjectName || 'Untitled Project';
-
         const newConnectionMetadata = DeepnoteKernelConnectionMetadata.create({
             interpreter,
             kernelSpec,
@@ -373,7 +370,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             serverProviderHandle,
             serverInfo,
             environmentName: getDisplayPath(interpreter.uri),
-            projectName: projectTitle,
             notebookName: notebookKey
         });
 

@@ -302,16 +302,22 @@ export function getDisplayNameOrNameOfKernelConnection(kernelConnection: KernelC
                 return `Python ${pythonVersion}`.trim();
             }
         case 'startUsingDeepnoteKernel': {
-            // Display as "Project Title"
-            if (kernelConnection.projectName) {
-                return kernelConnection.projectName;
+            // Named after the environment the code runs in, exactly as 'startUsingPythonInterpreter'
+            // does: the kernel picker answers "which interpreter?", and the project title is already
+            // carried by the editor tab and the Deepnote status bar.
+            if (!kernelConnection.interpreter) {
+                return oldDisplayName;
             }
-            // For Deepnote kernels, use the environment name if available
-            if (kernelConnection.environmentName) {
-                return `Deepnote: ${kernelConnection.environmentName}`;
+
+            if (getEnvironmentType(kernelConnection.interpreter) !== EnvironmentType.Unknown) {
+                return getDisplayNameOrNameOfPythonKernelConnection(kernelConnection.interpreter);
             }
-            // Fallback to kernelspec display name
-            return oldDisplayName;
+
+            const deepnotePythonVersion = (
+                getTelemetrySafeVersion(getCachedVersion(kernelConnection.interpreter)) || ''
+            ).trim();
+
+            return `Python ${deepnotePythonVersion}`.trim();
         }
     }
     return oldDisplayName;

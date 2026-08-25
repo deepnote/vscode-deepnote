@@ -51,9 +51,11 @@ export const EDITOR_ACTIVE_TIMEOUT = 15_000;
 // so reading them cannot accidentally match the cell's source in the editor.
 export const OUTPUT_SELECTOR = '.output_container, .output, .rendered-output';
 
-// Where the managed venv lives, and the substring that identifies it in the interpreter quick pick.
+// Where the managed venv lives. The directory name is what identifies it in the interpreter quick
+// pick; the bare '.venv' marker can only tell venv-shaped interpreters apart from the rest, since it
+// is also a substring of '.venv-e2e'.
 export const PREBAKED_VENV_DIR_NAME = '.venv-e2e';
-export const PREBAKED_VENV_MARKER = '.venv';
+export const ANY_VENV_MARKER = '.venv';
 
 // Only elapses when the venv is missing, so it stays well under QUICK_PICK_TIMEOUT.
 export const PREBAKED_VENV_FILTER_TIMEOUT = 10_000;

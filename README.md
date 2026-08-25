@@ -119,10 +119,6 @@ Once enabled, snapshots are automatically created when you execute notebooks. Yo
 
 Want to contribute? Check out our [Contributing guide](CONTRIBUTING.md) for detailed setup instructions.
 
-Running the end-to-end suite locally takes one extra step: `npm run setup:e2e` fetches the test VS Code
-build and chromedriver, and bakes the Python environment the notebooks run against. Run it once before
-`npm run test:e2e`.
-
 ## Third-party licenses
 
 This project includes the following third-party packages with notable licenses:

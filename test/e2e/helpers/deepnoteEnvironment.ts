@@ -1,4 +1,4 @@
-import { EditorView, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
+import { EditorView, InputBox, QuickPickItem, VSBrowser, Workbench } from 'vscode-extension-tester';
 
 import {
     ANY_VENV_MARKER,
@@ -18,6 +18,17 @@ import { tryOpenInputBox } from './quickInput';
 // Command palette labels (category + title) the way `Workbench.executeCommand` matches them.
 const CREATE_ENV_COMMAND = 'Deepnote: Create Environment';
 const SELECT_ENV_COMMAND = 'Deepnote: Select Environment for Notebook';
+
+/**
+ * Reads a quick-pick row as the label to filter by plus the label-and-description text to match
+ * against: the Python extension puts the interpreter path in either field depending on the entry,
+ * so matching one alone misses venvs described in the other.
+ */
+async function readPick(pick: QuickPickItem): Promise<{ label: string; text: string }> {
+    const label = await pick.getLabel();
+
+    return { label, text: `${label} ${(await pick.getDescription()) ?? ''}` };
+}
 
 /**
  * Picks the managed venv, which the extension adopts instead of provisioning its own.
@@ -40,9 +51,9 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
                 if (picks.length === 0) {
                     return undefined;
                 }
-                const first = `${await picks[0].getLabel()} ${(await picks[0].getDescription()) ?? ''}`;
+                const first = await readPick(picks[0]);
 
-                return first.includes(PREBAKED_VENV_DIR_NAME) ? picks[0] : undefined;
+                return first.text.includes(PREBAKED_VENV_DIR_NAME) ? picks[0] : undefined;
             }, PREBAKED_VENV_FILTER_TIMEOUT)
             .catch(() => undefined);
 
@@ -61,11 +72,11 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
     }
 
     const picks = await interpreterPick.getQuickPicks();
-    const labels = await Promise.all(picks.map(async (pick) => pick.getLabel()));
+    const entries = await Promise.all(picks.map(readPick));
     // Any venv, not just the baked one: the extension adopts whatever venv it is pointed at
     // (managedVenv: false), leaving the deletion suite nothing to delete. In CI this resolves to the
     // interpreter actions/setup-python installed.
-    const wanted = labels.find((label) => !label.includes(ANY_VENV_MARKER));
+    const wanted = entries.find((entry) => !entry.text.includes(ANY_VENV_MARKER))?.label;
 
     if (wanted) {
         // Filter to it and accept with Enter, the same way the baked-venv branch does, rather than
@@ -75,8 +86,11 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
         const narrowed = await driver
             .wait(async () => {
                 const filtered = await interpreterPick.getQuickPicks();
+                if (filtered.length === 0) {
+                    return false;
+                }
 
-                return filtered.length > 0 && !(await filtered[0].getLabel()).includes(ANY_VENV_MARKER);
+                return !(await readPick(filtered[0])).text.includes(ANY_VENV_MARKER);
             }, PREBAKED_VENV_FILTER_TIMEOUT)
             .catch(() => false);
 
@@ -91,7 +105,7 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
 
     console.warn(
         '[deepnote-e2e] no interpreter outside a venv could be filtered to; ' +
-            `accepting the first entry. Offered: ${JSON.stringify(labels)}`
+            `accepting the first entry. Offered: ${JSON.stringify(entries.map((entry) => entry.text))}`
     );
     await interpreterPick.confirm();
 }
@@ -120,12 +134,41 @@ export async function createEnvironment(name: string, options: { useManagedVenv?
             continue;
         }
 
+        // Every step below drives a quick pick the workbench can tear down under us, so they share
+        // one recovery: escape whatever input is open and spend another attempt. Retrying is safe
+        // because the create command treats an existing name as success.
         try {
             await driver.wait(
                 async () => (await interpreterPick.getQuickPicks()).length > 0,
                 QUICK_PICK_TIMEOUT,
                 'no Python interpreters were listed'
             );
+
+            await selectInterpreter(interpreterPick, options.useManagedVenv === true);
+
+            const nameBox = await InputBox.create();
+            await nameBox.setText(name);
+            await nameBox.confirm();
+
+            // On an existing name the create command short-circuits after the name prompt with an
+            // "already exists" notification and opens no further inputs, so only drive the optional
+            // prompts when the packages box actually appears. This keeps the documented idempotent
+            // retry path working: a leftover environment is reused rather than failing the test on a
+            // timed-out InputBox that never opens.
+            const packagesBox = await tryOpenInputBox(OPTIONAL_PROMPT_TIMEOUT);
+            if (packagesBox) {
+                // Packages (optional) — leave empty.
+                await packagesBox.confirm();
+
+                // Description (optional) — leave empty.
+                await (await InputBox.create()).confirm();
+            }
+
+            // Treat both the success toast and the "already exists" guard as success: a leftover
+            // environment from a previous/retried run is fine — it will be selected next.
+            await waitForNotification(/created successfully|already exists/i, ENV_CREATED_TIMEOUT, false);
+
+            return;
         } catch (error) {
             await interpreterPick.cancel().catch((cancelError) => {
                 console.warn('[deepnote-e2e] cancel interpreter quick pick:', cancelError);
@@ -135,31 +178,6 @@ export async function createEnvironment(name: string, options: { useManagedVenv?
             lastError = error;
             continue;
         }
-
-        await selectInterpreter(interpreterPick, options.useManagedVenv === true);
-
-        const nameBox = await InputBox.create();
-        await nameBox.setText(name);
-        await nameBox.confirm();
-
-        // On an existing name the create command short-circuits after the name prompt with an
-        // "already exists" notification and opens no further inputs, so only drive the optional
-        // prompts when the packages box actually appears. This keeps the documented idempotent
-        // retry path working: a leftover environment is reused rather than failing the test on a
-        // timed-out InputBox that never opens.
-        const packagesBox = await tryOpenInputBox(OPTIONAL_PROMPT_TIMEOUT);
-        if (packagesBox) {
-            // Packages (optional) — leave empty.
-            await packagesBox.confirm();
-
-            // Description (optional) — leave empty.
-            await (await InputBox.create()).confirm();
-        }
-
-        // Treat both the success toast and the "already exists" guard as success: a leftover
-        // environment from a previous/retried run is fine — it will be selected next.
-        await waitForNotification(/created successfully|already exists/i, ENV_CREATED_TIMEOUT, false);
-        return;
     }
 
     throw new Error(

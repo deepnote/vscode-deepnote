@@ -4,8 +4,11 @@
 try {
     const { ensureManagedVenv, writeGeneratedSettings } = require('../out/e2e/helpers/venv');
 
-    console.log(`[e2e-venv] ready: ${ensureManagedVenv()}`);
-    console.log(`[e2e-venv] settings: ${writeGeneratedSettings()}`);
+    const venvPath = ensureManagedVenv();
+    console.log(`[e2e-venv] ready: ${venvPath}`);
+
+    const settingsPath = writeGeneratedSettings();
+    console.log(`[e2e-venv] settings: ${settingsPath}`);
     process.exit(0);
 } catch (error) {
     console.error('[e2e-venv] could not prepare the toolkit venv:', error);

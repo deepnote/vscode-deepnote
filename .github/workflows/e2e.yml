@@ -153,7 +153,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          echo "Shards that reported in: $(ls shard-ran 2>/dev/null | tr '\n' ' ')"
+          echo "Shards that reported in: $(find shard-ran -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null)"
 
           status=0
           for dir in test/e2e/suite/*/; do

@@ -17,7 +17,13 @@ export async function openActivityBarView(title: string): Promise<void> {
     while (Date.now() < deadline) {
         try {
             const control = await new ActivityBar().getViewControl(title);
-            await control?.openView();
+            // A container that has not rendered yet comes back as undefined rather than throwing, so
+            // without this the loop would report success having opened nothing.
+            if (!control) {
+                throw new Error(`no "${title}" control in the activity bar`);
+            }
+
+            await control.openView();
 
             return;
         } catch (error) {

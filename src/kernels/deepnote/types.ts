@@ -148,6 +148,32 @@ export interface IDeepnoteToolkitInstaller {
     getVenvHash(deepnoteFileUri: vscode.Uri): string;
 }
 
+export enum DeepnoteToolkitDependencyResponse {
+    /** The toolkit is present, or the user approved the install and it succeeded. */
+    ok,
+    /** The user declined or cancelled. Not a failure — nothing should be reported as an error. */
+    cancel,
+    /** The user chose to point the workspace at a different interpreter instead. */
+    selectDifferentInterpreter,
+    /** The install ran and did not succeed. */
+    failed
+}
+
+export const IDeepnoteToolkitDependencyService = Symbol('IDeepnoteToolkitDependencyService');
+export interface IDeepnoteToolkitDependencyService {
+    /**
+     * Ensures deepnote-toolkit is available in the interpreter, prompting for consent first.
+     * @param interpreter The interpreter the kernel will run in
+     * @param resource The notebook the check is running for, used for logging
+     * @param token Cancellation token to cancel the check or the install
+     */
+    ensureToolkitInstalled(
+        interpreter: PythonEnvironment,
+        resource: vscode.Uri | undefined,
+        token: vscode.CancellationToken
+    ): Promise<DeepnoteToolkitDependencyResponse>;
+}
+
 export const IDeepnoteServerStarter = Symbol('IDeepnoteServerStarter');
 export interface IDeepnoteServerStarter {
     /**

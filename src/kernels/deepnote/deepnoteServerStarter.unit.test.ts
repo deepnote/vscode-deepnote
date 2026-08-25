@@ -2,14 +2,13 @@ import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { EventEmitter, Uri } from 'vscode';
+import { Uri } from 'vscode';
 
 import { serializeProjectFile } from '../../notebooks/deepnote/deepnoteTestHelpers';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { PythonExtension } from '@vscode/python-extension';
 import { setPythonApi } from '../../platform/interpreter/helpers';
-import { IInstaller, InstallerResponse } from '../../platform/interpreter/installer/types';
 import { IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import {
@@ -42,7 +41,6 @@ suite('DeepnoteServerStarter', () => {
 
     let serverStarter: DeepnoteServerStarter;
     let mockProcessServiceFactory: IProcessServiceFactory;
-    let mockInstaller: IInstaller;
     let mockAgentSkillsManager: DeepnoteAgentSkillsManager;
     let mockOutputChannel: IOutputChannel;
     let mockAsyncRegistry: IAsyncDisposableRegistry;
@@ -53,7 +51,6 @@ suite('DeepnoteServerStarter', () => {
         resetVSCodeMocks();
 
         mockProcessServiceFactory = mock<IProcessServiceFactory>();
-        mockInstaller = mock<IInstaller>();
         mockAgentSkillsManager = mock<DeepnoteAgentSkillsManager>();
         mockOutputChannel = mock<IOutputChannel>();
         mockAsyncRegistry = mock<IAsyncDisposableRegistry>();
@@ -61,10 +58,6 @@ suite('DeepnoteServerStarter', () => {
 
         when(mockAsyncRegistry.push(anything())).thenReturn();
         when(mockOutputChannel.appendLine(anything())).thenReturn();
-        when(mockInstaller.isInstalled(anything(), anything())).thenResolve(true);
-        when(mockInstaller.install(anything(), anything(), anything())).thenResolve(InstallerResponse.Installed);
-        when(mockInstaller.onInstalled).thenReturn(new EventEmitter<any>().event);
-
         when(mockUserpodApiEndpoints.ready).thenReturn(Promise.resolve());
         when(mockUserpodApiEndpoints.baseUrl).thenReturn(undefined);
 
@@ -80,7 +73,6 @@ suite('DeepnoteServerStarter', () => {
 
         serverStarter = new DeepnoteServerStarter(
             instance(mockProcessServiceFactory),
-            instance(mockInstaller),
             instance(mockAgentSkillsManager),
             instance(mockOutputChannel),
             instance(mockAsyncRegistry),

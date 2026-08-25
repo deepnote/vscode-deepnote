@@ -3,6 +3,7 @@ import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import { ServerHandleRegistry } from '../../kernels/deepnote/deepnoteServerHandleRegistry.node';
+import { DeepnoteToolkitDependencyResponse, IDeepnoteToolkitDependencyService } from '../../kernels/deepnote/types';
 import {
     IDeepnoteLspClientManager,
     IDeepnoteServerProvider,
@@ -46,6 +47,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockOutputChannel: IOutputChannel;
     let mockInterpreterService: IInterpreterService;
     let registry: ServerHandleRegistry;
+    let mockToolkitDependencyService: IDeepnoteToolkitDependencyService;
 
     let mockProgress: { report(value: { message?: string; increment?: number }): void };
     let mockCancellationToken: CancellationToken;
@@ -74,6 +76,10 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockOutputChannel = mock<IOutputChannel>();
         mockInterpreterService = mock<IInterpreterService>();
         registry = new ServerHandleRegistry();
+        mockToolkitDependencyService = mock<IDeepnoteToolkitDependencyService>();
+        when(mockToolkitDependencyService.ensureToolkitInstalled(anything(), anything(), anything())).thenResolve(
+            DeepnoteToolkitDependencyResponse.ok
+        );
 
         mockProgress = { report: sandbox.stub() };
         mockCancellationToken = mock<CancellationToken>();
@@ -137,7 +143,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockServerStarter),
             instance(mockOutputChannel),
             instance(mockInterpreterService),
-            registry
+            registry,
+            instance(mockToolkitDependencyService)
         );
     });
 

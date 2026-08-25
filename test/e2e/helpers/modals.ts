@@ -6,7 +6,10 @@ import { WORKBENCH_TIMEOUT } from './constants';
  * Confirms a `{modal:true}` dialog by clicking the button matching `label`, driving the raw
  * `.monaco-dialog-box` (ExTester's `ModalDialog` attaches unreliably); `messageIncludes` disambiguates.
  */
-export async function confirmModalDialog(label: string, options?: { messageIncludes?: string }): Promise<void> {
+export async function confirmModalDialog(
+    label: string,
+    options?: { messageIncludes?: string; onVisible?: () => Promise<void> }
+): Promise<void> {
     const driver = VSBrowser.instance.driver;
     const messageIncludes = options?.messageIncludes;
 
@@ -24,6 +27,9 @@ export async function confirmModalDialog(label: string, options?: { messageInclu
         WORKBENCH_TIMEOUT,
         `modal dialog${messageIncludes ? ` containing "${messageIncludes}"` : ''} did not appear`
     );
+
+    // Runs while the dialog is still up — the only chance to capture or inspect it.
+    await options?.onVisible?.();
 
     const button = await driver.wait(
         async () => {

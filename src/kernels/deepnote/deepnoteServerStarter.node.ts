@@ -8,7 +8,7 @@
 import * as fs from 'fs-extra';
 import { inject, injectable, named } from 'inversify';
 import * as os from 'os';
-import { CancellationToken, CancellationTokenSource, l10n, Uri } from 'vscode';
+import { CancellationToken, l10n, Uri } from 'vscode';
 
 import { startServer, stopServer } from '@deepnote/runtime-core';
 
@@ -21,7 +21,6 @@ import { sleep } from '../../platform/common/utils/async';
 import { generateUuid } from '../../platform/common/uuid';
 import { DeepnoteServerStartupError } from '../../platform/errors/deepnoteKernelErrors';
 import { getCachedEnvironment } from '../../platform/interpreter/helpers';
-import { IInstaller, InstallerResponse, Product } from '../../platform/interpreter/installer/types';
 import { logger } from '../../platform/logging';
 import { IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
@@ -74,7 +73,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
     constructor(
         @inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory,
-        @inject(IInstaller) private readonly installer: IInstaller,
         @inject(DeepnoteAgentSkillsManager) private readonly agentSkillsManager: DeepnoteAgentSkillsManager,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
         @inject(IAsyncDisposableRegistry) asyncRegistry: IAsyncDisposableRegistry,
@@ -214,7 +212,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * Core server start using @deepnote/runtime-core's `startServer`.
      *
      * Extension-specific layers:
-     * - Toolkit check/install via IInstaller (before start)
+     * - The caller guarantees deepnote-toolkit is installed (IDeepnoteToolkitDependencyService)
      * - Integration endpoint env var injection (via ServerOptions.env) — these point the toolkit at the
      *   extension's loopback `userpod-api` endpoint, which is how it fetches SQL credentials at kernel init
      * - Lock file creation (after start, using returned PID)
@@ -232,32 +230,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         Cancellation.throwIfCanceled(token);
 
         // Check if deepnote-toolkit is installed, and install if needed
-        logger.info(`Checking deepnote-toolkit installation for interpreter ${interpreterId}...`);
-        const isInstalled = await this.installer.isInstalled(Product.deepnoteToolkit, interpreter);
-
-        if (!isInstalled) {
-            logger.info(`deepnote-toolkit not installed, installing via IInstaller...`);
-            const cts = new CancellationTokenSource();
-            let cancellationListener: IDisposable | undefined;
-
-            try {
-                if (token) {
-                    cancellationListener = token.onCancellationRequested(() => cts.cancel());
-                }
-
-                const result = await this.installer.install(Product.deepnoteToolkit, interpreter, cts);
-
-                if (result === InstallerResponse.Cancelled) {
-                    throw new Error('deepnote-toolkit installation was cancelled by the user');
-                } else if (result !== InstallerResponse.Installed) {
-                    throw new Error('Failed to install deepnote-toolkit. Check the Output panel for details.');
-                }
-            } finally {
-                cancellationListener?.dispose();
-                cts.dispose();
-            }
-        }
-
         this.agentSkillsManager.ensureSkillsUpdated(interpreterId, interpreter);
 
         Cancellation.throwIfCanceled(token);

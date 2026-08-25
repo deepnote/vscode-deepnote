@@ -1,25 +1,22 @@
 /**
- * End-to-end UI test for kernel setup WITHOUT Deepnote environments.
+ * End-to-end UI test for kernel setup WITHOUT Deepnote environments, following the Jupyter
+ * extension's mechanism for a missing Python dependency:
+ *   1. opening a `.deepnote` file only OFFERS a kernel — nothing is installed and no server starts
+ *   2. running a cell detects that deepnote-toolkit is missing and asks for consent (modal prompt)
+ *   3. on "Install" the toolkit goes into the workspace's *active interpreter*, not a managed venv
+ *   4. the server starts, the real controller binds, and a re-run executes the cell
  *
- * This is the flow the extension uses now that environments are gone: the kernel is built from the
- * workspace's *active Python interpreter*, and deepnote-toolkit is installed into that interpreter
- * through the Python extension's installer infrastructure (`IInstaller`) — the same mechanism the
- * Jupyter extension uses for its own missing dependencies:
- *   1. open a one-notebook `.deepnote` file against a workspace whose active interpreter is a bare venv
- *   2. the auto-selector picks that interpreter — no environment is created and no picker appears
- *   3. deepnote-toolkit is missing, so an "Installing deepnote-toolkit" progress notification shows
- *   4. once it installs, the server starts and the kernel controller is bound
- *   5. run the cell and assert the rendered stdout
+ * The workspace's active interpreter is a bare venv this test creates, so the install path runs on
+ * every execution rather than only on a machine that happens to be missing the package. The cell
+ * prints `sys.prefix`, so the output proves the kernel ran inside that venv.
  *
- * The cell prints `sys.prefix`, so the output proves the kernel really ran inside the venv this test
- * created rather than in a Deepnote-managed environment. The suite also asserts the toolkit landed in
- * that same venv, which is the load-bearing difference from the environment-based flow.
+ * Screenshots are captured at each step into `test/e2e/screenshots/interpreterKernel/` so the flow
+ * can be confirmed visually — in particular that the consent prompt is actually shown.
  *
  * Prerequisites:
- *   - The Python extension (`ms-python.python`) must be installed in the test instance
- *     (`npm run setup:e2e:deps`).
+ *   - The Python extension (`ms-python.python`) must be installed in the test instance.
  *   - `python3` must be on PATH and able to create a venv (CI installs `python3.12-venv`).
- *   - Network access: the toolkit is installed from PyPI on first kernel start, which is slow.
+ *   - Network access: the toolkit is installed from PyPI, which is slow.
  */
 
 import { expect } from 'chai';
@@ -33,20 +30,22 @@ import {
     KERNEL_CONNECT_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    clickRunAll,
+    confirmModalDialog,
     copyFixtureToTempDir,
+    createScreenshotter,
+    dismissAllNotifications,
     openFolderViaDialog,
     openWorkspaceFile,
     runOnceAndAwaitOutput,
-    waitForNotification,
-    waitForNotificationToClear
+    waitForNotification
 } from '../helpers';
 
 const NOTEBOOK_FILE_NAME = 'interpreter-kernel.deepnote';
 const EXPECTED_OUTPUT = 'interpreter-kernel-ok';
 
-// The install toast is observed opportunistically; the venv check below is the real gate, so a
-// missed toast must not cost the suite a full kernel-connect timeout.
-const TOOLKIT_NOTIFICATION_TIMEOUT = 90_000;
+/** How long the notebook is watched to prove that merely opening it installs nothing. */
+const NO_INSTALL_OBSERVATION_MS = 15_000;
 
 /** Path to the interpreter inside a venv, for the platform the test is running on. */
 function venvPython(venvDir: string): string {
@@ -66,7 +65,7 @@ function isToolkitInstalled(python: string): boolean {
     }
 }
 
-describe('Deepnote E2E — run on the active interpreter (no Deepnote environment)', function () {
+describe('Deepnote E2E — consent, then install into the active interpreter', function () {
     this.timeout(SUITE_TIMEOUT);
 
     let cleanupTempDir: (() => void) | undefined;
@@ -77,9 +76,6 @@ describe('Deepnote E2E — run on the active interpreter (no Deepnote environmen
         const { cleanup, tempDir } = copyFixtureToTempDir(NOTEBOOK_FILE_NAME);
         cleanupTempDir = cleanup;
 
-        // A throwaway venv is what makes this test deterministic: it is guaranteed not to have
-        // deepnote-toolkit, so the install path runs on every execution rather than only on a
-        // machine that happens to be missing the package.
         venvDir = path.join(tempDir, '.venv');
         execFileSync('python3', ['-m', 'venv', venvDir], { stdio: 'inherit' });
         interpreter = venvPython(venvDir);
@@ -89,8 +85,8 @@ describe('Deepnote E2E — run on the active interpreter (no Deepnote environmen
             'precondition: the fresh venv must not already provide deepnote-toolkit'
         );
 
-        // Pin the workspace's interpreter so the auto-selector resolves this venv and not whatever
-        // the Python extension would otherwise discover on the machine.
+        // Pin the workspace's interpreter so the kernel resolves this venv and not whatever the
+        // Python extension would otherwise discover on the machine.
         const vscodeDir = path.join(tempDir, '.vscode');
         fs.mkdirSync(vscodeDir, { recursive: true });
         fs.writeFileSync(
@@ -99,9 +95,6 @@ describe('Deepnote E2E — run on the active interpreter (no Deepnote environmen
         );
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-
-        // Opening the folder reloads the window, so the notebook is opened in the test body — that
-        // keeps the install notification, which fires during the open, inside the assertions.
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
     });
@@ -121,38 +114,62 @@ describe('Deepnote E2E — run on the active interpreter (no Deepnote environmen
         }
     });
 
-    it('installs deepnote-toolkit into the active interpreter, then runs the cell', async function () {
-        await openWorkspaceFile(NOTEBOOK_FILE_NAME);
+    it('installs nothing on open, asks before installing, then runs the cell', async function () {
+        const shot = createScreenshotter(this);
+        const driver = VSBrowser.instance.driver;
 
-        await VSBrowser.instance.driver.wait(
+        await openWorkspaceFile(NOTEBOOK_FILE_NAME);
+        await driver.wait(
             async () => (await new EditorView().getOpenEditorTitles()).some((t) => t.includes(NOTEBOOK_FILE_NAME)),
             WORKBENCH_TIMEOUT,
             'Deepnote notebook editor did not open'
         );
 
-        // Opening the notebook auto-selects the kernel, which finds the toolkit missing and installs
-        // it — no environment is created and the user is never asked to pick one. The progress toast
-        // is the visible half of that, but it is transient (and absent on a retry, where the toolkit
-        // is already installed), so it is observed best-effort; the durable assertions are below.
-        await waitForNotification(/Installing deepnote-toolkit/i, TOOLKIT_NOTIFICATION_TIMEOUT, false);
+        await shot('notebook-open');
 
-        // The load-bearing gate: the install landed in the active interpreter. Polling the venv is
-        // race-free, unlike matching a toast that may already have gone.
-        await VSBrowser.instance.driver.wait(
+        // The load-bearing half of "detect on kernel start, not notebook open". Watching the install
+        // toast rather than only the venv is what makes this catch a regression: an open-time install
+        // announces itself within seconds, long before the package would actually land on disk.
+        const installStartedOnOpen = await waitForNotification(
+            /Installing deepnote_toolkit/i,
+            NO_INSTALL_OBSERVATION_MS,
+            false
+        );
+
+        expect(installStartedOnOpen, 'opening the notebook must not start an install').to.equal(undefined);
+        expect(isToolkitInstalled(interpreter)).to.equal(
+            false,
+            'opening the notebook must not install anything into the interpreter'
+        );
+
+        // Running a cell is the user gesture that triggers detection, and the consent prompt.
+        await dismissAllNotifications().catch(() => undefined);
+        await clickRunAll(NOTEBOOK_FILE_NAME);
+
+        await confirmModalDialog('Install', {
+            messageIncludes: 'deepnote-toolkit',
+            onVisible: async () => {
+                await shot('consent-prompt');
+            }
+        });
+
+        await driver.wait(
             () => isToolkitInstalled(interpreter),
             KERNEL_CONNECT_TIMEOUT,
             'deepnote-toolkit was never installed into the active interpreter'
         );
 
-        // Waiting for the auto-select toast to be *gone* gates "Run All" on a bound kernel without
-        // depending on catching it while it is shown.
-        await waitForNotificationToClear(/Auto-selecting Deepnote kernel/i, KERNEL_CONNECT_TIMEOUT);
+        // The first run only sets the kernel up; the cells themselves run on the re-run.
+        await waitForNotification(/Run the cells again/i, KERNEL_CONNECT_TIMEOUT, true);
+        await shot('kernel-ready');
 
         const renderedOutput = await runOnceAndAwaitOutput(
             NOTEBOOK_FILE_NAME,
             EXPECTED_OUTPUT,
             FIRST_RUN_OUTPUT_TIMEOUT
         );
+
+        await shot('cell-output');
 
         expect(renderedOutput).to.contain(EXPECTED_OUTPUT);
 

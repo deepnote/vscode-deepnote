@@ -2,6 +2,16 @@
 # Learn more at https://docs.qlty.sh
 config_version = "0"
 
+# Exclusion patterns. Must stay above every table header: a bare key after
+# `[[plugin]]`/`[[source]]` binds to that table and qlty silently drops it.
+exclude_patterns = [
+  "node_modules/**",
+  "dist/**",
+  "coverage/**",
+  "**/*.min.js",
+  "**/*.min.css",
+]
+
 # Plugins configuration
 [[plugin]]
 name = "actionlint"
@@ -16,17 +26,6 @@ name = "osv-scanner"
 [[source]]
 name = "default"
 default = true
-
-# Exclusion patterns
-exclude_patterns = [
-  "node_modules/**",
-  "dist/**",
-  "build/**",
-  "coverage/**",
-  "**/*.min.js",
-  "**/*.min.css",
-  ".git/**",
-]
 
 # Code Smells Configuration
 [smells]
@@ -44,26 +43,18 @@ threshold = 4
 enabled = true
 threshold = 5
 
-[smells.function_length]
+[smells.file_complexity]
 enabled = true
 threshold = 50
 
-[smells.file_length]
+[smells.function_complexity]
 enabled = true
-threshold = 500
+threshold = 18
 
-[smells.cognitive_complexity]
+[smells.identical_code]
 enabled = true
 threshold = 15
 
-[smells.duplicate_code]
+[smells.similar_code]
 enabled = true
-threshold = 6
-
-[smells.large_class]
-enabled = true
-threshold = 500
-
-[smells.long_parameter_list]
-enabled = true
-threshold = 2
+threshold = 15

@@ -64,8 +64,15 @@ jobs:
 
   qlty:
     name: Qlty Check
+    # qlty check and qlty smells analyze changed files only, against an upstream ref.
+    # A pull request is the only event that supplies one: actions/checkout leaves the
+    # runner on a detached merge ref, so without --upstream qlty compares HEAD against
+    # itself, finds nothing to analyze, and passes vacuously.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 10
+    env:
+      UPSTREAM_REF: origin/${{ github.base_ref }}
 
     steps:
       - name: Checkout code
@@ -78,10 +85,16 @@ jobs:
         uses: qltysh/qlty-action/install@08a0a862c159eae9b9003081da6663d96efef637 # v2.3.0
 
       - name: Run qlty check
-        run: qlty check
+        run: qlty check --upstream "$UPSTREAM_REF"
 
       - name: Run qlty code smells analysis
-        run: qlty smells
+        run: qlty smells --upstream "$UPSTREAM_REF"
+
+      # The osv-scanner plugin declares skip_upstream, so changed-file runs drop it
+      # entirely; --all is the only mode in which it ever sees a lockfile. Reporting
+      # only until the vulnerabilities it finds today are triaged.
+      - name: Run qlty dependency scan
+        run: qlty check --all --filter osv-scanner --no-fail
 
   build:
     name: Build & Test

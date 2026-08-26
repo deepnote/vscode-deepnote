@@ -31,16 +31,16 @@ async function readPick(pick: QuickPickItem): Promise<{ label: string; text: str
 }
 
 /**
- * Picks the managed venv, which the extension adopts instead of provisioning its own.
+ * Picks the pre-baked venv, which the extension adopts instead of provisioning its own.
  *
- * `useManagedVenv` picks an interpreter outside it, so the extension creates and owns the venv —
- * only the deletion suite needs that, since deleteEnvironment removes the directory for managed
- * environments only.
+ * `useExistingVenv: false` picks an interpreter outside it, so the extension creates and owns the
+ * venv — only the deletion suite needs that, since deleteEnvironment removes the directory for
+ * extension-managed environments only.
  */
-async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: boolean): Promise<void> {
+async function selectInterpreter(interpreterPick: InputBox, useExistingVenv: boolean): Promise<void> {
     const driver = VSBrowser.instance.driver;
 
-    if (!useManagedVenv) {
+    if (useExistingVenv) {
         await interpreterPick.setText(PREBAKED_VENV_DIR_NAME);
         // Wait for the *top row* to be the baked venv, not merely for the list to be non-empty:
         // VS Code applies the filter asynchronously, so the stale unfiltered list is briefly still
@@ -117,7 +117,7 @@ async function selectInterpreter(interpreterPick: InputBox, useManagedVenv: bool
  *
  * Each suite passes its own name, so no suite inherits an environment another one set up.
  */
-export async function createEnvironment(name: string, options: { useManagedVenv?: boolean } = {}): Promise<void> {
+export async function createEnvironment(name: string, options: { useExistingVenv?: boolean } = {}): Promise<void> {
     const driver = VSBrowser.instance.driver;
     let lastError: unknown;
 
@@ -144,7 +144,7 @@ export async function createEnvironment(name: string, options: { useManagedVenv?
                 'no Python interpreters were listed'
             );
 
-            await selectInterpreter(interpreterPick, options.useManagedVenv === true);
+            await selectInterpreter(interpreterPick, options.useExistingVenv !== false);
 
             const nameBox = await InputBox.create();
             await nameBox.setText(name);

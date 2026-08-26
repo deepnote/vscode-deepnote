@@ -301,7 +301,10 @@ running inside the Extension Development Host.
 
 1. Run the one-time setup. It fetches the test VS Code build, chromedriver, the Python extension and
    the mock LLM server, then bakes the `deepnote-toolkit` venv into `.venv-e2e` and writes
-   `test/e2e/settings.generated.json`.
+   `test/e2e/settings.generated.json`, without which `test:e2e` fails at launch. That file carries
+   `python.venvPath`, which is machine-scoped and so only takes effect from user settings — a
+   workspace `.vscode/settings.json` is silently ignored. `npm run setup:e2e:venv` regenerates it
+   without re-downloading VS Code.
 1. Compile the E2E sources — like the unit tests, they run from compiled JS in `out/`.
 1. Run the suites.
 
@@ -323,10 +326,6 @@ On a headless machine, wrap the command in `xvfb-run --auto-servernum --server-a
 
 A few things worth knowing before you debug a failure:
 
-- **`setup:e2e` is not optional.** `test:e2e` fails immediately without `test/e2e/settings.generated.json`.
-  That file carries `python.venvPath`, which is a machine-scoped setting and therefore only takes effect
-  from user settings — a workspace `.vscode/settings.json` is silently ignored. `npm run setup:e2e:venv`
-  regenerates it on its own.
 - **The suites adopt `.venv-e2e` rather than provisioning their own venv**, which is most of the runtime.
   If the Python extension does not offer it, the run still passes but takes several minutes longer and
   logs `no interpreter under .venv-e2e was offered` — grep for that first when a run is unexpectedly slow.

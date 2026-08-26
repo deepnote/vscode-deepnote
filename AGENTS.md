@@ -64,16 +64,11 @@ npm run test:e2e
 
 - Unit tests use Mocha/Chai with the `.unit.test.ts` extension, colocated with the source they test.
 - Use `assert.deepStrictEqual()` for object comparisons instead of checking individual properties.
-- `npm run setup:e2e` fetches the test VS Code build, chromedriver, the Python extension and the mock
-  LLM server, then runs `setup:e2e:venv`, which bakes the `deepnote-toolkit` venv into `.venv-e2e` and
-  writes `test/e2e/settings.generated.json`. The suites adopt that venv instead of each provisioning
-  their own, which is most of the runtime.
-- `test:e2e` needs the generated settings file, because `python.venvPath` is a machine-scoped setting
-  that only takes effect in user settings — extest reads it at launch and fails if it is missing. Re-run
-  `npm run setup:e2e:venv` on its own to regenerate it.
-- CI shards the suites by directory under `test/e2e/suite/<group>/` and runs one group per job via
-  `E2E_GROUP=<group> npm run test:e2e:ci`. A new group directory must be added to the matrix in
-  `.github/workflows/e2e.yml`, or the `verify-coverage` job fails the build.
+- `npm run setup:e2e` is not optional: it writes the gitignored `test/e2e/settings.generated.json`
+  that `test:e2e` needs. CONTRIBUTING.md has the full E2E walkthrough.
+- Adding a `test/e2e/suite/<group>/` directory means adding `<group>` to the matrix in
+  `.github/workflows/e2e.yml`, or the `verify-coverage` job fails the build. A suite left directly in
+  `test/e2e/suite/` is never globbed by any shard.
 
 ### Type Checking
 

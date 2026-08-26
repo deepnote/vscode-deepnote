@@ -1,6 +1,7 @@
 // ESM loader for Mocha tests
 // This provides custom module resolution for mocked modules
 
+import { readFile } from 'node:fs/promises';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { instrumentSource, isCoverageEnabled, shouldInstrument } from './coverage.js';
@@ -135,6 +136,15 @@ export async function resolve(specifier, context, nextResolve) {
 }
 
 export async function load(url, context, nextLoad) {
+    // Node's ESM loader rejects a JSON import without a `with { type: 'json' }` attribute, which tsc
+    // cannot emit under `module: ES2022` (TS2823). The shipped extension is bundled by esbuild, which
+    // inlines JSON, so this only bridges the gap for the `out/` build the tests run against.
+    if (url.startsWith('file://') && url.endsWith('.json')) {
+        const source = await readFile(fileURLToPath(url), 'utf8');
+
+        return { format: 'module', source: `export default ${source};`, shortCircuit: true };
+    }
+
     // Handle all vscode-mock URLs
     if (url.startsWith('vscode-mock:///')) {
         // Extract the module name from the URL

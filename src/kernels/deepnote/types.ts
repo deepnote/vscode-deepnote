@@ -10,6 +10,7 @@ import { getTelemetrySafeHashedString } from '../../platform/telemetry/helpers';
 import { JupyterServerProviderHandle } from '../jupyter/types';
 import { IJupyterKernelSpec } from '../types';
 import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './environments/deepnoteEnvironment';
+import toolkitSpec from './toolkitSpec.json';
 
 export interface VenvAndToolkitInstallation {
     pythonInterpreter: PythonEnvironment;
@@ -413,8 +414,8 @@ export interface IDeepnoteLspClientManager {
     stopAllClients(token?: vscode.CancellationToken): Promise<void>;
 }
 
-export const DEEPNOTE_TOOLKIT_VERSION = '2.1.1';
+export const DEEPNOTE_TOOLKIT_VERSION = toolkitSpec.version;
 
-export const DEEPNOTE_TOOLKIT_PACKAGES = ['ipykernel', 'python-lsp-server[all]', 'deepnote-cli'];
+export const DEEPNOTE_TOOLKIT_PACKAGES = toolkitSpec.packages;
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

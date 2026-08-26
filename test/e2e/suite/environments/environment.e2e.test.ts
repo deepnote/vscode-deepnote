@@ -314,7 +314,7 @@ describe('Deepnote — deleting an environment stops even a closed-but-running n
         // Servers already running from earlier suites — exclude these when isolating THIS PID.
         const pidsBefore = serverPids();
 
-        await createEnvironment(DELETE_ENV_NAME, { useManagedVenv: true });
+        await createEnvironment(DELETE_ENV_NAME, { useExistingVenv: false });
 
         await openWorkspaceFile(G2_FIXTURE);
         await driver.wait(

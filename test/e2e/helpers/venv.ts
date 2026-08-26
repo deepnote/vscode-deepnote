@@ -2,11 +2,11 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import toolkitSpec from '../../../src/kernels/deepnote/toolkitSpec.json';
 import { PREBAKED_VENV_DIR_NAME } from './constants';
 
 const REPO_ROOT = process.cwd();
 const VENV_DIR = path.join(REPO_ROOT, PREBAKED_VENV_DIR_NAME);
-const TOOLKIT_SPEC_SOURCE = path.join(REPO_ROOT, 'src', 'kernels', 'deepnote', 'types.ts');
 const SETTINGS_SOURCE = path.join(REPO_ROOT, 'test', 'e2e', 'settings.json');
 const SETTINGS_TARGET = path.join(REPO_ROOT, 'test', 'e2e', 'settings.generated.json');
 
@@ -16,52 +16,31 @@ function venvPython(): string {
         : path.join(VENV_DIR, 'bin', 'python');
 }
 
-/**
- * The pip specs deepnoteToolkitInstaller installs, read from source so they cannot drift.
- * Not imported: `src` is outside this tsconfig's rootDir (TS6059), and types.ts needs `vscode`.
- */
+/** The pip specs deepnoteToolkitInstaller installs, off the spec file both sides share. */
 function toolkitPipSpecs(): string[] {
-    const source = fs.readFileSync(TOOLKIT_SPEC_SOURCE, 'utf8');
-
-    const version = source.match(/DEEPNOTE_TOOLKIT_VERSION\s*=\s*'([^']+)'/)?.[1];
-    // Terminated on `];` rather than the first `]`, which sits inside 'python-lsp-server[all]'.
-    const packages = source.match(/DEEPNOTE_TOOLKIT_PACKAGES\s*=\s*\[([\s\S]*?)\];/)?.[1];
-    if (!version || packages === undefined) {
-        throw new Error(`Could not read the toolkit install spec from ${TOOLKIT_SPEC_SOURCE}`);
-    }
-
-    return [
-        `deepnote-toolkit[server]==${version}`,
-        ...[...packages.matchAll(/'([^']+)'/g)].map((match) => match[1])
-    ];
+    return [`deepnote-toolkit[server]==${toolkitSpec.version}`, ...toolkitSpec.packages];
 }
 
 /**
- * Whether the venv satisfies every spec. Checked via distribution metadata rather than
- * `import deepnote_toolkit`, which costs seconds and floods the log on every suite.
+ * Whether the venv already has the toolkit version we want. Read from distribution metadata rather
+ * than `import deepnote_toolkit`, which costs seconds and floods the log. The version arrives as
+ * argv, and a mismatch exits non-zero on its own — `assert` would be stripped under PYTHONOPTIMIZE.
  */
-function isUsable(specs: string[]): boolean {
+function isUsable(): boolean {
     if (!fs.existsSync(venvPython())) {
         return false;
     }
 
-    // 'deepnote-toolkit[server]==2.1.1' -> name 'deepnote-toolkit', version '2.1.1'.
-    const required = specs.map((spec) => {
-        const [name, version] = spec.split('==');
-
-        return { name: name.replace(/\[.*\]$/, ''), version };
-    });
-
-    const check = required
-        .map(({ name, version }) =>
-            version ? `assert v('${name}') == '${version}'` : `assert v('${name}')`
-        )
-        .join('; ');
-
     try {
-        execFileSync(venvPython(), ['-c', `from importlib.metadata import version as v; ${check}`], {
-            stdio: 'ignore'
-        });
+        execFileSync(
+            venvPython(),
+            [
+                '-c',
+                'import sys; from importlib.metadata import version; sys.exit(version("deepnote-toolkit") != sys.argv[1])',
+                toolkitSpec.version
+            ],
+            { stdio: 'ignore' }
+        );
 
         return true;
     } catch {
@@ -112,12 +91,10 @@ function pruneForeignKernelSpecs(): void {
 
 /**
  * Guarantees a venv with the toolkit installed and returns its interpreter. The extension adopts it
- * rather than provisioning its own, and a venv failing any spec is discarded and rebuilt.
+ * rather than provisioning its own, and a venv on the wrong toolkit version is discarded and rebuilt.
  */
 export function ensureManagedVenv(): string {
-    const specs = toolkitPipSpecs();
-
-    if (!isUsable(specs)) {
+    if (!isUsable()) {
         if (fs.existsSync(VENV_DIR)) {
             console.log(`[e2e-venv] discarding unusable venv at ${VENV_DIR}`);
             fs.rmSync(VENV_DIR, { recursive: true, force: true });
@@ -132,7 +109,9 @@ export function ensureManagedVenv(): string {
 
         // Mirrors deepnoteToolkitInstaller.installVenvAndToolkit.
         execFileSync(venvPython(), ['-m', 'pip', 'install', '--upgrade', 'pip'], { stdio: 'inherit' });
-        execFileSync(venvPython(), ['-m', 'pip', 'install', '--upgrade', ...specs], { stdio: 'inherit' });
+        execFileSync(venvPython(), ['-m', 'pip', 'install', '--upgrade', ...toolkitPipSpecs()], {
+            stdio: 'inherit'
+        });
     }
 
     pruneForeignKernelSpecs();

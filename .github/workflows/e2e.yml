@@ -84,10 +84,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pip
-          key: pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/toolkitSpec.json', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}-${{ github.run_id }}
-          restore-keys: |
-            pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/toolkitSpec.json', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}-
-            pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-
+          key: pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/kernels/deepnote/toolkitSpec.json', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
 
       - name: Cache the managed Deepnote toolkit venv
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

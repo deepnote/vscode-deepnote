@@ -94,6 +94,7 @@ jobs:
       # entirely; --all is the only mode in which it ever sees a lockfile. Reporting
       # only until the vulnerabilities it finds today are triaged.
       - name: Run qlty dependency scan
+        if: '!cancelled()'
         run: qlty check --all --filter osv-scanner --no-fail
 
   build:

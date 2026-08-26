@@ -1,11 +1,33 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import { pathToFileURL } from 'url';
 import * as path from '../platform/vscode-path/path';
 import { EXTENSION_ROOT_DIR_FOR_TESTS } from './constants.node';
 
 /**
- * Rebuilds all other files with coverage instrumentations
+ * Writes the report for the unit test run.
+ *
+ * The unit tests load `out/**\/*.js` as ES modules via `build/mocha-esm-loader.js`, which
+ * instruments them on the way in (nyc's require hook cannot see ESM). This turns the counters the
+ * instrumented modules left on `globalThis.__coverage__` into `coverage/lcov.info`.
+ */
+export async function writeUnitTestCoverageReport() {
+    if (!process.env.VSC_JUPYTER_INSTRUMENT_CODE_FOR_COVERAGE) {
+        return;
+    }
+
+    const helper = path.join(EXTENSION_ROOT_DIR_FOR_TESTS, 'build', 'coverage.js');
+    const { writeCoverageReport } = await import(pathToFileURL(helper).href);
+
+    await writeCoverageReport();
+}
+
+/**
+ * Rebuilds all other files with coverage instrumentations.
+ *
+ * Only usable from the integration tests, which run the CommonJS bundle inside VS Code. The unit
+ * tests load ES modules and are covered by `writeUnitTestCoverageReport` instead.
  */
 export async function setupCoverage() {
     // In case of running integration tests like DS test with VS Code UI, we have no other way to add coverage.

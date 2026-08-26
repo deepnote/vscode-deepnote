@@ -7,6 +7,27 @@ coverage:
   round: down
   range: '70...100'
 
+  # `project` measures the whole repository, most of which is inherited vscode-jupyter code we do
+  # not maintain. Measured on the first instrumented run (2026-08-24), by lines:
+  #
+  #   whole repository                       41%  (828 files)
+  #   files added since the fork             55%  (183 files)
+  #   ... excluding webview-side React       64%  (136 files)
+  #   inherited vscode-jupyter files         37%  (645 files)
+  #
+  # To hold Deepnote code to its own bar, give the project status a `paths` filter - the upload
+  # stays whole, so `patch` still covers every file a PR touches:
+  #
+  #   status:
+  #     project:
+  #       default:
+  #         paths: ['src/notebooks/deepnote/**', 'src/kernels/deepnote/**', ...]
+  #
+  # Two things to know before doing that. `paths` is a path filter, so it only tracks Deepnote code
+  # that lives under a deepnote-named directory - additions elsewhere (for example
+  # src/platform/analytics) fall outside it. And the 47 files under src/webviews/webview-side/ sit
+  # at 0% because the mocha unit suite never loads the browser bundles; they are unreachable by
+  # this runner rather than untested, and they cost the Deepnote figure roughly 8 points.
   status:
     project: yes
     patch: yes
@@ -25,6 +46,9 @@ comment:
   behavior: default
   require_changes: no
 
-fixes:
-  # Remove prefix in coverage report
-  - '/home/runner/work/vscode-jupyter/::'
+ignore:
+  - 'src/test/**'
+  - '**/*.unit.test.ts'
+  - '**/*.vscode.test.ts'
+  - '**/*.vscode.common.test.ts'
+  - 'test/**'

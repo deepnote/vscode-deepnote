@@ -17,9 +17,11 @@ export type AssertNonAnyStringArray<T> = IsNonAnyStringArray<T> extends true
 /**
  * Static check test cases fixtures
  */
+// oxlint-disable-next-line no-explicit-any
 declare const testAnyType: any;
 declare const testStringType: string;
 declare const testNumberType: number;
+// oxlint-disable-next-line no-explicit-any
 declare const testAnyArrayType: any[];
 declare const testStringArrayType: string[];
 declare const testNumberArrayType: number[];

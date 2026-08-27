@@ -11,7 +11,7 @@ import { JupyterServerProviderHandle } from '../jupyter/types';
 import { IJupyterKernelSpec } from '../types';
 import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './environments/deepnoteEnvironment';
 import toolkitSpec from './toolkitSpec.json';
-import { AssertNonAnyString, AssertNonAnyStringArray } from '../../utils/typescript';
+import { AssertNonAnyString, AssertNonAnyStringArray } from '../../platform/common/utils/typescript';
 
 export interface VenvAndToolkitInstallation {
     pythonInterpreter: PythonEnvironment;

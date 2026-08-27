@@ -8,12 +8,12 @@ import type { Environment } from '@deepnote/blocks';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { computeHash } from '../../../platform/common/crypto';
 import { raceTimeout } from '../../../platform/common/utils/async';
+import { IInterpreterService } from '../../../platform/interpreter/contracts';
+import { getEnvironmentType } from '../../../platform/interpreter/helpers';
+import { EnvironmentType } from '../../../platform/pythonEnvironments/info';
 import { logger } from '../../../platform/logging';
 import { parsePipFreezeFile } from './pipFileParser';
-import { IDeepnoteEnvironmentManager, IDeepnoteNotebookEnvironmentMapper } from '../../../kernels/deepnote/types';
 import { Uri } from 'vscode';
-import { DeepnoteEnvironment } from '../../../kernels/deepnote/environments/deepnoteEnvironment';
-import * as path from '../../../platform/vscode-path/path';
 
 const captureTimeoutInMilliseconds = 5_000;
 
@@ -31,36 +31,37 @@ export interface IEnvironmentCapture {
 
 type PythonEnvironmentType = 'uv' | 'conda' | 'venv' | 'poetry' | 'system';
 
+// The snapshot schema names a narrower set than the Python extension discovers; anything without a
+// counterpart is reported as the plain interpreter it effectively is.
+const ENVIRONMENT_TYPES: Partial<Record<EnvironmentType, PythonEnvironmentType>> = {
+    [EnvironmentType.Conda]: 'conda',
+    [EnvironmentType.Poetry]: 'poetry',
+    [EnvironmentType.Venv]: 'venv',
+    [EnvironmentType.VirtualEnv]: 'venv',
+    [EnvironmentType.VirtualEnvWrapper]: 'venv'
+};
+
 @injectable()
 export class EnvironmentCapture implements IEnvironmentCapture {
-    constructor(
-        @inject(IDeepnoteNotebookEnvironmentMapper)
-        private readonly environmentMapper: IDeepnoteNotebookEnvironmentMapper,
-        @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager
-    ) {}
+    constructor(@inject(IInterpreterService) private readonly interpreterService: IInterpreterService) {}
 
     async captureEnvironment(notebookUri: Uri): Promise<Environment | undefined> {
-        const deepnoteEnvironment = this.getEnvironmentForNotebook(notebookUri);
+        const interpreter = await this.interpreterService.getActiveInterpreter(notebookUri);
 
-        if (!deepnoteEnvironment) {
-            logger.warn('[EnvironmentCapture] No Deepnote environment found for the given notebook');
+        if (!interpreter) {
+            logger.warn('[EnvironmentCapture] No active Python interpreter for the given notebook');
 
             return undefined;
         }
 
-        const interpreterPath = deepnoteEnvironment.pythonInterpreter.uri.fsPath;
-        const pipDir = os.platform() === 'win32' ? 'Scripts' : 'bin';
-        const pipBinary = os.platform() === 'win32' ? 'pip.exe' : 'pip';
-        const pipBinaryPath = path.resolve(deepnoteEnvironment.venvPath.fsPath, pipDir, pipBinary);
-
-        logger.info(`[EnvironmentCapture] Capturing environment for interpreter ${interpreterPath}`);
+        logger.info(`[EnvironmentCapture] Capturing environment for interpreter ${interpreter.uri.fsPath}`);
 
         const platform = `${os.platform()}-${os.arch()}`;
 
         const [pythonVersion, pythonEnvironment, packages] = await Promise.all([
-            this.determinePythonVersion(deepnoteEnvironment.pythonInterpreter),
-            this.determinePythonEnvironment(),
-            this.listPackageVersions(pipBinaryPath)
+            this.determinePythonVersion(interpreter),
+            this.determinePythonEnvironment(interpreter),
+            this.listPackageVersions(interpreter)
         ]);
 
         if (!pythonVersion) {
@@ -107,13 +108,11 @@ export class EnvironmentCapture implements IEnvironmentCapture {
         return `sha256:${hash}`;
     }
 
-    private async determinePythonEnvironment(): Promise<PythonEnvironmentType> {
-        // We manage the venv for the Environment that we use to run the Deepnote Kernel so this will always be executed in a
-        // venv environment. Once we support other environment types, we can expand this logic.
-        return 'venv';
+    protected determinePythonEnvironment(interpreter: PythonEnvironment): PythonEnvironmentType {
+        return ENVIRONMENT_TYPES[getEnvironmentType(interpreter)] ?? 'system';
     }
 
-    private async determinePythonVersion(interpreter: PythonEnvironment): Promise<string | undefined> {
+    protected async determinePythonVersion(interpreter: PythonEnvironment): Promise<string | undefined> {
         const pythonVersionFromInterpreter = await this.determinePythonVersionFromRunningTheInterpreter(interpreter);
 
         if (pythonVersionFromInterpreter) {
@@ -184,22 +183,14 @@ export class EnvironmentCapture implements IEnvironmentCapture {
         return raceTimeout(captureTimeoutInMilliseconds, undefined, getVersion());
     }
 
-    private getEnvironmentForNotebook(notebookUri: Uri): DeepnoteEnvironment | undefined {
-        const environmentId = this.environmentMapper.getEnvironmentForNotebook(notebookUri);
-
-        if (!environmentId) {
-            return undefined;
-        }
-
-        return this.environmentManager.getEnvironment(environmentId);
-    }
-
-    private async listPackageVersions(pipBinaryPath: string): Promise<Record<string, string>> {
+    // `-m pip` rather than a `<venv>/bin/pip` path: the active interpreter may be conda, system or
+    // poetry, where no such binary exists next to it.
+    protected async listPackageVersions(interpreter: PythonEnvironment): Promise<Record<string, string>> {
         const execFileAsync = promisify(execFile);
 
         const getPackages = async (): Promise<Record<string, string>> => {
             try {
-                const output = await execFileAsync(pipBinaryPath, ['freeze', '--local']);
+                const output = await execFileAsync(interpreter.uri.fsPath, ['-m', 'pip', 'freeze', '--local']);
 
                 if (output.stderr) {
                     logger.warn('pip freeze returned error output', { stderr: output.stderr });

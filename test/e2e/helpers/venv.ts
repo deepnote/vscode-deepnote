@@ -18,7 +18,10 @@ function venvPython(): string {
 
 /** The pip specs deepnoteToolkitInstaller installs, off the spec file both sides share. */
 function toolkitPipSpecs(): string[] {
-    return [`deepnote-toolkit[server]==${toolkitSpec.version}`, ...toolkitSpec.packages];
+    return [
+        `deepnote-toolkit[server]==${toolkitSpec.version satisfies string}`,
+        ...(toolkitSpec.packages satisfies string[])
+    ];
 }
 
 /**

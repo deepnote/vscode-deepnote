@@ -264,12 +264,11 @@ export async function assertMarkersStayAbsent(
 }
 
 /**
- * Issues a SINGLE "Run All" after the kernel has been selected and polls the notebook output webview
- * until the expected text renders. It deliberately does NOT re-issue "Run All" when output is
- * missing: the kernel is already bound before we get here (`selectEnvironmentForNotebook` waits for
- * the post-binding "switched successfully" toast), so a first run that renders nothing means the
- * execution request was dropped — exactly the kernel-binding regression this suite must catch.
- * Re-running until output eventually appeared would mask that bug.
+ * Issues a SINGLE "Run All" and polls the notebook output webview until the expected text renders.
+ * It deliberately does NOT re-issue "Run All" when output is missing: the controller is registered
+ * when the notebook opens and the interpreter already carries the toolkit, so a first run that
+ * renders nothing means the execution request was dropped — exactly the kernel-binding regression
+ * this suite must catch. Re-running until output eventually appeared would mask that bug.
  */
 export async function runOnceAndAwaitOutput(
     notebookFileName: string,

@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [agent, environments, execution, files, interpreter, workspace]
+        group: [agent, execution, files, interpreter, workspace]
     env:
       # Keep ExTester's downloads (test VS Code, ChromeDriver, settings, screenshots) inside the
       # workspace so the artifact-upload paths are predictable. Both this and .test-extensions are

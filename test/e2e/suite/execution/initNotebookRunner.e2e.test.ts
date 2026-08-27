@@ -14,14 +14,12 @@ import {
     clickRunAll,
     copyFixtureIntoDir,
     copyFixtureToTempDir,
-    createEnvironment,
     createScreenshotter,
     dismissAllNotifications,
     openFolderViaDialog,
     openWorkspaceFile,
     readRenderedOutput,
-    runOnceAndAwaitOutput,
-    selectEnvironmentForNotebook
+    runOnceAndAwaitOutput
 } from '../../helpers';
 
 const MAIN_FILE = 'etl-pipeline-extract.deepnote';
@@ -93,7 +91,6 @@ async function confirmKernelPickerIfPresent(): Promise<void> {
 describe('Deepnote — running the sibling init notebook in a main notebook kernel', function () {
     this.timeout(SUITE_TIMEOUT);
 
-    const environmentName = 'E2E Init Runner Env';
     let cleanupTempDir: (() => void) | undefined;
     let screenshot: (label: string) => Promise<string>;
 
@@ -117,10 +114,7 @@ describe('Deepnote — running the sibling init notebook in a main notebook kern
             `${MAIN_FILE} did not open`
         );
 
-        // Selecting the environment connects the kernel, which triggers the init run.
-        await createEnvironment(environmentName);
-        await selectEnvironmentForNotebook(environmentName, MAIN_FILE);
-        await screenshot('kernel-connected');
+        await screenshot('notebook-open');
     });
 
     after(async function () {
@@ -138,6 +132,7 @@ describe('Deepnote — running the sibling init notebook in a main notebook kern
     });
 
     it('runs the init notebook on kernel start so its variable is defined in the main kernel', async function () {
+        // The first run is what starts the kernel, and the init notebook runs as part of that start.
         // The Extract cell prints INIT_MARKER, which only exists if the sibling init notebook ran.
         const output = await runOnceAndAwaitOutput(MAIN_FILE, INIT_MARKER, FIRST_RUN_OUTPUT_TIMEOUT);
         await screenshot('init-ran-output');

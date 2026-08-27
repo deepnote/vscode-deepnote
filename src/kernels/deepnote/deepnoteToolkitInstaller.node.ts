@@ -7,7 +7,11 @@ import { CancellationToken, l10n, Uri, workspace } from 'vscode';
 import { resolvePythonExecutable } from '@deepnote/runtime-core';
 
 import { Cancellation, isCancellationError } from '../../platform/common/cancellation';
-import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
+import {
+    DEEPNOTE_TOOLKIT_PACKAGES,
+    DEEPNOTE_TOOLKIT_VERSION,
+    STANDARD_OUTPUT_CHANNEL
+} from '../../platform/common/constants';
 import { IFileSystem } from '../../platform/common/platform/types';
 import { ExecutionResult, IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IExtensionContext, IOutputChannel } from '../../platform/common/types';
@@ -19,7 +23,6 @@ import {
 import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IDeepnoteToolkitInstaller, VenvAndToolkitInstallation } from './types';
-import { DEEPNOTE_TOOLKIT_VERSION } from '../../platform/common/constants';
 
 /**
  * Handles installation of the deepnote-toolkit Python package.
@@ -368,9 +371,7 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
                 'install',
                 '--upgrade',
                 `deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`,
-                'ipykernel',
-                'python-lsp-server[all]',
-                'deepnote-cli'
+                ...DEEPNOTE_TOOLKIT_PACKAGES
             ],
             token
         );

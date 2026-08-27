@@ -1,8 +1,14 @@
 // ESM loader for Mocha tests
 // This provides custom module resolution for mocked modules
 
+import { readFile } from 'node:fs/promises';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { instrumentSource, isCoverageEnabled, shouldInstrument } from './coverage.js';
+
+// The compiled sources are loaded as ES modules through this hook, so nyc's require hook never
+// sees them. Instrumenting here is what makes `coverage/lcov.info` non-empty.
+const coverageEnabled = isCoverageEnabled();
 
 // Import test setup will happen after the loader is registered
 let unittestsModule;
@@ -130,6 +136,15 @@ export async function resolve(specifier, context, nextResolve) {
 }
 
 export async function load(url, context, nextLoad) {
+    // Node's ESM loader rejects a JSON import without a `with { type: 'json' }` attribute, which tsc
+    // cannot emit under `module: ES2022` (TS2823). The shipped extension is bundled by esbuild, which
+    // inlines JSON, so this only bridges the gap for the `out/` build the tests run against.
+    if (url.startsWith('file://') && url.endsWith('.json')) {
+        const source = await readFile(fileURLToPath(url), 'utf8');
+
+        return { format: 'module', source: `export default ${source};`, shortCircuit: true };
+    }
+
     // Handle all vscode-mock URLs
     if (url.startsWith('vscode-mock:///')) {
         // Extract the module name from the URL
@@ -388,10 +403,19 @@ export async function load(url, context, nextLoad) {
 
     // For .js files in the project's out/ directory, inject CJS globals shims
     // This is needed because source files use native __dirname, __filename, require which don't exist in ESM
-    if (url.startsWith(projectOutUrl) && url.endsWith('.js')) {
-        const filePath = fileURLToPath(url);
+    // Match on the path, not the url - esmock re-imports the module under test as `<url>?esmk=N`.
+    const filePath = url.startsWith(projectOutUrl) ? fileURLToPath(url) : undefined;
+
+    if (filePath && filePath.endsWith('.js')) {
         const fs = await import('node:fs/promises');
-        const source = await fs.readFile(filePath, 'utf8');
+        let source = await fs.readFile(filePath, 'utf8');
+
+        // Instrument before the shim is prepended - istanbul records positions from the source it
+        // is given, so the extra shim lines must not be part of it.
+        if (coverageEnabled && shouldInstrument(filePath)) {
+            source = instrumentSource(source, filePath);
+        }
+
         const shim = `import { fileURLToPath as __fileURLToPath } from 'url';
 import { dirname as __getDirname } from 'path';
 import { createRequire as __createRequire } from 'module';

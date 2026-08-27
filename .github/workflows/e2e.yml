@@ -18,9 +18,13 @@ concurrency:
 
 jobs:
   e2e:
-    name: E2E (ExTester)
+    name: E2E (${{ matrix.group }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [agent, environments, execution, files, interpreter, workspace]
     env:
       # Keep ExTester's downloads (test VS Code, ChromeDriver, settings, screenshots) inside the
       # workspace so the artifact-upload paths are predictable. Both this and .test-extensions are
@@ -39,6 +43,7 @@ jobs:
           node-version-file: '.nvmrc'
 
       - name: Setup Python # interpreter the Deepnote environment is created from
+        id: python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
@@ -76,29 +81,87 @@ jobs:
         run: npm run setup:e2e:mock
 
       - name: Cache pip wheel downloads
-        # Provisioning the Deepnote environment pip-installs the toolkit dependency tree into a
-        # fresh venv on first kernel connect — the bulk of the E2E runtime. Caching pip's wheel
-        # cache makes that warm on later runs (the installs use the cache; nothing passes
-        # --no-cache-dir). The key busts when the toolkit version / install set changes; the
-        # restore-keys prefix keeps the cache warm across unrelated changes, since pip's cache is
-        # additive.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pip
-          key: pip-${{ runner.os }}-py312-${{ hashFiles('src/kernels/deepnote/types.ts', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
-          restore-keys: |
-            pip-${{ runner.os }}-py312-
+          key: pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/platform/common/toolkitSpec.json', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
+
+      - name: Cache the managed Deepnote toolkit venv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .venv-e2e
+          key: e2e-venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/platform/common/toolkitSpec.json', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
+
+      - name: Warm the managed venv
+        run: npm run setup:e2e:venv
 
       - name: Run E2E
         # VS Code launches with --no-sandbox (no AppArmor sysctl needed). Runs once; Mocha's retries:1
         # and rootHooks.ts (dismiss toasts between tests) handle flakiness in the single shared instance.
-        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:prebuilt
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:ci
+        env:
+          E2E_GROUP: ${{ matrix.group }}
+
+      # Written even when the tests fail, so a shard that ran is never mistaken for one that was
+      # never scheduled. verify-coverage collects these.
+      - name: Record the shard that ran
+        if: always()
+        run: mkdir -p shard-ran && touch "shard-ran/${{ matrix.group }}"
+
+      - name: Upload the shard record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-ran-${{ matrix.group }}
+          path: shard-ran/
 
       - name: Upload failure screenshots
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-screenshots
+          name: e2e-screenshots-${{ matrix.group }}
           path: ${{ env.TEST_RESOURCES }}/screenshots/**/*.png
           if-no-files-found: ignore
           retention-days: 14
+
+  verify-coverage:
+    name: Verify shard coverage
+    needs: e2e
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Collect what each shard reported
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          merge-multiple: true
+          path: shard-ran
+          pattern: e2e-ran-*
+
+      - name: Every suite directory must have been run
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "Shards that reported in: $(find shard-ran -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null)"
+
+          status=0
+          for dir in test/e2e/suite/*/; do
+            group="$(basename "${dir}")"
+            if [ ! -e "shard-ran/${group}" ]; then
+              echo "::error::test/e2e/suite/${group}/ was not run by any shard — add it to the matrix in this workflow."
+              status=1
+            fi
+          done
+
+          # A suite outside a group directory is never globbed by any shard either.
+          if compgen -G 'test/e2e/suite/*.e2e.test.ts' > /dev/null; then
+            echo "::error::Suites sit directly in test/e2e/suite/; move them into a group directory:"
+            ls test/e2e/suite/*.e2e.test.ts
+            status=1
+          fi
+
+          exit "${status}"

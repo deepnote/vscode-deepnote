@@ -11,13 +11,13 @@ import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    assertNotNull,
     copyFixtureToTempDir,
     createScreenshotter,
     openFolderViaDialog,
     openWorkspaceFile,
-    assertNotNull,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const DISMISS_FIXTURE = 'sales-analytics.deepnote';
 const SPLIT_PROMPT = /multiple notebooks/i;

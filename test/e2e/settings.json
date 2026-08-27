@@ -3,6 +3,7 @@
     "window.dialogStyle": "custom",
     "window.openFoldersInNewWindow": "off",
     "workbench.editor.enablePreview": false,
+    "breadcrumbs.enabled": false,
     "workbench.startupEditor": "none",
     "extensions.ignoreRecommendations": true,
     "workbench.remoteIndicator.showExtensionRecommendations": false,

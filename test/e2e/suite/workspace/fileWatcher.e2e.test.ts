@@ -12,11 +12,12 @@ import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
+    copySnapshotIntoDir,
     createScreenshotter,
     openFolderViaDialog,
     openWorkspaceFile,
     readRenderedOutput
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'hello-world.deepnote';
 const ORIGINAL_SOURCE = 'hello world';
@@ -159,6 +160,7 @@ describe('Deepnote — the file watcher applies snapshot outputs to an open note
 
     let cleanupTempDir: (() => void) | undefined;
     let snapshotTargetPath = '';
+    let tempDir = '';
 
     before(async function () {
         const driver = VSBrowser.instance.driver;
@@ -167,7 +169,7 @@ describe('Deepnote — the file watcher applies snapshot outputs to an open note
         // already open (with no output) when the sidecar appears.
         const copy = copyFixtureToTempDir(SNAPSHOT_FIXTURE);
         cleanupTempDir = copy.cleanup;
-        snapshotTargetPath = path.join(copy.tempDir, 'snapshots', SNAPSHOT);
+        tempDir = copy.tempDir;
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
@@ -220,11 +222,7 @@ describe('Deepnote — the file watcher applies snapshot outputs to an open note
 
         // 2. Make the snapshot APPEAR on disk under `<tempDir>/snapshots/`. The fs watcher fires
         //    onDidCreate, which routes to the snapshot-output-update path.
-        fs.mkdirSync(path.dirname(snapshotTargetPath), { recursive: true });
-        fs.copyFileSync(
-            path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'snapshots', SNAPSHOT),
-            snapshotTargetPath
-        );
+        snapshotTargetPath = copySnapshotIntoDir(tempDir, SNAPSHOT);
         expect(fs.existsSync(snapshotTargetPath), 'snapshot file must exist on disk after the copy').to.equal(true);
 
         // 3. Poll the rendered output until the watcher (500ms debounce + read + replaceCells) applies

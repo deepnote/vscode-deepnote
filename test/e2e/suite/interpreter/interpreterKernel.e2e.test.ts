@@ -42,7 +42,7 @@ import {
     readRenderedOutput,
     tryOpenInputBox,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'interpreter-kernel.deepnote';
 const EXPECTED_OUTPUT = 'interpreter-kernel-ok';

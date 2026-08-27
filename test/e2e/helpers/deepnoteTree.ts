@@ -1,6 +1,7 @@
-import { ActivityBar, By, SideBarView, VSBrowser, WebElement, type ViewItem } from 'vscode-extension-tester';
+import { By, SideBarView, VSBrowser, WebElement, type ViewItem } from 'vscode-extension-tester';
 
 import { WORKBENCH_TIMEOUT } from './constants';
+import { openActivityBarView } from './views';
 
 /** A row of the Deepnote Explorer tree: a project group ("N files") or a notebook leaf ("N cells"). */
 export interface DeepnoteTreeRow {
@@ -15,8 +16,7 @@ export interface DeepnoteTreeRow {
 
 /** Opens the Deepnote view container and returns its "Explorer" tree section. */
 export async function getDeepnoteExplorerSection() {
-    const control = await new ActivityBar().getViewControl('Deepnote');
-    await control?.openView();
+    await openActivityBarView('Deepnote');
     await VSBrowser.instance.driver.sleep(1200);
 
     const content = new SideBarView().getContent();

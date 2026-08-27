@@ -1,6 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import toolkitSpec from './toolkitSpec.json';
+import { AssertNonAnyString, AssertNonAnyStringArray } from './utils/typescript';
+
 export const PYTHON_LANGUAGE = 'python';
 export const MARKDOWN_LANGUAGE = 'markdown';
 export const NotebookCellScheme = 'vscode-notebook-cell';
@@ -23,9 +26,15 @@ export const NOTEBOOK_SELECTOR = [
 export const CodespaceExtensionId = 'GitHub.codespaces';
 export const JVSC_EXTENSION_ID = 'Deepnote.vscode-deepnote';
 
-// Lives here rather than with the Deepnote kernel types so the pip installer, which is platform
-// code, can pin the package without importing across the layer boundary.
-export const DEEPNOTE_TOOLKIT_VERSION = '2.1.1';
+// The spec lives here rather than with the Deepnote kernel types so the pip installer, which is
+// platform code, can pin the package without importing across the layer boundary.
+true satisfies AssertNonAnyString<typeof toolkitSpec.version>;
+true satisfies AssertNonAnyStringArray<typeof toolkitSpec.packages>;
+
+export const DEEPNOTE_TOOLKIT_VERSION: string = toolkitSpec.version;
+
+export const DEEPNOTE_TOOLKIT_PACKAGES: string[] = toolkitSpec.packages;
+
 export const DATA_WRANGLER_EXTENSION_ID = 'ms-toolsai.datawrangler';
 export const PROPOSED_API_ALLOWED_PUBLISHERS = ['donjayamanne'];
 export const POWER_TOYS_EXTENSION_ID = 'ms-toolsai.vscode-jupyter-powertoys';

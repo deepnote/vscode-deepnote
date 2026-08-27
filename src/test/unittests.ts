@@ -16,7 +16,7 @@ const originalLoad = Module._load;
 import * as child_process from 'child_process';
 import * as os from 'os';
 import { setTestExecution, setUnitTestExecution } from '../platform/common/constants';
-import { setupCoverage } from './coverage.node';
+import { writeUnitTestCoverageReport } from './coverage.node';
 if (os.platform() === 'win32') {
     const proc = child_process.spawn('C:\\Windows\\System32\\Reg.exe', ['/?']);
     proc.on('error', () => {
@@ -55,18 +55,13 @@ Module._load = function (request: string, _parent: NodeModule) {
     return originalLoad.apply(this, arguments as any);
 };
 
-// Rebuild with nyc
-const nycPromise = setupCoverage();
-
 export const mochaHooks = {
     async afterAll(this: Mocha.Context) {
-        this.timeout(30000);
-        // Also output the nyc coverage if we have any
-        const nyc = await nycPromise;
-        if (nyc) {
-            nyc.writeCoverageFile();
-            return nyc.report();
-        }
+        // Reporting on every compiled file, including those no test imported, takes a while.
+        this.timeout(300000);
+
+        // Instrumentation itself happens in build/mocha-esm-loader.js as modules are loaded.
+        await writeUnitTestCoverageReport();
     }
 };
 

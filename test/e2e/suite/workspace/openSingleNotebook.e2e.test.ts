@@ -15,7 +15,7 @@ import {
     openWorkspaceFile,
     readStatusBarText,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'quick-notes.deepnote';
 const NOTEBOOK_NAME = 'Quick Notes';

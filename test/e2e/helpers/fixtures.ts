@@ -11,18 +11,43 @@ export interface FixtureCopy {
     tempDir: string;
 }
 
+const FIXTURES_DIR = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures');
+
 /**
  * Copies a fixture from `test/e2e/fixtures` into a fresh throwaway temp directory and returns the
  * paths plus a `cleanup` callback that removes the dir. Execution dirties the notebook, so working
  * on a throwaway copy keeps the committed fixture pristine and avoids save prompts.
  */
 export function copyFixtureToTempDir(fixtureName: string): FixtureCopy {
-    const source = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', fixtureName);
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-e2e-'));
-    const filePath = path.join(tempDir, fixtureName);
-    fs.copyFileSync(source, filePath);
+    const filePath = copyFixtureIntoDir(tempDir, fixtureName);
 
     const cleanup = () => fs.rmSync(tempDir, { recursive: true, force: true });
 
     return { cleanup, filePath, tempDir };
+}
+
+/**
+ * Copies an additional fixture into an existing copy's directory, which is how a suite assembles a
+ * multi-file project. Returns the written path.
+ */
+export function copyFixtureIntoDir(tempDir: string, fixtureName: string): string {
+    const target = path.join(tempDir, fixtureName);
+    fs.copyFileSync(path.join(FIXTURES_DIR, fixtureName), target);
+
+    return target;
+}
+
+/**
+ * Copies a snapshot fixture into `<tempDir>/snapshots/`, the sibling directory buildSnapshotPath
+ * resolves to. Returns the written path.
+ */
+export function copySnapshotIntoDir(tempDir: string, snapshotName: string): string {
+    const snapshotsDir = path.join(tempDir, 'snapshots');
+    fs.mkdirSync(snapshotsDir, { recursive: true });
+
+    const target = path.join(snapshotsDir, snapshotName);
+    fs.copyFileSync(path.join(FIXTURES_DIR, 'snapshots', snapshotName), target);
+
+    return target;
 }

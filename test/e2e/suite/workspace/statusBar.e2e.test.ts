@@ -16,13 +16,13 @@ import {
     openFolderViaDialog,
     openWorkspaceFile,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'quick-notes.deepnote';
 const SCRATCH_FILE = 'clipboard-scratch.txt';
 const NOTEBOOK_NAME = 'Quick Notes';
-const PROJECT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const NOTEBOOK_ID = 'c-nb-main';
+const PROJECT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const COPIED_TOAST = /Copied Deepnote notebook details to clipboard\./i;
 
 /** Finds the Deepnote status-bar item by the notebook name in its text. */

@@ -25,6 +25,7 @@ __pycache__
 *.xlf
 **/.mypy_cache/**
 **/.venv*/
+test/e2e/settings.generated.json
 **/.vscode test/**
 **/.vscode-smoke/**
 **/.vscode-test/**

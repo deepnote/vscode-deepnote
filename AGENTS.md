@@ -57,12 +57,18 @@ npm run test:unittests -- --grep "SuiteName"
 npx mocha --config ./build/.mocha.unittests.js.json ./out/path/to/file.unit.test.js
 
 # End-to-end tests (extest-driven VS Code + chromedriver)
-npm run setup:e2e       # one-time: fetches VS Code, chromedriver, mock LLM server
+npm run setup:e2e       # required first — see below
+npm run compile-e2e     # E2E also runs against compiled JS
 npm run test:e2e
 ```
 
 - Unit tests use Mocha/Chai with the `.unit.test.ts` extension, colocated with the source they test.
 - Use `assert.deepStrictEqual()` for object comparisons instead of checking individual properties.
+- `npm run setup:e2e` is not optional: it writes the gitignored `test/e2e/settings.generated.json`
+  that `test:e2e` needs. CONTRIBUTING.md has the full E2E walkthrough.
+- Adding a `test/e2e/suite/<group>/` directory means adding `<group>` to the matrix in
+  `.github/workflows/e2e.yml`, or the `verify-coverage` job fails the build. A suite left directly in
+  `test/e2e/suite/` is never globbed by any shard.
 
 ### Type Checking
 

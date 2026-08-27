@@ -4,17 +4,17 @@
  */
 
 import { expect } from 'chai';
-import * as fs from 'fs';
-import * as path from 'path';
-import { ActivityBar, EditorView, SideBarView, VSBrowser, WebView, type ViewItem } from 'vscode-extension-tester';
+import { EditorView, SideBarView, VSBrowser, WebView, type ViewItem } from 'vscode-extension-tester';
 
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
+    openActivityBarView,
     openFolderViaDialog
-} from '../helpers';
+} from '../../helpers';
 
 const MARKETING_FILES = ['marketing-overview.deepnote', 'marketing-campaigns.deepnote', 'marketing-metrics.deepnote'];
 const OTHER_PROJECT_FILE = 'quick-notes.deepnote';
@@ -87,18 +87,14 @@ describe('Deepnote — the Explorer groups sibling files by project', function (
         const copy = copyFixtureToTempDir(MARKETING_FILES[0]);
         cleanupTempDir = copy.cleanup;
         for (const name of [...MARKETING_FILES.slice(1), OTHER_PROJECT_FILE]) {
-            fs.copyFileSync(
-                path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', name),
-                path.join(copy.tempDir, name)
-            );
+            copyFixtureIntoDir(copy.tempDir, name);
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        const control = await new ActivityBar().getViewControl('Deepnote');
-        await control?.openView();
+        await openActivityBarView('Deepnote');
         await driver.sleep(2000);
         const section = await getExplorerSection();
 

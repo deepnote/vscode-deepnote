@@ -10,6 +10,7 @@ import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    assertNotNull,
     confirmModalDialog,
     copyFixtureToTempDir,
     createScreenshotter,
@@ -19,10 +20,9 @@ import {
     openWorkspaceFile,
     readDeepnoteTreeRows,
     readStatusBarText,
-    assertNotNull,
     selectDeepnoteContextMenu,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'bootstrap-only.deepnote';
 const NOTEBOOK_NAME = 'Bootstrap';

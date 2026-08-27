@@ -4,8 +4,6 @@
  */
 
 import { expect } from 'chai';
-import * as fs from 'fs';
-import * as path from 'path';
 import { EditorView, InputBox, VSBrowser, WebView, Workbench } from 'vscode-extension-tester';
 
 import {
@@ -14,6 +12,7 @@ import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     clickRunAll,
+    copyFixtureIntoDir,
     copyFixtureToTempDir,
     createEnvironment,
     createScreenshotter,
@@ -23,7 +22,7 @@ import {
     readRenderedOutput,
     runOnceAndAwaitOutput,
     selectEnvironmentForNotebook
-} from '../helpers';
+} from '../../helpers';
 
 const MAIN_FILE = 'etl-pipeline-extract.deepnote';
 const INIT_SIBLING_FILE = 'etl-pipeline-init.deepnote';
@@ -94,7 +93,7 @@ async function confirmKernelPickerIfPresent(): Promise<void> {
 describe('Deepnote — running the sibling init notebook in a main notebook kernel', function () {
     this.timeout(SUITE_TIMEOUT);
 
-    const environmentName = 'E2E Init Env';
+    const environmentName = 'E2E Init Runner Env';
     let cleanupTempDir: (() => void) | undefined;
     let screenshot: (label: string) => Promise<string>;
 
@@ -105,8 +104,7 @@ describe('Deepnote — running the sibling init notebook in a main notebook kern
         // scanning the notebook's directory.
         const copy = copyFixtureToTempDir(MAIN_FILE);
         cleanupTempDir = copy.cleanup;
-        const initSrc = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', INIT_SIBLING_FILE);
-        fs.copyFileSync(initSrc, path.join(copy.tempDir, INIT_SIBLING_FILE));
+        copyFixtureIntoDir(copy.tempDir, INIT_SIBLING_FILE);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(copy.tempDir);

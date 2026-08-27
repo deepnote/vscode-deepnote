@@ -85,7 +85,9 @@ obj/**
 logs/**
 out/**
 .test-extensions/**
+.venv-e2e/**
 test-resources/**
+testing/**
 precommit.hook
 pythonFiles/.env
 pythonFiles/**/*.pyc

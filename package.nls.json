@@ -289,17 +289,7 @@
     "deepnote.commands.copyNotebookDetails.title": "Copy Active Deepnote Notebook Details",
     "deepnote.views.explorer.name": "Explorer",
     "deepnote.views.explorer.welcome": "No Deepnote notebooks found in this workspace.",
-    "deepnote.views.environments.name": "Environments",
     "deepnote.command.selectNotebook.title": "Select Notebook",
-    "deepnote.commands.environments.create.title": "Create Environment",
-    "deepnote.commands.environments.start.title": "Start Server",
-    "deepnote.commands.environments.stop.title": "Stop Server",
-    "deepnote.commands.environments.restart.title": "Restart Server",
-    "deepnote.commands.environments.delete.title": "Delete Environment",
-    "deepnote.commands.environments.managePackages.title": "Manage Packages",
-    "deepnote.commands.environments.editName.title": "Rename Environment",
-    "deepnote.commands.environments.refresh.title": "Refresh",
-    "deepnote.commands.environments.selectForNotebook.title": "Select Environment for Notebook",
     "contributes.walkthroughs.deepnoteWelcome.title": "Get Started with Deepnote",
     "contributes.walkthroughs.deepnoteWelcome.description": "Your first steps to set up and explore Deepnote notebooks in VS Code.",
     "contributes.walkthroughs.deepnoteWelcome.steps.exploreProjects.title": "Explore Your Projects",
@@ -313,8 +303,5 @@
     "contributes.walkthroughs.deepnoteWelcome.steps.notebookBlocks.media.altText": "A Deepnote notebook showing different block types",
     "contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.title": "Connect to Your Data Sources",
     "contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.description": "Set up integrations to connect your notebooks to databases, data warehouses, and other services. Query your data directly from SQL blocks.",
-    "contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.media.altText": "The Manage Integrations panel for connecting data sources",
-    "contributes.walkthroughs.deepnoteWelcome.steps.setupEnvironment.title": "Set Up a Python Environment",
-    "contributes.walkthroughs.deepnoteWelcome.steps.setupEnvironment.description": "Create and manage Python environments for your notebooks. Install packages, configure dependencies, and switch between environments.",
-    "contributes.walkthroughs.deepnoteWelcome.steps.setupEnvironment.media.altText": "The Deepnote Environments panel showing available environments"
+    "contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.media.altText": "The Manage Integrations panel for connecting data sources"
 }

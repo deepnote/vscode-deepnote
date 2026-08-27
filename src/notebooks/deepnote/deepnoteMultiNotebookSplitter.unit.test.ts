@@ -4,7 +4,6 @@ import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { EventEmitter, FileType, NotebookDocument, TabGroups, TabInputNotebook, Uri } from 'vscode';
 
 import { ITelemetryService } from '../../platform/analytics/types';
-import type { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import type { ILogger } from '../../platform/logging/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { DeepnoteMultiNotebookSplitter } from './deepnoteMultiNotebookSplitter';
@@ -49,7 +48,6 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     let splitter: DeepnoteMultiNotebookSplitter;
     let onDidOpen: EventEmitter<NotebookDocument>;
     let refreshTreeCount: number;
-    let envMapper: IDeepnoteNotebookEnvironmentMapper;
 
     // Ordered log of side-effecting fs operations, so we can assert write-before-rename ORDER.
     let callLog: Array<{ op: 'write' | 'rename'; name: string }>;
@@ -192,15 +190,7 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             return Promise.resolve(undefined);
         });
 
-        // Environment mapper: per-notebook env, recorded via real-ish maps.
-        const envMock = mock<IDeepnoteNotebookEnvironmentMapper>();
-        when(envMock.getEnvironmentForNotebook(anything())).thenReturn(undefined);
-        when(envMock.setEnvironmentForNotebook(anything(), anything())).thenResolve();
-        when(envMock.removeEnvironmentForNotebook(anything())).thenResolve();
-        envMapper = instance(envMock);
-
         splitter = new DeepnoteMultiNotebookSplitter(
-            envMapper,
             () => {
                 refreshTreeCount++;
             },
@@ -388,56 +378,6 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             );
         });
 
-        test('copies the original env mapping onto each new file and removes the original mapping (regression: split-time env migration)', async () => {
-            const file = makeFile([makeNotebook('n1', 'Alpha', 'a'), makeNotebook('n2', 'Beta', 'b')]);
-            stubReadFile(file);
-            acceptSplit();
-
-            const setCalls: string[] = [];
-            const removeCalls: string[] = [];
-            const envMock = mock<IDeepnoteNotebookEnvironmentMapper>();
-            when(envMock.getEnvironmentForNotebook(anything())).thenReturn('env-xyz');
-            when(envMock.setEnvironmentForNotebook(anything(), anything())).thenCall((uri: Uri, env: string) => {
-                setCalls.push(`${basename(uri)}=${env}`);
-                return Promise.resolve();
-            });
-            when(envMock.removeEnvironmentForNotebook(anything())).thenCall((uri: Uri) => {
-                removeCalls.push(basename(uri));
-                return Promise.resolve();
-            });
-
-            // Point the open event at a fresh local emitter BEFORE constructing/activating the
-            // env-returning splitter, so the new splitter subscribes to the emitter we fire below.
-            const localEmitter = new EventEmitter<NotebookDocument>();
-            when(mockedVSCodeNamespaces.workspace.onDidOpenNotebookDocument).thenReturn(localEmitter.event);
-
-            const splitterWithEnv = new DeepnoteMultiNotebookSplitter(
-                instance(envMock),
-                () => {
-                    refreshTreeCount++;
-                },
-                logger,
-                (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri))),
-                instance(mock<ITelemetryService>())
-            );
-            splitterWithEnv.activate();
-
-            localEmitter.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
-
-            await waitFor(() => removeCalls.length >= 1);
-            await settle();
-
-            assert.deepStrictEqual(
-                setCalls.sort(),
-                ['multi-alpha.deepnote=env-xyz', 'multi-beta.deepnote=env-xyz'],
-                'the original env must be copied onto every new sibling'
-            );
-            assert.deepStrictEqual(removeCalls, ['multi.deepnote'], 'the original mapping must be removed');
-
-            splitterWithEnv.dispose();
-            localEmitter.dispose();
-        });
-
         test('refreshes the tree after a successful split', async () => {
             const file = makeFile([makeNotebook('n1', 'Alpha', 'a'), makeNotebook('n2', 'Beta', 'b')]);
             stubReadFile(file);
@@ -558,51 +498,28 @@ suite('DeepnoteMultiNotebookSplitter', () => {
         }
 
         /**
-         * Build and activate a splitter wired to a fresh env mapper (so a test can inject env-set/remove
-         * failures) and a private open-event emitter (so the fire below targets exactly this splitter).
+         * Build and activate a splitter whose refreshTree throws, plus a private open-event emitter (so
+         * the fire below targets exactly this splitter). refreshTree is the last step after the rename,
+         * which makes it the injection point for "the split failed once the original was already gone".
          */
-        function makeEnvSplitter(opts: { env: string | undefined; failSetFor?: string; failRemoveFor?: string }): {
+        function makeFailingSplitter(): {
             emitter: EventEmitter<NotebookDocument>;
             splitter: DeepnoteMultiNotebookSplitter;
-            setCalls: string[];
-            removeCalls: string[];
         } {
-            const setCalls: string[] = [];
-            const removeCalls: string[] = [];
-            const envMock = mock<IDeepnoteNotebookEnvironmentMapper>();
-            when(envMock.getEnvironmentForNotebook(anything())).thenReturn(opts.env);
-            when(envMock.setEnvironmentForNotebook(anything(), anything())).thenCall((uri: Uri, env: string) => {
-                const name = basename(uri);
-                if (opts.failSetFor && name === opts.failSetFor) {
-                    return Promise.reject(new Error(`set env failed for ${name}`));
-                }
-                setCalls.push(`${name}=${env}`);
-                return Promise.resolve();
-            });
-            when(envMock.removeEnvironmentForNotebook(anything())).thenCall((uri: Uri) => {
-                const name = basename(uri);
-                if (opts.failRemoveFor && name === opts.failRemoveFor) {
-                    return Promise.reject(new Error(`remove env failed for ${name}`));
-                }
-                removeCalls.push(name);
-                return Promise.resolve();
-            });
-
             const emitter = new EventEmitter<NotebookDocument>();
             when(mockedVSCodeNamespaces.workspace.onDidOpenNotebookDocument).thenReturn(emitter.event);
 
-            const envSplitter = new DeepnoteMultiNotebookSplitter(
-                instance(envMock),
+            const failingSplitter = new DeepnoteMultiNotebookSplitter(
                 () => {
-                    refreshTreeCount++;
+                    throw new Error('refresh failed after the rename');
                 },
                 logger,
                 (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri))),
                 instance(mock<ITelemetryService>())
             );
-            envSplitter.activate();
+            failingSplitter.activate();
 
-            return { emitter, splitter: envSplitter, setCalls, removeCalls };
+            return { emitter, splitter: failingSplitter };
         }
 
         test('a failure after the rename rolls the original back into place and reports it restored', async () => {
@@ -611,16 +528,8 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             acceptSplit();
             const errors = captureErrorMessage();
 
-            // The rename succeeds, then removing the original's env mapping (the post-rename step) fails.
-            const {
-                emitter,
-                splitter: envSplitter,
-                setCalls,
-                removeCalls
-            } = makeEnvSplitter({
-                env: 'env-xyz',
-                failRemoveFor: 'multi.deepnote'
-            });
+            // The rename succeeds, then the post-rename refresh fails.
+            const { emitter, splitter: failingSplitter } = makeFailingSplitter();
 
             emitter.fire(notebookDoc(Uri.file('/ws/multi.deepnote')));
 
@@ -637,19 +546,12 @@ suite('DeepnoteMultiNotebookSplitter', () => {
                 ['multi-alpha.deepnote', 'multi-beta.deepnote'],
                 'the new siblings are still cleaned up'
             );
-            // The original mapping is restored via a compensating set (its forward removal had failed).
-            assert.include(setCalls, 'multi.deepnote=env-xyz', 'the original env mapping must be restored on rollback');
-            assert.deepStrictEqual(
-                removeCalls.slice().sort(),
-                ['multi-alpha.deepnote', 'multi-beta.deepnote'],
-                'the sibling env sets are reverted'
-            );
             assert.strictEqual(
                 errors.get(),
-                'Failed to split file: remove env failed for multi.deepnote. The original file was restored.'
+                'Failed to split file: refresh failed after the rename. The original file was restored.'
             );
 
-            envSplitter.dispose();
+            failingSplitter.dispose();
             emitter.dispose();
         });
     });

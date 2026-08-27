@@ -5,7 +5,6 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { ITelemetryService } from '../../platform/analytics/types';
 import { IExtensionContext } from '../../platform/common/types';
 import { ILogger } from '../../platform/logging/types';
-import { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
@@ -42,10 +41,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         @inject(IIntegrationManager) integrationManager: IIntegrationManager,
         @inject(ILogger) private readonly logger: ILogger,
         @inject(ITelemetryService) private readonly analytics: ITelemetryService,
-        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService,
-        @inject(IDeepnoteNotebookEnvironmentMapper)
-        @optional()
-        private readonly environmentMapper?: IDeepnoteNotebookEnvironmentMapper
+        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService
     ) {
         this.integrationManager = integrationManager;
     }
@@ -86,7 +82,6 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         this.integrationManager.activate();
 
         this.multiNotebookSplitter = new DeepnoteMultiNotebookSplitter(
-            this.environmentMapper,
             () => this.explorerView.refresh(),
             this.logger,
             deepnoteFileExists,

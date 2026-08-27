@@ -4,7 +4,6 @@ import { isSingleNotebookDeepnoteFile, splitByNotebooks } from '@deepnote/conver
 
 import { ITelemetryService } from '../../platform/analytics/types';
 import { ILogger } from '../../platform/logging/types';
-import type { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
 import { allocateSiblingUri } from './deepnoteSiblingFileAllocator';
@@ -28,8 +27,6 @@ export class DeepnoteMultiNotebookSplitter {
 
     private readonly disposables: Disposable[] = [];
 
-    private readonly envMapper: IDeepnoteNotebookEnvironmentMapper | undefined;
-
     private readonly exists: (uri: Uri) => Promise<boolean>;
 
     private readonly logger: ILogger;
@@ -39,13 +36,11 @@ export class DeepnoteMultiNotebookSplitter {
     private readonly refreshTree: () => void;
 
     constructor(
-        envMapper: IDeepnoteNotebookEnvironmentMapper | undefined,
         refreshTree: () => void,
         logger: ILogger,
         exists: (uri: Uri) => Promise<boolean>,
         analytics: ITelemetryService
     ) {
-        this.envMapper = envMapper;
         this.refreshTree = refreshTree;
         this.logger = logger;
         this.exists = exists;
@@ -158,8 +153,6 @@ export class DeepnoteMultiNotebookSplitter {
 
             const deepnoteFile = await readDeepnoteProjectFile(fileUri);
             const parentDir = Uri.joinPath(fileUri, '..');
-            const envMapper = this.envMapper;
-            const originalEnv = envMapper?.getEnvironmentForNotebook(fileUri);
 
             // Write all children before retiring the original (see step below).
             const entries = splitByNotebooks(deepnoteFile, getFileStem(fileUri));
@@ -187,15 +180,6 @@ export class DeepnoteMultiNotebookSplitter {
                 newUris.push(targetUri);
             }
 
-            // Migrate the environment selection onto each new file (desktop-only).
-            if (envMapper && originalEnv) {
-                for (const newUri of newUris) {
-                    // Register the revert BEFORE the set: the mapper mutates memory before the persist that can reject.
-                    rollbacks.push(() => envMapper.removeEnvironmentForNotebook(newUri));
-                    await envMapper.setEnvironmentForNotebook(newUri, originalEnv);
-                }
-            }
-
             // Abort before retiring the original if its tab won't close, else a later save recreates it.
             if (!(await this.closeNotebookTab(fileUri))) {
                 throw new Error(l10n.t('The file is still open in an editor and could not be closed.'));
@@ -205,15 +189,6 @@ export class DeepnoteMultiNotebookSplitter {
             await workspace.fs.rename(fileUri, legacyUri, { overwrite: false });
             renamed = true;
             rollbacks.push(() => workspace.fs.rename(legacyUri, fileUri, { overwrite: false }));
-
-            if (envMapper) {
-                // Restore the original mapping on rollback before removing it here.
-                if (originalEnv) {
-                    rollbacks.push(() => envMapper.setEnvironmentForNotebook(fileUri, originalEnv));
-                }
-
-                await envMapper.removeEnvironmentForNotebook(fileUri);
-            }
 
             this.refreshTree();
 

@@ -9,7 +9,6 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { getTelemetrySafeHashedString } from '../../platform/telemetry/helpers';
 import { JupyterServerProviderHandle } from '../jupyter/types';
 import { IJupyterKernelSpec } from '../types';
-import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './environments/deepnoteEnvironment';
 
 export interface VenvAndToolkitInstallation {
     pythonInterpreter: PythonEnvironment;
@@ -240,14 +239,6 @@ export interface IServerHandleRegistry {
 export const IDeepnoteKernelAutoSelector = Symbol('IDeepnoteKernelAutoSelector');
 export interface IDeepnoteKernelAutoSelector {
     /**
-     * Clear the controller selection for a notebook using a specific environment.
-     * This is used when deleting an environment to unselect its controller from any open notebooks.
-     * @param notebook The notebook document
-     * @param environmentId The environment ID
-     */
-    clearControllerForEnvironment(notebook: vscode.NotebookDocument, environmentId: string): void;
-
-    /**
      * Ensure an environment is configured for the notebook before execution.
      * If not configured, shows picker and sets up the kernel.
      * @returns true if environment is ready, false if user cancelled
@@ -286,115 +277,6 @@ export interface IDeepnoteKernelAutoSelector {
         progress: { report(value: { message?: string; increment?: number }): void },
         token: vscode.CancellationToken
     ): Promise<void>;
-}
-
-export const IDeepnoteEnvironmentManager = Symbol('IDeepnoteEnvironmentManager');
-export interface IDeepnoteEnvironmentManager {
-    /**
-     * Initialize the manager by loading environments from storage
-     */
-    initialize(): Promise<void>;
-
-    /**
-     * Wait for initialization to complete
-     */
-    waitForInitialization(): Promise<void>;
-
-    /**
-     * Create a new kernel environment
-     * @param options Environment creation options
-     * @param token Cancellation token to cancel the operation
-     */
-    createEnvironment(
-        options: CreateDeepnoteEnvironmentOptions,
-        token?: vscode.CancellationToken
-    ): Promise<DeepnoteEnvironment>;
-
-    /**
-     * Get all environments
-     */
-    listEnvironments(): DeepnoteEnvironment[];
-
-    /**
-     * Get a specific environment by ID
-     */
-    getEnvironment(id: string): DeepnoteEnvironment | undefined;
-
-    /**
-     * Update an environment's metadata
-     */
-    updateEnvironment(
-        id: string,
-        updates: Partial<Pick<DeepnoteEnvironment, 'name' | 'packages' | 'description'>>
-    ): Promise<void>;
-
-    /**
-     * Delete an environment
-     * @param id The environment ID
-     * @param token Cancellation token to cancel the operation
-     */
-    deleteEnvironment(id: string, token?: vscode.CancellationToken): Promise<void>;
-
-    /**
-     * Update the last used timestamp for an environment
-     */
-    updateLastUsed(id: string): Promise<void>;
-
-    /**
-     * Event fired when environments change
-     */
-    onDidChangeEnvironments: vscode.Event<void>;
-
-    /**
-     * Dispose of all resources
-     */
-    dispose(): void;
-}
-
-export const IDeepnoteNotebookEnvironmentMapper = Symbol('IDeepnoteNotebookEnvironmentMapper');
-export interface IDeepnoteNotebookEnvironmentMapper {
-    /**
-     * Get the environment ID selected for a notebook
-     * @param notebookUri The notebook URI (without query/fragment)
-     * @returns Environment ID, or undefined if not set
-     */
-    getEnvironmentForNotebook(notebookUri: vscode.Uri): string | undefined;
-
-    /**
-     * Set the environment for a notebook
-     * @param notebookUri The notebook URI (without query/fragment)
-     * @param environmentId The environment ID
-     */
-    setEnvironmentForNotebook(notebookUri: vscode.Uri, environmentId: string): Promise<void>;
-
-    /**
-     * Remove the environment mapping for a notebook
-     * @param notebookUri The notebook URI (without query/fragment)
-     */
-    removeEnvironmentForNotebook(notebookUri: vscode.Uri): Promise<void>;
-
-    /**
-     * Get all notebooks using a specific environment
-     * @param environmentId The environment ID
-     * @returns Array of notebook URIs
-     */
-    getNotebooksUsingEnvironment(environmentId: string): vscode.Uri[];
-
-    /**
-     * Get all notebook-to-environment mappings
-     * @returns Map of notebookUri.fsPath → environmentId
-     */
-    getAllMappings(): ReadonlyMap<string, string>;
-
-    /**
-     * Event fired when an environment mapping is removed for a notebook
-     */
-    onDidRemoveEnvironment: vscode.Event<{ notebookUri: vscode.Uri }>;
-
-    /**
-     * Event fired when an environment is set for a notebook
-     */
-    onDidSetEnvironment: vscode.Event<{ notebookUri: vscode.Uri; environmentId: string }>;
 }
 
 export const IDeepnoteLspClientManager = Symbol('IDeepnoteLspClientManager');

@@ -594,44 +594,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     /**
-     * Clear the controller selection for a notebook if it was set up by this selector
-     * for the given environment.
-     *
-     * The caller passes an `environmentId` (UUID), but the auto-selector now tracks
-     * notebooks by interpreter.id. We match by comparing the notebook's tracked
-     * controller instance against the currently selected controller, so we only
-     * clear controllers we own — never an unrelated Deepnote kernel.
-     */
-    public clearControllerForEnvironment(notebook: NotebookDocument, environmentId: string): void {
-        const notebookKey = getNotebookKey(notebook.uri);
-        const trackedController = this.notebookControllers.get(notebookKey);
-
-        if (!trackedController) {
-            return; // We didn't set up a controller for this notebook
-        }
-
-        const selectedController = this.controllerRegistration.getSelected(notebook);
-        if (!selectedController || selectedController.id !== trackedController.id) {
-            return; // Selected controller isn't the one we own
-        }
-
-        if (selectedController.connection.kind !== 'startUsingDeepnoteKernel') {
-            return;
-        }
-
-        selectedController.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Default);
-
-        // Clean up our tracking state for this notebook
-        this.notebookControllers.delete(notebookKey);
-        this.notebookConnectionMetadata.delete(notebookKey);
-        this.notebookInterpreterIds.delete(notebookKey);
-
-        logger.info(
-            `Cleared Deepnote controller for notebook ${getDisplayPath(notebook.uri)} (environment ${environmentId})`
-        );
-    }
-
-    /**
      * True when the notebook's controller is bound to a running server for this interpreter. A
      * controller registered at open time carries no baseUrl and is deliberately not "ready".
      */

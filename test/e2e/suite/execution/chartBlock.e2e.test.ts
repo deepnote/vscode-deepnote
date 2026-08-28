@@ -14,6 +14,7 @@ import {
     FIRST_RUN_OUTPUT_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    awaitRenderedChart,
     copyFixtureToTempDir,
     createEnvironment,
     openFolderViaDialog,
@@ -24,17 +25,15 @@ import {
 
 const NOTEBOOK_FILE_NAME = 'chart-uuid.deepnote';
 
-// Vega draws SVG, so the axis titles are readable text and serve as the marker for output settling.
-// They are not on their own proof the chart drew: a chart block that raises renders a traceback that
-// quotes the column name, which satisfies the same match. FORBIDDEN_OUTPUT is what separates the two.
-// Tick labels are deliberately not asserted on — Vega truncates them to the available width, which
-// varies by window size.
-const CHART_X_AXIS_TITLE = 'trace_id';
-const CHART_Y_AXIS_TITLE = 'amount';
+// stdout from the first cell, which only establishes that the kernel ran the notebook. The chart is
+// asserted through its rendered Vega root instead: the field names appear in the visualization
+// block's own JSON source and in any traceback quoting them, so no text match can tell a drawn chart
+// apart from a failed one.
+const DATA_CELL_OUTPUT = 'chart data ready';
 
-// A chart block that fails renders its error into the output, so these are the assertions that
-// actually catch a broken chart: the VegaFusion serialization failure, the vega renderer's own two
-// failure strings (`ErrorFallback` and the `renderOutputItem` catch), and a Python traceback.
+// A chart block that fails renders its error into the output: the VegaFusion serialization failure,
+// the vega renderer's own two failure strings (`ErrorFallback` and the `renderOutputItem` catch),
+// and a Python traceback.
 const FORBIDDEN_OUTPUT = [
     'Unsupported datatype for JSON serialization',
     'Error rendering chart',
@@ -87,14 +86,14 @@ describe('Deepnote E2E — render a chart block', function () {
 
         const renderedOutput = await runOnceAndAwaitOutput(
             NOTEBOOK_FILE_NAME,
-            CHART_X_AXIS_TITLE,
+            DATA_CELL_OUTPUT,
             FIRST_RUN_OUTPUT_TIMEOUT
         );
-
-        expect(renderedOutput).to.contain(CHART_Y_AXIS_TITLE);
 
         for (const forbidden of FORBIDDEN_OUTPUT) {
             expect(renderedOutput).to.not.contain(forbidden);
         }
+
+        await awaitRenderedChart(FIRST_RUN_OUTPUT_TIMEOUT, 'chart block output');
     });
 });

@@ -183,6 +183,38 @@ export async function readRenderedOutput(): Promise<string> {
 }
 
 /**
+ * Polls the notebook webview until a Vega chart has actually drawn, and throws with the webview text
+ * if it never does.
+ *
+ * Text assertions cannot stand in for this. `readRenderedOutput` falls back to the frame body when
+ * the output selectors match nothing, and the body includes a visualization block's own JSON source
+ * — so the chart's field names are present whether or not a chart exists, and a block that raises
+ * renders a traceback quoting them too. Vega tags its rendered root `.marks` (`svg` under the SVG
+ * renderer, `canvas` under the canvas one), which exists only once the chart has drawn.
+ */
+export async function awaitRenderedChart(timeout: number, context: string): Promise<void> {
+    const driver = VSBrowser.instance.driver;
+    const deadline = Date.now() + timeout;
+
+    while (Date.now() < deadline) {
+        const count = await readInsideNotebookWebview(async (webView) =>
+            String((await webView.findWebElements(By.css('svg.marks, canvas.marks'))).length)
+        );
+        if (Number(count) > 0) {
+            return;
+        }
+
+        await driver.sleep(OUTPUT_POLL_INTERVAL);
+    }
+
+    const text = await readNotebookWebviewText();
+    throw new Error(
+        `Timed out after ${timeout}ms waiting for a Vega chart to draw (${context}). ` +
+            `Notebook webview text: ${JSON.stringify(text)}`
+    );
+}
+
+/**
  * Polls the notebook webview until every marker in `markers` is rendered and none of `absentMarkers`
  * is, then returns the text it settled on. `context` names the state being waited for; it is only
  * used to make the timeout message say what did not happen.

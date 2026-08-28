@@ -13,23 +13,9 @@ project:
           blockGroup: e2e-chart-data-group
           type: code
           content: |-
-            import importlib.util
-            import sys
             import uuid
 
             import pandas as pd
-
-
-            def _origin(name):
-                try:
-                    spec = importlib.util.find_spec(name)
-                except Exception as exc:
-                    return f"error:{exc}"
-                return spec.origin if spec else None
-
-
-            print("DIAG", sys.executable, "|nw:", _origin("narwhals"), "|sd:", _origin("stack_data"))
-            print("DIAG path:", ":".join(sys.path))
 
             chart_df = pd.DataFrame(
                 {

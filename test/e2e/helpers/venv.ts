@@ -25,16 +25,16 @@ function toolkitPipSpecs(): string[] {
 }
 
 /**
- * Whether the venv has the toolkit version we want AND a complete dependency closure. Read from
- * distribution metadata rather than `import deepnote_toolkit`, which costs seconds and floods the
- * log. The version arrives as argv, and a mismatch exits non-zero on its own — `assert` would be
- * stripped under PYTHONOPTIMIZE.
+ * Whether the venv already has the toolkit version we want. Read from distribution metadata rather
+ * than `import deepnote_toolkit`, which costs seconds and floods the log. The version arrives as
+ * argv, and a mismatch exits non-zero on its own — `assert` would be stripped under PYTHONOPTIMIZE.
  *
- * The version alone is not enough. CI restores this directory from a cache keyed only on the spec
- * file, so a venv that was cached while incomplete is otherwise adopted forever: the toolkit itself
- * imports, every suite that only runs Python passes, and the missing transitive packages surface as
- * a ModuleNotFoundError inside one feature — charting lost `narwhals` this way. `pip check` reports
- * a dependency declared by an installed distribution but absent, which is exactly that shape.
+ * This only establishes the version. It cannot tell that a restored venv is missing package files
+ * whose metadata survived — the cache key covers the build recipe instead, so a recipe change
+ * rebuilds rather than adopts. Detecting a hollowed-out venv in place is unsolved: `pip check` reads
+ * metadata and is blind to it, importing the toolkit does not reach dependencies that VegaFusion
+ * loads lazily at render time, and sweeping every distribution's top-level name reports healthy
+ * venvs as broken.
  */
 function isUsable(): boolean {
     if (!fs.existsSync(venvPython())) {
@@ -51,7 +51,6 @@ function isUsable(): boolean {
             ],
             { stdio: 'ignore' }
         );
-        execFileSync(venvPython(), ['-m', 'pip', 'check'], { stdio: 'ignore' });
 
         return true;
     } catch {

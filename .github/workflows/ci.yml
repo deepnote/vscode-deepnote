@@ -67,7 +67,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      # Empty off a pull request, where the full-tree mode below runs instead.
       UPSTREAM_REF: origin/${{ github.base_ref }}
 
     steps:
@@ -80,24 +79,24 @@ jobs:
       - name: Install qlty
         uses: qltysh/qlty-action/install@08a0a862c159eae9b9003081da6663d96efef637 # v2.3.0
 
-      - name: Run qlty check
-        # qlty analyzes changed files only and needs an explicit base: actions/checkout
-        # leaves pull requests on a detached merge ref with no local branch, so qlty
-        # compares HEAD against itself and analyzes nothing. Off a pull request there is
-        # no base to compare against at all, so the whole tree is scanned instead —
-        # osv-scanner stays out of that filter because the step below reports its
-        # findings rather than gating on them.
-        run: qlty check ${{ github.event_name == 'pull_request' && '--upstream "$UPSTREAM_REF"' || '--all --filter=actionlint,trufflehog' }}
+      - name: Run qlty check (pull request)
+        if: github.event_name == 'pull_request'
+        run: qlty check --upstream "$UPSTREAM_REF"
 
-      - name: Run qlty code smells analysis
-        # A custom `if:` still carries an implicit success(), so !cancelled() is what
-        # keeps this running when the check above fails.
+      - name: Run qlty code smells analysis (pull request)
+        # A custom `if:` still implies success(), so !cancelled() is what survives a failed check above.
         if: "!cancelled() && github.event_name == 'pull_request'"
         run: qlty smells --upstream "$UPSTREAM_REF"
 
-      # The osv-scanner plugin declares skip_upstream, so changed-file runs drop it
-      # entirely; --all is the only mode in which it ever sees a lockfile. Reporting
-      # only until the vulnerabilities it finds today are triaged.
+      - name: Run qlty check (full tree)
+        if: github.event_name != 'pull_request'
+        run: qlty check --all --filter=actionlint,trufflehog
+
+      - name: Run qlty code smells analysis (full tree)
+        if: "!cancelled() && github.event_name != 'pull_request'"
+        run: qlty smells --all
+
+      # osv-scanner declares skip_upstream, so only --all ever sees a lockfile; reporting-only until triaged.
       - name: Run qlty dependency scan
         if: '!cancelled()'
         run: qlty check --all --filter=osv-scanner --no-fail
@@ -124,8 +123,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci --prefer-offline --no-audit
-          # Verify Tailwind CSS native modules are installed for Linux (npm optional deps bug)
-          # See: https://github.com/npm/cli/issues/4828
+          # Workaround for the npm optional-deps bug: https://github.com/npm/cli/issues/4828
           node -e "try { require('lightningcss'); } catch { process.exit(1); }" 2>/dev/null || npm install lightningcss-linux-x64-gnu
           node -e "try { require('@tailwindcss/oxide'); } catch { process.exit(1); }" 2>/dev/null || npm install @tailwindcss/oxide-linux-x64-gnu
 
@@ -246,7 +244,6 @@ jobs:
         run: npm ci --prefer-offline --no-audit
 
       - name: Run audit for production dependencies
-        # Uses better-npm-audit with .nsprc exceptions file
         run: npx better-npm-audit audit --production
 
   audit-all:
@@ -269,5 +266,4 @@ jobs:
         run: npm ci --prefer-offline --no-audit
 
       - name: Run audit for all dependencies
-        # Uses better-npm-audit with .nsprc exceptions file
         run: npx better-npm-audit audit

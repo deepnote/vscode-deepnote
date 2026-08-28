@@ -268,15 +268,16 @@ export interface IDeepnoteKernelAutoSelector {
 
     /**
      * Force rebuild the controller for a notebook by clearing cached controller and metadata.
-     * This is used when switching environments to ensure a new controller is created.
+     * This is used when switching interpreters to ensure a new controller is created.
      * @param notebook The notebook document
      * @param token Cancellation token to cancel the operation
+     * @returns Whether the notebook ended up on a running kernel for the resolved interpreter
      */
     rebuildController(
         notebook: vscode.NotebookDocument,
         progress: { report(value: { message?: string; increment?: number }): void },
         token: vscode.CancellationToken
-    ): Promise<void>;
+    ): Promise<boolean>;
 }
 
 export const IDeepnoteLspClientManager = Symbol('IDeepnoteLspClientManager');

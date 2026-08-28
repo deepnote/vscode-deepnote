@@ -59,6 +59,35 @@ suite('DeepnoteNotebookInterpreters', () => {
         assert.strictEqual(reopened.get(NOTEBOOK)?.toString(), INTERPRETER.toString());
     });
 
+    test('removes the pin when set to undefined, leaving the notebook on the workspace interpreter', async () => {
+        const store = new DeepnoteNotebookInterpreters(context());
+        await store.set(NOTEBOOK, INTERPRETER);
+
+        await store.set(NOTEBOOK, undefined);
+
+        assert.isUndefined(store.get(NOTEBOOK));
+    });
+
+    test("removing one notebook's pin leaves the others alone", async () => {
+        const store = new DeepnoteNotebookInterpreters(context());
+        await store.set(NOTEBOOK, INTERPRETER);
+        await store.set(OTHER_NOTEBOOK, LEGACY_INTERPRETER);
+
+        await store.set(NOTEBOOK, undefined);
+
+        assert.isUndefined(store.get(NOTEBOOK));
+        assert.strictEqual(store.get(OTHER_NOTEBOOK)?.toString(), LEGACY_INTERPRETER.toString());
+    });
+
+    test('a removed pin stays removed in a later session', async () => {
+        const shared = context();
+        const store = new DeepnoteNotebookInterpreters(shared);
+        await store.set(NOTEBOOK, INTERPRETER);
+        await store.set(NOTEBOOK, undefined);
+
+        assert.isUndefined(new DeepnoteNotebookInterpreters(shared).get(NOTEBOOK));
+    });
+
     test('resolves a notebook that only has an old Deepnote environment selection', () => {
         const store = new DeepnoteNotebookInterpreters(
             context({

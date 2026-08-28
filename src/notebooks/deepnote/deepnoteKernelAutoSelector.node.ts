@@ -178,18 +178,33 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return;
         }
 
-        // Stored before the rebuild, and kept even if it fails: the pin is the user's choice, and the
-        // next execution rebuilds on it anyway.
-        await this.notebookInterpreters.set(notebook.uri, selected.interpreter.uri);
+        await this.applyInterpreter(notebook, selected.interpreter);
+    }
+
+    /**
+     * Pins `interpreter` to the notebook and rebuilds its controller on it.
+     *
+     * The pin has to be written before the rebuild, which resolves the interpreter itself. So if the
+     * rebuild does not take, the previous pin is put back: otherwise the stored interpreter would
+     * disagree with the one the notebook is actually running on, and the next plain "run cell" would
+     * silently switch it and re-raise whatever prompt was just declined. Declining the toolkit
+     * install is the common way in, and it returns rather than throwing.
+     */
+    public async applyInterpreter(notebook: NotebookDocument, interpreter: PythonEnvironment): Promise<void> {
+        const previous = this.notebookInterpreters.get(notebook.uri);
+
+        await this.notebookInterpreters.set(notebook.uri, interpreter.uri);
+
+        let rebuilt = false;
 
         try {
-            await window.withProgress(
+            rebuilt = await window.withProgress(
                 { location: ProgressLocation.Notification, title: DataScience.switchingInterpreter, cancellable: true },
-                async (progress, token) => {
-                    await this.rebuildController(notebook, progress, token);
-                }
+                (progress, token) => this.rebuildController(notebook, progress, token)
             );
         } catch (error) {
+            await this.notebookInterpreters.set(notebook.uri, previous);
+
             if (isCancellationError(error as Error)) {
                 logger.info(`Interpreter switch cancelled for ${getDisplayPath(notebook.uri)}`);
 
@@ -197,6 +212,15 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             }
 
             await this.handleKernelSelectionError(error, notebook);
+
+            return;
+        }
+
+        if (!rebuilt) {
+            logger.info(
+                `Interpreter switch for ${getDisplayPath(notebook.uri)} did not take; restoring the previous selection`
+            );
+            await this.notebookInterpreters.set(notebook.uri, previous);
         }
     }
 
@@ -259,7 +283,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         notebook: NotebookDocument,
         progress: { report(value: { message?: string; increment?: number }): void },
         token: CancellationToken
-    ): Promise<void> {
+    ): Promise<boolean> {
         const notebookKey = getNotebookKey(notebook.uri);
 
         logger.info(`Switching controller environment for ${getDisplayPath(notebook.uri)}`);
@@ -293,7 +317,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         if (!interpreter) {
             logger.error(`No active Python interpreter found for ${getDisplayPath(notebook.uri)}`);
-            return;
+
+            return false;
         }
 
         const dependency = await this.toolkitDependencyService.ensureToolkitInstalled(interpreter, notebook.uri, token);
@@ -301,7 +326,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         if (dependency !== DeepnoteToolkitDependencyResponse.ok) {
             logger.info(`deepnote-toolkit unavailable, controller not rebuilt for ${getDisplayPath(notebook.uri)}`);
 
-            return;
+            return false;
         }
 
         await this.ensureKernelSelectedWithInterpreter(notebook, interpreter, notebookKey, progress, token);
@@ -315,7 +340,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             this.serverProvider.unregisterServer(oldServerHandle);
         }
 
-        logger.info(`Controller successfully switched to new environment`);
+        // ensureKernelSelectedWithInterpreter can return early without throwing (no Python extension,
+        // for one), so report what actually happened rather than assuming it worked.
+        const rebuilt = this.isKernelReady(notebookKey, interpreter.id);
+
+        logger.info(`Controller switch for ${getDisplayPath(notebook.uri)} rebuilt=${rebuilt}`);
+
+        return rebuilt;
     }
 
     public async ensureKernelSelected(

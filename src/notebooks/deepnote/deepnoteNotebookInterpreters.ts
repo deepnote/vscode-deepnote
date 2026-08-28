@@ -27,8 +27,11 @@ export interface IDeepnoteNotebookInterpreters {
      */
     get(notebookUri: Uri): Uri | undefined;
 
-    /** Pins an interpreter to this notebook for this workspace, across sessions. */
-    set(notebookUri: Uri, interpreter: Uri): Promise<void>;
+    /**
+     * Pins an interpreter to this notebook for this workspace, across sessions. Passing `undefined`
+     * removes the pin, so the notebook follows the workspace's active interpreter again.
+     */
+    set(notebookUri: Uri, interpreter: Uri | undefined): Promise<void>;
 }
 
 /**
@@ -57,8 +60,11 @@ export class DeepnoteNotebookInterpreters implements IDeepnoteNotebookInterprete
         return stored ? Uri.parse(stored) : undefined;
     }
 
-    public async set(notebookUri: Uri, interpreter: Uri): Promise<void> {
-        this.pinned = { ...this.pinned, [notebookUri.toString()]: interpreter.toString() };
+    public async set(notebookUri: Uri, interpreter: Uri | undefined): Promise<void> {
+        const key = notebookUri.toString();
+        const { [key]: removed, ...rest } = this.pinned;
+
+        this.pinned = interpreter ? { ...rest, [key]: interpreter.toString() } : rest;
 
         await this.context.workspaceState.update(STORAGE_KEY, this.pinned);
     }

@@ -1134,6 +1134,120 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         });
     });
 
+    suite('rebuildController reports whether the switch took', () => {
+        const INTERPRETER: PythonEnvironment = { id: '/usr/bin/python3', uri: Uri.file('/usr/bin/python3') };
+
+        setup(() => {
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(INTERPRETER);
+            when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
+        });
+
+        test('false when the user declines installing the toolkit', async () => {
+            when(mockToolkitDependencyService.ensureToolkitInstalled(anything(), anything(), anything())).thenResolve(
+                DeepnoteToolkitDependencyResponse.cancel
+            );
+
+            const rebuilt = await selector.rebuildController(
+                mockNotebook,
+                mockProgress,
+                instance(mockCancellationToken)
+            );
+
+            assert.isFalse(rebuilt, 'a declined toolkit install must not report a successful switch');
+        });
+
+        test('false when there is no interpreter to rebuild onto', async () => {
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(undefined);
+
+            const rebuilt = await selector.rebuildController(
+                mockNotebook,
+                mockProgress,
+                instance(mockCancellationToken)
+            );
+
+            assert.isFalse(rebuilt);
+        });
+
+        test('false when setup returns without leaving the notebook on a running kernel', async () => {
+            // ensureKernelSelectedWithInterpreter can bail without throwing (no Python extension, say),
+            // so the outcome is read from the resulting state rather than from it having been called.
+            sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            const rebuilt = await selector.rebuildController(
+                mockNotebook,
+                mockProgress,
+                instance(mockCancellationToken)
+            );
+
+            assert.isFalse(rebuilt, 'no controller was registered, so the switch did not take');
+        });
+    });
+
+    suite('applyInterpreter', () => {
+        const PREVIOUS = Uri.file('/envs/previous/bin/python');
+        const CHOSEN: PythonEnvironment = { id: '/envs/chosen/bin/python', uri: Uri.file('/envs/chosen/bin/python') };
+
+        /** withProgress runs its callback for real; the outcome comes from the stubbed rebuild. */
+        function whenRebuild(outcome: { rebuilt?: boolean; throws?: Error }) {
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                async (_options, callback) => callback({ report: () => undefined }, instance(mockCancellationToken))
+            );
+
+            return sandbox
+                .stub(selector, 'rebuildController')
+                .callsFake(() =>
+                    outcome.throws ? Promise.reject(outcome.throws) : Promise.resolve(!!outcome.rebuilt)
+                );
+        }
+
+        test('keeps the new interpreter when the rebuild takes', async () => {
+            when(mockNotebookInterpreters.get(anything())).thenReturn(PREVIOUS);
+            whenRebuild({ rebuilt: true });
+
+            await selector.applyInterpreter(mockNotebook, CHOSEN);
+
+            verify(mockNotebookInterpreters.set(anything(), CHOSEN.uri)).once();
+            verify(mockNotebookInterpreters.set(anything(), PREVIOUS)).never();
+        });
+
+        test('restores the previous interpreter when the rebuild does not take', async () => {
+            when(mockNotebookInterpreters.get(anything())).thenReturn(PREVIOUS);
+            whenRebuild({ rebuilt: false });
+
+            await selector.applyInterpreter(mockNotebook, CHOSEN);
+
+            verify(mockNotebookInterpreters.set(anything(), PREVIOUS)).once();
+        });
+
+        test('clears the pin when the rebuild does not take and there was none before', async () => {
+            when(mockNotebookInterpreters.get(anything())).thenReturn(undefined);
+            whenRebuild({ rebuilt: false });
+
+            await selector.applyInterpreter(mockNotebook, CHOSEN);
+
+            verify(mockNotebookInterpreters.set(anything(), undefined)).once();
+        });
+
+        test('restores the previous interpreter when the rebuild is cancelled', async () => {
+            when(mockNotebookInterpreters.get(anything())).thenReturn(PREVIOUS);
+            whenRebuild({ throws: new CancellationError() });
+
+            await selector.applyInterpreter(mockNotebook, CHOSEN);
+
+            verify(mockNotebookInterpreters.set(anything(), PREVIOUS)).once();
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).never();
+        });
+
+        test('restores the previous interpreter when the rebuild throws', async () => {
+            when(mockNotebookInterpreters.get(anything())).thenReturn(PREVIOUS);
+            whenRebuild({ throws: new Error('server did not start') });
+
+            await selector.applyInterpreter(mockNotebook, CHOSEN);
+
+            verify(mockNotebookInterpreters.set(anything(), PREVIOUS)).once();
+        });
+    });
+
     suite('cancellation is not reported as a failure', () => {
         test('a cancelled kernel selection does not show an error message', async () => {
             await selector.handleKernelSelectionError(new CancellationError(), mockNotebook);

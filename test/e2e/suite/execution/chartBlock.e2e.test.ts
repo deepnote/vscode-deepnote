@@ -1,17 +1,10 @@
 /**
- * End-to-end UI test driven by ExTester (vscode-extension-tester).
+ * ExTester E2E for the chart-block path: a `visualization` block executes as `_dntk.DeepnoteChart(...)`,
+ * comes back as `application/vnd.vega.v5+json`, and is drawn by the `deepnote-vega-renderer`.
  *
- * Covers the chart-block path, which reaches deepnote-toolkit code no other suite touches: a
- * `visualization` block executes as `_dntk.DeepnoteChart(...)` and comes back as
- * `application/vnd.vega.v5+json`, rendered by the extension's own `deepnote-vega-renderer`.
- *
- * The dataframe deliberately carries a `uuid.UUID` column. From pyarrow 24 the pandas -> Arrow
- * conversion infers the `arrow.uuid` extension type (FixedSizeBinary(16)), which VegaFusion cannot
- * serialize to JSON; the toolkit stringifies such columns before charting. The extension installs
- * the toolkit with an unbounded `pyarrow>=23.0.1` on Python 3.12+ — the version E2E CI runs — so a
- * pyarrow or toolkit change that silently reintroduced that failure would land here and nowhere else.
- *
- * Prerequisites are the same as `helloWorld.e2e.test.ts`.
+ * The fixture charts a `uuid.UUID` column on purpose: Arrow infers the `arrow.uuid` extension type
+ * (`FixedSizeBinary(16)`) for such columns and VegaFusion cannot serialize that to JSON, so the
+ * toolkit stringifies them before charting.
  */
 
 import { expect } from 'chai';
@@ -31,19 +24,18 @@ import {
 
 const NOTEBOOK_FILE_NAME = 'chart-uuid.deepnote';
 
-// The chart renders as SVG, so its axis titles and tick labels are readable text. Waiting on the x
-// axis title means the wait ends only once VegaFusion produced a spec and the renderer drew it.
+// Vega draws SVG, so axis titles and tick labels are readable text. The x axis title appears only
+// once VegaFusion has produced a spec and the renderer has drawn it, which is what makes it a usable
+// wait marker.
 const CHART_X_AXIS_TITLE = 'trace_id';
 const CHART_Y_AXIS_TITLE = 'amount';
 
-// A tick label from the UUID column. Its presence is the actual regression signal: the values only
-// reach the axis as text if the toolkit stringified them before Arrow inferred `arrow.uuid`. The
-// renderer truncates long labels, so match a prefix rather than a whole UUID.
+// UUID values only reach the axis as text if the toolkit stringified them. Axis labels are truncated,
+// so match a prefix rather than a whole UUID.
 const CHART_UUID_TICK_LABEL = '00000000-0000';
 
-// Must not appear in the output. The first is the VegaFusion serialization failure the toolkit's UUID
-// sanitization exists to prevent; the rest are the vega renderer's own failure strings (`ErrorFallback`
-// and the `renderOutputItem` catch) and a Python traceback from the chart block itself.
+// The VegaFusion serialization failure, the vega renderer's own two failure strings (`ErrorFallback`
+// and the `renderOutputItem` catch), and a traceback from the chart block itself.
 const FORBIDDEN_OUTPUT = [
     'Unsupported datatype for JSON serialization',
     'Error rendering chart',

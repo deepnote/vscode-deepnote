@@ -849,6 +849,11 @@
                 "title": "List Variables",
                 "enablement": "isWorkspaceTrusted && !deepnote.webExtension",
                 "category": "Jupyter"
+            },
+            {
+                "command": "deepnote.selectInterpreterForNotebook",
+                "title": "%deepnote.commands.selectInterpreterForNotebook.title%",
+                "category": "Deepnote"
             }
         ],
         "submenus": [
@@ -1528,6 +1533,10 @@
                 {
                     "command": "deepnote.listVariables",
                     "when": "false"
+                },
+                {
+                    "command": "deepnote.selectInterpreterForNotebook",
+                    "when": "notebookType == 'deepnote' && isWorkspaceTrusted"
                 }
             ],
             "debug/variables/context": [

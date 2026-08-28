@@ -11,11 +11,12 @@ import {
 } from '../../kernels/deepnote/types';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
-import { IPythonExtensionChecker } from '../../platform/api/types';
+import { IPythonApiProvider, IPythonExtensionChecker } from '../../platform/api/types';
 import { IJupyterRequestCreator } from '../../kernels/jupyter/types';
 import { IConfigurationService } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec, KernelConnectionMetadata } from '../../kernels/types';
+import { IDeepnoteNotebookInterpreters } from './deepnoteNotebookInterpreters';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 import {
     CancellationError,
@@ -48,6 +49,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let mockInterpreterService: IInterpreterService;
     let registry: ServerHandleRegistry;
     let mockToolkitDependencyService: IDeepnoteToolkitDependencyService;
+    let mockNotebookInterpreters: IDeepnoteNotebookInterpreters;
+    let mockPythonApiProvider: IPythonApiProvider;
 
     let mockProgress: { report(value: { message?: string; increment?: number }): void };
     let mockCancellationToken: CancellationToken;
@@ -77,6 +80,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         mockInterpreterService = mock<IInterpreterService>();
         registry = new ServerHandleRegistry();
         mockToolkitDependencyService = mock<IDeepnoteToolkitDependencyService>();
+        mockNotebookInterpreters = mock<IDeepnoteNotebookInterpreters>();
+        when(mockNotebookInterpreters.get(anything())).thenReturn(undefined);
+        mockPythonApiProvider = mock<IPythonApiProvider>();
         when(mockToolkitDependencyService.ensureToolkitInstalled(anything(), anything(), anything())).thenResolve(
             DeepnoteToolkitDependencyResponse.ok
         );
@@ -131,7 +137,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockOutputChannel),
             instance(mockInterpreterService),
             registry,
-            instance(mockToolkitDependencyService)
+            instance(mockToolkitDependencyService),
+            instance(mockNotebookInterpreters),
+            instance(mockPythonApiProvider)
         );
     });
 
@@ -1092,6 +1100,37 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 // Should have filtered and sorted correctly
                 assert.strictEqual(hash, 'numpy|pandas|scipy');
             });
+        });
+    });
+
+    suite('per-notebook interpreter', () => {
+        const ACTIVE: PythonEnvironment = { id: '/usr/bin/python3', uri: Uri.file('/usr/bin/python3') };
+        const PINNED: PythonEnvironment = { id: '/envs/pinned/bin/python', uri: Uri.file('/envs/pinned/bin/python') };
+
+        test('runs the notebook on the interpreter pinned to it, not the workspace one', async () => {
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(ACTIVE);
+            when(mockNotebookInterpreters.get(anything())).thenReturn(PINNED.uri);
+            when(mockInterpreterService.getInterpreterDetails(anything())).thenResolve(PINNED);
+            when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
+
+            const stub = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
+
+            assert.strictEqual(stub.firstCall.args[1], PINNED, 'the pinned interpreter must win');
+        });
+
+        test('falls back to the workspace interpreter when the pinned one no longer resolves', async () => {
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(ACTIVE);
+            when(mockNotebookInterpreters.get(anything())).thenReturn(Uri.file('/envs/deleted/bin/python'));
+            when(mockInterpreterService.getInterpreterDetails(anything())).thenResolve(undefined);
+            when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
+
+            const stub = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
+
+            assert.strictEqual(stub.firstCall.args[1], ACTIVE, 'a dangling pin must not block the notebook');
         });
     });
 

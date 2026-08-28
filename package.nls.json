@@ -303,5 +303,6 @@
     "contributes.walkthroughs.deepnoteWelcome.steps.notebookBlocks.media.altText": "A Deepnote notebook showing different block types",
     "contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.title": "Connect to Your Data Sources",
     "contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.description": "Set up integrations to connect your notebooks to databases, data warehouses, and other services. Query your data directly from SQL blocks.",
-    "contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.media.altText": "The Manage Integrations panel for connecting data sources"
+    "contributes.walkthroughs.deepnoteWelcome.steps.connectDataSources.media.altText": "The Manage Integrations panel for connecting data sources",
+    "deepnote.commands.selectInterpreterForNotebook.title": "Select Interpreter for Notebook"
 }

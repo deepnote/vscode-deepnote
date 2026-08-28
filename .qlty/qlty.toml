@@ -5,11 +5,12 @@ config_version = "0"
 # Exclusion patterns. Must stay above every table header: a bare key after
 # `[[plugin]]`/`[[source]]` binds to that table and qlty silently drops it.
 exclude_patterns = [
-  "node_modules/**",
-  "dist/**",
-  "coverage/**",
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/coverage/**",
   "**/*.min.js",
   "**/*.min.css",
+  "**/*.d.ts",
 ]
 
 # Plugins configuration

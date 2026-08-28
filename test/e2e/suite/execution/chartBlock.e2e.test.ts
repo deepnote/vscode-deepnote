@@ -90,9 +90,13 @@ describe('Deepnote E2E — render a chart block', function () {
             FIRST_RUN_OUTPUT_TIMEOUT
         );
 
-        for (const forbidden of FORBIDDEN_OUTPUT) {
-            expect(renderedOutput).to.not.contain(forbidden);
-        }
+        // Reported as one assertion carrying the whole output: a chart block that raises puts its
+        // traceback here, and the default failure message truncates away the part that says why.
+        const failureText = FORBIDDEN_OUTPUT.filter((forbidden) => renderedOutput.includes(forbidden));
+        expect(
+            failureText,
+            `chart output contained failure text. Full output: ${JSON.stringify(renderedOutput)}`
+        ).to.deep.equal([]);
 
         await awaitRenderedChart(FIRST_RUN_OUTPUT_TIMEOUT, 'chart block output');
     });

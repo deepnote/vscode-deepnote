@@ -7,7 +7,6 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-    ActivityBar,
     By,
     EditorView,
     InputBox,
@@ -24,23 +23,24 @@ import {
     QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    assertNotNull,
     confirmModalDialog,
     copyFixtureToTempDir,
     createEnvironment,
     createScreenshotter,
+    openActivityBarView,
     openFolderViaDialog,
     openWorkspaceFile,
-    assertNotNull,
     runOnceAndAwaitOutput,
     selectDeepnoteContextMenu,
     selectEnvironmentForNotebook,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'sales-analytics.deepnote';
 const CHILD = 'sales-analytics-overview.deepnote';
 const PROJECT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const ENV_NAME = 'E2E Hello Env'; // shared env so CI provisions one venv
+const ENV_NAME = 'E2E Split Migration Env';
 const SPLIT_PROMPT = /multiple notebooks/i;
 const SPLIT_ACTION = 'Split into separate files';
 const SPLIT_DONE = /Split into \d+ files\./i;
@@ -136,7 +136,30 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
         }
         await screenshot('split-prompt');
 
-        await assertNotNull(prompt, 'split prompt notification').takeAction(SPLIT_ACTION);
+        // Re-find the toast on each attempt instead of reusing the reference captured before the
+        // screenshot above: the notification re-renders while it sits there, which stales it. Same
+        // locate-and-act-in-one-loop shape as clickRunAll.
+        assertNotNull(prompt, 'split prompt notification');
+        await driver.wait(
+            async () => {
+                const current = await waitForNotification(SPLIT_PROMPT, INLINE_PROMPT_TIMEOUT, false);
+                if (!current) {
+                    return false;
+                }
+
+                try {
+                    await current.takeAction(SPLIT_ACTION);
+
+                    return true;
+                } catch (error) {
+                    console.warn('[deepnote-e2e] take split action (retrying):', error);
+
+                    return false;
+                }
+            },
+            WORKBENCH_TIMEOUT,
+            `could not take the "${SPLIT_ACTION}" action on the split prompt`
+        );
         await waitForNotification(SPLIT_DONE, WORKBENCH_TIMEOUT, true);
         await driver.sleep(2500);
         await screenshot('split-done');
@@ -202,7 +225,6 @@ describe('Deepnote — splitting a file migrates its selected environment onto e
 // shares os.tmpdir() with the extension host, so reading the dir is the only cross-process stop signal.
 const LOCK_DIR = path.join(os.tmpdir(), 'vscode-deepnote-locks');
 
-// A dedicated env name so deleting it never disturbs the shared `E2E Hello Env` other suites reuse.
 const DELETE_ENV_NAME = 'E2E Delete Env';
 const G2_FIXTURE = 'marketing-overview.deepnote';
 
@@ -239,8 +261,7 @@ function isAlive(pid: number): boolean {
 
 /** Opens the Deepnote view container and returns its "Environments" tree section. */
 async function getDeepnoteEnvironmentsSection() {
-    const control = await new ActivityBar().getViewControl('Deepnote');
-    await control?.openView();
+    await openActivityBarView('Deepnote');
     await VSBrowser.instance.driver.sleep(1200);
 
     const content = new SideBarView().getContent();
@@ -293,7 +314,7 @@ describe('Deepnote — deleting an environment stops even a closed-but-running n
         // Servers already running from earlier suites — exclude these when isolating THIS PID.
         const pidsBefore = serverPids();
 
-        await createEnvironment(DELETE_ENV_NAME);
+        await createEnvironment(DELETE_ENV_NAME, { useExistingVenv: false });
 
         await openWorkspaceFile(G2_FIXTURE);
         await driver.wait(

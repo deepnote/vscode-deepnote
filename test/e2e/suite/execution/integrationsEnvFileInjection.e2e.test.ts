@@ -18,7 +18,7 @@ import {
     openWorkspaceFile,
     runOnceAndAwaitOutput,
     selectEnvironmentForNotebook
-} from '../helpers';
+} from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'integrations-env-file.deepnote';
 const EXPECTED_OUTPUT = 'injected-host.example.com';
@@ -49,9 +49,6 @@ const DOTENV_CONTENT = 'DEMO_DB_HOST=injected-host.example.com\n';
 describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`', function () {
     this.timeout(SUITE_TIMEOUT);
 
-    // A stable name: createEnvironment is idempotent (it treats "already exists" as success), so a
-    // leftover environment from a previous or retried run is reused rather than colliding — which
-    // also lets a persistent test instance reuse the already-provisioned venv.
     const environmentName = 'E2E Integrations Env';
 
     let cleanupTempDir: (() => void) | undefined;

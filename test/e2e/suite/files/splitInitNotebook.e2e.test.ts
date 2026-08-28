@@ -11,16 +11,16 @@ import { EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    assertNotNull,
     copyFixtureToTempDir,
     createScreenshotter,
     dismissAllNotifications,
     notebookCount,
     openFolderViaDialog,
     openWorkspaceFile,
-    assertNotNull,
     showView,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const FIXTURE = 'etl-pipeline.deepnote';
 const SPLIT_ACTION = 'Split into separate files';

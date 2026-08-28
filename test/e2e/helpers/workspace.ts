@@ -1,7 +1,8 @@
-import { By, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
+import { By, EditorView, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
 
 import {
     DIALOG_RESOLVE_DELAY,
+    EDITOR_ACTIVE_TIMEOUT,
     FOLDER_OK_RETRY_DELAY,
     FOLDER_OPEN_TIMEOUT,
     QUICK_PICK_TIMEOUT,
@@ -30,6 +31,21 @@ export async function openWorkspaceFile(fileName: string): Promise<void> {
         `"${fileName}" did not appear in Quick Open`
     );
     await quickOpen.confirm();
+
+    // Confirming Quick Open is not the same as the file being focused, and a caller that reads the
+    // editor straight away otherwise reads the one that was already there.
+    await driver.wait(
+        async () => {
+            const title = await new EditorView()
+                .getActiveTab()
+                .then((tab) => tab?.getTitle())
+                .catch(() => undefined);
+
+            return title?.includes(fileName) === true;
+        },
+        EDITOR_ACTIVE_TIMEOUT,
+        `"${fileName}" did not become the active editor`
+    );
 }
 
 /**

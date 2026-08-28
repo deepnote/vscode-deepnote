@@ -31,7 +31,7 @@ import {
     openWorkspaceFile,
     runOnceAndAwaitOutput,
     selectEnvironmentForNotebook
-} from '../helpers';
+} from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'hello-world.deepnote';
 const EXPECTED_OUTPUT = 'hello world';
@@ -40,9 +40,6 @@ describe('Deepnote E2E — run "hello world"', function () {
     // Per-test timeout for the whole suite (overrides the mocharc default for these tests).
     this.timeout(SUITE_TIMEOUT);
 
-    // A stable name: createEnvironment is idempotent (it treats "already exists" as success), so a
-    // leftover environment from a previous or retried run is reused rather than colliding — which
-    // also lets a persistent test instance reuse the already-provisioned venv.
     const environmentName = 'E2E Hello Env';
 
     // Captured in `before` and invoked in `after` to remove the throwaway temp dir.

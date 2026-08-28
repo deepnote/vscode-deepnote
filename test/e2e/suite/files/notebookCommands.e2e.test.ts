@@ -7,7 +7,6 @@ import { expect } from 'chai';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-    ActivityBar,
     By,
     EditorView,
     InputBox,
@@ -22,14 +21,16 @@ import {
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    assertNotNull,
     confirmModalDialog,
+    copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
+    getDeepnoteExplorerSection,
     openFolderViaDialog,
     openWorkspaceFile,
-    assertNotNull,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const MARKETING_FILES = ['marketing-overview.deepnote', 'marketing-campaigns.deepnote', 'marketing-metrics.deepnote'];
 const GROUP = 'Marketing';
@@ -54,17 +55,7 @@ async function descriptionOf(item: ViewItem): Promise<string> {
     return description ?? '';
 }
 
-async function getExplorerSection() {
-    const control = await new ActivityBar().getViewControl('Deepnote');
-    await control?.openView();
-    await VSBrowser.instance.driver.sleep(1200);
-    const content = new SideBarView().getContent();
-    const named = await content.getSection('Explorer').catch(() => undefined);
-
-    return named ?? (await content.getSections())[0];
-}
-
-async function readRows(section: Awaited<ReturnType<typeof getExplorerSection>>): Promise<TreeRow[]> {
+async function readRows(section: Awaited<ReturnType<typeof getDeepnoteExplorerSection>>): Promise<TreeRow[]> {
     const rows: TreeRow[] = [];
 
     for (const item of await section.getVisibleItems().catch(() => [] as ViewItem[])) {
@@ -80,13 +71,15 @@ async function readRows(section: Awaited<ReturnType<typeof getExplorerSection>>)
     return rows;
 }
 
-async function findGroup(section: Awaited<ReturnType<typeof getExplorerSection>>): Promise<ViewItem | undefined> {
+async function findGroup(
+    section: Awaited<ReturnType<typeof getDeepnoteExplorerSection>>
+): Promise<ViewItem | undefined> {
     return (await readRows(section)).find((row) => row.label === GROUP && row.isGroup)?.item;
 }
 
 /** Expands the Marketing group first, then finds a notebook leaf by name. */
 async function findLeaf(
-    section: Awaited<ReturnType<typeof getExplorerSection>>,
+    section: Awaited<ReturnType<typeof getDeepnoteExplorerSection>>,
     label: string
 ): Promise<ViewItem | undefined> {
     const group = await findGroup(section);
@@ -140,7 +133,7 @@ function listDeepnoteFiles(dir: string): string[] {
 }
 
 /** True when the group's notebook leaves are visible, i.e. the group is expanded (not collapsed). */
-async function groupIsExpanded(section: Awaited<ReturnType<typeof getExplorerSection>>): Promise<boolean> {
+async function groupIsExpanded(section: Awaited<ReturnType<typeof getDeepnoteExplorerSection>>): Promise<boolean> {
     return (await readRows(section)).some((row) => row.isLeaf);
 }
 
@@ -158,14 +151,14 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
         cleanupTempDir = copy.cleanup;
         tempDir = copy.tempDir;
         for (const name of MARKETING_FILES.slice(1)) {
-            fs.copyFileSync(path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', name), path.join(tempDir, name));
+            copyFixtureIntoDir(tempDir, name);
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        const section = await getExplorerSection();
+        const section = await getDeepnoteExplorerSection();
         await VSBrowser.instance.driver.wait(
             async () => (await readRows(section)).some((row) => row.label === GROUP && row.isGroup),
             TREE_LOAD_TIMEOUT,
@@ -206,7 +199,7 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
     });
 
     it('creates a new sibling file via "Add Notebook" named from the project name', async function () {
-        const section = await getExplorerSection();
+        const section = await getDeepnoteExplorerSection();
         const group = assertNotNull(await findGroup(section), 'Marketing group tree item');
 
         // Expand the multi-file group first: "Add Notebook" must keep the group usable/expanded, not
@@ -239,7 +232,7 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
     });
 
     it('duplicates a notebook into a new sibling file', async function () {
-        const section = await getExplorerSection();
+        const section = await getDeepnoteExplorerSection();
         const overview = assertNotNull(await findLeaf(section, 'Overview'), 'Overview leaf');
 
         await contextSelect(overview, 'Duplicate Notebook');
@@ -256,7 +249,7 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
     });
 
     it('renames the notebook inside the file, not the file', async function () {
-        const section = await getExplorerSection();
+        const section = await getDeepnoteExplorerSection();
         const campaigns = assertNotNull(await findLeaf(section, 'Campaigns'), 'Campaigns leaf');
 
         await contextSelect(campaigns, 'Rename Notebook');
@@ -275,7 +268,7 @@ describe('Deepnote — notebook-management commands create and remove sibling fi
     });
 
     it('deletes the whole single-notebook file after a modal confirmation', async function () {
-        const section = await getExplorerSection();
+        const section = await getDeepnoteExplorerSection();
         const metrics = assertNotNull(await findLeaf(section, 'Metrics'), 'Metrics leaf');
 
         await contextSelect(metrics, 'Delete Notebook');

@@ -13,6 +13,7 @@ import { By, EditorView, InputBox, VSBrowser, WebView, type ViewItem } from 'vsc
 import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    copyFixtureIntoDir,
     copyFixtureToTempDir,
     createScreenshotter,
     findDeepnoteGroup,
@@ -22,7 +23,7 @@ import {
     readDeepnoteTreeRows,
     selectDeepnoteContextMenu,
     waitForNotification
-} from '../helpers';
+} from '../../helpers';
 
 const DIRTIED_FILE = 'marketing-overview.deepnote' as const;
 const MARKETING_FILES = [DIRTIED_FILE, 'marketing-campaigns.deepnote', 'marketing-metrics.deepnote'] as const;
@@ -101,7 +102,7 @@ describe('Deepnote — renaming a project fans the new name out to every sibling
         cleanupTempDir = copy.cleanup;
         tempDir = copy.tempDir;
         for (const name of MARKETING_FILES.slice(1)) {
-            fs.copyFileSync(path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', name), path.join(tempDir, name));
+            copyFixtureIntoDir(tempDir, name);
         }
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);

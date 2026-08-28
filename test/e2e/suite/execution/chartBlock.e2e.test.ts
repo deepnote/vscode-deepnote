@@ -24,18 +24,17 @@ import {
 
 const NOTEBOOK_FILE_NAME = 'chart-uuid.deepnote';
 
-// Vega draws SVG, so axis titles and tick labels are readable text. The x axis title appears only
-// once VegaFusion has produced a spec and the renderer has drawn it, which is what makes it a usable
-// wait marker.
+// Vega draws SVG, so the axis titles are readable text and serve as the marker for output settling.
+// They are not on their own proof the chart drew: a chart block that raises renders a traceback that
+// quotes the column name, which satisfies the same match. FORBIDDEN_OUTPUT is what separates the two.
+// Tick labels are deliberately not asserted on — Vega truncates them to the available width, which
+// varies by window size.
 const CHART_X_AXIS_TITLE = 'trace_id';
 const CHART_Y_AXIS_TITLE = 'amount';
 
-// UUID values only reach the axis as text if the toolkit stringified them. Axis labels are truncated,
-// so match a prefix rather than a whole UUID.
-const CHART_UUID_TICK_LABEL = '00000000-0000';
-
-// The VegaFusion serialization failure, the vega renderer's own two failure strings (`ErrorFallback`
-// and the `renderOutputItem` catch), and a traceback from the chart block itself.
+// A chart block that fails renders its error into the output, so these are the assertions that
+// actually catch a broken chart: the VegaFusion serialization failure, the vega renderer's own two
+// failure strings (`ErrorFallback` and the `renderOutputItem` catch), and a Python traceback.
 const FORBIDDEN_OUTPUT = [
     'Unsupported datatype for JSON serialization',
     'Error rendering chart',
@@ -93,7 +92,6 @@ describe('Deepnote E2E — render a chart block', function () {
         );
 
         expect(renderedOutput).to.contain(CHART_Y_AXIS_TITLE);
-        expect(renderedOutput).to.contain(CHART_UUID_TICK_LABEL);
 
         for (const forbidden of FORBIDDEN_OUTPUT) {
             expect(renderedOutput).to.not.contain(forbidden);

@@ -270,6 +270,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         this.notebookInterpreterIds.delete(notebookKey);
         this.notebookControllers.delete(notebookKey);
 
+        // The language servers are per notebook and outlive it otherwise, one pylsp process per
+        // notebook ever opened. The server itself deliberately keeps running; only LSP is torn down,
+        // and the next execution starts it again, exactly as it does for a notebook opened fresh.
+        this.lspClientManager.stopLspClients(notebook.uri).catch((error) => {
+            logger.warn(`Could not stop LSP clients for the closed ${getDisplayPath(notebook.uri)}`, error);
+        });
+
         logger.info(`Deepnote notebook closed, cleaned up: ${getDisplayPath(notebook.uri)}`);
     }
 
@@ -307,10 +314,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // strand the still-selected controller on a dead handle.
         const oldServerHandle = this.serverHandleRegistry.get(notebookKey);
 
-        // Stop existing LSP clients so new ones can be created with fresh environment
-        // Without this, the SQL LSP client's command handlers remain registered and
-        // cause "command already exists" errors when trying to start new clients
-        await this.lspClientManager.stopLspClients(notebook.uri, token);
+        const previousInterpreterId = this.notebookInterpreterIds.get(notebookKey);
 
         // Get the active interpreter and re-setup the kernel
         const interpreter = await this.resolveInterpreter(notebook.uri);
@@ -329,7 +333,28 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return false;
         }
 
-        await this.ensureKernelSelectedWithInterpreter(notebook, interpreter, notebookKey, progress, token);
+        // Stopping is what lets the new clients be created: startLspClients treats a notebook that
+        // already has one as done and would leave it on the old interpreter. It happens here, after
+        // every bail-out above, so a switch that never starts does not cost the notebook its language
+        // features -- and if the setup below does not take, they go back on the old interpreter.
+        await this.lspClientManager.stopLspClients(notebook.uri, token);
+
+        try {
+            await this.ensureKernelSelectedWithInterpreter(notebook, interpreter, notebookKey, progress, token);
+        } catch (error) {
+            await this.restoreLspClients(notebook, previousInterpreterId);
+
+            throw error;
+        }
+
+        // Not only on a throw: setup can also give up by returning, and it can fail *after* starting
+        // LSP on the new interpreter, which would otherwise leave the notebook's language features
+        // pointed at an interpreter the switch never committed to.
+        if (!this.isKernelReady(notebookKey, interpreter.id)) {
+            await this.restoreLspClients(notebook, previousInterpreterId);
+
+            return false;
+        }
 
         // Setup succeeded. If it registered a new server handle (full setup path), drop the old one.
         // The verified-controller early return reuses the existing handle, so nothing to clear then.
@@ -340,13 +365,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             this.serverProvider.unregisterServer(oldServerHandle);
         }
 
-        // ensureKernelSelectedWithInterpreter can return early without throwing (no Python extension,
-        // for one), so report what actually happened rather than assuming it worked.
-        const rebuilt = this.isKernelReady(notebookKey, interpreter.id);
+        logger.info(`Controller switched to ${getDisplayPath(interpreter.uri)} for ${getDisplayPath(notebook.uri)}`);
 
-        logger.info(`Controller switch for ${getDisplayPath(notebook.uri)} rebuilt=${rebuilt}`);
-
-        return rebuilt;
+        return true;
     }
 
     public async ensureKernelSelected(
@@ -421,7 +442,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Use the active interpreter directly for LSP (it already has deepnote-toolkit installed)
         try {
-            await this.lspClientManager.startLspClients(serverInfo, notebook.uri, interpreter, progressToken);
+            await this.lspClientManager.startLspClients(notebook.uri, interpreter, progressToken);
 
             logger.info(`✓ LSP clients started for ${notebookKey}`);
         } catch (error) {
@@ -697,6 +718,32 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         }
 
         return !!this.notebookControllers.get(notebookKey);
+    }
+
+    /**
+     * Puts the notebook's language features back on the interpreter it was using before a switch that
+     * did not complete. Best effort: the notebook still has a working kernel either way, so a failure
+     * to restart LSP is logged rather than raised over whatever caused the switch to fail.
+     */
+    private async restoreLspClients(notebook: NotebookDocument, interpreterId: string | undefined): Promise<void> {
+        if (!interpreterId) {
+            return;
+        }
+
+        try {
+            const interpreter = await this.interpreterService.getInterpreterDetails(interpreterId);
+
+            if (!interpreter) {
+                return;
+            }
+
+            // Stop first: a failure late in the setup can leave clients already running on the new
+            // interpreter, and startLspClients treats a live client as nothing to do.
+            await this.lspClientManager.stopLspClients(notebook.uri);
+            await this.lspClientManager.startLspClients(notebook.uri, interpreter);
+        } catch (error) {
+            logger.warn(`Could not restore LSP clients for ${getDisplayPath(notebook.uri)}`, error);
+        }
     }
 
     /**

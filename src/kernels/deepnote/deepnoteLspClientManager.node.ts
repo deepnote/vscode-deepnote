@@ -12,13 +12,13 @@ import type {
 // The bundled module uses ESM default export, so we need to access .default
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const languageClientModule = require('vscode-languageclient/node');
-const { LanguageClient, TransportKind, RevealOutputChannelOn } = (languageClientModule.default ??
+const { LanguageClient, TransportKind, RevealOutputChannelOn, State } = (languageClientModule.default ??
     languageClientModule) as typeof import('vscode-languageclient/node');
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposable, IDisposableRegistry } from '../../platform/common/types';
 import * as path from '../../platform/vscode-path/path';
-import { DeepnoteServerInfo, IDeepnoteLspClientManager } from './types';
+import { IDeepnoteLspClientManager } from './types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { logger } from '../../platform/logging';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
@@ -76,7 +76,6 @@ export class DeepnoteLspClientManager
     }
 
     public async startLspClients(
-        _serverInfo: DeepnoteServerInfo,
         notebookUri: vscode.Uri,
         interpreter: PythonEnvironment,
         token?: vscode.CancellationToken
@@ -99,7 +98,13 @@ export class DeepnoteLspClientManager
             return;
         }
 
-        if (this.clients.has(notebookKey)) {
+        const existing = this.clients.get(notebookKey);
+
+        // `state` rather than mere presence: vscode-languageclient restarts a crashed server on the
+        // same instance (5 times in 3 minutes), so a client that is merely recovering must be left
+        // alone. Note that a client part-way through its own stop() also reads as Stopped, which is
+        // why stopLspClients only removes the entry it started with.
+        if (existing?.pythonClient && existing.pythonClient.state !== State.Stopped) {
             logger.trace(`LSP clients already started for ${notebookKey}.`);
 
             return;
@@ -107,9 +112,18 @@ export class DeepnoteLspClientManager
 
         logger.info(`Starting LSP clients for ${notebookKey} using interpreter ${interpreter.uri.fsPath}.`);
 
+        // Claimed before the first await below, so a second caller arriving while a dead client is
+        // being replaced is turned away by the pending check rather than replacing it a second time.
         this.pendingStarts.set(notebookKey, true);
 
         try {
+            if (existing) {
+                logger.warn(`Replacing a stopped Python LSP client for ${notebookKey}`);
+                this.clients.delete(notebookKey);
+                this.releaseSharedSqlClient();
+                await existing.pythonClient?.dispose().catch(noop);
+            }
+
             if (token?.isCancellationRequested) {
                 return;
             }
@@ -185,10 +199,14 @@ export class DeepnoteLspClientManager
             }
         }
 
-        // Release reference to shared SQL client
-        this.releaseSharedSqlClient();
-
-        this.clients.delete(notebookKey);
+        // Only if it is still the client this call set out to stop: a stopping client already reads
+        // as Stopped, so a start that ran while the teardown above was awaited may have replaced the
+        // entry. Deleting unconditionally would drop that live client and leak its process. The SQL
+        // reference goes with the entry, so whichever call removes it is the one that releases.
+        if (this.clients.get(notebookKey) === clientInfo) {
+            this.clients.delete(notebookKey);
+            this.releaseSharedSqlClient();
+        }
 
         logger.info(`LSP clients stopped for ${notebookKey}`);
     }
@@ -238,6 +256,16 @@ export class DeepnoteLspClientManager
      */
     private async ensureSharedSqlClient(notebookUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void> {
         // If client already exists, just increment ref count
+        // Same liveness rule as the Python client: a stopped client can never be started again, so
+        // drop it and fall through to creating its replacement. Resets mirror forceStopSharedSqlClient.
+        if (sharedSqlClient && sharedSqlClient.state === State.Stopped) {
+            logger.warn('Replacing a stopped shared SQL LSP client');
+            await sharedSqlClient.dispose().catch(noop);
+            sharedSqlClient = undefined;
+            sharedSqlClientRefCount = 0;
+            sharedSqlConnections = [];
+        }
+
         if (sharedSqlClient) {
             sharedSqlClientRefCount++;
             logger.trace(`Reusing shared SQL LSP client, ref count: ${sharedSqlClientRefCount}`);

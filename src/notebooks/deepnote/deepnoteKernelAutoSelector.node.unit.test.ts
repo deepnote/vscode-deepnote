@@ -147,6 +147,20 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         sandbox.restore();
     });
 
+    /** Mirrors the state ensureKernelSelectedWithInterpreter leaves behind, which isKernelReady reads. */
+    function markKernelReady(interpreterId: string) {
+        const internals = selector as unknown as {
+            notebookControllers: Map<string, IVSCodeNotebookController>;
+            notebookInterpreterIds: Map<string, string>;
+            notebookConnectionMetadata: Map<string, { baseUrl: string }>;
+        };
+        const notebookKey = getNotebookKey(mockNotebook.uri);
+
+        internals.notebookControllers.set(notebookKey, instance(mockController));
+        internals.notebookInterpreterIds.set(notebookKey, interpreterId);
+        internals.notebookConnectionMetadata.set(notebookKey, { baseUrl: 'http://localhost:8888' });
+    }
+
     suite('rebuildController', () => {
         test('should proceed with environment switch despite pending cells', async () => {
             // This test verifies that rebuildController continues with the environment switch
@@ -328,9 +342,12 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             };
             when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
             when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(mockInterpreter);
-            // Real setup registers a new handle for the notebook - emulate that side effect.
+            // Emulate the side effects of a real setup: a new handle, plus the controller/connection
+            // state that marks the notebook as running on the new interpreter. Without the latter the
+            // switch counts as not having taken, and the old handle is deliberately kept.
             sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').callsFake(async () => {
                 registry.set(notebookKey, newServerHandle);
+                markKernelReady(mockInterpreter.id);
             });
 
             await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
@@ -1180,6 +1197,104 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             );
 
             assert.isFalse(rebuilt, 'no controller was registered, so the switch did not take');
+        });
+    });
+
+    suite('LSP clients across a controller rebuild', () => {
+        const INTERPRETER: PythonEnvironment = { id: '/usr/bin/python3', uri: Uri.file('/usr/bin/python3') };
+
+        setup(() => {
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(INTERPRETER);
+            when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
+            when(mockLspClientManager.stopLspClients(anything())).thenResolve();
+            when(mockLspClientManager.stopLspClients(anything(), anything())).thenResolve();
+        });
+
+        test('leaves them running when there is no interpreter to switch to', async () => {
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(undefined);
+
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
+
+            verify(mockLspClientManager.stopLspClients(anything(), anything())).never();
+        });
+
+        test('leaves them running when the user declines installing the toolkit', async () => {
+            when(mockToolkitDependencyService.ensureToolkitInstalled(anything(), anything(), anything())).thenResolve(
+                DeepnoteToolkitDependencyResponse.cancel
+            );
+
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
+
+            verify(mockLspClientManager.stopLspClients(anything(), anything())).never();
+        });
+
+        test('stops them once the switch actually goes ahead', async () => {
+            sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
+
+            verify(mockLspClientManager.stopLspClients(anything(), anything())).once();
+        });
+
+        test('starts them again on the previous interpreter when the setup throws', async () => {
+            const previous: PythonEnvironment = { id: 'previous-id', uri: Uri.file('/envs/previous/bin/python') };
+            // The interpreter the notebook was on before this switch.
+            (selector as unknown as { notebookInterpreterIds: Map<string, string> }).notebookInterpreterIds.set(
+                getNotebookKey(mockNotebook.uri),
+                previous.id
+            );
+            when(mockInterpreterService.getInterpreterDetails(anything())).thenResolve(previous);
+            sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').rejects(new Error('server did not start'));
+
+            await assert.isRejected(
+                selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken))
+            );
+
+            verify(mockLspClientManager.startLspClients(anything(), previous)).once();
+        });
+
+        test('puts them back on the previous interpreter when setup returns without a working kernel', async () => {
+            const previous: PythonEnvironment = { id: 'previous-id', uri: Uri.file('/envs/previous/bin/python') };
+            (selector as unknown as { notebookInterpreterIds: Map<string, string> }).notebookInterpreterIds.set(
+                getNotebookKey(mockNotebook.uri),
+                previous.id
+            );
+            when(mockInterpreterService.getInterpreterDetails(anything())).thenResolve(previous);
+            // Returns rather than throwing, and leaves no running kernel behind.
+            sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            const rebuilt = await selector.rebuildController(
+                mockNotebook,
+                mockProgress,
+                instance(mockCancellationToken)
+            );
+
+            assert.isFalse(rebuilt);
+            verify(mockLspClientManager.startLspClients(anything(), previous)).once();
+        });
+
+        test('stops the new interpreter clients before restoring, so a live one cannot block it', async () => {
+            const previous: PythonEnvironment = { id: 'previous-id', uri: Uri.file('/envs/previous/bin/python') };
+            (selector as unknown as { notebookInterpreterIds: Map<string, string> }).notebookInterpreterIds.set(
+                getNotebookKey(mockNotebook.uri),
+                previous.id
+            );
+            when(mockInterpreterService.getInterpreterDetails(anything())).thenResolve(previous);
+            sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
+
+            // Once for the switch itself, once more before putting the previous clients back.
+            verify(mockLspClientManager.stopLspClients(anything(), anything())).once();
+            verify(mockLspClientManager.stopLspClients(anything())).once();
+        });
+
+        test('stops them when the notebook is closed, so the process does not outlive it', () => {
+            (selector as unknown as { onDidCloseNotebook(notebook: NotebookDocument): void }).onDidCloseNotebook(
+                mockNotebook
+            );
+
+            verify(mockLspClientManager.stopLspClients(anything())).once();
         });
     });
 

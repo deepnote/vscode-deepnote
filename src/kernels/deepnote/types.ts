@@ -283,14 +283,13 @@ export interface IDeepnoteKernelAutoSelector {
 export const IDeepnoteLspClientManager = Symbol('IDeepnoteLspClientManager');
 export interface IDeepnoteLspClientManager {
     /**
-     * Start LSP clients for a Deepnote server
-     * @param serverInfo Server information
+     * Start LSP clients for a notebook. The clients are independent processes spawned from the
+     * interpreter, not connections to the toolkit server, so no running server is required.
      * @param notebookUri The notebook URI for which to start LSP clients
-     * @param interpreter The Python interpreter from the venv
+     * @param interpreter The Python interpreter to run the language server from
      * @param token Optional cancellation token to cancel the operation
      */
     startLspClients(
-        serverInfo: DeepnoteServerInfo,
         notebookUri: vscode.Uri,
         interpreter: PythonEnvironment,
         token?: vscode.CancellationToken

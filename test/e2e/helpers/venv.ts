@@ -8,14 +8,9 @@ import { PREBAKED_VENV_DIR_NAME } from './constants';
 const REPO_ROOT = process.cwd();
 
 /**
- * Where the pre-baked venv lives — necessarily outside the directory the toolkit treats as the
- * notebook root, since `set_notebook_path` drops every `sys.path` entry under that root by prefix
- * match. Unconfigured, that root is `$HOME/work`, which on a GitHub runner holds the checkout, so a
- * venv in the workspace loses its site-packages mid-session: whatever was not imported during kernel
- * startup (`narwhals`, which VegaFusion reaches only at render time) then stops resolving.
- *
- * The basename must stay PREBAKED_VENV_DIR_NAME — that is what identifies the venv in the
- * interpreter quick pick.
+ * `set_notebook_path` drops every `sys.path` entry under the toolkit's notebook root (`$HOME/work`
+ * unconfigured), so the venv has to sit outside it. The basename identifies the venv in the
+ * interpreter quick pick, so it stays PREBAKED_VENV_DIR_NAME.
  */
 const VENV_DIR = process.env.DEEPNOTE_E2E_VENV_DIR
     ? path.resolve(process.env.DEEPNOTE_E2E_VENV_DIR)
@@ -42,10 +37,8 @@ function toolkitPipSpecs(): string[] {
  * than `import deepnote_toolkit`, which costs seconds and floods the log. The version arrives as
  * argv, and a mismatch exits non-zero on its own — `assert` would be stripped under PYTHONOPTIMIZE.
  *
- * Version only: a restored venv whose metadata outlived its package files still reads as usable, so
- * the CI cache key covers the build recipe rather than trusting this. Catching that here has no
- * cheap answer — `pip check` reads the same metadata, and importing the toolkit never reaches what
- * VegaFusion loads lazily at render time.
+ * Deliberate: metadata only, so a venv whose files were lost but whose metadata survived still reads
+ * as usable; file integrity rides on the CI cache key hashing the build recipe.
  */
 function isUsable(): boolean {
     if (!fs.existsSync(venvPython())) {

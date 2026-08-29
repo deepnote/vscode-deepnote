@@ -1,10 +1,7 @@
 /**
- * ExTester E2E for the chart-block path: a `visualization` block executes as `_dntk.DeepnoteChart(...)`,
- * comes back as `application/vnd.vega.v5+json`, and is drawn by the `deepnote-vega-renderer`.
- *
- * The fixture charts a `uuid.UUID` column on purpose: Arrow infers the `arrow.uuid` extension type
- * (`FixedSizeBinary(16)`) for such columns and VegaFusion cannot serialize that to JSON, so the
- * toolkit stringifies them before charting.
+ * E2E (ExTester): a `visualization` block executes as `_dntk.DeepnoteChart(...)`, returns
+ * `application/vnd.vega.v5+json`, and is drawn by the `deepnote-vega-renderer`. The fixture charts a
+ * `uuid.UUID` column because Arrow maps those to an extension type VegaFusion cannot serialize.
  */
 
 import { expect } from 'chai';
@@ -24,12 +21,8 @@ import {
 } from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'chart-uuid.deepnote';
-
-// Only establishes that the kernel ran the notebook; the chart itself is asserted on its Vega root.
 const DATA_CELL_OUTPUT = 'chart data ready';
 
-// What each known failure mode renders into the output: VegaFusion's serialization error, the vega
-// renderer's own message (shared by its `ErrorFallback` and its `renderOutputItem` catch), a traceback.
 const FORBIDDEN_OUTPUT = [
     'Unsupported datatype for JSON serialization',
     'Error rendering chart',
@@ -86,8 +79,7 @@ describe('Deepnote E2E — render a chart block', function () {
             FIRST_RUN_OUTPUT_TIMEOUT
         );
 
-        // One assertion carrying the whole output: the default failure message truncates away the
-        // traceback a raising chart block leaves here.
+        // Carries the full output because chai's own failure message truncates it.
         const failureText = FORBIDDEN_OUTPUT.filter((forbidden) => renderedOutput.includes(forbidden));
         expect(
             failureText,

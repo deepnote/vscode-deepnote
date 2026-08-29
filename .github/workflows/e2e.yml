@@ -81,8 +81,7 @@ jobs:
         run: npm run setup:e2e:mock
 
       - name: Place the toolkit venv outside the notebook root
-        # That root defaults to $HOME/work, which on a runner holds the checkout — and $RUNNER_TEMP,
-        # so that is no alternative. The VENV_DIR note in test/e2e/helpers/venv.ts has the mechanism.
+        # The root is $HOME/work on a runner, so $RUNNER_TEMP is no alternative either.
         run: echo "DEEPNOTE_E2E_VENV_DIR=$HOME/.deepnote-e2e/.venv-e2e" >> "$GITHUB_ENV"
 
       - name: Cache pip wheel downloads

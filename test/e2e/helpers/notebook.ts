@@ -183,12 +183,8 @@ export async function readRenderedOutput(): Promise<string> {
 }
 
 /**
- * Polls the notebook webview until a Vega chart has drawn, and throws with the webview text if it
- * never does.
- *
- * Matched on `.marks`, the class Vega puts on its rendered root (`svg` or `canvas`, by renderer),
- * because it appears only once the chart draws. Webview text cannot stand in: a visualization
- * block's JSON source — and a traceback quoting it — carry the chart's field names either way.
+ * Polls until Vega has drawn a chart in the notebook webview; throws with the webview text on
+ * timeout. Vega puts `.marks` on the rendered root only once the chart draws.
  */
 export async function awaitRenderedChart(timeout: number, context: string): Promise<void> {
     const driver = VSBrowser.instance.driver;

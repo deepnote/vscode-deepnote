@@ -25,15 +25,11 @@ import {
 
 const NOTEBOOK_FILE_NAME = 'chart-uuid.deepnote';
 
-// stdout from the first cell, which only establishes that the kernel ran the notebook. The chart is
-// asserted through its rendered Vega root instead: the field names appear in the visualization
-// block's own JSON source and in any traceback quoting them, so no text match can tell a drawn chart
-// apart from a failed one.
+// Only establishes that the kernel ran the notebook; the chart itself is asserted on its Vega root.
 const DATA_CELL_OUTPUT = 'chart data ready';
 
-// A chart block that fails renders its error into the output: the VegaFusion serialization failure,
-// the vega renderer's own two failure strings (`ErrorFallback` and the `renderOutputItem` catch),
-// and a Python traceback.
+// What each known failure mode renders into the output: VegaFusion's serialization error, the vega
+// renderer's own message (shared by its `ErrorFallback` and its `renderOutputItem` catch), a traceback.
 const FORBIDDEN_OUTPUT = [
     'Unsupported datatype for JSON serialization',
     'Error rendering chart',
@@ -90,8 +86,8 @@ describe('Deepnote E2E — render a chart block', function () {
             FIRST_RUN_OUTPUT_TIMEOUT
         );
 
-        // Reported as one assertion carrying the whole output: a chart block that raises puts its
-        // traceback here, and the default failure message truncates away the part that says why.
+        // One assertion carrying the whole output: the default failure message truncates away the
+        // traceback a raising chart block leaves here.
         const failureText = FORBIDDEN_OUTPUT.filter((forbidden) => renderedOutput.includes(forbidden));
         expect(
             failureText,

@@ -81,10 +81,8 @@ jobs:
         run: npm run setup:e2e:mock
 
       - name: Place the toolkit venv outside the notebook root
-        # `set_notebook_path` drops every sys.path entry under the toolkit's notebook root, which
-        # defaults to $HOME/work — and on a runner that contains the checkout, so a venv inside the
-        # workspace loses its site-packages mid-session. $RUNNER_TEMP is no good either; it lives at
-        # $HOME/work/_temp.
+        # That root defaults to $HOME/work, which on a runner holds the checkout — and $RUNNER_TEMP,
+        # so that is no alternative. The VENV_DIR note in test/e2e/helpers/venv.ts has the mechanism.
         run: echo "DEEPNOTE_E2E_VENV_DIR=$HOME/.deepnote-e2e/.venv-e2e" >> "$GITHUB_ENV"
 
       - name: Cache pip wheel downloads

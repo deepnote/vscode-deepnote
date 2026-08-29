@@ -8,15 +8,14 @@ import { PREBAKED_VENV_DIR_NAME } from './constants';
 const REPO_ROOT = process.cwd();
 
 /**
- * Where the pre-baked venv lives. It must sit outside the directory the toolkit treats as the
- * notebook root, because `set_notebook_path` drops every `sys.path` entry underneath that root — it
- * is undoing the entry Jupyter adds for the kernel's start directory, but the filter is a prefix
- * match. With no explicit config the root is `$HOME/work`, which on a GitHub runner contains the
- * checkout: the venv's site-packages is stripped, and the packages nothing imported during kernel
- * startup (`narwhals` behind VegaFusion, `stack_data` behind IPython) stop resolving mid-session.
+ * Where the pre-baked venv lives — necessarily outside the directory the toolkit treats as the
+ * notebook root, since `set_notebook_path` drops every `sys.path` entry under that root by prefix
+ * match. Unconfigured, that root is `$HOME/work`, which on a GitHub runner holds the checkout, so a
+ * venv in the workspace loses its site-packages mid-session: whatever was not imported during kernel
+ * startup (`narwhals`, which VegaFusion reaches only at render time) then stops resolving.
  *
- * `DEEPNOTE_E2E_VENV_DIR` moves it somewhere that collision cannot happen. The basename still has to
- * be PREBAKED_VENV_DIR_NAME — that is what identifies the venv in the interpreter quick pick.
+ * The basename must stay PREBAKED_VENV_DIR_NAME — that is what identifies the venv in the
+ * interpreter quick pick.
  */
 const VENV_DIR = process.env.DEEPNOTE_E2E_VENV_DIR
     ? path.resolve(process.env.DEEPNOTE_E2E_VENV_DIR)
@@ -43,12 +42,10 @@ function toolkitPipSpecs(): string[] {
  * than `import deepnote_toolkit`, which costs seconds and floods the log. The version arrives as
  * argv, and a mismatch exits non-zero on its own — `assert` would be stripped under PYTHONOPTIMIZE.
  *
- * This only establishes the version. It cannot tell that a restored venv is missing package files
- * whose metadata survived — the cache key covers the build recipe instead, so a recipe change
- * rebuilds rather than adopts. Detecting a hollowed-out venv in place is unsolved: `pip check` reads
- * metadata and is blind to it, importing the toolkit does not reach dependencies that VegaFusion
- * loads lazily at render time, and sweeping every distribution's top-level name reports healthy
- * venvs as broken.
+ * Version only: a restored venv whose metadata outlived its package files still reads as usable, so
+ * the CI cache key covers the build recipe rather than trusting this. Catching that here has no
+ * cheap answer — `pip check` reads the same metadata, and importing the toolkit never reaches what
+ * VegaFusion loads lazily at render time.
  */
 function isUsable(): boolean {
     if (!fs.existsSync(venvPython())) {

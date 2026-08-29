@@ -6,7 +6,21 @@ import toolkitSpec from '../../../src/kernels/deepnote/toolkitSpec.json';
 import { PREBAKED_VENV_DIR_NAME } from './constants';
 
 const REPO_ROOT = process.cwd();
-const VENV_DIR = path.join(REPO_ROOT, PREBAKED_VENV_DIR_NAME);
+
+/**
+ * Where the pre-baked venv lives. It must sit outside the directory the toolkit treats as the
+ * notebook root, because `set_notebook_path` drops every `sys.path` entry underneath that root — it
+ * is undoing the entry Jupyter adds for the kernel's start directory, but the filter is a prefix
+ * match. With no explicit config the root is `$HOME/work`, which on a GitHub runner contains the
+ * checkout: the venv's site-packages is stripped, and the packages nothing imported during kernel
+ * startup (`narwhals` behind VegaFusion, `stack_data` behind IPython) stop resolving mid-session.
+ *
+ * `DEEPNOTE_E2E_VENV_DIR` moves it somewhere that collision cannot happen. The basename still has to
+ * be PREBAKED_VENV_DIR_NAME — that is what identifies the venv in the interpreter quick pick.
+ */
+const VENV_DIR = process.env.DEEPNOTE_E2E_VENV_DIR
+    ? path.resolve(process.env.DEEPNOTE_E2E_VENV_DIR)
+    : path.join(REPO_ROOT, PREBAKED_VENV_DIR_NAME);
 const SETTINGS_SOURCE = path.join(REPO_ROOT, 'test', 'e2e', 'settings.json');
 const SETTINGS_TARGET = path.join(REPO_ROOT, 'test', 'e2e', 'settings.generated.json');
 
@@ -146,7 +160,7 @@ export function ensureManagedVenv(): string {
  */
 export function writeGeneratedSettings(): string {
     const base = JSON.parse(fs.readFileSync(SETTINGS_SOURCE, 'utf8')) as Record<string, unknown>;
-    const settings = { ...base, 'python.venvPath': REPO_ROOT };
+    const settings = { ...base, 'python.venvPath': path.dirname(VENV_DIR) };
 
     fs.writeFileSync(SETTINGS_TARGET, `${JSON.stringify(settings, undefined, 4)}\n`, 'utf8');
 

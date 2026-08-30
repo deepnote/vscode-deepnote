@@ -295,6 +295,28 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         logger.info(`Switching controller environment for ${getDisplayPath(notebook.uri)}`);
 
+        // Resolved before anything is torn down, so that a notebook already running on this
+        // interpreter can be left alone below.
+        const interpreter = await this.resolveInterpreter(notebook.uri);
+
+        if (!interpreter) {
+            logger.error(`No active Python interpreter found for ${getDisplayPath(notebook.uri)}`);
+
+            return false;
+        }
+
+        // Reselecting the interpreter a notebook is already running on: there is nothing to rebuild,
+        // and doing it anyway would restart the server and the language servers for no gain. The
+        // controller is still re-selected, since the notebook may have been pointed elsewhere since.
+        if (this.isKernelReady(notebookKey, interpreter.id)) {
+            logger.info(
+                `${getDisplayPath(notebook.uri)} already runs on ${getDisplayPath(interpreter.uri)}, nothing to rebuild`
+            );
+            await this.ensureControllerSelectedForNotebook(notebook, this.notebookControllers.get(notebookKey)!, token);
+
+            return true;
+        }
+
         // Check if any cells are executing and log a warning
         const kernel = this.kernelProvider.get(notebook);
         if (kernel) {
@@ -315,15 +337,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         const oldServerHandle = this.serverHandleRegistry.get(notebookKey);
 
         const previousInterpreterId = this.notebookInterpreterIds.get(notebookKey);
-
-        // Get the active interpreter and re-setup the kernel
-        const interpreter = await this.resolveInterpreter(notebook.uri);
-
-        if (!interpreter) {
-            logger.error(`No active Python interpreter found for ${getDisplayPath(notebook.uri)}`);
-
-            return false;
-        }
 
         const dependency = await this.toolkitDependencyService.ensureToolkitInstalled(interpreter, notebook.uri, token);
 

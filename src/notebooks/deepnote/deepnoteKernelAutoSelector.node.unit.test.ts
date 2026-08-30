@@ -1151,6 +1151,58 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         });
     });
 
+    suite('reselecting the interpreter a notebook already runs on', () => {
+        const SAME: PythonEnvironment = { id: '/usr/bin/python3', uri: Uri.file('/usr/bin/python3') };
+        const OTHER: PythonEnvironment = { id: '/envs/other/bin/python', uri: Uri.file('/envs/other/bin/python') };
+
+        setup(() => {
+            when(mockKernelProvider.get(mockNotebook)).thenReturn(undefined);
+            when(mockLspClientManager.stopLspClients(anything(), anything())).thenResolve();
+            when(mockControllerRegistration.getSelected(mockNotebook)).thenReturn(instance(mockController));
+            when(mockCancellationToken.isCancellationRequested).thenReturn(false);
+            // Re-selection touches the real controller, unlike the tests that stub setup out.
+            when(mockController.controller).thenReturn({
+                updateNotebookAffinity: sandbox.stub()
+            } as unknown as NotebookController);
+        });
+
+        test('does not tear anything down, and keeps the kernel', async () => {
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(SAME);
+            markKernelReady(SAME.id);
+            const setup = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            const rebuilt = await selector.rebuildController(
+                mockNotebook,
+                mockProgress,
+                instance(mockCancellationToken)
+            );
+
+            assert.isTrue(rebuilt);
+            assert.isFalse(setup.called, 'the kernel must not be set up again');
+            verify(mockLspClientManager.stopLspClients(anything(), anything())).never();
+            verify(mockToolkitDependencyService.ensureToolkitInstalled(anything(), anything(), anything())).never();
+        });
+
+        test('still rebuilds when the notebook is on that interpreter but has no running kernel', async () => {
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(SAME);
+            const setup = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
+
+            assert.isTrue(setup.called, 'a dead kernel on the same interpreter still needs rebuilding');
+        });
+
+        test('still rebuilds when a different interpreter is chosen', async () => {
+            when(mockInterpreterService.getActiveInterpreter(anything())).thenResolve(OTHER);
+            markKernelReady(SAME.id);
+            const setup = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            await selector.rebuildController(mockNotebook, mockProgress, instance(mockCancellationToken));
+
+            assert.isTrue(setup.called, 'a genuine switch must still rebuild');
+        });
+    });
+
     suite('rebuildController reports whether the switch took', () => {
         const INTERPRETER: PythonEnvironment = { id: '/usr/bin/python3', uri: Uri.file('/usr/bin/python3') };
 

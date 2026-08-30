@@ -1,0 +1,55 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-chart-timestamp-project
+  name: E2E Chart Timestamp
+  notebooks:
+    - id: e2e-chart-timestamp-notebook
+      name: Chart Timestamp
+      blocks:
+        - id: e2e-chart-ts-data-block
+          blockGroup: e2e-chart-ts-data-group
+          type: code
+          content: |-
+            import io
+
+            import pandas as pd
+
+            # read_csv leaves ts as strings; parsing it here would bypass the parser under test.
+            timeseries_df = pd.read_csv(
+                io.StringIO(
+                    "ts,amount\n"
+                    "2024-04-17 23:18:06.527738,10\n"
+                    "2024-04-18 09:02:11.004500,20\n"
+                    "2024-04-19 14:45:59.999999,30\n"
+                )
+            )
+            print("timeseries data ready")
+          sortingKey: a0
+          metadata: {}
+        - id: e2e-chart-ts-viz-block
+          blockGroup: e2e-chart-ts-viz-group
+          type: visualization
+          content: ''
+          sortingKey: a1
+          metadata:
+            deepnote_variable_name: timeseries_df
+            deepnote_visualization_spec:
+              mark: line
+              encoding:
+                x:
+                  field: ts
+                  type: temporal
+                  axis:
+                    # Pins the axis caption the test reads; the default format is locale-dependent.
+                    format: '%Y-%m-%dT%H:%M:%S'
+                y:
+                  field: amount
+                  type: quantitative
+            deepnote_chart_filter:
+              advancedFilters: []
+      executionMode: block
+      isModule: false
+  settings: {}

@@ -16,12 +16,20 @@ import {
     createEnvironment,
     openFolderViaDialog,
     openWorkspaceFile,
+    readChartAriaLabels,
     runOnceAndAwaitOutput,
     selectEnvironmentForNotebook
 } from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'chart-uuid.deepnote';
 const DATA_CELL_OUTPUT = 'chart data ready';
+
+// The fixture's uuid.UUID(int=0..2), as the toolkit stringifies them onto the axis.
+const CHART_UUIDS = [
+    '00000000-0000-0000-0000-000000000000',
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000002'
+];
 
 const FORBIDDEN_OUTPUT = [
     'Unsupported datatype for JSON serialization',
@@ -87,5 +95,10 @@ describe('Deepnote E2E — render a chart block', function () {
         ).to.deep.equal([]);
 
         await awaitRenderedChart(FIRST_RUN_OUTPUT_TIMEOUT, 'chart block output');
+
+        const ariaLabels = await readChartAriaLabels();
+        for (const uuid of CHART_UUIDS) {
+            expect(ariaLabels, `chart aria labels: ${ariaLabels}`).to.contain(uuid);
+        }
     });
 });

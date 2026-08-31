@@ -1,7 +1,11 @@
 /**
  * E2E (ExTester): a `visualization` block executes as `_dntk.DeepnoteChart(...)`, returns
- * `application/vnd.vega.v5+json`, and is drawn by the `deepnote-vega-renderer`. The fixture charts a
- * `uuid.UUID` column because Arrow maps those to an extension type VegaFusion cannot serialize.
+ * `application/vnd.vega.v5+json`, and is drawn by the `deepnote-vega-renderer`.
+ *
+ * One chart carries both column types VegaFusion has needed fixing for: `uuid.UUID`, which Arrow
+ * maps to an extension type it cannot serialize, and string timestamps as `pd.read_csv` leaves
+ * them, which its format list rejected below deepnote-vegafusion 2.1.1 unless the fractional part
+ * was exactly three digits.
  */
 
 import { expect } from 'chai';
@@ -21,18 +25,21 @@ import {
     selectEnvironmentForNotebook
 } from '../../helpers';
 
-const NOTEBOOK_FILE_NAME = 'chart-uuid.deepnote';
+const NOTEBOOK_FILE_NAME = 'chart-column-types.deepnote';
 const DATA_CELL_OUTPUT = 'chart data ready';
 
-// The fixture's uuid.UUID(int=0..2), as the toolkit stringifies them onto the axis.
+// Vega captions each axis and legend with its scale domain: the fixture's uuid.UUID(int=0..2) as
+// the toolkit stringifies them, and the first and last CSV rows as VegaFusion parsed them.
 const CHART_UUIDS = [
     '00000000-0000-0000-0000-000000000000',
     '00000000-0000-0000-0000-000000000001',
     '00000000-0000-0000-0000-000000000002'
 ];
+const PARSED_DOMAIN = 'values from 2024-04-17T23:18:06 to 2024-04-19T14:45:59';
 
 const FORBIDDEN_OUTPUT = [
     'Unsupported datatype for JSON serialization',
+    'Error parsing timestamp',
     'Error rendering chart',
     'Traceback (most recent call last)'
 ];
@@ -77,7 +84,7 @@ describe('Deepnote E2E — render a chart block', function () {
         }
     });
 
-    it('charts a dataframe with a UUID column without a serialization error', async function () {
+    it('charts UUID and microsecond timestamp columns without a serialization or parse error', async function () {
         await createEnvironment(environmentName);
         await selectEnvironmentForNotebook(environmentName, NOTEBOOK_FILE_NAME);
 
@@ -97,8 +104,8 @@ describe('Deepnote E2E — render a chart block', function () {
         await awaitRenderedChart(FIRST_RUN_OUTPUT_TIMEOUT, 'chart block output');
 
         const ariaLabels = await readChartAriaLabels();
-        for (const uuid of CHART_UUIDS) {
-            expect(ariaLabels, `chart aria labels: ${ariaLabels}`).to.contain(uuid);
+        for (const expected of [...CHART_UUIDS, PARSED_DOMAIN]) {
+            expect(ariaLabels, `chart aria labels: ${ariaLabels}`).to.contain(expected);
         }
     });
 });

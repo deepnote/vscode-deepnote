@@ -3,22 +3,23 @@ metadata:
   createdAt: '2025-01-01T00:00:00.000Z'
   modifiedAt: '2025-01-01T00:00:00.000Z'
 project:
-  id: e2e-chart-timestamp-project
-  name: E2E Chart Timestamp
+  id: e2e-chart-columns-project
+  name: E2E Chart Column Types
   notebooks:
-    - id: e2e-chart-timestamp-notebook
-      name: Chart Timestamp
+    - id: e2e-chart-columns-notebook
+      name: Chart Column Types
       blocks:
-        - id: e2e-chart-ts-data-block
-          blockGroup: e2e-chart-ts-data-group
+        - id: e2e-chart-data-block
+          blockGroup: e2e-chart-data-group
           type: code
           content: |-
             import io
+            import uuid
 
             import pandas as pd
 
             # read_csv leaves ts as strings; parsing it here would bypass the parser under test.
-            timeseries_df = pd.read_csv(
+            chart_df = pd.read_csv(
                 io.StringIO(
                     "ts,amount\n"
                     "2024-04-17 23:18:06.527738,10\n"
@@ -26,18 +27,19 @@ project:
                     "2024-04-19 14:45:59.999999,30\n"
                 )
             )
-            print("timeseries data ready")
+            chart_df["trace_id"] = [uuid.UUID(int=index) for index in range(3)]
+            print("chart data ready")
           sortingKey: a0
           metadata: {}
-        - id: e2e-chart-ts-viz-block
-          blockGroup: e2e-chart-ts-viz-group
+        - id: e2e-chart-viz-block
+          blockGroup: e2e-chart-viz-group
           type: visualization
           content: ''
           sortingKey: a1
           metadata:
-            deepnote_variable_name: timeseries_df
+            deepnote_variable_name: chart_df
             deepnote_visualization_spec:
-              mark: line
+              mark: point
               encoding:
                 x:
                   field: ts
@@ -48,6 +50,9 @@ project:
                 y:
                   field: amount
                   type: quantitative
+                color:
+                  field: trace_id
+                  type: nominal
             deepnote_chart_filter:
               advancedFilters: []
       executionMode: block

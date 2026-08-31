@@ -56,7 +56,7 @@ export class DeepnoteLspClientManager
     implements IDeepnoteLspClientManager, IExtensionSyncActivationService, IDisposable
 {
     private readonly clients = new Map<string, LspClientInfo>();
-    private readonly pendingStarts = new Map<string, boolean>();
+    private readonly pendingStarts = new Map<string, Promise<void>>();
 
     private disposed = false;
 
@@ -90,12 +90,17 @@ export class DeepnoteLspClientManager
 
         const notebookKey = getNotebookKey(notebookUri);
 
+        // Wait the in-flight start out rather than returning: a caller that needs clients on a
+        // different interpreter must get its turn, not be told the job is done.
         const pendingStart = this.pendingStarts.get(notebookKey);
 
         if (pendingStart) {
-            logger.trace(`LSP client is already starting up for ${notebookKey}.`);
+            logger.trace(`LSP client is already starting up for ${notebookKey}; waiting for it.`);
+            await pendingStart.catch(noop);
 
-            return;
+            if (this.disposed || token?.isCancellationRequested) {
+                return;
+            }
         }
 
         const existing = this.clients.get(notebookKey);
@@ -112,10 +117,28 @@ export class DeepnoteLspClientManager
 
         logger.info(`Starting LSP clients for ${notebookKey} using interpreter ${interpreter.uri.fsPath}.`);
 
-        // Claimed before the first await below, so a second caller arriving while a dead client is
-        // being replaced is turned away by the pending check rather than replacing it a second time.
-        this.pendingStarts.set(notebookKey, true);
+        // Claimed before the first await below, so a stop issued while this runs waits for it
+        // instead of no-opping against a `clients` map this call has not populated yet.
+        const start = this.startClients(notebookKey, notebookUri, interpreter, existing, token);
 
+        this.pendingStarts.set(notebookKey, start);
+
+        try {
+            await start;
+        } finally {
+            if (this.pendingStarts.get(notebookKey) === start) {
+                this.pendingStarts.delete(notebookKey);
+            }
+        }
+    }
+
+    private async startClients(
+        notebookKey: string,
+        notebookUri: vscode.Uri,
+        interpreter: PythonEnvironment,
+        existing: LspClientInfo | undefined,
+        token?: vscode.CancellationToken
+    ): Promise<void> {
         try {
             if (existing) {
                 logger.warn(`Replacing a stopped Python LSP client for ${notebookKey}`);
@@ -169,13 +192,20 @@ export class DeepnoteLspClientManager
             logger.error(`Failed to start LSP clients for ${notebookKey}:`, error);
 
             throw error;
-        } finally {
-            this.pendingStarts.delete(notebookKey);
         }
     }
 
     public async stopLspClients(notebookUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void> {
         const notebookKey = getNotebookKey(notebookUri);
+
+        // `clients` is only populated once a start has fully settled, so stopping mid-start would
+        // find nothing and silently leave the client it was meant to kill running.
+        const pendingStart = this.pendingStarts.get(notebookKey);
+
+        if (pendingStart) {
+            await pendingStart.catch(noop);
+        }
+
         const clientInfo = this.clients.get(notebookKey);
 
         if (!clientInfo) {

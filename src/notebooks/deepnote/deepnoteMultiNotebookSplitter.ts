@@ -8,6 +8,7 @@ import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
 import { allocateSiblingUri } from './deepnoteSiblingFileAllocator';
 import { getFileStem } from './deepnoteNotebookFileFactory';
+import type { IDeepnoteNotebookInterpreters } from './deepnoteNotebookInterpreters';
 
 const SPLIT_ACTION = l10n.t('Split into separate files');
 
@@ -20,7 +21,7 @@ const MAX_LEGACY_ALLOCATION_ATTEMPTS = 10_000;
 /**
  * On opening a legacy multi-notebook `.deepnote` file, prompts to split it into one single-notebook
  * sibling file per notebook and retire the original as `<name>.deepnote.legacy`. No automatic rewrite.
- * The environment mapper is undefined on the web target, where env migration is a desktop-only no-op.
+ * The interpreter store is undefined on the web target, where pin migration is a desktop-only no-op.
  */
 export class DeepnoteMultiNotebookSplitter {
     private readonly analytics: ITelemetryService;
@@ -31,16 +32,20 @@ export class DeepnoteMultiNotebookSplitter {
 
     private readonly logger: ILogger;
 
+    private readonly notebookInterpreters: IDeepnoteNotebookInterpreters | undefined;
+
     private readonly promptedUris = new Set<string>();
 
     private readonly refreshTree: () => void;
 
     constructor(
+        notebookInterpreters: IDeepnoteNotebookInterpreters | undefined,
         refreshTree: () => void,
         logger: ILogger,
         exists: (uri: Uri) => Promise<boolean>,
         analytics: ITelemetryService
     ) {
+        this.notebookInterpreters = notebookInterpreters;
         this.refreshTree = refreshTree;
         this.logger = logger;
         this.exists = exists;
@@ -153,6 +158,8 @@ export class DeepnoteMultiNotebookSplitter {
 
             const deepnoteFile = await readDeepnoteProjectFile(fileUri);
             const parentDir = Uri.joinPath(fileUri, '..');
+            const interpreters = this.notebookInterpreters;
+            const pinnedInterpreter = interpreters?.get(fileUri);
 
             // Write all children before retiring the original (see step below).
             const entries = splitByNotebooks(deepnoteFile, getFileStem(fileUri));
@@ -180,6 +187,15 @@ export class DeepnoteMultiNotebookSplitter {
                 newUris.push(targetUri);
             }
 
+            // Carry the interpreter selection onto each new file (desktop-only).
+            if (interpreters && pinnedInterpreter) {
+                for (const newUri of newUris) {
+                    // Register the revert BEFORE the set: the store mutates memory before the persist that can reject.
+                    rollbacks.push(() => interpreters.set(newUri, undefined));
+                    await interpreters.set(newUri, pinnedInterpreter);
+                }
+            }
+
             // Abort before retiring the original if its tab won't close, else a later save recreates it.
             if (!(await this.closeNotebookTab(fileUri))) {
                 throw new Error(l10n.t('The file is still open in an editor and could not be closed.'));
@@ -189,6 +205,13 @@ export class DeepnoteMultiNotebookSplitter {
             await workspace.fs.rename(fileUri, legacyUri, { overwrite: false });
             renamed = true;
             rollbacks.push(() => workspace.fs.rename(legacyUri, fileUri, { overwrite: false }));
+
+            if (interpreters && pinnedInterpreter) {
+                // Restore the original's pin on rollback before removing it here.
+                rollbacks.push(() => interpreters.set(fileUri, pinnedInterpreter));
+
+                await interpreters.set(fileUri, undefined);
+            }
 
             this.refreshTree();
 

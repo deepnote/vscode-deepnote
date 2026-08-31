@@ -38,8 +38,8 @@ import {
 } from '../../kernels/jupyter/types';
 import { IJupyterKernelSpec, IKernelProvider } from '../../kernels/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { IPythonApiProvider, IPythonExtensionChecker } from '../../platform/api/types';
-import { Cancellation, isCancellationError } from '../../platform/common/cancellation';
+import { IPythonExtensionChecker } from '../../platform/api/types';
+import { Cancellation, isCancellationError, wrapCancellationTokens } from '../../platform/common/cancellation';
 import { Commands, JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { IConfigurationService, IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
@@ -49,11 +49,15 @@ import { createDeepnoteServerConfigHandle } from '../../platform/deepnote/deepno
 import { DeepnoteKernelError } from '../../platform/errors/deepnoteKernelErrors';
 import { DataScience } from '../../platform/common/utils/localize';
 import { IInterpreterService } from '../../platform/interpreter/contracts';
+import { getCachedEnvironment, resolvedPythonEnvToJupyterEnv } from '../../platform/interpreter/helpers';
+import { PythonEnvironmentFilter } from '../../platform/interpreter/filter/filterService';
 import {
-    getCachedEnvironment,
-    getPythonEnvironmentName,
-    resolvedPythonEnvToJupyterEnv
-} from '../../platform/interpreter/helpers';
+    getPythonEnvironmentCategory,
+    pythonEnvironmentQuickPick
+} from '../../platform/interpreter/pythonEnvironmentPicker.node';
+import { PythonEnvironmentQuickPickItemProvider } from '../../platform/interpreter/pythonEnvironmentQuickPickProvider.node';
+import { BaseProviderBasedQuickPick } from '../../platform/common/providerBasedQuickPick';
+import { InputFlowAction } from '../../platform/common/utils/multiStepInput';
 import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
@@ -88,6 +92,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     private readonly notebookControllers = new Map<string, IVSCodeNotebookController>();
     // Track interpreter ID for each notebook
     private readonly notebookInterpreterIds = new Map<string, string>();
+    // The install prompt is modal, and several notebooks can open at once.
+    private promptedToInstallPython = false;
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
@@ -111,7 +117,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         private readonly toolkitDependencyService: IDeepnoteToolkitDependencyService,
         @inject(IDeepnoteNotebookInterpreters)
         private readonly notebookInterpreters: IDeepnoteNotebookInterpreters,
-        @inject(IPythonApiProvider) private readonly pythonApiProvider: IPythonApiProvider
+        @inject(PythonEnvironmentQuickPickItemProvider)
+        private readonly environmentQuickPickProvider: PythonEnvironmentQuickPickItemProvider,
+        @inject(PythonEnvironmentFilter) private readonly environmentFilter: PythonEnvironmentFilter
     ) {}
 
     public activate() {
@@ -128,6 +136,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             this,
             this.disposables
         );
+
+        // A notebook opened before any interpreter existed got no controller at all, and nothing
+        // else would ever give it one: the execution gate only runs from a registered controller.
+        this.interpreterService.onDidChangeInterpreters(this.onDidChangeInterpreters, this, this.disposables);
 
         this.disposables.push(
             commands.registerCommand(Commands.SelectInterpreterForNotebook, () => this.selectInterpreterForNotebook())
@@ -153,32 +165,41 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return;
         }
 
-        const api = await this.pythonApiProvider.getNewApi();
-        const items = (api?.environments.known ?? [])
-            .map((environment) => resolvedPythonEnvToJupyterEnv(getCachedEnvironment(environment)))
-            .filter((interpreter): interpreter is PythonEnvironment => interpreter !== undefined)
-            .map((interpreter) => ({
-                label: getPythonEnvironmentName(interpreter) || getDisplayPath(interpreter.uri),
-                description: getDisplayPath(interpreter.uri),
-                interpreter
-            }));
+        // The shared provider the kernel picker uses: it triggers discovery on first read, honours
+        // deepnote.kernels.excludePythonEnvironments, and keeps the list live while the pick is open.
+        const provider = this.environmentQuickPickProvider.withFilter(
+            (environment) => !this.environmentFilter.isPythonEnvironmentExcluded(environment)
+        );
+        const picker = new BaseProviderBasedQuickPick(
+            Promise.resolve(provider),
+            pythonEnvironmentQuickPick,
+            getPythonEnvironmentCategory,
+            { supportsBack: false },
+            undefined,
+            DataScience.selectInterpreterForNotebookPlaceholder
+        );
+        const cts = new CancellationTokenSource();
 
-        if (items.length === 0) {
-            void window.showErrorMessage(DataScience.selectInterpreterNoneFound);
+        try {
+            const selected = await picker.selectItem(cts.token);
 
-            return;
+            if (!selected || selected instanceof InputFlowAction) {
+                return;
+            }
+
+            const interpreter = resolvedPythonEnvToJupyterEnv(getCachedEnvironment(selected));
+
+            if (!interpreter) {
+                logger.warn(`Could not resolve the selected environment ${selected.id}`);
+
+                return;
+            }
+
+            await this.applyInterpreter(notebook, interpreter);
+        } finally {
+            cts.dispose();
+            picker.dispose();
         }
-
-        const selected = await window.showQuickPick(items, {
-            placeHolder: DataScience.selectInterpreterForNotebookPlaceholder,
-            matchOnDescription: true
-        });
-
-        if (!selected) {
-            return;
-        }
-
-        await this.applyInterpreter(notebook, selected.interpreter);
     }
 
     /**
@@ -216,11 +237,28 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return;
         }
 
-        if (!rebuilt) {
+        // Only when the pin is still the one this call wrote: the toolkit prompt's "Select a
+        // different Interpreter" re-enters this method, so a newer pin may already have replaced it.
+        if (!rebuilt && this.notebookInterpreters.get(notebook.uri)?.toString() === interpreter.uri.toString()) {
             logger.info(
                 `Interpreter switch for ${getDisplayPath(notebook.uri)} did not take; restoring the previous selection`
             );
             await this.notebookInterpreters.set(notebook.uri, previous);
+        }
+    }
+
+    private onDidChangeInterpreters() {
+        for (const notebook of workspace.notebookDocuments) {
+            if (
+                notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE ||
+                this.notebookControllers.has(getNotebookKey(notebook.uri))
+            ) {
+                continue;
+            }
+
+            this.registerControllerForNotebook(notebook).catch((error) => {
+                logger.error(`Failed to offer a Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
+            });
         }
     }
 
@@ -297,7 +335,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Resolved before anything is torn down, so that a notebook already running on this
         // interpreter can be left alone below.
-        const interpreter = await this.resolveInterpreter(notebook.uri);
+        const interpreter = await this.notebookInterpreters.resolve(notebook.uri);
 
         if (!interpreter) {
             logger.error(`No active Python interpreter found for ${getDisplayPath(notebook.uri)}`);
@@ -328,7 +366,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             }
         }
 
-        // Clear cached metadata so ensureKernelSelected creates fresh metadata with new environment
+        // Clear cached metadata so setup creates fresh metadata for the new interpreter
         // The controller will stay alive - it will just get updated via updateConnection()
         this.notebookConnectionMetadata.delete(notebookKey);
 
@@ -383,27 +421,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         return true;
     }
 
-    public async ensureKernelSelected(
-        notebook: NotebookDocument,
-        progress: { report(value: { message?: string; increment?: number }): void },
-        token: CancellationToken
-    ): Promise<boolean> {
-        // notebookKey uniquely identifies THIS NOTEBOOK - the same identity the controller/server use
-        const notebookKey = getNotebookKey(notebook.uri);
-
-        // Get the active Python interpreter
-        const interpreter = await this.resolveInterpreter(notebook.uri);
-
-        if (!interpreter) {
-            logger.warn(`No active Python interpreter found for ${getDisplayPath(notebook.uri)}`);
-            return false;
-        }
-
-        await this.ensureKernelSelectedWithInterpreter(notebook, interpreter, notebookKey, progress, token);
-
-        return true;
-    }
-
     public async ensureKernelSelectedWithInterpreter(
         notebook: NotebookDocument,
         interpreter: PythonEnvironment,
@@ -438,8 +455,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         progress.report({ message: 'Starting Deepnote server...' });
         const serverInfo = await this.serverStarter.startServer(interpreter, notebook.uri, progressToken);
 
-        this.notebookInterpreterIds.set(notebookKey, interpreter.id);
-
         logger.info(`Server running at ${serverInfo.url}`);
 
         // Create server provider handle using interpreter ID
@@ -453,13 +468,20 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
         this.serverHandleRegistry.set(notebookKey, serverProviderHandle.handle);
 
-        // Use the active interpreter directly for LSP (it already has deepnote-toolkit installed)
-        try {
-            await this.lspClientManager.startLspClients(notebook.uri, interpreter, progressToken);
+        // Starting the server can take up to two minutes, and onDidCloseNotebook has already run its
+        // teardown by now for a notebook closed in that window; starting LSP would leak a pylsp
+        // process nothing will ever stop.
+        if (notebook.isClosed) {
+            logger.info(`${notebookKey} was closed during setup, not starting LSP clients`);
+        } else {
+            // Use the active interpreter directly for LSP (it already has deepnote-toolkit installed)
+            try {
+                await this.lspClientManager.startLspClients(notebook.uri, interpreter, progressToken);
 
-            logger.info(`✓ LSP clients started for ${notebookKey}`);
-        } catch (error) {
-            logger.error(`Failed to start LSP clients for ${notebookKey}:`, error);
+                logger.info(`✓ LSP clients started for ${notebookKey}`);
+            } catch (error) {
+                logger.error(`Failed to start LSP clients for ${notebookKey}:`, error);
+            }
         }
 
         progress.report({ message: 'Connecting to kernel...' });
@@ -534,6 +556,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Store the controller for reuse
         this.notebookControllers.set(notebookKey, controller);
+        // Written here rather than beside startServer, in the same synchronous block as the metadata
+        // and controller above: a throw in between would otherwise leave the id pointing at an
+        // interpreter with no matching connection, and isKernelReady would stay true for it forever.
+        this.notebookInterpreterIds.set(notebookKey, interpreter.id);
 
         const projectId = notebook.metadata?.deepnoteProjectId;
         const notebookId = notebook.metadata?.deepnoteNotebookId;
@@ -655,7 +681,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         const notebookKey = getNotebookKey(notebook.uri);
 
-        const interpreter = await this.resolveInterpreter(notebook.uri);
+        const interpreter = await this.notebookInterpreters.resolve(notebook.uri);
 
         if (!interpreter) {
             logger.warn(`No active Python interpreter found for ${getDisplayPath(notebook.uri)}`);
@@ -705,23 +731,47 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return false;
         }
 
+        // Captured before setup, which overwrites it.
+        const previousInterpreterId = this.notebookInterpreterIds.get(notebookKey);
+
         try {
-            await window.withProgress(
+            const ready = await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
                     title: l10n.t('Setting up Deepnote kernel...'),
                     cancellable: true
                 },
                 async (progress, progressToken) => {
-                    await this.ensureKernelSelectedWithInterpreter(
-                        notebook,
-                        interpreter,
-                        notebookKey,
-                        progress,
-                        progressToken
-                    );
+                    // The caller's token is cancelled when the notebook closes; the progress token
+                    // only when the user clicks Cancel. Setup has to observe both.
+                    const setupToken = wrapCancellationTokens(token, progressToken);
+
+                    try {
+                        // An interpreter change needs the teardown rebuildController does — stop the
+                        // old LSP clients and drop the old server handle — or language features and
+                        // the advertised server stay on the interpreter we just moved off.
+                        if (previousInterpreterId && previousInterpreterId !== interpreter.id) {
+                            return await this.rebuildController(notebook, progress, setupToken.token);
+                        }
+
+                        await this.ensureKernelSelectedWithInterpreter(
+                            notebook,
+                            interpreter,
+                            notebookKey,
+                            progress,
+                            setupToken.token
+                        );
+
+                        return true;
+                    } finally {
+                        setupToken.dispose();
+                    }
                 }
             );
+
+            if (!ready) {
+                return false;
+            }
         } catch (error) {
             if (token.isCancellationRequested || isCancellationError(error as Error)) {
                 logger.info(`Kernel setup cancelled for ${getDisplayPath(notebook.uri)}`);
@@ -760,31 +810,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     /**
-     * The interpreter this notebook runs on: the one pinned to it if that still resolves, otherwise
-     * the workspace's active interpreter. A pin that no longer resolves (its venv was deleted, say)
-     * falls back rather than failing, so the notebook stays runnable.
-     */
-    private async resolveInterpreter(notebookUri: Uri): Promise<PythonEnvironment | undefined> {
-        const pinned = this.notebookInterpreters.get(notebookUri);
-
-        if (pinned) {
-            const interpreter = await this.interpreterService.getInterpreterDetails(pinned);
-
-            if (interpreter) {
-                return interpreter;
-            }
-
-            logger.warn(
-                `Interpreter pinned to ${getDisplayPath(notebookUri)} no longer resolves (${getDisplayPath(
-                    pinned
-                )}); using the active interpreter`
-            );
-        }
-
-        return this.interpreterService.getActiveInterpreter(notebookUri);
-    }
-
-    /**
      * True when the notebook's controller is bound to a running server for this interpreter. A
      * controller registered at open time carries no baseUrl and is deliberately not "ready".
      */
@@ -802,10 +827,17 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * carries no baseUrl; the first execution starts the server and updates it in place.
      */
     private async registerControllerForNotebook(notebook: NotebookDocument): Promise<void> {
-        const interpreter = await this.resolveInterpreter(notebook.uri);
+        const interpreter = await this.notebookInterpreters.resolve(notebook.uri);
 
         if (!interpreter) {
             logger.warn(`No active Python interpreter for ${getDisplayPath(notebook.uri)}, no kernel offered`);
+
+            // Without a controller the execution gate never runs, so this is the only place the
+            // prompt can reach a user who has no Python extension at all.
+            if (!this.promptedToInstallPython && !this.pythonExtensionChecker.isPythonExtensionInstalled) {
+                this.promptedToInstallPython = true;
+                await this.pythonExtensionChecker.showPythonExtensionInstallRequiredPrompt();
+            }
 
             return;
         }

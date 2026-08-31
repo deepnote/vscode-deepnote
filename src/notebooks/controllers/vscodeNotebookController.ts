@@ -451,6 +451,13 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
 
             if (kernelAutoSelector) {
                 const cts = new CancellationTokenSource();
+                // Setup can install packages and start a server for over a minute; without this the
+                // work runs to completion for a document the user has already closed.
+                const closeListener = workspace.onDidCloseNotebookDocument((closed) => {
+                    if (closed === notebook) {
+                        cts.cancel();
+                    }
+                });
 
                 try {
                     const hasEnvironment = await kernelAutoSelector.ensureEnvironmentConfiguredBeforeExecution(
@@ -464,6 +471,7 @@ export class VSCodeNotebookController implements Disposable, IVSCodeNotebookCont
                         return;
                     }
                 } finally {
+                    closeListener.dispose();
                     cts.dispose();
                 }
             }

@@ -4,6 +4,7 @@ import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { EventEmitter, FileType, NotebookDocument, TabGroups, TabInputNotebook, Uri } from 'vscode';
 
 import { ITelemetryService } from '../../platform/analytics/types';
+import type { IDeepnoteNotebookInterpreters } from './deepnoteNotebookInterpreters';
 import type { ILogger } from '../../platform/logging/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { DeepnoteMultiNotebookSplitter } from './deepnoteMultiNotebookSplitter';
@@ -64,6 +65,9 @@ suite('DeepnoteMultiNotebookSplitter', () => {
     // Filenames passed to workspace.fs.delete (rollback cleanup), in call order.
     let deleteTargets: string[];
     let mockTelemetryService: ITelemetryService;
+    // In-memory stand-in for the pin store, so tests can assert which files ended up pinned.
+    let pins: Map<string, string>;
+    let notebookInterpreters: IDeepnoteNotebookInterpreters;
 
     const logger: ILogger = {
         error: () => undefined,
@@ -190,7 +194,25 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             return Promise.resolve(undefined);
         });
 
+        pins = new Map<string, string>();
+        notebookInterpreters = {
+            get: (uri: Uri) => {
+                const pinned = pins.get(uri.toString());
+
+                return pinned ? Uri.parse(pinned) : undefined;
+            },
+            resolve: () => Promise.resolve(undefined),
+            set: async (uri: Uri, interpreter: Uri | undefined) => {
+                if (interpreter) {
+                    pins.set(uri.toString(), interpreter.toString());
+                } else {
+                    pins.delete(uri.toString());
+                }
+            }
+        };
+
         splitter = new DeepnoteMultiNotebookSplitter(
+            notebookInterpreters,
             () => {
                 refreshTreeCount++;
             },
@@ -217,6 +239,110 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             return Promise.resolve(undefined);
         });
     }
+
+    /**
+     * Build and activate a splitter whose refreshTree throws, plus a private open-event emitter (so
+     * the fire below targets exactly this splitter). refreshTree is the last step after the rename,
+     * which makes it the injection point for "the split failed once the original was already gone".
+     */
+    function makeFailingSplitter(): {
+        emitter: EventEmitter<NotebookDocument>;
+        splitter: DeepnoteMultiNotebookSplitter;
+    } {
+        const emitter = new EventEmitter<NotebookDocument>();
+        when(mockedVSCodeNamespaces.workspace.onDidOpenNotebookDocument).thenReturn(emitter.event);
+
+        const failingSplitter = new DeepnoteMultiNotebookSplitter(
+            notebookInterpreters,
+            () => {
+                throw new Error('refresh failed after the rename');
+            },
+            logger,
+            (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri))),
+            instance(mock<ITelemetryService>())
+        );
+        failingSplitter.activate();
+
+        return { emitter, splitter: failingSplitter };
+    }
+
+    suite('interpreter migration', () => {
+        const ORIGINAL = Uri.file('/ws/multi.deepnote');
+        const PINNED = Uri.file('/envs/project/bin/python');
+
+        function threeNotebookFile() {
+            return makeFile([
+                makeNotebook('n1', 'Alpha', 'a'),
+                makeNotebook('n2', 'Beta', 'b'),
+                makeNotebook('n3', 'Gamma', 'c')
+            ]);
+        }
+
+        test("carries the original's pinned interpreter onto every child file", async () => {
+            stubReadFile(threeNotebookFile());
+            pins.set(ORIGINAL.toString(), PINNED.toString());
+            acceptSplit();
+
+            onDidOpen.fire(notebookDoc(ORIGINAL));
+
+            await waitFor(() => renameOps.length === 1);
+            await settle();
+
+            assert.deepStrictEqual(
+                writeTargets.map((name) => pins.get(Uri.file(`/ws/${name}`).toString())),
+                [PINNED.toString(), PINNED.toString(), PINNED.toString()],
+                'each child must run on the interpreter the original was pinned to'
+            );
+        });
+
+        test("clears the retired original's pin, so the dead URI does not keep one", async () => {
+            stubReadFile(threeNotebookFile());
+            pins.set(ORIGINAL.toString(), PINNED.toString());
+            acceptSplit();
+
+            onDidOpen.fire(notebookDoc(ORIGINAL));
+
+            await waitFor(() => renameOps.length === 1);
+            await settle();
+
+            assert.isUndefined(pins.get(ORIGINAL.toString()));
+        });
+
+        test('a split that fails after the rename leaves the pins exactly as it found them', async () => {
+            stubReadFile(threeNotebookFile());
+            const { emitter, splitter: failingSplitter } = makeFailingSplitter();
+            pins.set(ORIGINAL.toString(), PINNED.toString());
+            acceptSplit();
+
+            try {
+                emitter.fire(notebookDoc(ORIGINAL));
+
+                await waitFor(() => deleteTargets.length > 0);
+                await settle();
+
+                assert.deepStrictEqual(
+                    [...pins.entries()],
+                    [[ORIGINAL.toString(), PINNED.toString()]],
+                    "rollback must restore the original pin and drop the children's"
+                );
+            } finally {
+                failingSplitter.dispose();
+                emitter.dispose();
+            }
+        });
+
+        test('an unpinned file splits without inventing a pin for the children', async () => {
+            stubReadFile(threeNotebookFile());
+            acceptSplit();
+
+            onDidOpen.fire(notebookDoc(ORIGINAL));
+
+            await waitFor(() => renameOps.length === 1);
+            await settle();
+
+            assert.strictEqual(pins.size, 0, 'nothing was pinned, so nothing should be');
+        });
+    });
 
     suite('prompt gating', () => {
         test('a 3-notebook file prompts and writes/renames NOTHING until the action is taken (regression: no silent rewrite on open)', async () => {
@@ -495,31 +621,6 @@ suite('DeepnoteMultiNotebookSplitter', () => {
             });
 
             return { get: () => message };
-        }
-
-        /**
-         * Build and activate a splitter whose refreshTree throws, plus a private open-event emitter (so
-         * the fire below targets exactly this splitter). refreshTree is the last step after the rename,
-         * which makes it the injection point for "the split failed once the original was already gone".
-         */
-        function makeFailingSplitter(): {
-            emitter: EventEmitter<NotebookDocument>;
-            splitter: DeepnoteMultiNotebookSplitter;
-        } {
-            const emitter = new EventEmitter<NotebookDocument>();
-            when(mockedVSCodeNamespaces.workspace.onDidOpenNotebookDocument).thenReturn(emitter.event);
-
-            const failingSplitter = new DeepnoteMultiNotebookSplitter(
-                () => {
-                    throw new Error('refresh failed after the rename');
-                },
-                logger,
-                (uri: Uri) => Promise.resolve(existingOnDisk.has(basename(uri))),
-                instance(mock<ITelemetryService>())
-            );
-            failingSplitter.activate();
-
-            return { emitter, splitter: failingSplitter };
         }
 
         test('a failure after the rename rolls the original back into place and reports it restored', async () => {

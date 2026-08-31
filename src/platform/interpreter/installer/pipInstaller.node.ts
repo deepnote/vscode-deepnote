@@ -15,7 +15,7 @@ import { Environment } from '@vscode/python-extension';
 import { getEnvironmentType } from '../helpers';
 import { workspace } from 'vscode';
 
-import { DEEPNOTE_TOOLKIT_VERSION } from '../../common/constants';
+import { DEEPNOTE_TOOLKIT_PACKAGES, DEEPNOTE_TOOLKIT_VERSION } from '../../common/constants';
 
 /**
  * Installer for pip. Default installer for most everything.
@@ -87,14 +87,16 @@ export class PipInstaller extends ModuleInstaller {
         if (getEnvironmentType(interpreter) === EnvironmentType.Unknown) {
             args.push('--user');
         }
-        // deepnote_toolkit's import name differs from the pip package name (deepnote-toolkit[server])
-        const pipPackageName =
+        // deepnote_toolkit's import name differs from the pip package name (deepnote-toolkit[server]).
+        // The spec's companion packages ride along: the [server] extra pins the pylsp fork without
+        // its own [all] extras, so lint diagnostics and formatting silently disappear without them.
+        const pipPackages =
             moduleName === translateProductToModule(Product.deepnoteToolkit)
-                ? `deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`
-                : moduleName;
+                ? [`deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`, ...DEEPNOTE_TOOLKIT_PACKAGES]
+                : [moduleName];
 
         return {
-            args: ['-m', 'pip', ...args, pipPackageName].concat(getPinnedPackages('pip', moduleName))
+            args: ['-m', 'pip', ...args, ...pipPackages].concat(getPinnedPackages('pip', moduleName))
         };
     }
     private isPipAvailable(interpreter: PythonEnvironment | Environment): Promise<boolean> {

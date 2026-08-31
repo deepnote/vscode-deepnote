@@ -10,11 +10,6 @@ import { getTelemetrySafeHashedString } from '../../platform/telemetry/helpers';
 import { JupyterServerProviderHandle } from '../jupyter/types';
 import { IJupyterKernelSpec } from '../types';
 
-export interface VenvAndToolkitInstallation {
-    pythonInterpreter: PythonEnvironment;
-    toolkitVersion: string;
-}
-
 /**
  * Connection metadata for Deepnote Toolkit Kernels.
  * This kernel connects to a Jupyter server started by deepnote-toolkit.
@@ -84,65 +79,6 @@ export class DeepnoteKernelConnectionMetadata {
     }
 }
 
-export const IDeepnoteToolkitInstaller = Symbol('IDeepnoteToolkitInstaller');
-export interface IDeepnoteToolkitInstaller {
-    /**
-     * Ensures deepnote-toolkit is installed in a dedicated virtual environment.
-     * Environment-based method.
-     * @param baseInterpreter The base Python interpreter to use for creating the venv
-     * @param venvPath The path where the venv should be created
-     * @param managedVenv Whether the venv is managed by this extension (created by us)
-     * @param token Cancellation token to cancel the operation
-     * @returns The Python interpreter from the venv and the toolkit version
-     * @throws {DeepnoteVenvCreationError} If venv creation fails
-     * @throws {DeepnoteToolkitInstallError} If toolkit installation fails
-     */
-    ensureVenvAndToolkit(
-        baseInterpreter: PythonEnvironment,
-        venvPath: vscode.Uri,
-        managedVenv: boolean,
-        token?: vscode.CancellationToken
-    ): Promise<VenvAndToolkitInstallation>;
-
-    /**
-     * Install additional packages in the venv.
-     * @param venvPath The path to the venv
-     * @param packages List of package names to install
-     * @param token Cancellation token to cancel the operation
-     */
-    installAdditionalPackages(
-        venvPath: vscode.Uri,
-        packages: string[],
-        token?: vscode.CancellationToken
-    ): Promise<void>;
-
-    /**
-     * Install deepnote-toolkit in an existing external venv.
-     * This is used when the user has an external venv without toolkit installed.
-     * @param venvPath Path to the existing venv
-     * @param token Cancellation token to cancel the operation
-     * @returns The venv Python interpreter and toolkit version if successful
-     * @throws {DeepnoteToolkitInstallError} If toolkit installation fails
-     */
-    installToolkitInExistingVenv(
-        venvPath: vscode.Uri,
-        token?: vscode.CancellationToken
-    ): Promise<VenvAndToolkitInstallation>;
-
-    /**
-     * Gets the venv Python interpreter if toolkit is installed, undefined otherwise.
-     * @param deepnoteFileUri The URI of the .deepnote file
-     */
-    getVenvInterpreter(deepnoteFileUri: vscode.Uri): Promise<PythonEnvironment | undefined>;
-
-    /**
-     * Gets the hash for the venv directory/kernel spec name based on file path.
-     * @param deepnoteFileUri The URI of the .deepnote file
-     * @returns The hash string used for venv directory and kernel spec naming
-     */
-    getVenvHash(deepnoteFileUri: vscode.Uri): string;
-}
-
 export enum DeepnoteToolkitDependencyResponse {
     /** The toolkit is present, or the user approved the install and it succeeded. */
     ok,
@@ -184,13 +120,6 @@ export interface IDeepnoteServerStarter {
         deepnoteFileUri: vscode.Uri,
         token?: vscode.CancellationToken
     ): Promise<DeepnoteServerInfo>;
-
-    /**
-     * Stops the deepnote-toolkit server for a .deepnote file.
-     * @param deepnoteFileUri The URI of the .deepnote file
-     * @param token Cancellation token to cancel the operation
-     */
-    stopServer(deepnoteFileUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Disposes all server processes and resources.
@@ -245,17 +174,6 @@ export interface IDeepnoteKernelAutoSelector {
      */
     ensureEnvironmentConfiguredBeforeExecution(
         notebook: vscode.NotebookDocument,
-        token: vscode.CancellationToken
-    ): Promise<boolean>;
-
-    /**
-     * Automatically selects and starts a Deepnote kernel for the given notebook.
-     * @param notebook The notebook document
-     * @param token Cancellation token to cancel the operation
-     */
-    ensureKernelSelected(
-        notebook: vscode.NotebookDocument,
-        progress: { report(value: { message?: string; increment?: number }): void },
         token: vscode.CancellationToken
     ): Promise<boolean>;
 

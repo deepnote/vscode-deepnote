@@ -853,6 +853,7 @@
             {
                 "command": "deepnote.selectInterpreterForNotebook",
                 "title": "%deepnote.commands.selectInterpreterForNotebook.title%",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension",
                 "category": "Deepnote"
             }
         ],

@@ -469,7 +469,6 @@ export namespace DataScience {
     export const selectDifferentPythonInterpreter = l10n.t('Select a different Interpreter');
     export const selectInterpreterForNotebookPlaceholder = l10n.t('Select a Python interpreter for this notebook');
     export const selectInterpreterNoActiveNotebook = l10n.t('Open a Deepnote notebook first.');
-    export const selectInterpreterNoneFound = l10n.t('No Python interpreters found. Please install Python first.');
     export const switchingInterpreter = l10n.t('Switching interpreter...');
     export const kernelFilterPlaceholder = l10n.t('Choose the kernels that are available in the kernel picker.');
     export const recommendedItemCategoryInQuickPick = l10n.t('Recommended');

@@ -14,7 +14,8 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import {
     __getStartServerCalls,
     __getStopServerCalls,
-    __resetRuntimeCoreMock
+    __resetRuntimeCoreMock,
+    __setStopServerImpl
 } from '../../test/mocks/deepnoteRuntimeCore';
 import { stubReadFile } from '../../test/mocks/vscodeFs';
 import { resolvableInstance } from '../../test/datascience/helpers';
@@ -34,6 +35,10 @@ suite('DeepnoteServerStarter', () => {
     const interpreter: PythonEnvironment = {
         id: '/usr/bin/python3',
         uri: Uri.file('/usr/bin/python3')
+    };
+    const otherInterpreter: PythonEnvironment = {
+        id: '/envs/other/bin/python',
+        uri: Uri.file('/envs/other/bin/python')
     };
     // Two notebooks in the SAME project directory but different files (sibling files).
     const uriA = Uri.file('/workspace/project/notebook-a.deepnote');
@@ -125,7 +130,7 @@ suite('DeepnoteServerStarter', () => {
         });
     });
 
-    suite('per-notebook keying (startServer/stopServer)', () => {
+    suite('per-notebook keying', () => {
         test('starts SEPARATE servers for two different notebook URIs in the same dir (catches cross-sibling server reuse)', async () => {
             const infoA = await serverStarter.startServer(interpreter, uriA);
             const infoB = await serverStarter.startServer(interpreter, uriB);
@@ -161,35 +166,63 @@ suite('DeepnoteServerStarter', () => {
             );
         });
 
-        test('spawns a FRESH server when the same notebook starts again after stopServer (catches stale server-info reuse)', async () => {
-            // Health probes report "running" for everything; a stopped notebook must still respawn.
-            sinon.stub(globalThis, 'fetch').resolves(new Response());
-
-            await serverStarter.startServer(interpreter, uriA);
-            await serverStarter.stopServer(uriA);
+        test('passes the interpreter executable to runtime-core, not a derived directory', async () => {
             await serverStarter.startServer(interpreter, uriA);
 
-            assert.strictEqual(__getStartServerCalls().length, 2, 'restart after stop must spawn a new server');
+            assert.strictEqual(
+                __getStartServerCalls()[0].pythonEnv,
+                interpreter.uri.fsPath,
+                'runtime-core resolves a directory by probing for a generic python; only the exact executable is safe'
+            );
         });
 
-        test('stopServer(uriA) tears down ONLY notebook A; B keeps running (catches cross-notebook teardown)', async () => {
+        test('switching interpreter stops the old server and spawns a fresh one (catches stale server-info reuse)', async () => {
+            // Health probes report "running" for everything; a different interpreter must still respawn.
+            sinon.stub(globalThis, 'fetch').resolves(new Response());
+
+            const first = await serverStarter.startServer(interpreter, uriA);
+            await serverStarter.startServer(otherInterpreter, uriA);
+
+            assert.strictEqual(__getStartServerCalls().length, 2, 'a different interpreter must spawn a new server');
+            assert.deepStrictEqual(__getStopServerCalls(), [first], "the old interpreter's server must be stopped");
+        });
+
+        test('switching interpreter for notebook A leaves B running (catches cross-notebook teardown)', async () => {
             const infoA = await serverStarter.startServer(interpreter, uriA);
             await serverStarter.startServer(interpreter, uriB);
 
-            await serverStarter.stopServer(uriA);
+            await serverStarter.startServer(otherInterpreter, uriA);
 
             assert.deepStrictEqual(__getStopServerCalls(), [infoA], "only notebook A's server must be stopped");
         });
 
-        test('stopServer for a notebook with NO running server is a safe no-op (does not throw, does not call runtime-core stop)', async () => {
-            // Never started anything for this URI.
-            await serverStarter.stopServer(Uri.file('/workspace/project/never-started.deepnote'));
+        test('two concurrent starts across an interpreter switch spawn ONE server (catches an untracked leaked server)', async () => {
+            // Health probes report "running", so the joined caller reuses rather than respawning.
+            sinon.stub(globalThis, 'fetch').resolves(new Response());
+
+            const first = await serverStarter.startServer(interpreter, uriA);
+
+            // Hold the teardown open so both callers sit inside the switch window at once.
+            let releaseStop!: () => void;
+            const stopped = new Promise<void>((resolve) => (releaseStop = resolve));
+            __setStopServerImpl(() => stopped);
+
+            const both = Promise.all([
+                serverStarter.startServer(otherInterpreter, uriA),
+                serverStarter.startServer(otherInterpreter, uriA)
+            ]);
+
+            releaseStop();
+            const [a, b] = await both;
+            __setStopServerImpl(null);
 
             assert.strictEqual(
-                __getStopServerCalls().length,
-                0,
-                'stopping a notebook with no server must not invoke runtime-core stopServer'
+                __getStartServerCalls().length,
+                2,
+                'the second caller must join the in-flight switch, not spawn a server nothing can stop'
             );
+            assert.strictEqual(a, b, 'both callers must receive the same server');
+            assert.notStrictEqual(a.url, first.url, 'the switch must produce a new server');
         });
     });
 

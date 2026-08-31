@@ -71,7 +71,6 @@ import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 import { DirtyInputBlockStatusBarProvider } from './deepnote/dirtyInputBlockStatusBarProvider';
 import { StaleOutputStatusBarProvider } from './deepnote/staleOutputStatusBarProvider';
 import {
-    IDeepnoteToolkitInstaller,
     IDeepnoteServerStarter,
     IDeepnoteKernelAutoSelector,
     IDeepnoteServerProvider,
@@ -80,7 +79,6 @@ import {
     IServerHandleRegistry
 } from '../kernels/deepnote/types';
 import { DeepnoteAgentSkillsManager } from '../kernels/deepnote/deepnoteAgentSkillsManager.node';
-import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
 import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelector.node';
 import { DeepnoteNotebookInterpreters, IDeepnoteNotebookInterpreters } from './deepnote/deepnoteNotebookInterpreters';
@@ -252,7 +250,6 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
 
     // Deepnote kernel services
     serviceManager.addSingleton<DeepnoteAgentSkillsManager>(DeepnoteAgentSkillsManager, DeepnoteAgentSkillsManager);
-    serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);
     serviceManager.addSingleton<IDeepnoteServerStarter>(IDeepnoteServerStarter, DeepnoteServerStarter);
     serviceManager.addBinding(IDeepnoteServerStarter, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteServerProvider>(IDeepnoteServerProvider, DeepnoteServerProvider);

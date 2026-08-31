@@ -8,6 +8,7 @@ import { ILogger } from '../../platform/logging/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
+import { IDeepnoteNotebookInterpreters } from './deepnoteNotebookInterpreters';
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { DeepnoteMultiNotebookSplitter } from './deepnoteMultiNotebookSplitter';
 import { deepnoteFileExists } from './deepnoteSiblingFileAllocator';
@@ -41,7 +42,11 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         @inject(IIntegrationManager) integrationManager: IIntegrationManager,
         @inject(ILogger) private readonly logger: ILogger,
         @inject(ITelemetryService) private readonly analytics: ITelemetryService,
-        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService
+        @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService,
+        // Registered on the desktop target only; on web there is no interpreter to carry over.
+        @inject(IDeepnoteNotebookInterpreters)
+        @optional()
+        private readonly notebookInterpreters?: IDeepnoteNotebookInterpreters
     ) {
         this.integrationManager = integrationManager;
     }
@@ -82,6 +87,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         this.integrationManager.activate();
 
         this.multiNotebookSplitter = new DeepnoteMultiNotebookSplitter(
+            this.notebookInterpreters,
             () => this.explorerView.refresh(),
             this.logger,
             deepnoteFileExists,

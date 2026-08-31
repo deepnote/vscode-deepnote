@@ -84,13 +84,13 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pip
-          key: pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/platform/common/toolkitSpec.json', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
+          key: pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/platform/common/toolkitSpec.json', 'test/e2e/helpers/venv.ts') }}
 
       - name: Cache the managed Deepnote toolkit venv
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .venv-e2e
-          key: e2e-venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/platform/common/toolkitSpec.json', 'src/kernels/deepnote/deepnoteToolkitInstaller.node.ts') }}
+          key: e2e-venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/platform/common/toolkitSpec.json', 'test/e2e/helpers/venv.ts') }}
 
       - name: Warm the managed venv
         run: npm run setup:e2e:venv

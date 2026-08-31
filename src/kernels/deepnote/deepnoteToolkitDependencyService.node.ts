@@ -1,17 +1,24 @@
 import { inject, injectable } from 'inversify';
 import { CancellationToken, CancellationTokenSource, commands, window } from 'vscode';
 
+import { Commands } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { IDisposable, Resource } from '../../platform/common/types';
 import { Common, DataScience } from '../../platform/common/utils/localize';
 import { getPythonEnvDisplayName } from '../../platform/interpreter/helpers';
 import { ProductNames } from '../../platform/interpreter/installer/productNames';
 import { IInstaller, InstallerResponse, Product } from '../../platform/interpreter/installer/types';
+import { raceCancellation } from '../../platform/common/cancellation';
+import { noop } from '../../platform/common/utils/misc';
 import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
+import { getComparisonKey } from '../../platform/vscode-path/resources';
 import { DeepnoteToolkitDependencyResponse, IDeepnoteToolkitDependencyService } from './types';
 
-const SELECT_INTERPRETER_COMMAND = 'python.setInterpreter';
+// The per-notebook picker, not the Python extension's `python.setInterpreter`: that one changes
+// the workspace selection, which a notebook's own pin overrides — so the prompt would reappear
+// unchanged on the next run.
+const SELECT_INTERPRETER_COMMAND = Commands.SelectInterpreterForNotebook;
 
 /**
  * Asks for consent before installing deepnote-toolkit into the user's interpreter, mirroring
@@ -23,9 +30,41 @@ const SELECT_INTERPRETER_COMMAND = 'python.setInterpreter';
  */
 @injectable()
 export class DeepnoteToolkitDependencyService implements IDeepnoteToolkitDependencyService {
+    /**
+     * In-flight checks, keyed on the interpreter as `KernelDependencyService` does. The contended
+     * resource is that interpreter's site-packages, so two notebooks sharing one must join rather
+     * than each raise their own prompt and run their own pip.
+     */
+    private readonly pendingChecks = new Map<string, Promise<DeepnoteToolkitDependencyResponse>>();
+
     constructor(@inject(IInstaller) private readonly installer: IInstaller) {}
 
     public async ensureToolkitInstalled(
+        interpreter: PythonEnvironment,
+        resource: Resource,
+        token: CancellationToken
+    ): Promise<DeepnoteToolkitDependencyResponse> {
+        const key = getComparisonKey(interpreter.uri);
+        let pending = this.pendingChecks.get(key);
+
+        if (!pending) {
+            pending = this.checkAndInstall(interpreter, resource, token);
+            pending.catch(noop).finally(() => {
+                if (this.pendingChecks.get(key) === pending) {
+                    this.pendingChecks.delete(key);
+                }
+            });
+            this.pendingChecks.set(key, pending);
+        }
+
+        const response = await pending;
+
+        // The joined caller inherits the first one's outcome but keeps its own cancellation: its
+        // notebook may have closed while it waited.
+        return token.isCancellationRequested ? DeepnoteToolkitDependencyResponse.cancel : response;
+    }
+
+    private async checkAndInstall(
         interpreter: PythonEnvironment,
         resource: Resource,
         token: CancellationToken
@@ -47,11 +86,11 @@ export class DeepnoteToolkitDependencyService implements IDeepnoteToolkitDepende
 
         logger.info(`${moduleName} missing for ${getDisplayPath(resource)}, prompting to install`);
 
-        const selection = await window.showInformationMessage(
-            message,
-            { modal: true },
-            Common.install,
-            selectInterpreter
+        // Racing the token, as KernelDependencyService does: a caller whose notebook closed must not
+        // stay blocked on a modal only the user can dismiss.
+        const selection = await raceCancellation(
+            token,
+            window.showInformationMessage(message, { modal: true }, Common.install, selectInterpreter)
         );
 
         if (selection === selectInterpreter) {

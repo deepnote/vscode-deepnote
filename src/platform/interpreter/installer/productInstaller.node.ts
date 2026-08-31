@@ -96,16 +96,22 @@ export class DataScienceInstaller {
         silent?: boolean
     ): Promise<InstallerResponse> {
         let installer: IModuleInstaller | undefined;
+        const channels = this.serviceContainer.get<IInstallationChannelManager>(IInstallationChannelManager);
 
-        // deepnote-toolkit is PyPI-only with pip-specific [server] extras syntax,
-        // so always use PipInstaller regardless of environment type.
-        // We bypass getInstallationChannels() because it filters by isSupported(),
-        // and PipInstaller.isSupported() rejects Conda/Pipenv/Poetry interpreters.
+        // deepnote-toolkit is PyPI-only with pip-specific [server] extras syntax, so pip installs it
+        // whatever the environment type. getInstallationChannel() would refuse: PipInstaller reports
+        // itself unsupported for Conda/Pipenv/Poetry, and the channel it picks instead would install
+        // under the wrong package name. Until the other installers learn the deepnote-toolkit package
+        // name, only the environment-type half of isSupported() is skipped — pip must still exist, or
+        // the install dies on a raw "No module named pip".
         if (product === Product.deepnoteToolkit) {
-            const allInstallers = this.serviceContainer.getAll<IModuleInstaller>(IModuleInstaller);
-            installer = allInstallers.find((i) => i.type === ModuleInstallerType.Pip);
+            if (await this.isInstalled(Product.pip, interpreter)) {
+                const allInstallers = this.serviceContainer.getAll<IModuleInstaller>(IModuleInstaller);
+                installer = allInstallers.find((i) => i.type === ModuleInstallerType.Pip);
+            } else {
+                await channels.showNoInstallersMessage(interpreter);
+            }
         } else {
-            const channels = this.serviceContainer.get<IInstallationChannelManager>(IInstallationChannelManager);
             installer = await channels.getInstallationChannel(product, interpreter);
         }
 

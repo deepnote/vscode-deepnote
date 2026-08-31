@@ -2,8 +2,8 @@ import { assert } from 'chai';
 import { instance, mock, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
-import { IInterpreterService } from '../../../platform/interpreter/contracts';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
+import { IDeepnoteNotebookInterpreters } from '../deepnoteNotebookInterpreters';
 import { EnvironmentCapture, parsePipFreeze } from './environmentCapture.node';
 
 const NOTEBOOK = Uri.file('/w/project.deepnote');
@@ -23,10 +23,10 @@ class StubbedCapture extends EnvironmentCapture {
     public seenPackagesInterpreter: PythonEnvironment | undefined;
 
     constructor(
-        interpreterService: IInterpreterService,
+        notebookInterpreters: IDeepnoteNotebookInterpreters,
         private readonly stub: Stub
     ) {
-        super(interpreterService);
+        super(notebookInterpreters);
     }
 
     protected override async determinePythonVersion(): Promise<string | undefined> {
@@ -45,10 +45,10 @@ class StubbedCapture extends EnvironmentCapture {
 }
 
 function captureWith(interpreter: PythonEnvironment | undefined, stub: Stub): StubbedCapture {
-    const interpreterService = mock<IInterpreterService>();
-    when(interpreterService.getActiveInterpreter(NOTEBOOK)).thenResolve(interpreter);
+    const notebookInterpreters = mock<IDeepnoteNotebookInterpreters>();
+    when(notebookInterpreters.resolve(NOTEBOOK)).thenResolve(interpreter);
 
-    return new StubbedCapture(instance(interpreterService), stub);
+    return new StubbedCapture(instance(notebookInterpreters), stub);
 }
 
 suite('EnvironmentCapture', () => {
@@ -175,7 +175,7 @@ package4==4.0.0.dev1+local`;
     });
 
     suite('captureEnvironment', () => {
-        test('captures from the active interpreter, with no Deepnote environment involved', async () => {
+        test('captures from the interpreter the notebook runs on', async () => {
             const capture = captureWith(INTERPRETER, {
                 version: '3.12.13',
                 environment: 'venv',
@@ -189,6 +189,15 @@ package4==4.0.0.dev1+local`;
             assert.strictEqual(capture.seenPackagesInterpreter, INTERPRETER);
         });
 
+        test("captures the notebook's pinned interpreter, not the workspace-active one", async () => {
+            const pinned: PythonEnvironment = { id: 'py-pinned', uri: Uri.file('/w/other-venv/bin/python') };
+            const capture = captureWith(pinned, { version: '3.12.13', packages: { numpy: '1.26.0' } });
+
+            await capture.captureEnvironment(NOTEBOOK);
+
+            assert.strictEqual(capture.seenPackagesInterpreter, pinned);
+        });
+
         test('reports the interpreter type it was given rather than assuming a venv', async () => {
             const capture = captureWith(INTERPRETER, { version: '3.12.13', environment: 'conda' });
 
@@ -197,7 +206,7 @@ package4==4.0.0.dev1+local`;
             assert.strictEqual(environment?.python?.environment, 'conda');
         });
 
-        test('returns undefined when the notebook has no active interpreter', async () => {
+        test('returns undefined when no interpreter resolves for the notebook', async () => {
             const capture = captureWith(undefined, { version: '3.12.13' });
 
             assert.isUndefined(await capture.captureEnvironment(NOTEBOOK));

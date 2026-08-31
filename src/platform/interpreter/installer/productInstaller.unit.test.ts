@@ -29,6 +29,14 @@ class AlwaysInstalledDataScienceInstaller extends DataScienceInstaller {
     }
 }
 
+/** Everything is installed except pip itself — a uv-created venv or a bare system python. */
+class PipMissingDataScienceInstaller extends DataScienceInstaller {
+    // eslint-disable-next-line class-methods-use-this
+    public override async isInstalled(product: Product, _resource?: InterpreterUri | Environment): Promise<boolean> {
+        return product !== Product.pip;
+    }
+}
+
 suite('DataScienceInstaller install', async () => {
     let serviceContainer: TypeMoq.IMock<IServiceContainer>;
     let installationChannelManager: TypeMoq.IMock<IInstallationChannelManager>;
@@ -263,6 +271,39 @@ suite('DataScienceInstaller install', async () => {
                     TypeMoq.It.isAny()
                 ),
             TypeMoq.Times.never()
+        );
+    });
+
+    test('Will not run pip for deepnoteToolkit when the interpreter has no pip, and says so', async () => {
+        const testEnvironment: PythonEnvironment = {
+            id: interpreterPath.fsPath,
+            uri: interpreterPath
+        };
+        const pipInstaller = TypeMoq.Mock.ofType<IModuleInstaller>();
+        pipInstaller.setup((c) => c.type).returns(() => ModuleInstallerType.Pip);
+        pipInstaller.setup((p) => (p as any).then).returns(() => undefined);
+        serviceContainer
+            .setup((c) => c.getAll(TypeMoq.It.isValue(IModuleInstaller)))
+            .returns(() => [pipInstaller.object]);
+
+        const installer = new PipMissingDataScienceInstaller(serviceContainer.object, outputChannel.object);
+        const result = await installer.install(Product.deepnoteToolkit, testEnvironment, tokenSource);
+
+        expect(result).to.equal(InstallerResponse.Ignore, 'Should not report an install it never ran');
+        pipInstaller.verify(
+            (c) =>
+                c.installModule(
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny()
+                ),
+            TypeMoq.Times.never()
+        );
+        installationChannelManager.verify(
+            (c) => c.showNoInstallersMessage(TypeMoq.It.isValue(testEnvironment)),
+            TypeMoq.Times.once()
         );
     });
 });

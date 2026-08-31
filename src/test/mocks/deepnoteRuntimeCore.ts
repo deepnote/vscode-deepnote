@@ -15,6 +15,7 @@ const startServerCalls: ServerOptions[] = [];
 const stopServerCalls: ServerInfo[] = [];
 let nextServerId = 0;
 let startServerImpl: RuntimeCore['startServer'] | null = null;
+let stopServerImpl: RuntimeCore['stopServer'] | null = null;
 
 function makeFakeProcess(id: number): ChildProcess {
     // Partial stand-in: only the members DeepnoteServerStarter touches.
@@ -65,6 +66,10 @@ export const startServer: RuntimeCore['startServer'] = async (options) => {
 
 export const stopServer: RuntimeCore['stopServer'] = async (info) => {
     stopServerCalls.push(info);
+
+    if (stopServerImpl) {
+        await stopServerImpl(info);
+    }
 };
 
 // Test-only helpers (prefixed with __ to signal they are not part of the real API).
@@ -88,6 +93,10 @@ export function __setStartServerImpl(impl: RuntimeCore['startServer'] | null): v
     startServerImpl = impl;
 }
 
+export function __setStopServerImpl(impl: RuntimeCore['stopServer'] | null): void {
+    stopServerImpl = impl;
+}
+
 export function __resetRuntimeCoreMock(): void {
     executeAgentBlockCalls.length = 0;
     serializeNotebookContextFromBlocksCalls.length = 0;
@@ -95,4 +104,5 @@ export function __resetRuntimeCoreMock(): void {
     stopServerCalls.length = 0;
     nextServerId = 0;
     startServerImpl = null;
+    stopServerImpl = null;
 }

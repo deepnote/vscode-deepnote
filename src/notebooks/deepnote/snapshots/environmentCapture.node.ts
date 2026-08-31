@@ -8,11 +8,11 @@ import type { Environment } from '@deepnote/blocks';
 import { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import { computeHash } from '../../../platform/common/crypto';
 import { raceTimeout } from '../../../platform/common/utils/async';
-import { IInterpreterService } from '../../../platform/interpreter/contracts';
 import { getEnvironmentType } from '../../../platform/interpreter/helpers';
 import { EnvironmentType } from '../../../platform/pythonEnvironments/info';
 import { logger } from '../../../platform/logging';
 import { parsePipFreezeFile } from './pipFileParser';
+import { IDeepnoteNotebookInterpreters } from '../deepnoteNotebookInterpreters';
 import { Uri } from 'vscode';
 
 const captureTimeoutInMilliseconds = 5_000;
@@ -43,13 +43,17 @@ const ENVIRONMENT_TYPES: Partial<Record<EnvironmentType, PythonEnvironmentType>>
 
 @injectable()
 export class EnvironmentCapture implements IEnvironmentCapture {
-    constructor(@inject(IInterpreterService) private readonly interpreterService: IInterpreterService) {}
+    constructor(
+        // The same resolution the kernel uses, so a snapshot describes the environment the notebook
+        // actually executed in rather than the workspace's active interpreter.
+        @inject(IDeepnoteNotebookInterpreters) private readonly notebookInterpreters: IDeepnoteNotebookInterpreters
+    ) {}
 
     async captureEnvironment(notebookUri: Uri): Promise<Environment | undefined> {
-        const interpreter = await this.interpreterService.getActiveInterpreter(notebookUri);
+        const interpreter = await this.notebookInterpreters.resolve(notebookUri);
 
         if (!interpreter) {
-            logger.warn('[EnvironmentCapture] No active Python interpreter for the given notebook');
+            logger.warn('[EnvironmentCapture] No Python interpreter resolved for the given notebook');
 
             return undefined;
         }

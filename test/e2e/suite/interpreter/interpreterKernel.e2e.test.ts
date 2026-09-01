@@ -24,7 +24,7 @@ import { expect } from 'chai';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { EditorView, VSBrowser, WebView, Workbench } from 'vscode-extension-tester';
+import { EditorView, InputBox, VSBrowser, WebView, Workbench } from 'vscode-extension-tester';
 
 import {
     KERNEL_CONNECT_TIMEOUT,
@@ -55,6 +55,22 @@ function venvPython(venvDir: string): string {
     return process.platform === 'win32'
         ? path.join(venvDir, 'Scripts', 'python.exe')
         : path.join(venvDir, 'bin', 'python');
+}
+
+/** Reads the label and description of every entry the quick pick currently renders. */
+async function readQuickPickEntries(picker: InputBox): Promise<Array<{ description: string; label: string }>> {
+    const items = await picker.getQuickPicks().catch((error) => {
+        console.warn('[deepnote-e2e] read kernel picker entries:', error);
+
+        return [];
+    });
+
+    return Promise.all(
+        items.map(async (item) => ({
+            description: (await item.getDescription().catch(() => '')) ?? '',
+            label: await item.getLabel().catch(() => '')
+        }))
+    );
 }
 
 /** True when `deepnote_toolkit` imports in the given interpreter. */
@@ -187,15 +203,39 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
         // separates "active interpreter" from the old Deepnote-managed environment.
         expect(renderedOutput).to.contain(venvDir);
 
-        // The kernel picker is the only place the description is rendered, so open it to capture
-        // both halves of the entry: the environment name as the label, its path as the description.
+        // The kernel picker is the only place the description is rendered, so open it and assert on
+        // both halves of the entry: the environment name as the label, its interpreter path as the
+        // description. That path is rendered relative to the workspace folder, so it is matched on
+        // the venv's directory name rather than on the absolute path.
         await new Workbench().executeCommand('notebook.selectKernel');
 
         const picker = await tryOpenInputBox(QUICK_PICK_TIMEOUT);
 
         expect(picker, 'the kernel picker should open').to.not.equal(undefined);
 
+        const venvName = path.basename(venvDir);
+        let entries: Array<{ description: string; label: string }> = [];
+
+        await driver
+            .wait(
+                async () => {
+                    entries = await readQuickPickEntries(picker!);
+
+                    return entries.some((entry) => entry.description.includes(venvName));
+                },
+                QUICK_PICK_TIMEOUT,
+                `no kernel entry showed a path under ${venvName}`
+            )
+            // Swallowed so the assertion below can report what the picker actually listed.
+            .catch(() => undefined);
+
         await shot('kernel-picker');
+
+        const venvEntry = entries.find((entry) => entry.description.includes(venvName));
+
+        expect(venvEntry, `the kernel picker listed ${JSON.stringify(entries)}`).to.not.equal(undefined);
+        expect(venvEntry?.label, 'the kernel entry must be named after the environment').to.not.equal('');
+
         await picker?.cancel();
     });
 });

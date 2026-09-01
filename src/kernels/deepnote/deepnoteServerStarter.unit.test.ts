@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { Uri } from 'vscode';
+import { CancellationTokenSource, Uri } from 'vscode';
 
 import { serializeProjectFile } from '../../notebooks/deepnote/deepnoteTestHelpers';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
@@ -197,7 +197,8 @@ suite('DeepnoteServerStarter', () => {
         });
 
         test('two concurrent starts across an interpreter switch spawn ONE server (catches an untracked leaked server)', async () => {
-            // Health probes report "running", so the joined caller reuses rather than respawning.
+            // Health probes report "running", so the joined caller reuses the server rather than
+            // starting a second one.
             sinon.stub(globalThis, 'fetch').resolves(new Response());
 
             const first = await serverStarter.startServer(interpreter, uriA);
@@ -223,6 +224,30 @@ suite('DeepnoteServerStarter', () => {
             );
             assert.strictEqual(a, b, 'both callers must receive the same server');
             assert.notStrictEqual(a.url, first.url, 'the switch must produce a new server');
+        });
+
+        test('a cancelled interpreter switch still stops the old server (catches an orphaned process)', async () => {
+            const first = await serverStarter.startServer(interpreter, uriA);
+            const cts = new CancellationTokenSource();
+
+            // Cancelled before the switch is scheduled, as it is when the user dismisses the
+            // progress notification while an earlier operation on this notebook is still running.
+            cts.cancel();
+
+            try {
+                await serverStarter.startServer(otherInterpreter, uriA, cts.token).then(
+                    () => assert.fail('a cancelled switch must not resolve'),
+                    () => undefined
+                );
+
+                assert.deepStrictEqual(
+                    __getStopServerCalls(),
+                    [first],
+                    "the old interpreter's server must be stopped even when the switch is cancelled"
+                );
+            } finally {
+                cts.dispose();
+            }
         });
     });
 

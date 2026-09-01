@@ -157,7 +157,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const operation = {
             type: 'start' as const,
             promise: (contextToStop
-                ? this.stopServerForEnvironment(contextToStop, deepnoteFileUri, token)
+                ? this.stopServerForEnvironment(contextToStop, deepnoteFileUri)
                 : Promise.resolve()
             ).then(() => this.startServerForEnvironment(contextToStart, interpreter, deepnoteFileUri, token))
         };
@@ -261,15 +261,13 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
     /**
      * Stop the server using @deepnote/runtime-core's `stopServer` (SIGTERM -> wait -> SIGKILL).
+     *
+     * Deliberately not cancellable. By the time this runs `projectContexts` already points at the
+     * new interpreter, so this context is the only thing still holding the old server: skipping the
+     * stop would leave a process that neither `dispose` nor a later `startServer` can reach.
      */
-    private async stopServerForEnvironment(
-        projectContext: ProjectContext,
-        deepnoteFileUri: Uri,
-        token?: CancellationToken
-    ): Promise<void> {
+    private async stopServerForEnvironment(projectContext: ProjectContext, deepnoteFileUri: Uri): Promise<void> {
         const fileKey = deepnoteFileUri.fsPath;
-
-        Cancellation.throwIfCanceled(token);
 
         const { serverInfo } = projectContext;
 
@@ -290,8 +288,6 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
                 }
             }
         }
-
-        Cancellation.throwIfCanceled(token);
 
         this.serverOutputByFile.delete(fileKey);
 

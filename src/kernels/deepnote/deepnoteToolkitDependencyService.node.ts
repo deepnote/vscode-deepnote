@@ -57,11 +57,10 @@ export class DeepnoteToolkitDependencyService implements IDeepnoteToolkitDepende
             this.pendingChecks.set(key, pending);
         }
 
-        const response = await pending;
-
-        // The joined caller inherits the first one's outcome but keeps its own cancellation: its
-        // notebook may have closed while it waited.
-        return token.isCancellationRequested ? DeepnoteToolkitDependencyResponse.cancel : response;
+        // The joined caller inherits the first one's outcome but keeps its own cancellation, and
+        // stops waiting the moment its notebook closes rather than sitting behind a shared modal or
+        // pip run it no longer has a use for. The shared work carries on for whoever started it.
+        return raceCancellation(token, DeepnoteToolkitDependencyResponse.cancel, pending);
     }
 
     private async checkAndInstall(

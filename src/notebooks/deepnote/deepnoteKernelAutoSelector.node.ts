@@ -457,6 +457,18 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         logger.info(`Server running at ${serverInfo.url}`);
 
+        // Starting the server can take up to two minutes, and onDidCloseNotebook has already run its
+        // teardown by now for a notebook closed in that window. Everything below re-registers what
+        // that teardown cleared -- the controller, its metadata, the interpreter id -- and close does
+        // not fire twice, so the entries would outlive the notebook and keep isKernelReady true,
+        // costing it its language servers on reopen. Nothing has been registered yet at this point.
+        // The server itself deliberately keeps running, exactly as it does for any closed notebook.
+        if (notebook.isClosed) {
+            logger.info(`${notebookKey} was closed during setup, abandoning it`);
+
+            return;
+        }
+
         // Create server provider handle using interpreter ID
         const serverProviderHandle: JupyterServerProviderHandle = {
             extensionId: JVSC_EXTENSION_ID,
@@ -468,20 +480,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
         this.serverHandleRegistry.set(notebookKey, serverProviderHandle.handle);
 
-        // Starting the server can take up to two minutes, and onDidCloseNotebook has already run its
-        // teardown by now for a notebook closed in that window; starting LSP would leak a pylsp
-        // process nothing will ever stop.
-        if (notebook.isClosed) {
-            logger.info(`${notebookKey} was closed during setup, not starting LSP clients`);
-        } else {
-            // Use the active interpreter directly for LSP (it already has deepnote-toolkit installed)
-            try {
-                await this.lspClientManager.startLspClients(notebook.uri, interpreter, progressToken);
+        // Use the active interpreter directly for LSP (it already has deepnote-toolkit installed)
+        try {
+            await this.lspClientManager.startLspClients(notebook.uri, interpreter, progressToken);
 
-                logger.info(`✓ LSP clients started for ${notebookKey}`);
-            } catch (error) {
-                logger.error(`Failed to start LSP clients for ${notebookKey}:`, error);
-            }
+            logger.info(`✓ LSP clients started for ${notebookKey}`);
+        } catch (error) {
+            logger.error(`Failed to start LSP clients for ${notebookKey}:`, error);
         }
 
         progress.report({ message: 'Connecting to kernel...' });
@@ -789,7 +794,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * to restart LSP is logged rather than raised over whatever caused the switch to fail.
      */
     private async restoreLspClients(notebook: NotebookDocument, interpreterId: string | undefined): Promise<void> {
-        if (!interpreterId) {
+        // A setup abandoned because the notebook closed also lands here, and putting language servers
+        // back on a notebook nobody has open leaks the pylsp process onDidCloseNotebook just stopped.
+        if (!interpreterId || notebook.isClosed) {
             return;
         }
 

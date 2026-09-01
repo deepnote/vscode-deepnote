@@ -118,7 +118,7 @@ export class DeepnoteLspClientManager
         logger.info(`Starting LSP clients for ${notebookKey} using interpreter ${interpreter.uri.fsPath}.`);
 
         // Claimed before the first await below, so a stop issued while this runs waits for it
-        // instead of no-opping against a `clients` map this call has not populated yet.
+        // instead of doing nothing against a `clients` map this call has not populated yet.
         const start = this.startClients(notebookKey, notebookUri, interpreter, existing, token);
 
         this.pendingStarts.set(notebookKey, start);

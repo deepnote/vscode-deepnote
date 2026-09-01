@@ -989,6 +989,30 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             verify(mockLspClientManager.startLspClients(anything(), previous)).once();
         });
 
+        test('does NOT put them back when the notebook closed during the setup it abandoned', async () => {
+            const previous: PythonEnvironment = { id: 'previous-id', uri: Uri.file('/envs/previous/bin/python') };
+            const closedNotebook = { ...mockNotebook, isClosed: true } as unknown as NotebookDocument;
+            (selector as unknown as { notebookInterpreterIds: Map<string, string> }).notebookInterpreterIds.set(
+                getNotebookKey(mockNotebook.uri),
+                previous.id
+            );
+            when(mockKernelProvider.get(anything())).thenReturn(undefined);
+            when(mockInterpreterService.getInterpreterDetails(anything())).thenResolve(previous);
+            // Abandoning setup for a closed notebook looks exactly like a switch that did not take.
+            sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+            const rebuilt = await selector.rebuildController(
+                closedNotebook,
+                mockProgress,
+                instance(mockCancellationToken)
+            );
+
+            assert.isFalse(rebuilt);
+            // Restoring here would start a pylsp process that onDidCloseNotebook has already stopped
+            // and will never be asked to stop again.
+            verify(mockLspClientManager.startLspClients(anything(), previous)).never();
+        });
+
         test('stops the new interpreter clients before restoring, so a live one cannot block it', async () => {
             const previous: PythonEnvironment = { id: 'previous-id', uri: Uri.file('/envs/previous/bin/python') };
             (selector as unknown as { notebookInterpreterIds: Map<string, string> }).notebookInterpreterIds.set(
@@ -1089,6 +1113,32 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             verify(mockLspClientManager.startLspClients(anything(), anything(), anything())).never();
         });
+
+        test('registers nothing for it, so the close teardown is not undone behind its back', async () => {
+            const notebookKey = getNotebookKey(mockNotebook.uri);
+            const interpreter: PythonEnvironment = {
+                id: '/usr/bin/python3.12',
+                uri: Uri.parse('/usr/bin/python3.12')
+            };
+            const closedNotebook = { ...mockNotebook, isClosed: true } as unknown as NotebookDocument;
+
+            when(mockServerStarter.startServer(anything(), anything(), anything())).thenResolve({
+                url: 'http://127.0.0.1:9999',
+                token: '',
+                jupyterPort: 9999,
+                lspPort: 9998
+            } as never);
+
+            await selector
+                .ensureKernelSelectedWithInterpreter(closedNotebook, interpreter, notebookKey, mockProgress, liveToken)
+                .catch(() => undefined);
+
+            // onDidCloseNotebook has already run and does not fire twice, so anything registered here
+            // would outlive the notebook for the rest of the session.
+            assert.isUndefined(registry.get(notebookKey), 'the server handle must not be tracked');
+            verify(mockServerProvider.registerServer(anything(), anything())).never();
+            verify(mockControllerRegistration.addOrUpdate(anything(), anything())).never();
+        });
     });
 
     suite('applyInterpreter', () => {
@@ -1159,7 +1209,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         });
 
         test('keeps a pin chosen during the failed rebuild instead of clobbering it', async () => {
-            const RECHOSEN = Uri.file('/envs/rechosen/bin/python');
+            const NEWER_PIN = Uri.file('/envs/newer/bin/python');
             withPin(PREVIOUS);
             // The toolkit prompt's "Select a different Interpreter" re-enters applyInterpreter and
             // pins another interpreter before this rebuild reports that it did not take.
@@ -1167,7 +1217,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 async (_options, callback) => callback({ report: () => undefined }, instance(mockCancellationToken))
             );
             sandbox.stub(selector, 'rebuildController').callsFake(async () => {
-                await instance(mockNotebookInterpreters).set(mockNotebook.uri, RECHOSEN);
+                await instance(mockNotebookInterpreters).set(mockNotebook.uri, NEWER_PIN);
 
                 return false;
             });
@@ -1176,7 +1226,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             assert.strictEqual(
                 instance(mockNotebookInterpreters).get(mockNotebook.uri)?.toString(),
-                RECHOSEN.toString(),
+                NEWER_PIN.toString(),
                 'the newer pin must survive'
             );
         });

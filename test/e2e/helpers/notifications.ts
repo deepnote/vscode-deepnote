@@ -60,30 +60,3 @@ export async function waitForNotification(
         return undefined;
     }
 }
-
-/**
- * Waits until no visible notification matches `pattern` any more. A progress notification is
- * removed when its operation settles, so this gates on "that work finished" rather than on a
- * fixed sleep.
- */
-export async function waitForNotificationToClear(pattern: RegExp, timeout: number): Promise<void> {
-    await VSBrowser.instance.driver.wait(
-        async () => {
-            const notifications = await new Workbench().getNotifications().catch((error) => {
-                console.warn('[deepnote-e2e] get notifications:', error);
-
-                return [] as Notification[];
-            });
-            for (const notification of notifications) {
-                const message = await notification.getMessage().catch(() => '');
-                if (pattern.test(message)) {
-                    return false;
-                }
-            }
-
-            return true;
-        },
-        timeout,
-        `timed out waiting for notifications matching ${pattern} to clear`
-    );
-}

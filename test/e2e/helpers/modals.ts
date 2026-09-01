@@ -1,4 +1,4 @@
-import { By, VSBrowser } from 'vscode-extension-tester';
+import { By, VSBrowser, WebElement } from 'vscode-extension-tester';
 
 import { WORKBENCH_TIMEOUT } from './constants';
 
@@ -8,33 +8,37 @@ import { WORKBENCH_TIMEOUT } from './constants';
  */
 export async function confirmModalDialog(
     label: string,
-    options?: { messageIncludes?: string; onVisible?: () => Promise<void> }
+    options?: { messageIncludes?: string; onVisible?: (dialog: WebElement) => Promise<void> }
 ): Promise<void> {
     const driver = VSBrowser.instance.driver;
     const messageIncludes = options?.messageIncludes;
 
-    await driver.wait(
+    const dialog = await driver.wait(
         async () => {
             for (const box of await driver.findElements(By.css('.monaco-dialog-box')).catch(() => [])) {
                 const text = await box.getText().catch(() => '');
                 if (!messageIncludes || text.includes(messageIncludes)) {
-                    return true;
+                    return box;
                 }
             }
 
-            return false;
+            return undefined;
         },
         WORKBENCH_TIMEOUT,
         `modal dialog${messageIncludes ? ` containing "${messageIncludes}"` : ''} did not appear`
     );
+    if (!dialog) {
+        throw new Error(`modal dialog${messageIncludes ? ` containing "${messageIncludes}"` : ''} not found`);
+    }
 
     // Runs while the dialog is still up — the only chance to capture or inspect it.
-    await options?.onVisible?.();
+    await options?.onVisible?.(dialog);
 
+    // Scoped to the matched dialog: an unscoped query would discard what `messageIncludes` resolved.
     const button = await driver.wait(
         async () => {
-            const selector = '.monaco-dialog-box .dialog-buttons .monaco-button, .monaco-dialog-box .monaco-button';
-            for (const element of await driver.findElements(By.css(selector)).catch(() => [])) {
+            const selector = '.dialog-buttons .monaco-button, .monaco-button';
+            for (const element of await dialog.findElements(By.css(selector)).catch(() => [])) {
                 if ((await element.getText().catch(() => '')).trim() === label) {
                     return element;
                 }

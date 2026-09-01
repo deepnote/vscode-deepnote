@@ -8,23 +8,12 @@ import { _SCRIPTS_DIR } from '../internal/scripts/index.node';
 import { ModuleInstallerType, ModuleInstallFlags, Product, IInstaller } from './types';
 import { EnvironmentType, PythonEnvironment } from '../../pythonEnvironments/info';
 import { IServiceContainer } from '../../ioc/types';
-import { translateProductToModule } from './utils';
+import { translateModuleToPackages, translateProductToModule } from './utils';
 import { IPythonExecutionFactory } from '../types.node';
 import { getPinnedPackages } from './pinnedPackages';
 import { Environment } from '@vscode/python-extension';
 import { getEnvironmentType } from '../helpers';
 import { workspace } from 'vscode';
-
-import { DEEPNOTE_TOOLKIT_PACKAGES, DEEPNOTE_TOOLKIT_VERSION } from '../../common/constants';
-
-function getPipPackages(moduleName: string): string[] {
-    switch (moduleName) {
-        case translateProductToModule(Product.deepnoteToolkit):
-            return [`deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`, ...DEEPNOTE_TOOLKIT_PACKAGES];
-        default:
-            return [moduleName];
-    }
-}
 
 /**
  * Installer for pip. Default installer for most everything.
@@ -96,10 +85,7 @@ export class PipInstaller extends ModuleInstaller {
         if (getEnvironmentType(interpreter) === EnvironmentType.Unknown) {
             args.push('--user');
         }
-        // deepnote_toolkit's import name differs from the pip package name (deepnote-toolkit[server]).
-        // The spec's companion packages ride along: the [server] extra pins the pylsp fork without
-        // its own [all] extras, so lint diagnostics and formatting silently disappear without them.
-        const pipPackages = getPipPackages(moduleName);
+        const pipPackages = translateModuleToPackages(moduleName);
 
         return {
             args: ['-m', 'pip', ...args, ...pipPackages].concat(getPinnedPackages('pip', moduleName))

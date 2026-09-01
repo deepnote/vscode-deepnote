@@ -12,6 +12,7 @@ import { ModuleInstallerType } from './types';
 import { Environment } from '@vscode/python-extension';
 import { Uri } from 'vscode';
 import { getEnvironmentType } from '../helpers';
+import { translateModuleToPackages } from './utils';
 
 export const poetryName = 'poetry';
 
@@ -74,7 +75,11 @@ export class PoetryInstaller extends ModuleInstaller {
         interpreter: PythonEnvironment | Environment
     ): Promise<ExecutionInstallArgs> {
         const execPath = this.configurationService.getSettings(undefined).poetryPath;
-        const args = [execPath, 'add', '--dev', moduleName];
+        // useShellExec joins these args with a space and runs them through a shell unescaped, so a
+        // spec like package[extra]==1.0 must carry its own quotes or the brackets glob-expand.
+        // Double, not single: cmd.exe only strips double quotes.
+        const packages = translateModuleToPackages(moduleName).map((pkg) => `"${pkg}"`);
+        const args = [execPath, 'add', '--dev', ...packages];
         const cwd = getInterpreterWorkspaceFolder(interpreter)?.fsPath;
 
         // TODO: We have to shell exec this because child_process.spawn will die

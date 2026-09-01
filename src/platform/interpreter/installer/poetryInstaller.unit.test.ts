@@ -12,7 +12,9 @@ import { EnvironmentType, PythonEnvironment } from '../../../platform/pythonEnvi
 import { TEST_LAYOUT_ROOT } from '../../../test/pythonEnvironments/constants';
 import { JupyterSettings } from '../../../platform/common/configSettings';
 import { ExecutionInstallArgs } from '../../../platform/interpreter/installer/moduleInstaller.node';
-import { ModuleInstallFlags } from '../../../platform/interpreter/installer/types';
+import { ModuleInstallFlags, Product } from '../../../platform/interpreter/installer/types';
+import { translateProductToModule } from '../../../platform/interpreter/installer/utils';
+import { DEEPNOTE_TOOLKIT_PACKAGES, DEEPNOTE_TOOLKIT_VERSION } from '../../../platform/common/constants';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { Disposable } from 'vscode';
 import { dispose } from '../../common/utils/lifecycle';
@@ -190,7 +192,42 @@ suite('Module Installer - Poetry', () => {
 
         const info = await poetryInstaller.getExecutionArgs('something', interpreter);
 
-        assert.deepEqual(info, { args: ['poetry path', 'add', '--dev', 'something'], cwd: null, useShellExec: true });
+        assert.deepStrictEqual(info, {
+            args: ['poetry path', 'add', '--dev', '"something"'],
+            cwd: undefined,
+            useShellExec: true
+        });
+    });
+    test('Quotes each deepnote-toolkit package spec so shellExec does not glob-expand the brackets', async () => {
+        const interpreter: PythonEnvironment = {
+            uri: Uri.file('foobar'),
+            id: Uri.file('foobar').fsPath
+        };
+        when(environments.known).thenReturn([
+            {
+                id: interpreter.id,
+                tools: [EnvironmentType.Poetry]
+            } as any
+        ]);
+
+        const settings = mock(JupyterSettings);
+        when(configurationService.getSettings(undefined)).thenReturn(instance(settings));
+        when(settings.poetryPath).thenReturn('poetry path');
+
+        const moduleName = translateProductToModule(Product.deepnoteToolkit);
+        const info = await poetryInstaller.getExecutionArgs(moduleName, interpreter);
+
+        assert.deepStrictEqual(info, {
+            args: [
+                'poetry path',
+                'add',
+                '--dev',
+                `"deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}"`,
+                ...DEEPNOTE_TOOLKIT_PACKAGES.map((pkg) => `"${pkg}"`)
+            ],
+            cwd: undefined,
+            useShellExec: true
+        });
     });
     test('Is supported returns true if selected interpreter is related to the workspace', async () => {
         const uri = Uri.file(project1);

@@ -95,20 +95,21 @@ export class DataScienceInstaller {
         installPipIfRequired?: boolean,
         silent?: boolean
     ): Promise<InstallerResponse> {
-        let installer: IModuleInstaller | undefined;
         const channels = this.serviceContainer.get<IInstallationChannelManager>(IInstallationChannelManager);
+        let installer: IModuleInstaller | undefined;
 
-        // deepnote-toolkit is PyPI-only with pip-specific [server] extras syntax, so pip installs it
-        // whatever the environment type. getInstallationChannel() would refuse: PipInstaller reports
-        // itself unsupported for Conda/Pipenv/Poetry, and the channel it picks instead would install
-        // under the wrong package name. Until the other installers learn the deepnote-toolkit package
-        // name, only the environment-type half of isSupported() is skipped — pip must still exist, or
-        // the install dies on a raw "No module named pip".
         if (product === Product.deepnoteToolkit) {
-            if (await this.isInstalled(Product.pip, interpreter)) {
-                const allInstallers = this.serviceContainer.getAll<IModuleInstaller>(IModuleInstaller);
-                installer = allInstallers.find((i) => i.type === ModuleInstallerType.Pip);
-            } else {
+            // deepnote-toolkit is PyPI-only and conda's `pkg[extra]` brackets mean build constraints,
+            // not extras, so conda can never install it. pip is the last resort for a conda/poetry/
+            // pipenv env whose own tool is unreachable — PipInstaller excludes itself from those types.
+            const supported = await channels.getInstallationChannels(interpreter);
+            installer = supported.find((i) => i.type !== ModuleInstallerType.Conda);
+            if (!installer && (await this.isInstalled(Product.pip, interpreter))) {
+                installer = this.serviceContainer
+                    .getAll<IModuleInstaller>(IModuleInstaller)
+                    .find((i) => i.type === ModuleInstallerType.Pip);
+            }
+            if (!installer) {
                 await channels.showNoInstallersMessage(interpreter);
             }
         } else {

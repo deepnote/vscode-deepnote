@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import { WrappedError } from '../../errors/types';
+import { DEEPNOTE_TOOLKIT_PACKAGES, DEEPNOTE_TOOLKIT_VERSION } from '../../common/constants';
 import { Product } from './types';
 
 // Licensed under the MIT License.
@@ -32,5 +33,16 @@ export function translateProductToModule(product: Product): string {
                 'unknownProduct'
             );
         }
+    }
+}
+
+// deepnote_toolkit's import name differs from its pip distribution name. The [server] extra pins
+// a pylsp fork without its own [all] extras, so the companion packages ride along explicitly.
+export function translateModuleToPackages(moduleName: string): string[] {
+    switch (moduleName) {
+        case translateProductToModule(Product.deepnoteToolkit):
+            return [`deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`, ...DEEPNOTE_TOOLKIT_PACKAGES];
+        default:
+            return [moduleName];
     }
 }

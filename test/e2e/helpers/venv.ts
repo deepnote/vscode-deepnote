@@ -6,7 +6,15 @@ import toolkitSpec from '../../../src/platform/common/toolkitSpec.json';
 import { PREBAKED_VENV_DIR_NAME } from './constants';
 
 const REPO_ROOT = process.cwd();
-const VENV_DIR = path.join(REPO_ROOT, PREBAKED_VENV_DIR_NAME);
+
+/**
+ * `set_notebook_path` drops every `sys.path` entry under the toolkit's notebook root (`$HOME/work`
+ * unconfigured), so the venv has to sit outside it. The basename identifies the venv in the
+ * interpreter quick pick, so it stays PREBAKED_VENV_DIR_NAME.
+ */
+const VENV_DIR = process.env.DEEPNOTE_E2E_VENV_DIR
+    ? path.resolve(process.env.DEEPNOTE_E2E_VENV_DIR)
+    : path.join(REPO_ROOT, PREBAKED_VENV_DIR_NAME);
 const SETTINGS_SOURCE = path.join(REPO_ROOT, 'test', 'e2e', 'settings.json');
 const SETTINGS_TARGET = path.join(REPO_ROOT, 'test', 'e2e', 'settings.generated.json');
 
@@ -29,6 +37,9 @@ function toolkitPipSpecs(): string[] {
  * Whether the venv already has the toolkit version we want. Read from distribution metadata rather
  * than `import deepnote_toolkit`, which costs seconds and floods the log. The version arrives as
  * argv, and a mismatch exits non-zero on its own — `assert` would be stripped under PYTHONOPTIMIZE.
+ *
+ * Deliberate: metadata only, so a venv whose files were lost but whose metadata survived still reads
+ * as usable; file integrity rides on the CI cache key hashing the build recipe.
  */
 function isUsable(): boolean {
     if (!fs.existsSync(venvPython())) {
@@ -150,7 +161,7 @@ export function writeGeneratedSettings(): string {
     const settings = {
         ...base,
         'python.defaultInterpreterPath': venvPython(),
-        'python.venvPath': REPO_ROOT
+        'python.venvPath': path.dirname(VENV_DIR)
     };
 
     fs.writeFileSync(SETTINGS_TARGET, `${JSON.stringify(settings, undefined, 4)}\n`, 'utf8');

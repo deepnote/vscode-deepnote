@@ -80,6 +80,10 @@ jobs:
         # aimock is npx-only (not in lockfile), so setup-node never restores ~/.npm/_npx.
         run: npm run setup:e2e:mock
 
+      - name: Place the toolkit venv outside the notebook root
+        # The root is $HOME/work on a runner, so $RUNNER_TEMP is no alternative either.
+        run: echo "DEEPNOTE_E2E_VENV_DIR=$HOME/.deepnote-e2e/.venv-e2e" >> "$GITHUB_ENV"
+
       - name: Cache pip wheel downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -89,7 +93,7 @@ jobs:
       - name: Cache the managed Deepnote toolkit venv
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .venv-e2e
+          path: ${{ env.DEEPNOTE_E2E_VENV_DIR }}
           key: e2e-venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/platform/common/toolkitSpec.json', 'test/e2e/helpers/venv.ts') }}
 
       - name: Warm the managed venv
@@ -136,7 +140,7 @@ jobs:
           persist-credentials: false
 
       - name: Collect what each shard reported
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           merge-multiple: true
           path: shard-ran

@@ -110,7 +110,7 @@ export class DataScienceInstaller {
                     .find((i) => i.type === ModuleInstallerType.Pip);
             }
             if (!installer) {
-                await channels.showNoInstallersMessage(interpreter);
+                channels.showNoInstallersMessage(interpreter);
             }
         } else {
             installer = await channels.getInstallationChannel(product, interpreter);

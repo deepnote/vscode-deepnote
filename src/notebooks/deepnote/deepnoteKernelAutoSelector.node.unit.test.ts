@@ -3,7 +3,11 @@ import * as sinon from 'sinon';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { DeepnoteKernelAutoSelector } from './deepnoteKernelAutoSelector.node';
 import { ServerHandleRegistry } from '../../kernels/deepnote/deepnoteServerHandleRegistry.node';
-import { DeepnoteToolkitDependencyResponse, IDeepnoteToolkitDependencyService } from '../../kernels/deepnote/types';
+import {
+    DeepnoteControllerRebuild,
+    DeepnoteToolkitDependencyResponse,
+    IDeepnoteToolkitDependencyService
+} from '../../kernels/deepnote/types';
 import {
     IDeepnoteLspClientManager,
     IDeepnoteServerProvider,
@@ -458,7 +462,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             const rebuildStub = sandbox.stub(selector, 'rebuildController').callsFake(async () => {
                 selectorAny.notebookControllers.set(notebookKey, instance(mockNewController));
 
-                return true;
+                return 'rebuilt';
             });
 
             const result = await selector.ensureEnvironmentConfiguredBeforeExecution(mockNotebook, nonCancelledToken);
@@ -485,7 +489,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall((_opts: any, task: any) =>
                 task({ report: sandbox.stub() }, nonCancelledToken)
             );
-            sandbox.stub(selector, 'rebuildController').resolves(false);
+            sandbox.stub(selector, 'rebuildController').resolves('notRebuilt');
 
             const result = await selector.ensureEnvironmentConfiguredBeforeExecution(mockNotebook, nonCancelledToken);
 
@@ -505,7 +509,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 task({ report: sandbox.stub() }, nonCancelledToken)
             );
 
-            const rebuildStub = sandbox.stub(selector, 'rebuildController').resolves(true);
+            const rebuildStub = sandbox.stub(selector, 'rebuildController').resolves('rebuilt');
             const ensureStub = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').callsFake(async () => {
                 selectorAny.notebookControllers.set(notebookKey, instance(mockNewController));
             });
@@ -559,8 +563,10 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).never();
             });
 
-            test('opting to pick another interpreter blocks this run without an error message', async () => {
+            test('dismissing the interpreter picker blocks this run without an error message', async () => {
                 const ensureStub = whenDependency(DeepnoteToolkitDependencyResponse.selectDifferentInterpreter);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                sandbox.stub(selector as any, 'pickInterpreter').resolves(undefined);
 
                 const result = await selector.ensureEnvironmentConfiguredBeforeExecution(
                     mockNotebook,
@@ -569,6 +575,26 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
                 assert.strictEqual(result, false, 'the notebook must not run until it is reconfigured');
                 assert.strictEqual(ensureStub.called, false);
+                verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).never();
+            });
+
+            test('opting to pick another interpreter switches to it rather than abandoning the run', async () => {
+                const picked: PythonEnvironment = {
+                    id: '/envs/picked/bin/python',
+                    uri: Uri.file('/envs/picked/bin/python')
+                };
+                whenDependency(DeepnoteToolkitDependencyResponse.selectDifferentInterpreter);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                sandbox.stub(selector as any, 'pickInterpreter').resolves(picked);
+                const apply = sandbox.stub(selector, 'applyInterpreter').resolves();
+
+                const result = await selector.ensureEnvironmentConfiguredBeforeExecution(
+                    mockNotebook,
+                    nonCancelledToken
+                );
+
+                assert.strictEqual(apply.calledOnceWith(mockNotebook, picked), true, 'the pick must drive the switch');
+                assert.strictEqual(result, false, 'the switch left no ready kernel, so this run still stops');
                 verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).never();
             });
         });
@@ -841,7 +867,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 instance(mockCancellationToken)
             );
 
-            assert.isTrue(rebuilt);
+            assert.strictEqual(rebuilt, 'rebuilt');
             assert.isFalse(setup.called, 'the kernel must not be set up again');
             verify(mockLspClientManager.stopLspClients(anything(), anything())).never();
             verify(mockToolkitDependencyService.ensureToolkitInstalled(anything(), anything(), anything())).never();
@@ -886,7 +912,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 instance(mockCancellationToken)
             );
 
-            assert.isFalse(rebuilt, 'a declined toolkit install must not report a successful switch');
+            assert.strictEqual(rebuilt, 'notRebuilt', 'a declined toolkit install must not report a successful switch');
         });
 
         test('false when there is no interpreter to rebuild onto', async () => {
@@ -898,7 +924,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 instance(mockCancellationToken)
             );
 
-            assert.isFalse(rebuilt);
+            assert.strictEqual(rebuilt, 'notRebuilt');
         });
 
         test('false when setup returns without leaving the notebook on a running kernel', async () => {
@@ -912,7 +938,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 instance(mockCancellationToken)
             );
 
-            assert.isFalse(rebuilt, 'no controller was registered, so the switch did not take');
+            assert.strictEqual(rebuilt, 'notRebuilt', 'no controller was registered, so the switch did not take');
         });
     });
 
@@ -985,7 +1011,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 instance(mockCancellationToken)
             );
 
-            assert.isFalse(rebuilt);
+            assert.strictEqual(rebuilt, 'notRebuilt');
             verify(mockLspClientManager.startLspClients(anything(), previous)).once();
         });
 
@@ -1007,7 +1033,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 instance(mockCancellationToken)
             );
 
-            assert.isFalse(rebuilt);
+            assert.strictEqual(rebuilt, 'notRebuilt');
             // Restoring here would start a pylsp process that onDidCloseNotebook has already stopped
             // and will never be asked to stop again.
             verify(mockLspClientManager.startLspClients(anything(), previous)).never();
@@ -1166,8 +1192,16 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             return sandbox
                 .stub(selector, 'rebuildController')
                 .callsFake(() =>
-                    outcome.throws ? Promise.reject(outcome.throws) : Promise.resolve(!!outcome.rebuilt)
+                    outcome.throws
+                        ? Promise.reject(outcome.throws)
+                        : Promise.resolve<DeepnoteControllerRebuild>(outcome.rebuilt ? 'rebuilt' : 'notRebuilt')
                 );
+        }
+
+        /** `pickInterpreter` is private; the suite drives it the way the file already reaches internals. */
+        function whenPicked(picked: PythonEnvironment | undefined) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return sandbox.stub(selector as any, 'pickInterpreter').resolves(picked);
         }
 
         test('keeps the new interpreter when the rebuild takes', async () => {
@@ -1219,7 +1253,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             sandbox.stub(selector, 'rebuildController').callsFake(async () => {
                 await instance(mockNotebookInterpreters).set(mockNotebook.uri, NEWER_PIN);
 
-                return false;
+                return 'notRebuilt';
             });
 
             await selector.applyInterpreter(mockNotebook, CHOSEN);
@@ -1238,6 +1272,70 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             await selector.applyInterpreter(mockNotebook, CHOSEN);
 
             verify(mockNotebookInterpreters.set(anything(), PREVIOUS)).once();
+        });
+
+        test('retries on the interpreter picked from the toolkit prompt', async () => {
+            const SECOND: PythonEnvironment = {
+                id: '/envs/second/bin/python',
+                uri: Uri.file('/envs/second/bin/python')
+            };
+            withPin(PREVIOUS);
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                async (_options, callback) => callback({ report: () => undefined }, instance(mockCancellationToken))
+            );
+            const pick = whenPicked(SECOND);
+            const rebuild = sandbox.stub(selector, 'rebuildController');
+            rebuild.onFirstCall().resolves('selectDifferentInterpreter');
+            rebuild.onSecondCall().resolves('rebuilt');
+
+            await selector.applyInterpreter(mockNotebook, CHOSEN);
+
+            assert.strictEqual(rebuild.callCount, 2, 'the switch must be retried, not abandoned');
+            assert.strictEqual(pick.callCount, 1);
+            assert.strictEqual(
+                instance(mockNotebookInterpreters).get(mockNotebook.uri)?.toString(),
+                SECOND.uri.toString(),
+                'the notebook must end up pinned to the interpreter picked from the prompt'
+            );
+        });
+
+        test('restores the interpreter the user started from when a picked retry also fails', async () => {
+            const SECOND: PythonEnvironment = {
+                id: '/envs/second/bin/python',
+                uri: Uri.file('/envs/second/bin/python')
+            };
+            withPin(PREVIOUS);
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                async (_options, callback) => callback({ report: () => undefined }, instance(mockCancellationToken))
+            );
+            whenPicked(SECOND);
+            const rebuild = sandbox.stub(selector, 'rebuildController');
+            rebuild.onFirstCall().resolves('selectDifferentInterpreter');
+            rebuild.onSecondCall().resolves('notRebuilt');
+
+            await selector.applyInterpreter(mockNotebook, CHOSEN);
+
+            assert.strictEqual(
+                instance(mockNotebookInterpreters).get(mockNotebook.uri)?.toString(),
+                PREVIOUS.toString(),
+                'the whole chain must roll back to where the user began, not to the failed middle pick'
+            );
+        });
+
+        test('restores the previous interpreter when the user dismisses the picker', async () => {
+            withPin(PREVIOUS);
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                async (_options, callback) => callback({ report: () => undefined }, instance(mockCancellationToken))
+            );
+            whenPicked(undefined);
+            sandbox.stub(selector, 'rebuildController').resolves('selectDifferentInterpreter');
+
+            await selector.applyInterpreter(mockNotebook, CHOSEN);
+
+            assert.strictEqual(
+                instance(mockNotebookInterpreters).get(mockNotebook.uri)?.toString(),
+                PREVIOUS.toString()
+            );
         });
 
         test('keeps a pin chosen during a rebuild that throws instead of clobbering it', async () => {

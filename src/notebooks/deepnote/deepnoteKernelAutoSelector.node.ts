@@ -20,6 +20,7 @@ import {
 } from 'vscode';
 import {
     DEEPNOTE_NOTEBOOK_TYPE,
+    DeepnoteControllerRebuild,
     DeepnoteKernelConnectionMetadata,
     DeepnoteToolkitDependencyResponse,
     IDeepnoteKernelAutoSelector,
@@ -165,6 +166,20 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return;
         }
 
+        const interpreter = await this.pickInterpreter();
+
+        if (interpreter) {
+            await this.applyInterpreter(notebook, interpreter);
+        }
+    }
+
+    /**
+     * Shows the interpreter quick pick and resolves what the user chose, or `undefined` when they
+     * dismissed it or the choice could not be resolved. Applies nothing: the caller decides what a
+     * pick means, which is what keeps the toolkit prompt's "Select a different Interpreter" from
+     * starting a switch inside the dependency check it was raised from.
+     */
+    private async pickInterpreter(): Promise<PythonEnvironment | undefined> {
         // The shared provider the kernel picker uses: it triggers discovery on first read, honours
         // deepnote.kernels.excludePythonEnvironments, and keeps the list live while the pick is open.
         const provider = this.environmentQuickPickProvider.withFilter(
@@ -184,18 +199,16 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             const selected = await picker.selectItem(cts.token);
 
             if (!selected || selected instanceof InputFlowAction) {
-                return;
+                return undefined;
             }
 
             const interpreter = resolvedPythonEnvToJupyterEnv(getCachedEnvironment(selected));
 
             if (!interpreter) {
                 logger.warn(`Could not resolve the selected environment ${selected.id}`);
-
-                return;
             }
 
-            await this.applyInterpreter(notebook, interpreter);
+            return interpreter;
         } finally {
             cts.dispose();
             picker.dispose();
@@ -210,43 +223,74 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * disagree with the one the notebook is actually running on, and the next plain "run cell" would
      * silently switch it and re-raise whatever prompt was just declined. Declining the toolkit
      * install is the common way in, and it returns rather than throwing.
+     *
+     * Answering that prompt with "Select a different Interpreter" retries here rather than starting
+     * a nested switch, so `previous` stays the pin the user actually came from however many
+     * interpreters they try, and a chain that ends in failure restores that one rather than an
+     * intermediate choice that also failed.
      */
     public async applyInterpreter(notebook: NotebookDocument, interpreter: PythonEnvironment): Promise<void> {
         const previous = this.notebookInterpreters.get(notebook.uri);
+        let chosen = interpreter;
 
-        await this.notebookInterpreters.set(notebook.uri, interpreter.uri);
+        for (;;) {
+            await this.notebookInterpreters.set(notebook.uri, chosen.uri);
 
-        let rebuilt = false;
+            let outcome: DeepnoteControllerRebuild;
 
-        try {
-            rebuilt = await window.withProgress(
-                { location: ProgressLocation.Notification, title: DataScience.switchingInterpreter, cancellable: true },
-                (progress, token) => this.rebuildController(notebook, progress, token)
-            );
-        } catch (error) {
-            // Same guard as the !rebuilt path below: a pin written by a newer switch while this
-            // rebuild was in flight must survive; only this call's own pin is undone.
-            if (this.notebookInterpreters.get(notebook.uri)?.toString() === interpreter.uri.toString()) {
-                await this.notebookInterpreters.set(notebook.uri, previous);
-            }
+            try {
+                outcome = await window.withProgress(
+                    {
+                        location: ProgressLocation.Notification,
+                        title: DataScience.switchingInterpreter,
+                        cancellable: true
+                    },
+                    (progress, token) => this.rebuildController(notebook, progress, token)
+                );
+            } catch (error) {
+                await this.undoPin(notebook, chosen, previous);
 
-            if (isCancellationError(error as Error)) {
-                logger.info(`Interpreter switch cancelled for ${getDisplayPath(notebook.uri)}`);
+                if (isCancellationError(error as Error)) {
+                    logger.info(`Interpreter switch cancelled for ${getDisplayPath(notebook.uri)}`);
+
+                    return;
+                }
+
+                await this.handleKernelSelectionError(error, notebook);
 
                 return;
             }
 
-            await this.handleKernelSelectionError(error, notebook);
+            if (outcome === 'rebuilt') {
+                return;
+            }
 
-            return;
-        }
+            if (outcome === 'selectDifferentInterpreter') {
+                const picked = await this.pickInterpreter();
 
-        // Only when the pin is still the one this call wrote: the toolkit prompt's "Select a
-        // different Interpreter" re-enters this method, so a newer pin may already have replaced it.
-        if (!rebuilt && this.notebookInterpreters.get(notebook.uri)?.toString() === interpreter.uri.toString()) {
+                if (picked) {
+                    chosen = picked;
+
+                    continue;
+                }
+            }
+
             logger.info(
                 `Interpreter switch for ${getDisplayPath(notebook.uri)} did not take; restoring the previous selection`
             );
+            await this.undoPin(notebook, chosen, previous);
+
+            return;
+        }
+    }
+
+    /**
+     * Puts `previous` back, but only while the notebook is still pinned to `chosen` — a concurrent
+     * switch may have pinned something newer while this one was rebuilding, and that choice has to
+     * survive this one's failure.
+     */
+    private async undoPin(notebook: NotebookDocument, chosen: PythonEnvironment, previous: Uri | undefined) {
+        if (this.notebookInterpreters.get(notebook.uri)?.toString() === chosen.uri.toString()) {
             await this.notebookInterpreters.set(notebook.uri, previous);
         }
     }
@@ -332,7 +376,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         notebook: NotebookDocument,
         progress: { report(value: { message?: string; increment?: number }): void },
         token: CancellationToken
-    ): Promise<boolean> {
+    ): Promise<DeepnoteControllerRebuild> {
         const notebookKey = getNotebookKey(notebook.uri);
 
         logger.info(`Switching controller environment for ${getDisplayPath(notebook.uri)}`);
@@ -344,7 +388,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         if (!interpreter) {
             logger.error(`No active Python interpreter found for ${getDisplayPath(notebook.uri)}`);
 
-            return false;
+            return 'notRebuilt';
         }
 
         // Reselecting the interpreter a notebook is already running on: there is nothing to rebuild,
@@ -356,7 +400,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             );
             await this.ensureControllerSelectedForNotebook(notebook, this.notebookControllers.get(notebookKey)!, token);
 
-            return true;
+            return 'rebuilt';
         }
 
         // Check if any cells are executing and log a warning
@@ -385,7 +429,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         if (dependency !== DeepnoteToolkitDependencyResponse.ok) {
             logger.info(`deepnote-toolkit unavailable, controller not rebuilt for ${getDisplayPath(notebook.uri)}`);
 
-            return false;
+            return dependency === DeepnoteToolkitDependencyResponse.selectDifferentInterpreter
+                ? 'selectDifferentInterpreter'
+                : 'notRebuilt';
         }
 
         // Stopping is what lets the new clients be created: startLspClients treats a notebook that
@@ -408,7 +454,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         if (!this.isKernelReady(notebookKey, interpreter.id)) {
             await this.restoreLspClients(notebook, previousInterpreterId);
 
-            return false;
+            return 'notRebuilt';
         }
 
         // Setup succeeded. If it registered a new server handle (full setup path), drop the old one.
@@ -422,7 +468,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         logger.info(`Controller switched to ${getDisplayPath(interpreter.uri)} for ${getDisplayPath(notebook.uri)}`);
 
-        return true;
+        return 'rebuilt';
     }
 
     public async ensureKernelSelectedWithInterpreter(
@@ -730,6 +776,21 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return false;
         }
 
+        // The prompt only reports the choice; the switch runs here, once this check has settled and
+        // released its shared entry. applyInterpreter owns any further re-picks, so this stays one
+        // level deep rather than recursing through the picker.
+        if (dependency === DeepnoteToolkitDependencyResponse.selectDifferentInterpreter) {
+            const picked = await this.pickInterpreter();
+
+            if (!picked) {
+                return false;
+            }
+
+            await this.applyInterpreter(notebook, picked);
+
+            return this.isKernelReady(notebookKey, picked.id);
+        }
+
         if (dependency !== DeepnoteToolkitDependencyResponse.ok) {
             logger.info(
                 `deepnote-toolkit unavailable for ${getDisplayPath(notebook.uri)} (${
@@ -760,7 +821,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                         // old LSP clients and drop the old server handle — or language features and
                         // the advertised server stay on the interpreter we just moved off.
                         if (previousInterpreterId && previousInterpreterId !== interpreter.id) {
-                            return await this.rebuildController(notebook, progress, setupToken.token);
+                            // The toolkit gate above already settled for this interpreter, so the
+                            // rebuild's own gate cannot ask for another one here.
+                            return (await this.rebuildController(notebook, progress, setupToken.token)) === 'rebuilt';
                         }
 
                         await this.ensureKernelSelectedWithInterpreter(

@@ -90,6 +90,13 @@ export enum DeepnoteToolkitDependencyResponse {
     failed
 }
 
+/**
+ * How a controller rebuild ended. `selectDifferentInterpreter` is kept apart from `notRebuilt`
+ * because only it is worth retrying: the user asked for another interpreter rather than declining,
+ * so the caller picks one and rebuilds again instead of putting the previous pin back.
+ */
+export type DeepnoteControllerRebuild = 'rebuilt' | 'notRebuilt' | 'selectDifferentInterpreter';
+
 export const IDeepnoteToolkitDependencyService = Symbol('IDeepnoteToolkitDependencyService');
 export interface IDeepnoteToolkitDependencyService {
     /**
@@ -189,13 +196,13 @@ export interface IDeepnoteKernelAutoSelector {
      * This is used when switching interpreters to ensure a new controller is created.
      * @param notebook The notebook document
      * @param token Cancellation token to cancel the operation
-     * @returns Whether the notebook ended up on a running kernel for the resolved interpreter
+     * @returns How the rebuild ended — see {@link DeepnoteControllerRebuild}
      */
     rebuildController(
         notebook: vscode.NotebookDocument,
         progress: { report(value: { message?: string; increment?: number }): void },
         token: vscode.CancellationToken
-    ): Promise<boolean>;
+    ): Promise<DeepnoteControllerRebuild>;
 }
 
 export const IDeepnoteLspClientManager = Symbol('IDeepnoteLspClientManager');

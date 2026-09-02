@@ -1,7 +1,6 @@
 import { inject, injectable } from 'inversify';
-import { CancellationToken, CancellationTokenSource, commands, window } from 'vscode';
+import { CancellationToken, CancellationTokenSource, window } from 'vscode';
 
-import { Commands } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { IDisposable, Resource } from '../../platform/common/types';
 import { Common, DataScience } from '../../platform/common/utils/localize';
@@ -14,11 +13,6 @@ import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { getComparisonKey } from '../../platform/vscode-path/resources';
 import { DeepnoteToolkitDependencyResponse, IDeepnoteToolkitDependencyService } from './types';
-
-// The per-notebook picker, not the Python extension's `python.setInterpreter`: that one changes
-// the workspace selection, which a notebook's own pin overrides — so the prompt would reappear
-// unchanged on the next run.
-const SELECT_INTERPRETER_COMMAND = Commands.SelectInterpreterForNotebook;
 
 /**
  * Asks for consent before installing deepnote-toolkit into the user's interpreter, mirroring
@@ -92,9 +86,10 @@ export class DeepnoteToolkitDependencyService implements IDeepnoteToolkitDepende
             window.showInformationMessage(message, { modal: true }, Common.install, selectInterpreter)
         );
 
+        // Reported, not acted on, as KernelDependencyService does with selectDifferentKernel. Opening
+        // the picker here would re-enter this same check through the switch it starts, and that check
+        // is the shared promise this call is still inside: it would join itself and never settle.
         if (selection === selectInterpreter) {
-            await commands.executeCommand(SELECT_INTERPRETER_COMMAND);
-
             return DeepnoteToolkitDependencyResponse.selectDifferentInterpreter;
         }
 

@@ -86,7 +86,7 @@ suite('DeepnoteToolkitDependencyService', () => {
         verify(installer.install(anything(), anything(), anything())).never();
     });
 
-    test('does NOT install when the user opts to change interpreter, and opens the picker', async () => {
+    test('reports the interpreter change without installing or opening the picker itself', async () => {
         when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
         answerPrompt('Select a different Interpreter');
 
@@ -94,7 +94,22 @@ suite('DeepnoteToolkitDependencyService', () => {
 
         assert.strictEqual(result, DeepnoteToolkitDependencyResponse.selectDifferentInterpreter);
         verify(installer.install(anything(), anything(), anything())).never();
-        verify(mockedVSCodeNamespaces.commands.executeCommand(Commands.SelectInterpreterForNotebook)).once();
+        // Driving the picker from here would re-enter this check through the switch it starts, and
+        // that check is the shared promise this call is still inside — it would join itself.
+        verify(mockedVSCodeNamespaces.commands.executeCommand(Commands.SelectInterpreterForNotebook)).never();
+    });
+
+    test('settles the shared entry, so a re-check for the same interpreter prompts again', async () => {
+        when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+        answerPrompt('Select a different Interpreter');
+
+        await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
+        const second = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
+
+        assert.strictEqual(second, DeepnoteToolkitDependencyResponse.selectDifferentInterpreter);
+        verify(
+            mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything(), anything())
+        ).twice();
     });
 
     test('reports a cancelled install as cancel, not failure', async () => {

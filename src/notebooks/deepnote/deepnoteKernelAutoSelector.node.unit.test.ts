@@ -1239,6 +1239,29 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             verify(mockNotebookInterpreters.set(anything(), PREVIOUS)).once();
         });
+
+        test('keeps a pin chosen during a rebuild that throws instead of clobbering it', async () => {
+            const NEWER_PIN = Uri.file('/envs/newer/bin/python');
+            withPin(PREVIOUS);
+            // A second switch pins another interpreter while this rebuild is still running, and this
+            // one then fails: the failure must undo only its own pin, not the newer one.
+            when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                async (_options, callback) => callback({ report: () => undefined }, instance(mockCancellationToken))
+            );
+            sandbox.stub(selector, 'rebuildController').callsFake(async () => {
+                await instance(mockNotebookInterpreters).set(mockNotebook.uri, NEWER_PIN);
+
+                throw new Error('server did not start');
+            });
+
+            await selector.applyInterpreter(mockNotebook, CHOSEN);
+
+            assert.strictEqual(
+                instance(mockNotebookInterpreters).get(mockNotebook.uri)?.toString(),
+                NEWER_PIN.toString(),
+                'the newer pin must survive'
+            );
+        });
     });
 
     suite('cancellation is not reported as a failure', () => {

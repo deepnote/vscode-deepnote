@@ -144,6 +144,16 @@ suite('DeepnoteNotebookInterpreters', () => {
     });
 
     suite('legacy managed venvs', () => {
+        let originalGetOSType: typeof platformUtils.platformUtils.getOSType;
+
+        setup(() => {
+            originalGetOSType = platformUtils.platformUtils.getOSType;
+        });
+
+        teardown(() => {
+            platformUtils.platformUtils.getOSType = originalGetOSType;
+        });
+
         function withEnvironment(environment: Record<string, unknown>) {
             return store({
                 workspace: { 'deepnote.notebookEnvironmentMappings': { [NOTEBOOK.fsPath]: 'env-1' } },
@@ -185,21 +195,16 @@ suite('DeepnoteNotebookInterpreters', () => {
         });
 
         test("uses the venv's Scripts directory on Windows", () => {
-            const original = platformUtils.platformUtils.getOSType;
             platformUtils.platformUtils.getOSType = () => platformUtils.OSType.Windows;
 
-            try {
-                const pins = withEnvironment(
-                    legacyEnvironment('env-1', LEGACY_INTERPRETER, { venvPath: LEGACY_VENV.toString(true) })
-                );
+            const pins = withEnvironment(
+                legacyEnvironment('env-1', LEGACY_INTERPRETER, { venvPath: LEGACY_VENV.toString(true) })
+            );
 
-                assert.strictEqual(
-                    pins.get(NOTEBOOK)?.toString(),
-                    Uri.file('/envs/legacy-venv/Scripts/python.exe').toString()
-                );
-            } finally {
-                platformUtils.platformUtils.getOSType = original;
-            }
+            assert.strictEqual(
+                pins.get(NOTEBOOK)?.toString(),
+                Uri.file('/envs/legacy-venv/Scripts/python.exe').toString()
+            );
         });
     });
 

@@ -224,7 +224,11 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 (progress, token) => this.rebuildController(notebook, progress, token)
             );
         } catch (error) {
-            await this.notebookInterpreters.set(notebook.uri, previous);
+            // Same guard as the !rebuilt path below: a pin written by a newer switch while this
+            // rebuild was in flight must survive; only this call's own pin is undone.
+            if (this.notebookInterpreters.get(notebook.uri)?.toString() === interpreter.uri.toString()) {
+                await this.notebookInterpreters.set(notebook.uri, previous);
+            }
 
             if (isCancellationError(error as Error)) {
                 logger.info(`Interpreter switch cancelled for ${getDisplayPath(notebook.uri)}`);

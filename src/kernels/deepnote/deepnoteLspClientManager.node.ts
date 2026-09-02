@@ -91,16 +91,22 @@ export class DeepnoteLspClientManager
         const notebookKey = getNotebookKey(notebookUri);
 
         // Wait the in-flight start out rather than returning: a caller that needs clients on a
-        // different interpreter must get its turn, not be told the job is done.
-        const pendingStart = this.pendingStarts.get(notebookKey);
+        // different interpreter must get its turn, not be told the job is done. Loop rather than a
+        // single wait, as DeepnoteServerStarter does: a caller released by one start must not walk
+        // past a newer one that was registered while it was waiting.
+        let pendingStart = this.pendingStarts.get(notebookKey);
 
-        if (pendingStart) {
+        while (pendingStart) {
             logger.trace(`LSP client is already starting up for ${notebookKey}; waiting for it.`);
             await pendingStart.catch(noop);
 
             if (this.disposed || token?.isCancellationRequested) {
                 return;
             }
+
+            const nextStart = this.pendingStarts.get(notebookKey);
+
+            pendingStart = nextStart === pendingStart ? undefined : nextStart;
         }
 
         const existing = this.clients.get(notebookKey);
@@ -199,11 +205,17 @@ export class DeepnoteLspClientManager
         const notebookKey = getNotebookKey(notebookUri);
 
         // `clients` is only populated once a start has fully settled, so stopping mid-start would
-        // find nothing and silently leave the client it was meant to kill running.
-        const pendingStart = this.pendingStarts.get(notebookKey);
+        // find nothing and silently leave the client it was meant to kill running. Loop rather than
+        // a single wait: a stop released by one start must not walk past a newer one that was
+        // registered while it was waiting.
+        let pendingStart = this.pendingStarts.get(notebookKey);
 
-        if (pendingStart) {
+        while (pendingStart) {
             await pendingStart.catch(noop);
+
+            const nextStart = this.pendingStarts.get(notebookKey);
+
+            pendingStart = nextStart === pendingStart ? undefined : nextStart;
         }
 
         const clientInfo = this.clients.get(notebookKey);

@@ -701,7 +701,7 @@ async function buildSqlLanguageServer() {
         version: '1.0.0',
         dependencies: {
             'node-ssh-forward': '^0.6.3',
-            mysql2: '^3.9.8',
+            mysql2: '^3.22.0',
             pg: '^8.9.0',
             sqlite3: '^5.0.3',
             '@google-cloud/bigquery': '^8.1.1'

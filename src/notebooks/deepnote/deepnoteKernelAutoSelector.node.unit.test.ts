@@ -565,7 +565,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             test('dismissing the interpreter picker blocks this run without an error message', async () => {
                 const ensureStub = whenDependency(DeepnoteToolkitDependencyResponse.selectDifferentInterpreter);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 sandbox.stub(selector as any, 'pickInterpreter').resolves(undefined);
 
                 const result = await selector.ensureEnvironmentConfiguredBeforeExecution(
@@ -584,7 +583,6 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                     uri: Uri.file('/envs/picked/bin/python')
                 };
                 whenDependency(DeepnoteToolkitDependencyResponse.selectDifferentInterpreter);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 sandbox.stub(selector as any, 'pickInterpreter').resolves(picked);
                 const apply = sandbox.stub(selector, 'applyInterpreter').resolves();
 
@@ -596,6 +594,72 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 assert.strictEqual(apply.calledOnceWith(mockNotebook, picked), true, 'the pick must drive the switch');
                 assert.strictEqual(result, false, 'the switch left no ready kernel, so this run still stops');
                 verify(mockedVSCodeNamespaces.window.showErrorMessage(anything(), anything(), anything())).never();
+            });
+
+            test('reports ready when the switch ends on an interpreter picked later in the chain', async () => {
+                const firstPick: PythonEnvironment = {
+                    id: '/envs/first/bin/python',
+                    uri: Uri.file('/envs/first/bin/python')
+                };
+                const finalPick: PythonEnvironment = {
+                    id: '/envs/final/bin/python',
+                    uri: Uri.file('/envs/final/bin/python')
+                };
+                const notebookKey = mockNotebook.uri.toString();
+                const selectorAny = selector as any;
+                whenDependency(DeepnoteToolkitDependencyResponse.selectDifferentInterpreter);
+                when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+                    (_opts: any, task: any) => task({ report: sandbox.stub() }, nonCancelledToken)
+                );
+                const pick = sandbox.stub(selectorAny, 'pickInterpreter');
+                pick.onFirstCall().resolves(firstPick);
+                pick.onSecondCall().resolves(finalPick);
+                const rebuild = sandbox.stub(selector, 'rebuildController');
+                rebuild.onFirstCall().resolves('selectDifferentInterpreter');
+                rebuild.onSecondCall().callsFake(async () => {
+                    selectorAny.notebookControllers.set(notebookKey, instance(mockController));
+                    selectorAny.notebookInterpreterIds.set(notebookKey, finalPick.id);
+                    selectorAny.notebookConnectionMetadata.set(notebookKey, { baseUrl: 'http://127.0.0.1:8888' });
+
+                    return 'rebuilt';
+                });
+
+                const result = await selector.ensureEnvironmentConfiguredBeforeExecution(
+                    mockNotebook,
+                    nonCancelledToken
+                );
+
+                assert.strictEqual(result, true, 'the kernel is ready on the interpreter the chain ended on');
+                assert.strictEqual(rebuild.callCount, 2);
+            });
+
+            test('declining the toolkit for a switch does not cost the notebook the kernel it was on', async () => {
+                const other: PythonEnvironment = {
+                    id: '/envs/other/bin/python',
+                    uri: Uri.file('/envs/other/bin/python')
+                };
+                let active = other;
+                markKernelReady(interpreter.id);
+                when(mockInterpreterService.getActiveInterpreter(anything())).thenCall(async () => active);
+                when(
+                    mockToolkitDependencyService.ensureToolkitInstalled(anything(), anything(), anything())
+                ).thenResolve(DeepnoteToolkitDependencyResponse.cancel);
+                const ensureStub = sandbox.stub(selector, 'ensureKernelSelectedWithInterpreter').resolves();
+
+                const rebuilt = await selector.rebuildController(mockNotebook, mockProgress, nonCancelledToken);
+
+                assert.strictEqual(rebuilt, 'notRebuilt');
+
+                active = interpreter;
+
+                const ready = await selector.ensureEnvironmentConfiguredBeforeExecution(
+                    mockNotebook,
+                    nonCancelledToken
+                );
+
+                assert.strictEqual(ready, true, 'the kernel the notebook was already on must still count as ready');
+                assert.strictEqual(ensureStub.called, false, 'the live kernel must be reused, not set up again');
+                verify(mockToolkitDependencyService.ensureToolkitInstalled(anything(), anything(), anything())).once();
             });
         });
 
@@ -1198,9 +1262,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 );
         }
 
-        /** `pickInterpreter` is private; the suite drives it the way the file already reaches internals. */
         function whenPicked(picked: PythonEnvironment | undefined) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return sandbox.stub(selector as any, 'pickInterpreter').resolves(picked);
         }
 
@@ -1208,8 +1270,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             withPin(PREVIOUS);
             whenRebuild({ rebuilt: true });
 
-            await selector.applyInterpreter(mockNotebook, CHOSEN);
+            const applied = await selector.applyInterpreter(mockNotebook, CHOSEN);
 
+            assert.strictEqual(applied, CHOSEN);
             verify(mockNotebookInterpreters.set(anything(), CHOSEN.uri)).once();
             verify(mockNotebookInterpreters.set(anything(), PREVIOUS)).never();
         });
@@ -1218,8 +1281,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             withPin(PREVIOUS);
             whenRebuild({ rebuilt: false });
 
-            await selector.applyInterpreter(mockNotebook, CHOSEN);
+            const applied = await selector.applyInterpreter(mockNotebook, CHOSEN);
 
+            assert.isUndefined(applied);
             verify(mockNotebookInterpreters.set(anything(), PREVIOUS)).once();
         });
 
@@ -1269,8 +1333,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             withPin(PREVIOUS);
             whenRebuild({ throws: new Error('server did not start') });
 
-            await selector.applyInterpreter(mockNotebook, CHOSEN);
+            const applied = await selector.applyInterpreter(mockNotebook, CHOSEN);
 
+            assert.isUndefined(applied);
             verify(mockNotebookInterpreters.set(anything(), PREVIOUS)).once();
         });
 
@@ -1288,8 +1353,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             rebuild.onFirstCall().resolves('selectDifferentInterpreter');
             rebuild.onSecondCall().resolves('rebuilt');
 
-            await selector.applyInterpreter(mockNotebook, CHOSEN);
+            const applied = await selector.applyInterpreter(mockNotebook, CHOSEN);
 
+            assert.strictEqual(applied, SECOND, 'the caller must learn which interpreter the chain ended on');
             assert.strictEqual(rebuild.callCount, 2, 'the switch must be retried, not abandoned');
             assert.strictEqual(pick.callCount, 1);
             assert.strictEqual(
@@ -1330,8 +1396,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             whenPicked(undefined);
             sandbox.stub(selector, 'rebuildController').resolves('selectDifferentInterpreter');
 
-            await selector.applyInterpreter(mockNotebook, CHOSEN);
+            const applied = await selector.applyInterpreter(mockNotebook, CHOSEN);
 
+            assert.isUndefined(applied);
             assert.strictEqual(
                 instance(mockNotebookInterpreters).get(mockNotebook.uri)?.toString(),
                 PREVIOUS.toString()

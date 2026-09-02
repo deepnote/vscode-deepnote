@@ -229,7 +229,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * interpreters they try, and a chain that ends in failure restores that one rather than an
      * intermediate choice that also failed.
      */
-    public async applyInterpreter(notebook: NotebookDocument, interpreter: PythonEnvironment): Promise<void> {
+    public async applyInterpreter(
+        notebook: NotebookDocument,
+        interpreter: PythonEnvironment
+    ): Promise<PythonEnvironment | undefined> {
         const previous = this.notebookInterpreters.get(notebook.uri);
         let chosen = interpreter;
 
@@ -253,16 +256,16 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 if (isCancellationError(error as Error)) {
                     logger.info(`Interpreter switch cancelled for ${getDisplayPath(notebook.uri)}`);
 
-                    return;
+                    return undefined;
                 }
 
                 await this.handleKernelSelectionError(error, notebook);
 
-                return;
+                return undefined;
             }
 
             if (outcome === 'rebuilt') {
-                return;
+                return chosen;
             }
 
             if (outcome === 'selectDifferentInterpreter') {
@@ -280,7 +283,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             );
             await this.undoPin(notebook, chosen, previous);
 
-            return;
+            return undefined;
         }
     }
 
@@ -414,10 +417,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             }
         }
 
-        // Clear cached metadata so setup creates fresh metadata for the new interpreter
-        // The controller will stay alive - it will just get updated via updateConnection()
-        this.notebookConnectionMetadata.delete(notebookKey);
-
         // Capture the old handle but don't unregister it yet: a failed or cancelled switch would
         // strand the still-selected controller on a dead handle.
         const oldServerHandle = this.serverHandleRegistry.get(notebookKey);
@@ -439,6 +438,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // every bail-out above, so a switch that never starts does not cost the notebook its language
         // features -- and if the setup below does not take, they go back on the old interpreter.
         await this.lspClientManager.stopLspClients(notebook.uri, token);
+
+        this.notebookConnectionMetadata.delete(notebookKey);
 
         try {
             await this.ensureKernelSelectedWithInterpreter(notebook, interpreter, notebookKey, progress, token);
@@ -786,9 +787,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
                 return false;
             }
 
-            await this.applyInterpreter(notebook, picked);
+            const applied = await this.applyInterpreter(notebook, picked);
 
-            return this.isKernelReady(notebookKey, picked.id);
+            return !!applied && this.isKernelReady(notebookKey, applied.id);
         }
 
         if (dependency !== DeepnoteToolkitDependencyResponse.ok) {

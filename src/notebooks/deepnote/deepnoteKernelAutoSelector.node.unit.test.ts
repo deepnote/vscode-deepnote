@@ -712,6 +712,61 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         });
     });
 
+    suite('controller disposal', () => {
+        test('keeps a replacement controller, which shares the disposed one id', () => {
+            const notebookKey = getNotebookKey(mockNotebook.uri);
+            const replacement = mock<IVSCodeNotebookController>();
+            // Controller ids come from the notebook, so the replacement carries the same one.
+            when(replacement.id).thenReturn('deepnote-config-kernel-old-env-id');
+            const selectorAny = selector as any;
+            selectorAny.notebookControllers.set(notebookKey, instance(replacement));
+
+            selectorAny.untrackDisposedController(notebookKey, instance(mockController));
+
+            assert.strictEqual(
+                selectorAny.notebookControllers.get(notebookKey),
+                instance(replacement),
+                'a live replacement must stay tracked when its predecessor is disposed'
+            );
+        });
+
+        test('stops tracking the controller that was disposed', () => {
+            const notebookKey = getNotebookKey(mockNotebook.uri);
+            const selectorAny = selector as any;
+            selectorAny.notebookControllers.set(notebookKey, instance(mockController));
+
+            selectorAny.untrackDisposedController(notebookKey, instance(mockController));
+
+            assert.strictEqual(selectorAny.notebookControllers.has(notebookKey), false);
+        });
+    });
+
+    suite('registerControllerForNotebook', () => {
+        test('does not track a notebook that closed while its interpreter was resolving', async () => {
+            const notebookKey = getNotebookKey(mockNotebook.uri);
+            const selectorAny = selector as any;
+            when(mockNotebookInterpreters.resolve(anything())).thenCall(async () => {
+                (mockNotebook as { isClosed: boolean }).isClosed = true;
+
+                return { id: '/envs/first/bin/python', uri: Uri.file('/envs/first/bin/python') };
+            });
+            when(mockControllerRegistration.addOrUpdate(anything(), anything())).thenReturn([instance(mockController)]);
+            // Not the subject here, and it drives VS Code controller APIs the mock does not carry.
+            sandbox.stub(selectorAny, 'ensureControllerSelectedForNotebook').resolves();
+
+            await selectorAny.registerControllerForNotebook(mockNotebook);
+
+            assert.strictEqual(
+                selectorAny.notebookControllers.has(notebookKey),
+                false,
+                'close already cleared this notebook and does not fire again'
+            );
+            assert.strictEqual(selectorAny.notebookConnectionMetadata.has(notebookKey), false);
+            assert.strictEqual(selectorAny.notebookInterpreterIds.has(notebookKey), false);
+            verify(mockControllerRegistration.addOrUpdate(anything(), anything())).never();
+        });
+    });
+
     // REAL TDD Tests - These should FAIL if bugs exist
     suite('Bug Detection: Kernel Selection', () => {
         test('Should select the first Python kernel from available specs', () => {

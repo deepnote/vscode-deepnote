@@ -643,21 +643,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         this.controllerRegistration.trackActiveInterpreterControllers([controller]);
         logger.info(`Marked Deepnote controller as protected from automatic disposal`);
 
-        // Listen to controller disposal
-        controller.onDidDispose(() => {
-            logger.info(`Deepnote controller ${controller!.id} disposed, checking if we should remove from tracking`);
-            // Only remove from map if THIS controller is still the one mapped to this notebookKey
-            // This prevents old controllers from deleting newer controllers during environment switching
-            const currentController = this.notebookControllers.get(notebookKey);
-            if (currentController?.id === controller.id) {
-                logger.info(`Removing controller ${controller.id} from tracking map`);
-                this.notebookControllers.delete(notebookKey);
-            } else {
-                logger.info(
-                    `Not removing controller ${controller.id} from tracking - a newer controller ${currentController?.id} has replaced it`
-                );
-            }
-        });
+        controller.onDidDispose(() => this.untrackDisposedController(notebookKey, controller));
 
         // Auto-select the controller
         await this.ensureControllerSelectedForNotebook(notebook, controller, progressToken);
@@ -917,6 +903,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return;
         }
 
+        // onDidCloseNotebook has already cleared this notebook and does not fire twice, so anything
+        // registered now would outlive it.
+        if (notebook.isClosed) {
+            return;
+        }
+
         const notebookKey = getNotebookKey(notebook.uri);
         const connection = DeepnoteKernelConnectionMetadata.create({
             interpreter,
@@ -953,6 +945,18 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         } finally {
             cts.dispose();
         }
+    }
+
+    /** Ids are derived from the notebook, so a replacement carries the disposed one's — only identity separates them. */
+    private untrackDisposedController(notebookKey: string, controller: IVSCodeNotebookController) {
+        if (this.notebookControllers.get(notebookKey) !== controller) {
+            logger.info(`Controller for ${notebookKey} disposed; a newer one has replaced it`);
+
+            return;
+        }
+
+        logger.info(`Controller for ${notebookKey} disposed; removing it from tracking`);
+        this.notebookControllers.delete(notebookKey);
     }
 
     /**

@@ -3011,7 +3011,7 @@
         "brace-expansion@>=2.0.0 <2.1.4": "2.1.4",
         "brace-expansion@>=5.0.0 <5.0.9": "5.0.9",
         "yaml": "2.8.3",
-        "dompurify": "3.4.13",
+        "dompurify": "3.4.14",
         "ip-address": "10.4.0",
         "mermaid": "11.16.1",
         "postcss": "^8.5.18",

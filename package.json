@@ -2771,7 +2771,7 @@
         "react-error-boundary": "^6.0.0",
         "react-redux": "^7.1.1",
         "react-svg-pan-zoom": "3.9.0",
-        "react-svgmt": "1.1.11",
+        "react-svgmt": "1.2.0",
         "react-toggle": "^4.1.2",
         "react-vega": "^7.7.1",
         "react-virtualized": "^9.21.1",

@@ -5,10 +5,10 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { ITelemetryService } from '../../platform/analytics/types';
 import { IExtensionContext } from '../../platform/common/types';
 import { ILogger } from '../../platform/logging/types';
-import { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteNotebookSerializer } from './deepnoteSerializer';
 import { DeepnoteExplorerView } from './deepnoteExplorerView';
+import { IDeepnoteNotebookInterpreters } from './deepnoteNotebookInterpreters';
 import { DeepnoteTreeDataProvider } from './deepnoteTreeDataProvider';
 import { DeepnoteMultiNotebookSplitter } from './deepnoteMultiNotebookSplitter';
 import { deepnoteFileExists } from './deepnoteSiblingFileAllocator';
@@ -43,9 +43,10 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         @inject(ILogger) private readonly logger: ILogger,
         @inject(ITelemetryService) private readonly analytics: ITelemetryService,
         @inject(SnapshotService) @optional() private readonly snapshotService?: SnapshotService,
-        @inject(IDeepnoteNotebookEnvironmentMapper)
+        // Registered on the desktop target only; on web there is no interpreter to carry over.
+        @inject(IDeepnoteNotebookInterpreters)
         @optional()
-        private readonly environmentMapper?: IDeepnoteNotebookEnvironmentMapper
+        private readonly notebookInterpreters?: IDeepnoteNotebookInterpreters
     ) {
         this.integrationManager = integrationManager;
     }
@@ -86,7 +87,7 @@ export class DeepnoteActivationService implements IExtensionSyncActivationServic
         this.integrationManager.activate();
 
         this.multiNotebookSplitter = new DeepnoteMultiNotebookSplitter(
-            this.environmentMapper,
+            this.notebookInterpreters,
             () => this.explorerView.refresh(),
             this.logger,
             deepnoteFileExists,

@@ -12,13 +12,13 @@ import type {
 // The bundled module uses ESM default export, so we need to access .default
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const languageClientModule = require('vscode-languageclient/node');
-const { LanguageClient, TransportKind, RevealOutputChannelOn } = (languageClientModule.default ??
+const { LanguageClient, TransportKind, RevealOutputChannelOn, State } = (languageClientModule.default ??
     languageClientModule) as typeof import('vscode-languageclient/node');
 
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
 import { IDisposable, IDisposableRegistry } from '../../platform/common/types';
 import * as path from '../../platform/vscode-path/path';
-import { DeepnoteServerInfo, IDeepnoteLspClientManager } from './types';
+import { IDeepnoteLspClientManager } from './types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { logger } from '../../platform/logging';
 import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
@@ -56,7 +56,7 @@ export class DeepnoteLspClientManager
     implements IDeepnoteLspClientManager, IExtensionSyncActivationService, IDisposable
 {
     private readonly clients = new Map<string, LspClientInfo>();
-    private readonly pendingStarts = new Map<string, boolean>();
+    private readonly pendingStarts = new Map<string, Promise<void>>();
 
     private disposed = false;
 
@@ -76,7 +76,6 @@ export class DeepnoteLspClientManager
     }
 
     public async startLspClients(
-        _serverInfo: DeepnoteServerInfo,
         notebookUri: vscode.Uri,
         interpreter: PythonEnvironment,
         token?: vscode.CancellationToken
@@ -91,15 +90,32 @@ export class DeepnoteLspClientManager
 
         const notebookKey = getNotebookKey(notebookUri);
 
-        const pendingStart = this.pendingStarts.get(notebookKey);
+        // Wait the in-flight start out rather than returning: a caller that needs clients on a
+        // different interpreter must get its turn, not be told the job is done. Loop rather than a
+        // single wait, as DeepnoteServerStarter does: a caller released by one start must not walk
+        // past a newer one that was registered while it was waiting.
+        let pendingStart = this.pendingStarts.get(notebookKey);
 
-        if (pendingStart) {
-            logger.trace(`LSP client is already starting up for ${notebookKey}.`);
+        while (pendingStart) {
+            logger.trace(`LSP client is already starting up for ${notebookKey}; waiting for it.`);
+            await pendingStart.catch(noop);
 
-            return;
+            if (this.disposed || token?.isCancellationRequested) {
+                return;
+            }
+
+            const nextStart = this.pendingStarts.get(notebookKey);
+
+            pendingStart = nextStart === pendingStart ? undefined : nextStart;
         }
 
-        if (this.clients.has(notebookKey)) {
+        const existing = this.clients.get(notebookKey);
+
+        // `state` rather than mere presence: vscode-languageclient restarts a crashed server on the
+        // same instance (5 times in 3 minutes), so a client that is merely recovering must be left
+        // alone. Note that a client part-way through its own stop() also reads as Stopped, which is
+        // why stopLspClients only removes the entry it started with.
+        if (existing?.pythonClient && existing.pythonClient.state !== State.Stopped) {
             logger.trace(`LSP clients already started for ${notebookKey}.`);
 
             return;
@@ -107,9 +123,36 @@ export class DeepnoteLspClientManager
 
         logger.info(`Starting LSP clients for ${notebookKey} using interpreter ${interpreter.uri.fsPath}.`);
 
-        this.pendingStarts.set(notebookKey, true);
+        // Claimed before the first await below, so a stop issued while this runs waits for it
+        // instead of doing nothing against a `clients` map this call has not populated yet.
+        const start = this.startClients(notebookKey, notebookUri, interpreter, existing, token);
+
+        this.pendingStarts.set(notebookKey, start);
 
         try {
+            await start;
+        } finally {
+            if (this.pendingStarts.get(notebookKey) === start) {
+                this.pendingStarts.delete(notebookKey);
+            }
+        }
+    }
+
+    private async startClients(
+        notebookKey: string,
+        notebookUri: vscode.Uri,
+        interpreter: PythonEnvironment,
+        existing: LspClientInfo | undefined,
+        token?: vscode.CancellationToken
+    ): Promise<void> {
+        try {
+            if (existing) {
+                logger.warn(`Replacing a stopped Python LSP client for ${notebookKey}`);
+                this.clients.delete(notebookKey);
+                this.releaseSharedSqlClient();
+                await existing.pythonClient?.dispose().catch(noop);
+            }
+
             if (token?.isCancellationRequested) {
                 return;
             }
@@ -155,13 +198,26 @@ export class DeepnoteLspClientManager
             logger.error(`Failed to start LSP clients for ${notebookKey}:`, error);
 
             throw error;
-        } finally {
-            this.pendingStarts.delete(notebookKey);
         }
     }
 
     public async stopLspClients(notebookUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void> {
         const notebookKey = getNotebookKey(notebookUri);
+
+        // `clients` is only populated once a start has fully settled, so stopping mid-start would
+        // find nothing and silently leave the client it was meant to kill running. Loop rather than
+        // a single wait: a stop released by one start must not walk past a newer one that was
+        // registered while it was waiting.
+        let pendingStart = this.pendingStarts.get(notebookKey);
+
+        while (pendingStart) {
+            await pendingStart.catch(noop);
+
+            const nextStart = this.pendingStarts.get(notebookKey);
+
+            pendingStart = nextStart === pendingStart ? undefined : nextStart;
+        }
+
         const clientInfo = this.clients.get(notebookKey);
 
         if (!clientInfo) {
@@ -185,10 +241,14 @@ export class DeepnoteLspClientManager
             }
         }
 
-        // Release reference to shared SQL client
-        this.releaseSharedSqlClient();
-
-        this.clients.delete(notebookKey);
+        // Only if it is still the client this call set out to stop: a stopping client already reads
+        // as Stopped, so a start that ran while the teardown above was awaited may have replaced the
+        // entry. Deleting unconditionally would drop that live client and leak its process. The SQL
+        // reference goes with the entry, so whichever call removes it is the one that releases.
+        if (this.clients.get(notebookKey) === clientInfo) {
+            this.clients.delete(notebookKey);
+            this.releaseSharedSqlClient();
+        }
 
         logger.info(`LSP clients stopped for ${notebookKey}`);
     }
@@ -238,6 +298,16 @@ export class DeepnoteLspClientManager
      */
     private async ensureSharedSqlClient(notebookUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void> {
         // If client already exists, just increment ref count
+        // Same liveness rule as the Python client: a stopped client can never be started again, so
+        // drop it and fall through to creating its replacement. Resets mirror forceStopSharedSqlClient.
+        if (sharedSqlClient && sharedSqlClient.state === State.Stopped) {
+            logger.warn('Replacing a stopped shared SQL LSP client');
+            await sharedSqlClient.dispose().catch(noop);
+            sharedSqlClient = undefined;
+            sharedSqlClientRefCount = 0;
+            sharedSqlConnections = [];
+        }
+
         if (sharedSqlClient) {
             sharedSqlClientRefCount++;
             logger.trace(`Reusing shared SQL LSP client, ref count: ${sharedSqlClientRefCount}`);

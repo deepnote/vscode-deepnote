@@ -71,30 +71,23 @@ import { SqlCellStatusBarProvider } from './deepnote/sqlCellStatusBarProvider';
 import { DirtyInputBlockStatusBarProvider } from './deepnote/dirtyInputBlockStatusBarProvider';
 import { StaleOutputStatusBarProvider } from './deepnote/staleOutputStatusBarProvider';
 import {
-    IDeepnoteToolkitInstaller,
     IDeepnoteServerStarter,
     IDeepnoteKernelAutoSelector,
     IDeepnoteServerProvider,
-    IDeepnoteEnvironmentManager,
-    IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteLspClientManager,
+    IDeepnoteToolkitDependencyService,
     IServerHandleRegistry
 } from '../kernels/deepnote/types';
 import { DeepnoteAgentSkillsManager } from '../kernels/deepnote/deepnoteAgentSkillsManager.node';
-import { DeepnoteToolkitInstaller } from '../kernels/deepnote/deepnoteToolkitInstaller.node';
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
 import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelector.node';
+import { DeepnoteNotebookInterpreters, IDeepnoteNotebookInterpreters } from './deepnote/deepnoteNotebookInterpreters';
 import { DeepnoteServerProvider } from '../kernels/deepnote/deepnoteServerProvider.node';
 import { ServerHandleRegistry } from '../kernels/deepnote/deepnoteServerHandleRegistry.node';
+import { DeepnoteToolkitDependencyService } from '../kernels/deepnote/deepnoteToolkitDependencyService.node';
 import { DeepnoteLspClientManager } from '../kernels/deepnote/deepnoteLspClientManager.node';
 import { DeepnoteInitNotebookRunner } from './deepnote/deepnoteInitNotebookRunner.node';
 import { DeepnoteRequirementsHelper, IDeepnoteRequirementsHelper } from './deepnote/deepnoteRequirementsHelper.node';
-import { DeepnoteEnvironmentManager } from '../kernels/deepnote/environments/deepnoteEnvironmentManager.node';
-import { DeepnoteEnvironmentStorage } from '../kernels/deepnote/environments/deepnoteEnvironmentStorage.node';
-import { DeepnoteEnvironmentsView } from '../kernels/deepnote/environments/deepnoteEnvironmentsView.node';
-import { DeepnoteEnvironmentsActivationService } from '../kernels/deepnote/environments/deepnoteEnvironmentsActivationService';
-import { DeepnoteExtensionSidecarWriter } from '../kernels/deepnote/environments/deepnoteExtensionSidecarWriter.node';
-import { DeepnoteNotebookEnvironmentMapper } from '../kernels/deepnote/environments/deepnoteNotebookEnvironmentMapper.node';
 import { DeepnoteCellExecutionAnalytics } from './deepnote/deepnoteCellExecutionAnalytics';
 import { DeepnoteNotebookCommandListener } from './deepnote/deepnoteNotebookCommandListener';
 import { DeepnoteInputBlockCellStatusBarItemProvider } from './deepnote/deepnoteInputBlockCellStatusBarProvider';
@@ -105,7 +98,6 @@ import { EphemeralCellStatusBarProvider } from './deepnote/ephemeralCellStatusBa
 import { OrphanedEphemeralCellCleaner } from './deepnote/orphanedEphemeralCellCleaner';
 import { DeepnoteNewCellLanguageService } from './deepnote/deepnoteNewCellLanguageService';
 import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
-import { DeepnoteEnvironmentTreeDataProvider } from '../kernels/deepnote/environments/deepnoteEnvironmentTreeDataProvider.node';
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 import { IntegrationEnvRefreshHandler } from './deepnote/integrations/integrationEnvRefreshHandler';
 import { IntegrationsEnvFileWatcher } from './deepnote/integrations/integrationsEnvFileWatcher.node';
@@ -258,12 +250,19 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
 
     // Deepnote kernel services
     serviceManager.addSingleton<DeepnoteAgentSkillsManager>(DeepnoteAgentSkillsManager, DeepnoteAgentSkillsManager);
-    serviceManager.addSingleton<IDeepnoteToolkitInstaller>(IDeepnoteToolkitInstaller, DeepnoteToolkitInstaller);
     serviceManager.addSingleton<IDeepnoteServerStarter>(IDeepnoteServerStarter, DeepnoteServerStarter);
     serviceManager.addBinding(IDeepnoteServerStarter, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteServerProvider>(IDeepnoteServerProvider, DeepnoteServerProvider);
     serviceManager.addBinding(IDeepnoteServerProvider, IExtensionSyncActivationService);
     serviceManager.addSingleton<IServerHandleRegistry>(IServerHandleRegistry, ServerHandleRegistry);
+    serviceManager.addSingleton<IDeepnoteToolkitDependencyService>(
+        IDeepnoteToolkitDependencyService,
+        DeepnoteToolkitDependencyService
+    );
+    serviceManager.addSingleton<IDeepnoteNotebookInterpreters>(
+        IDeepnoteNotebookInterpreters,
+        DeepnoteNotebookInterpreters
+    );
     serviceManager.addSingleton<IDeepnoteKernelAutoSelector>(IDeepnoteKernelAutoSelector, DeepnoteKernelAutoSelector);
     serviceManager.addBinding(IDeepnoteKernelAutoSelector, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteLspClientManager>(IDeepnoteLspClientManager, DeepnoteLspClientManager);
@@ -304,33 +303,6 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         DeepnoteNotebookInfoStatusBar
-    );
-
-    // Deepnote configuration services
-    serviceManager.addSingleton<DeepnoteEnvironmentStorage>(DeepnoteEnvironmentStorage, DeepnoteEnvironmentStorage);
-    serviceManager.addSingleton<IDeepnoteEnvironmentManager>(IDeepnoteEnvironmentManager, DeepnoteEnvironmentManager);
-    serviceManager.addSingleton<DeepnoteEnvironmentTreeDataProvider>(
-        DeepnoteEnvironmentTreeDataProvider,
-        DeepnoteEnvironmentTreeDataProvider
-    );
-
-    // Deepnote configuration view
-    serviceManager.addSingleton<DeepnoteEnvironmentsView>(DeepnoteEnvironmentsView, DeepnoteEnvironmentsView);
-    serviceManager.addSingleton<IExtensionSyncActivationService>(
-        IExtensionSyncActivationService,
-        DeepnoteEnvironmentsActivationService
-    );
-
-    // Deepnote configuration selection
-    serviceManager.addSingleton<IDeepnoteNotebookEnvironmentMapper>(
-        IDeepnoteNotebookEnvironmentMapper,
-        DeepnoteNotebookEnvironmentMapper
-    );
-
-    // Sidecar file writer (exposes env mappings for external tools)
-    serviceManager.addSingleton<IExtensionSyncActivationService>(
-        IExtensionSyncActivationService,
-        DeepnoteExtensionSidecarWriter
     );
 
     // Snapshot service

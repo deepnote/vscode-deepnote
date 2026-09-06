@@ -7,32 +7,27 @@ import { inject, injectable, named, optional } from 'inversify';
 import {
     CancellationToken,
     CancellationTokenSource,
-    NotebookController,
     NotebookControllerAffinity,
     NotebookDocument,
     NotebookEditor,
     ProgressLocation,
-    QuickPickItem,
     Uri,
     commands,
     env,
     l10n,
-    notebooks,
     window,
     workspace
 } from 'vscode';
-import { DeepnoteEnvironment } from '../../kernels/deepnote/environments/deepnoteEnvironment';
 import {
     DEEPNOTE_NOTEBOOK_TYPE,
-    DEEPNOTE_TOOLKIT_VERSION,
+    DeepnoteControllerRebuild,
     DeepnoteKernelConnectionMetadata,
-    IDeepnoteEnvironmentManager,
+    DeepnoteToolkitDependencyResponse,
     IDeepnoteKernelAutoSelector,
     IDeepnoteLspClientManager,
-    IDeepnoteNotebookEnvironmentMapper,
     IDeepnoteServerProvider,
     IDeepnoteServerStarter,
-    IDeepnoteToolkitInstaller,
+    IDeepnoteToolkitDependencyService,
     IServerHandleRegistry
 } from '../../kernels/deepnote/types';
 import { createJupyterConnectionInfo } from '../../kernels/jupyter/jupyterUtils';
@@ -44,24 +39,46 @@ import {
 } from '../../kernels/jupyter/types';
 import { IJupyterKernelSpec, IKernelProvider } from '../../kernels/types';
 import { IExtensionSyncActivationService } from '../../platform/activation/types';
-import { ITelemetryService } from '../../platform/analytics/types';
 import { IPythonExtensionChecker } from '../../platform/api/types';
-import { Cancellation, isCancellationError } from '../../platform/common/cancellation';
-import { JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
+import { Cancellation, isCancellationError, wrapCancellationTokens } from '../../platform/common/cancellation';
+import { Commands, JVSC_EXTENSION_ID, STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { IConfigurationService, IDisposableRegistry, IOutputChannel } from '../../platform/common/types';
 import { disposeAsync } from '../../platform/common/utils';
+import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { createDeepnoteServerConfigHandle } from '../../platform/deepnote/deepnoteServerUtils.node';
-import { DeepnoteKernelError, DeepnoteToolkitMissingError } from '../../platform/errors/deepnoteKernelErrors';
+import { DeepnoteKernelError } from '../../platform/errors/deepnoteKernelErrors';
+import { DataScience } from '../../platform/common/utils/localize';
+import { IInterpreterService } from '../../platform/interpreter/contracts';
+import { getCachedEnvironment, resolvedPythonEnvToJupyterEnv } from '../../platform/interpreter/helpers';
+import { PythonEnvironmentFilter } from '../../platform/interpreter/filter/filterService';
+import {
+    getPythonEnvironmentCategory,
+    pythonEnvironmentQuickPick
+} from '../../platform/interpreter/pythonEnvironmentPicker.node';
+import { PythonEnvironmentQuickPickItemProvider } from '../../platform/interpreter/pythonEnvironmentQuickPickProvider.node';
+import { BaseProviderBasedQuickPick } from '../../platform/common/providerBasedQuickPick';
+import { InputFlowAction } from '../../platform/common/utils/multiStepInput';
 import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
-import { getNotebookKey } from '../../platform/deepnote/deepnoteProjectUtils';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
+import { IDeepnoteNotebookInterpreters } from './deepnoteNotebookInterpreters';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
-// Constants for NotebookEditor retry logic
+/**
+ * Stand-in for the spec the toolkit server will report. The server's own spec replaces it once the
+ * kernel is set up; until then it only has to describe the environment for the kernel picker.
+ */
+const PENDING_KERNEL_SPEC: IJupyterKernelSpec = {
+    argv: [],
+    display_name: 'Python 3 (ipykernel)',
+    executable: 'python',
+    language: 'python',
+    name: 'python3'
+};
+
 const NOTEBOOK_EDITOR_RETRY_COUNT = 10;
 const NOTEBOOK_EDITOR_RETRY_DELAY_MS = 100;
 
@@ -74,10 +91,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     private readonly notebookConnectionMetadata = new Map<string, DeepnoteKernelConnectionMetadata>();
     // Track registered controllers per NOTEBOOK (full URI with query) - one controller per notebook
     private readonly notebookControllers = new Map<string, IVSCodeNotebookController>();
-    // Track environment for each notebook
-    private readonly notebookEnvironmentsIds = new Map<string, string>();
-    // Track per-notebook placeholder controllers for notebooks without configured environments
-    private readonly placeholderControllers = new Map<string, NotebookController>();
+    // Track interpreter ID for each notebook
+    private readonly notebookInterpreterIds = new Map<string, string>();
+    // The install prompt is modal, and several notebooks can open at once.
+    private promptedToInstallPython = false;
 
     constructor(
         @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
@@ -93,14 +110,17 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
         @inject(IKernelProvider) private readonly kernelProvider: IKernelProvider,
         @inject(IDeepnoteRequirementsHelper) private readonly requirementsHelper: IDeepnoteRequirementsHelper,
-        @inject(IDeepnoteEnvironmentManager) private readonly environmentManager: IDeepnoteEnvironmentManager,
         @inject(IDeepnoteServerStarter) private readonly serverStarter: IDeepnoteServerStarter,
-        @inject(IDeepnoteNotebookEnvironmentMapper)
-        private readonly notebookEnvironmentMapper: IDeepnoteNotebookEnvironmentMapper,
         @inject(IOutputChannel) @named(STANDARD_OUTPUT_CHANNEL) private readonly outputChannel: IOutputChannel,
-        @inject(IDeepnoteToolkitInstaller) private readonly toolkitInstaller: IDeepnoteToolkitInstaller,
+        @inject(IInterpreterService) private readonly interpreterService: IInterpreterService,
         @inject(IServerHandleRegistry) private readonly serverHandleRegistry: IServerHandleRegistry,
-        @inject(ITelemetryService) private readonly analytics: ITelemetryService
+        @inject(IDeepnoteToolkitDependencyService)
+        private readonly toolkitDependencyService: IDeepnoteToolkitDependencyService,
+        @inject(IDeepnoteNotebookInterpreters)
+        private readonly notebookInterpreters: IDeepnoteNotebookInterpreters,
+        @inject(PythonEnvironmentQuickPickItemProvider)
+        private readonly environmentQuickPickProvider: PythonEnvironmentQuickPickItemProvider,
+        @inject(PythonEnvironmentFilter) private readonly environmentFilter: PythonEnvironmentFilter
     ) {}
 
     public activate() {
@@ -118,10 +138,179 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             this.disposables
         );
 
+        // A notebook opened before any interpreter existed got no controller at all, and nothing
+        // else would ever give it one: the execution gate only runs from a registered controller.
+        this.interpreterService.onDidChangeInterpreters(this.onDidChangeInterpreters, this, this.disposables);
+
+        this.disposables.push(
+            commands.registerCommand(Commands.SelectInterpreterForNotebook, () => this.selectInterpreterForNotebook())
+        );
+
         // Handle currently open notebooks - await all async operations
         Promise.all(workspace.notebookDocuments.map((d) => this.onDidOpenNotebook(d))).catch((error) => {
             logger.error(`Error handling open notebooks during activation: ${error}`);
         });
+    }
+
+    /**
+     * Pins an interpreter to the active notebook and rebuilds its controller on it. Scoped to the one
+     * notebook: the Python extension's own selection is workspace-wide and also drives terminals and
+     * language features, so it is deliberately left alone.
+     */
+    private async selectInterpreterForNotebook(): Promise<void> {
+        const notebook = window.activeNotebookEditor?.notebook;
+
+        if (!notebook || notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
+            void window.showWarningMessage(DataScience.selectInterpreterNoActiveNotebook);
+
+            return;
+        }
+
+        const interpreter = await this.pickInterpreter();
+
+        if (interpreter) {
+            await this.applyInterpreter(notebook, interpreter);
+        }
+    }
+
+    /**
+     * Shows the interpreter quick pick and resolves what the user chose, or `undefined` when they
+     * dismissed it or the choice could not be resolved. Applies nothing: the caller decides what a
+     * pick means, which is what keeps the toolkit prompt's "Select a different Interpreter" from
+     * starting a switch inside the dependency check it was raised from.
+     */
+    private async pickInterpreter(): Promise<PythonEnvironment | undefined> {
+        // The shared provider the kernel picker uses: it triggers discovery on first read, honours
+        // deepnote.kernels.excludePythonEnvironments, and keeps the list live while the pick is open.
+        const provider = this.environmentQuickPickProvider.withFilter(
+            (environment) => !this.environmentFilter.isPythonEnvironmentExcluded(environment)
+        );
+        const picker = new BaseProviderBasedQuickPick(
+            Promise.resolve(provider),
+            pythonEnvironmentQuickPick,
+            getPythonEnvironmentCategory,
+            { supportsBack: false },
+            undefined,
+            DataScience.selectInterpreterForNotebookPlaceholder
+        );
+        const cts = new CancellationTokenSource();
+
+        try {
+            const selected = await picker.selectItem(cts.token);
+
+            if (!selected || selected instanceof InputFlowAction) {
+                return undefined;
+            }
+
+            const interpreter = resolvedPythonEnvToJupyterEnv(getCachedEnvironment(selected));
+
+            if (!interpreter) {
+                logger.warn(`Could not resolve the selected environment ${selected.id}`);
+            }
+
+            return interpreter;
+        } finally {
+            cts.dispose();
+            picker.dispose();
+        }
+    }
+
+    /**
+     * Pins `interpreter` to the notebook and rebuilds its controller on it.
+     *
+     * The pin has to be written before the rebuild, which resolves the interpreter itself. So if the
+     * rebuild does not take, the previous pin is put back: otherwise the stored interpreter would
+     * disagree with the one the notebook is actually running on, and the next plain "run cell" would
+     * silently switch it and re-raise whatever prompt was just declined. Declining the toolkit
+     * install is the common way in, and it returns rather than throwing.
+     *
+     * Answering that prompt with "Select a different Interpreter" retries here rather than starting
+     * a nested switch, so `previous` stays the pin the user actually came from however many
+     * interpreters they try, and a chain that ends in failure restores that one rather than an
+     * intermediate choice that also failed.
+     */
+    public async applyInterpreter(
+        notebook: NotebookDocument,
+        interpreter: PythonEnvironment
+    ): Promise<PythonEnvironment | undefined> {
+        const previous = this.notebookInterpreters.get(notebook.uri);
+        let chosen = interpreter;
+
+        for (;;) {
+            await this.notebookInterpreters.set(notebook.uri, chosen.uri);
+
+            let outcome: DeepnoteControllerRebuild;
+
+            try {
+                outcome = await window.withProgress(
+                    {
+                        location: ProgressLocation.Notification,
+                        title: DataScience.switchingInterpreter,
+                        cancellable: true
+                    },
+                    (progress, token) => this.rebuildController(notebook, progress, token)
+                );
+            } catch (error) {
+                await this.undoPin(notebook, chosen, previous);
+
+                if (isCancellationError(error as Error)) {
+                    logger.info(`Interpreter switch cancelled for ${getDisplayPath(notebook.uri)}`);
+
+                    return undefined;
+                }
+
+                await this.handleKernelSelectionError(error, notebook);
+
+                return undefined;
+            }
+
+            if (outcome === 'rebuilt') {
+                return chosen;
+            }
+
+            if (outcome === 'selectDifferentInterpreter') {
+                const picked = await this.pickInterpreter();
+
+                if (picked) {
+                    chosen = picked;
+
+                    continue;
+                }
+            }
+
+            logger.info(
+                `Interpreter switch for ${getDisplayPath(notebook.uri)} did not take; restoring the previous selection`
+            );
+            await this.undoPin(notebook, chosen, previous);
+
+            return undefined;
+        }
+    }
+
+    /**
+     * Puts `previous` back, but only while the notebook is still pinned to `chosen` — a concurrent
+     * switch may have pinned something newer while this one was rebuilding, and that choice has to
+     * survive this one's failure.
+     */
+    private async undoPin(notebook: NotebookDocument, chosen: PythonEnvironment, previous: Uri | undefined) {
+        if (this.notebookInterpreters.get(notebook.uri)?.toString() === chosen.uri.toString()) {
+            await this.notebookInterpreters.set(notebook.uri, previous);
+        }
+    }
+
+    private onDidChangeInterpreters() {
+        for (const notebook of workspace.notebookDocuments) {
+            if (
+                notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE ||
+                this.notebookControllers.has(getNotebookKey(notebook.uri))
+            ) {
+                continue;
+            }
+
+            this.registerControllerForNotebook(notebook).catch((error) => {
+                logger.error(`Failed to offer a Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
+            });
+        }
     }
 
     private async onDidOpenNotebook(notebook: NotebookDocument) {
@@ -134,125 +323,13 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         logger.info(`Deepnote notebook opened: ${getDisplayPath(notebook.uri)}`);
 
-        // Always try to ensure kernel is selected (this will reuse existing controllers)
-        // Don't await - let it happen in background so notebook opens quickly
-        window
-            .withProgress<boolean>(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Auto-selecting Deepnote kernel... {0}', getDisplayPath(notebook.uri)),
-                    cancellable: true
-                },
-                async (progress, token) => {
-                    try {
-                        const result = await this.ensureKernelSelected(notebook, progress, token);
-                        return result;
-                    } catch (error) {
-                        logger.error(
-                            `Failed to auto-select Deepnote kernel for ${getDisplayPath(notebook.uri)}`,
-                            error
-                        );
-                        void this.handleKernelSelectionError(error, notebook);
-                        return true;
-                    }
-                }
-            )
-            .then(
-                (result) => {
-                    logger.info(`Auto-selecting Deepnote kernel for ${getDisplayPath(notebook.uri)} result: ${result}`);
-                    if (!result) {
-                        logger.info(`No environment configured for ${getDisplayPath(notebook.uri)}, showing warning`);
-                        this.showNoEnvironmentWarning(notebook).catch((error) => {
-                            logger.error(
-                                `Error showing no environment warning for ${getDisplayPath(notebook.uri)}`,
-                                error
-                            );
-                            void this.handleKernelSelectionError(error, notebook);
-                        });
-                    }
-                },
-                (error) => {
-                    logger.error(`Error auto-selecting Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
-                    void this.handleKernelSelectionError(error, notebook);
-                }
-            );
-    }
-
-    private async showNoEnvironmentWarning(notebook: NotebookDocument): Promise<void> {
-        logger.info(`Showing no environment warning for ${getDisplayPath(notebook.uri)}`);
-        const selectEnvironmentAction = l10n.t('Select Environment');
-        const cancelAction = l10n.t('Cancel');
-
-        const selectedAction = await window.showWarningMessage(
-            l10n.t('No environment configured for this notebook. Please select an environment to continue.'),
-            { modal: false },
-            selectEnvironmentAction,
-            cancelAction
-        );
-
-        logger.info(`Selected action: ${selectedAction}`);
-        if (selectedAction === selectEnvironmentAction) {
-            logger.info(`Executing command to pick environment for ${getDisplayPath(notebook.uri)}`);
-            void commands.executeCommand('deepnote.environments.selectForNotebook', { notebook });
+        // Like the Jupyter extension, opening a notebook only registers a controller for the
+        // environment; nothing is installed and no server starts until the first execution.
+        try {
+            await this.registerControllerForNotebook(notebook);
+        } catch (error) {
+            logger.error(`Failed to offer a Deepnote kernel for ${getDisplayPath(notebook.uri)}`, error);
         }
-    }
-
-    public async pickEnvironment(notebookUri: Uri): Promise<DeepnoteEnvironment | undefined> {
-        logger.info(`Picking environment for notebook ${getDisplayPath(notebookUri)}`);
-
-        // Wait for environment manager to finish loading environments from storage
-        await this.environmentManager.waitForInitialization();
-
-        const environments = this.environmentManager.listEnvironments();
-        const items: (QuickPickItem & { environment?: DeepnoteEnvironment })[] = environments.map((env) => {
-            return {
-                label: env.name,
-                description: getDisplayPath(env.pythonInterpreter.uri),
-                detail: env.packages?.length
-                    ? l10n.t('Packages: {0}', env.packages.join(', '))
-                    : l10n.t('No additional packages'),
-                environment: env
-            };
-        });
-
-        items.push({
-            label: '$(add) Create New Environment',
-            description: 'Set up a new kernel environment',
-            alwaysShow: true
-        });
-
-        const selected = await window.showQuickPick(items, {
-            placeHolder: `Select an environment for ${getDisplayPath(notebookUri)}`,
-            matchOnDescription: true,
-            matchOnDetail: true
-        });
-
-        if (!selected) {
-            logger.info('User cancelled environment selection');
-            return; // User cancelled
-        }
-
-        if (!selected.environment) {
-            logger.info('User chose to create new environment - triggering create command');
-
-            await commands.executeCommand('deepnote.environments.create');
-
-            const newEnvironments = this.environmentManager.listEnvironments();
-
-            if (newEnvironments.length > environments.length) {
-                logger.info('Environment created, showing picker again');
-
-                return this.pickEnvironment(notebookUri);
-            }
-
-            logger.info('No new environment created');
-
-            return;
-        }
-
-        logger.info(`Selected environment "${selected.environment.name}" for notebook ${getDisplayPath(notebookUri)}`);
-
-        return selected.environment;
     }
 
     private onControllerSelectionChanged(event: {
@@ -273,24 +350,23 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     private onDidCloseNotebook(notebook: NotebookDocument) {
-        logger.info(`Notebook closed: ${getDisplayPath(notebook.uri)}, with type: ${notebook.notebookType}`);
-
-        // Only handle deepnote notebooks
         if (notebook.notebookType !== DEEPNOTE_NOTEBOOK_TYPE) {
             return;
         }
 
-        logger.info(`Deepnote notebook closed: ${getDisplayPath(notebook.uri)}`);
-
-        // Clean up placeholder controller if it exists
         const notebookKey = getNotebookKey(notebook.uri);
-        const placeholder = this.placeholderControllers.get(notebookKey);
+        this.notebookConnectionMetadata.delete(notebookKey);
+        this.notebookInterpreterIds.delete(notebookKey);
+        this.notebookControllers.delete(notebookKey);
 
-        if (placeholder) {
-            logger.info(`Disposing placeholder controller for closed notebook: ${getDisplayPath(notebook.uri)}`);
-            placeholder.dispose();
-            this.placeholderControllers.delete(notebookKey);
-        }
+        // The language servers are per notebook and outlive it otherwise, one pylsp process per
+        // notebook ever opened. The server itself deliberately keeps running; only LSP is torn down,
+        // and the next execution starts it again, exactly as it does for a notebook opened fresh.
+        this.lspClientManager.stopLspClients(notebook.uri).catch((error) => {
+            logger.warn(`Could not stop LSP clients for the closed ${getDisplayPath(notebook.uri)}`, error);
+        });
+
+        logger.info(`Deepnote notebook closed, cleaned up: ${getDisplayPath(notebook.uri)}`);
     }
 
     /**
@@ -303,10 +379,32 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         notebook: NotebookDocument,
         progress: { report(value: { message?: string; increment?: number }): void },
         token: CancellationToken
-    ): Promise<void> {
+    ): Promise<DeepnoteControllerRebuild> {
         const notebookKey = getNotebookKey(notebook.uri);
 
         logger.info(`Switching controller environment for ${getDisplayPath(notebook.uri)}`);
+
+        // Resolved before anything is torn down, so that a notebook already running on this
+        // interpreter can be left alone below.
+        const interpreter = await this.notebookInterpreters.resolve(notebook.uri);
+
+        if (!interpreter) {
+            logger.error(`No active Python interpreter found for ${getDisplayPath(notebook.uri)}`);
+
+            return 'notRebuilt';
+        }
+
+        // Reselecting the interpreter a notebook is already running on: there is nothing to rebuild,
+        // and doing it anyway would restart the server and the language servers for no gain. The
+        // controller is still re-selected, since the notebook may have been pointed elsewhere since.
+        if (this.isKernelReady(notebookKey, interpreter.id)) {
+            logger.info(
+                `${getDisplayPath(notebook.uri)} already runs on ${getDisplayPath(interpreter.uri)}, nothing to rebuild`
+            );
+            await this.ensureControllerSelectedForNotebook(notebook, this.notebookControllers.get(notebookKey)!, token);
+
+            return 'rebuilt';
+        }
 
         // Check if any cells are executing and log a warning
         const kernel = this.kernelProvider.get(notebook);
@@ -319,32 +417,46 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             }
         }
 
-        // Clear cached metadata so ensureKernelSelected creates fresh metadata with new environment
-        // The controller will stay alive - it will just get updated via updateConnection()
-        this.notebookConnectionMetadata.delete(notebookKey);
-
         // Capture the old handle but don't unregister it yet: a failed or cancelled switch would
         // strand the still-selected controller on a dead handle.
         const oldServerHandle = this.serverHandleRegistry.get(notebookKey);
 
-        // Stop existing LSP clients so new ones can be created with fresh environment
-        // Without this, the SQL LSP client's command handlers remain registered and
-        // cause "command already exists" errors when trying to start new clients
-        await this.lspClientManager.stopLspClients(notebook.uri, token);
+        const previousInterpreterId = this.notebookInterpreterIds.get(notebookKey);
 
-        // Update the controller with new environment's metadata
-        // Because we use notebook-based controller IDs, addOrUpdate will call updateConnection()
-        // on the existing controller instead of creating a new one
-        const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
-        const environment = environmentId ? this.environmentManager.getEnvironment(environmentId) : undefined;
+        const dependency = await this.toolkitDependencyService.ensureToolkitInstalled(interpreter, notebook.uri, token);
 
-        if (environment == null) {
-            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(notebook.uri);
-            logger.error(`No environment found for notebook ${getDisplayPath(notebook.uri)}`);
-            return;
+        if (dependency !== DeepnoteToolkitDependencyResponse.ok) {
+            logger.info(`deepnote-toolkit unavailable, controller not rebuilt for ${getDisplayPath(notebook.uri)}`);
+
+            return dependency === DeepnoteToolkitDependencyResponse.selectDifferentInterpreter
+                ? 'selectDifferentInterpreter'
+                : 'notRebuilt';
         }
 
-        await this.ensureKernelSelectedWithConfiguration(notebook, environment, notebookKey, progress, token);
+        // Stopping is what lets the new clients be created: startLspClients treats a notebook that
+        // already has one as done and would leave it on the old interpreter. It happens here, after
+        // every bail-out above, so a switch that never starts does not cost the notebook its language
+        // features -- and if the setup below does not take, they go back on the old interpreter.
+        await this.lspClientManager.stopLspClients(notebook.uri, token);
+
+        this.notebookConnectionMetadata.delete(notebookKey);
+
+        try {
+            await this.ensureKernelSelectedWithInterpreter(notebook, interpreter, notebookKey, progress, token);
+        } catch (error) {
+            await this.restoreLspClients(notebook, previousInterpreterId);
+
+            throw error;
+        }
+
+        // Not only on a throw: setup can also give up by returning, and it can fail *after* starting
+        // LSP on the new interpreter, which would otherwise leave the notebook's language features
+        // pointed at an interpreter the switch never committed to.
+        if (!this.isKernelReady(notebookKey, interpreter.id)) {
+            await this.restoreLspClients(notebook, previousInterpreterId);
+
+            return 'notRebuilt';
+        }
 
         // Setup succeeded. If it registered a new server handle (full setup path), drop the old one.
         // The verified-controller early return reuses the existing handle, so nothing to clear then.
@@ -355,58 +467,20 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             this.serverProvider.unregisterServer(oldServerHandle);
         }
 
-        logger.info(`Controller successfully switched to new environment`);
+        logger.info(`Controller switched to ${getDisplayPath(interpreter.uri)} for ${getDisplayPath(notebook.uri)}`);
+
+        return 'rebuilt';
     }
 
-    public async ensureKernelSelected(
+    public async ensureKernelSelectedWithInterpreter(
         notebook: NotebookDocument,
-        progress: { report(value: { message?: string; increment?: number }): void },
-        token: CancellationToken
-    ): Promise<boolean> {
-        // notebookKey uniquely identifies THIS NOTEBOOK - the same identity the controller/server use
-        const notebookKey = getNotebookKey(notebook.uri);
-
-        const environmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
-
-        if (environmentId == null) {
-            await this.selectPlaceholderController(notebook);
-
-            return false;
-        }
-
-        const environment = environmentId ? this.environmentManager.getEnvironment(environmentId) : undefined;
-
-        if (environment == null) {
-            logger.info(`No environment found for notebook ${getDisplayPath(notebook.uri)}`);
-            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(notebook.uri);
-            await this.selectPlaceholderController(notebook);
-
-            return false;
-        }
-
-        await this.ensureKernelSelectedWithConfiguration(notebook, environment, notebookKey, progress, token);
-
-        return true;
-    }
-
-    public async ensureKernelSelectedWithConfiguration(
-        notebook: NotebookDocument,
-        configuration: DeepnoteEnvironment,
+        interpreter: PythonEnvironment,
         notebookKey: string,
         progress: { report(value: { message?: string; increment?: number }): void },
         progressToken: CancellationToken
     ): Promise<void> {
-        // Dispose placeholder controller if it exists (real controller is taking over)
-        const placeholder = this.placeholderControllers.get(notebookKey);
-
-        if (placeholder) {
-            logger.info(`Disposing placeholder controller for ${getDisplayPath(notebook.uri)}`);
-            placeholder.dispose();
-            this.placeholderControllers.delete(notebookKey);
-        }
-
-        logger.info(`Setting up kernel using configuration: ${configuration.name} (${configuration.id})`);
-        progress.report({ message: `Using ${configuration.name}...` });
+        logger.info(`Setting up kernel using interpreter: ${interpreter.id}`);
+        progress.report({ message: `Using interpreter ${getDisplayPath(interpreter.uri)}...` });
 
         // Check if Python extension is installed
         if (!this.pythonExtensionChecker.isPythonExtensionInstalled) {
@@ -415,71 +489,51 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return;
         }
 
-        const existingController = this.notebookControllers.get(notebookKey);
-        const existingEnvironmentId = this.notebookEnvironmentsIds.get(notebookKey);
-
-        if (existingEnvironmentId != null && existingController != null && existingEnvironmentId === configuration.id) {
-            logger.info(`Existing controller found for notebook ${getDisplayPath(notebook.uri)}, verifying connection`);
-
-            // Verify the controller's interpreter path matches the expected venv path
-            // This handles cases where notebooks were used in VS Code and now opened in Cursor
-            if (this.isControllerInterpreterValid(existingController, configuration.venvPath)) {
-                logger.info(`Controller verified, selecting it`);
-                await this.ensureControllerSelectedForNotebook(notebook, existingController, progressToken);
-
-                return;
-            }
-
-            const expectedInterpreter = this.getVenvInterpreterUri(configuration.venvPath);
-            logger.warn(
-                `Controller interpreter path mismatch! Expected: ${expectedInterpreter.fsPath}, Got: ${existingController.connection.interpreter?.uri.fsPath}. Recreating controller.`
+        if (this.isKernelReady(notebookKey, interpreter.id)) {
+            logger.info(`Existing controller found for notebook ${getDisplayPath(notebook.uri)}, reusing`);
+            await this.ensureControllerSelectedForNotebook(
+                notebook,
+                this.notebookControllers.get(notebookKey)!,
+                progressToken
             );
 
-            // Dispose old controller and recreate it
-            existingController.dispose();
-            this.notebookControllers.delete(notebookKey);
+            return;
         }
 
         // Ensure server is running (startServer is idempotent - returns early if already running)
-        // Note: startServer() will create the venv if it doesn't exist
-        logger.info(`Ensuring server is running for configuration ${configuration.id}`);
+        // Server starter handles toolkit check/install via IInstaller internally
+        logger.info(`Ensuring server is running for interpreter ${interpreter.id}`);
         progress.report({ message: 'Starting Deepnote server...' });
-        const serverInfo = await this.serverStarter.startServer(
-            configuration.pythonInterpreter,
-            configuration.venvPath,
-            configuration.managedVenv,
-            configuration.packages ?? [],
-            configuration.id,
-            notebook.uri,
-            progressToken
-        );
-
-        this.notebookEnvironmentsIds.set(notebookKey, configuration.id);
+        const serverInfo = await this.serverStarter.startServer(interpreter, notebook.uri, progressToken);
 
         logger.info(`Server running at ${serverInfo.url}`);
 
-        // Update last used timestamp
-        await this.environmentManager.updateLastUsed(configuration.id);
+        // Starting the server can take up to two minutes, and onDidCloseNotebook has already run its
+        // teardown by now for a notebook closed in that window. Everything below re-registers what
+        // that teardown cleared -- the controller, its metadata, the interpreter id -- and close does
+        // not fire twice, so the entries would outlive the notebook and keep isKernelReady true,
+        // costing it its language servers on reopen. Nothing has been registered yet at this point.
+        // The server itself deliberately keeps running, exactly as it does for any closed notebook.
+        if (notebook.isClosed) {
+            logger.info(`${notebookKey} was closed during setup, abandoning it`);
 
-        // Create server provider handle
+            return;
+        }
+
+        // Create server provider handle using interpreter ID
         const serverProviderHandle: JupyterServerProviderHandle = {
             extensionId: JVSC_EXTENSION_ID,
             id: 'deepnote-server',
-            handle: createDeepnoteServerConfigHandle(configuration.id, notebook.uri)
+            handle: createDeepnoteServerConfigHandle(interpreter.id, notebook.uri)
         };
 
+        // Register the server with the provider (one server per PROJECT)
         this.serverProvider.registerServer(serverProviderHandle.handle, serverInfo);
         this.serverHandleRegistry.set(notebookKey, serverProviderHandle.handle);
 
-        const lspInterpreterUri = this.getVenvInterpreterUri(configuration.venvPath);
-
-        const lspInterpreter: PythonEnvironment = {
-            uri: lspInterpreterUri,
-            id: lspInterpreterUri.fsPath
-        } as PythonEnvironment;
-
+        // Use the active interpreter directly for LSP (it already has deepnote-toolkit installed)
         try {
-            await this.lspClientManager.startLspClients(serverInfo, notebook.uri, lspInterpreter, progressToken);
+            await this.lspClientManager.startLspClients(notebook.uri, interpreter, progressToken);
 
             logger.info(`✓ LSP clients started for ${notebookKey}`);
         } catch (error) {
@@ -488,12 +542,14 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         progress.report({ message: 'Connecting to kernel...' });
 
+        const displayName = `Deepnote: ${getDisplayPath(interpreter.uri)} (${notebookKey})`;
+
         const connectionInfo = createJupyterConnectionInfo(
             serverProviderHandle,
             {
                 baseUrl: serverInfo.url,
                 token: serverInfo.token || '',
-                displayName: `Deepnote: ${configuration.name} (${notebookKey})`,
+                displayName,
                 authorizationHeader: {}
             },
             this.requestCreator,
@@ -508,8 +564,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             const kernelSpecs = await sessionManager.getKernelSpecs();
             logger.info(`Available kernel specs on Deepnote server: ${kernelSpecs.map((s) => s.name).join(', ')}`);
 
-            // Use the extracted kernel selection logic
-            kernelSpec = this.selectKernelSpec(kernelSpecs, configuration.id);
+            // Select the default Python kernel (ipykernel-provided python3 spec)
+            kernelSpec = this.selectKernelSpec(kernelSpecs);
 
             logger.info(`✓ Using kernel spec: ${kernelSpec.name} (${kernelSpec.display_name})`);
         } finally {
@@ -518,10 +574,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         progress.report({ message: 'Finalizing kernel setup...' });
 
-        const venvInterpreter = this.getVenvInterpreterUri(configuration.venvPath);
-
-        logger.info(`Using venv path: ${configuration.venvPath.fsPath}`);
-        logger.info(`Venv interpreter path: ${venvInterpreter.fsPath}`);
+        logger.info(`Using interpreter: ${interpreter.uri.fsPath}`);
 
         // CRITICAL: Use unique notebook-based ID (includes query with notebook ID)
         // This ensures each notebook gets its own controller/kernel, even within the same project.
@@ -529,19 +582,15 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // controller instead of creating a new one, avoiding the DISPOSED error.
         const controllerId = `deepnote-notebook-${notebookKey}`;
 
-        // Extract project and notebook titles from metadata for display
-        const projectTitle = notebook.metadata?.deepnoteProjectName || 'Untitled Project';
-
         const newConnectionMetadata = DeepnoteKernelConnectionMetadata.create({
-            interpreter: { uri: venvInterpreter, id: venvInterpreter.fsPath },
+            interpreter,
             kernelSpec,
             baseUrl: serverInfo.url,
             id: controllerId,
             projectFilePath: getNotebookKey(notebook.uri),
             serverProviderHandle,
             serverInfo,
-            environmentName: configuration.name,
-            projectName: projectTitle,
+            environmentName: getDisplayPath(interpreter.uri),
             notebookName: notebookKey
         });
 
@@ -563,8 +612,11 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Store the controller for reuse
         this.notebookControllers.set(notebookKey, controller);
+        // Written here rather than beside startServer, in the same synchronous block as the metadata
+        // and controller above: a throw in between would otherwise leave the id pointing at an
+        // interpreter with no matching connection, and isKernelReady would stay true for it forever.
+        this.notebookInterpreterIds.set(notebookKey, interpreter.id);
 
-        // Prepare init notebook execution
         const projectId = notebook.metadata?.deepnoteProjectId;
         const notebookId = notebook.metadata?.deepnoteNotebookId;
         const project =
@@ -591,26 +643,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         this.controllerRegistration.trackActiveInterpreterControllers([controller]);
         logger.info(`Marked Deepnote controller as protected from automatic disposal`);
 
-        // Listen to controller disposal
-        controller.onDidDispose(() => {
-            logger.info(`Deepnote controller ${controller!.id} disposed, checking if we should remove from tracking`);
-            // Only remove from map if THIS controller is still the one mapped to this notebookKey
-            // This prevents old controllers from deleting newer controllers during environment switching
-            const currentController = this.notebookControllers.get(notebookKey);
-            if (currentController?.id === controller.id) {
-                logger.info(`Removing controller ${controller.id} from tracking map`);
-                this.notebookControllers.delete(notebookKey);
-            } else {
-                logger.info(
-                    `Not removing controller ${controller.id} from tracking - a newer controller ${currentController?.id} has replaced it`
-                );
-            }
-        });
+        controller.onDidDispose(() => this.untrackDisposedController(notebookKey, controller));
 
         // Auto-select the controller
         await this.ensureControllerSelectedForNotebook(notebook, controller, progressToken);
 
-        logger.info(`Successfully set up kernel with configuration: ${configuration.name}`);
+        logger.info(`Successfully set up kernel with interpreter: ${interpreter.id}`);
         progress.report({ message: 'Kernel ready!' });
     }
 
@@ -653,35 +691,20 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     /**
-     * Select the appropriate kernel spec for an environment.
+     * Select the default Python kernel spec from the server.
      * Extracted for testability.
      * @param kernelSpecs Available kernel specs from the server
-     * @param environmentId The environment ID to find a kernel for
      * @returns The selected kernel spec
      * @throws Error if no suitable kernel spec is found
      */
-    public selectKernelSpec(kernelSpecs: IJupyterKernelSpec[], environmentId: string): IJupyterKernelSpec {
-        // Look for environment-specific kernel first
-        const expectedKernelName = `deepnote-${environmentId}`;
-        logger.info(`Looking for environment-specific kernel: ${expectedKernelName}`);
-
-        const kernelSpec = kernelSpecs.find((s) => s.name === expectedKernelName);
+    public selectKernelSpec(kernelSpecs: IJupyterKernelSpec[]): IJupyterKernelSpec {
+        const kernelSpec =
+            kernelSpecs.find((s) => s.language === 'python') ||
+            kernelSpecs.find((s) => s.name === 'python3') ||
+            kernelSpecs[0];
 
         if (!kernelSpec) {
-            logger.warn(
-                `Environment-specific kernel '${expectedKernelName}' not found! Falling back to generic Python kernel.`
-            );
-            // Fallback to any Python kernel
-            const fallbackKernel =
-                kernelSpecs.find((s) => s.language === 'python') ||
-                kernelSpecs.find((s) => s.name === 'python3') ||
-                kernelSpecs[0];
-
-            if (!fallbackKernel) {
-                throw new Error('No kernel specs available on Deepnote server');
-            }
-
-            return fallbackKernel;
+            throw new Error('No kernel specs available on Deepnote server');
         }
 
         return kernelSpec;
@@ -689,7 +712,7 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
     /**
      * Ensure an environment is configured for the notebook before execution.
-     * If not configured, shows picker and sets up the kernel.
+     * Uses the active Python interpreter and the IInstaller infrastructure.
      * @returns true if environment is ready, false if user cancelled
      */
     public async ensureEnvironmentConfiguredBeforeExecution(
@@ -700,179 +723,240 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         const notebookKey = getNotebookKey(notebook.uri);
 
-        const existingEnvironmentId = this.notebookEnvironmentMapper.getEnvironmentForNotebook(notebook.uri);
+        const interpreter = await this.notebookInterpreters.resolve(notebook.uri);
 
-        // No environment configured - need to pick one
-        if (!existingEnvironmentId) {
-            return this.pickAndSetupEnvironment(notebook, notebookKey, token);
+        if (!interpreter) {
+            logger.warn(`No active Python interpreter found for ${getDisplayPath(notebook.uri)}`);
+            return false;
         }
 
-        const environment = this.environmentManager.getEnvironment(existingEnvironmentId);
-
-        // Environment no longer exists - remove stale mapping and pick a new one
-        if (!environment) {
-            logger.info(`Removing stale environment mapping for ${getDisplayPath(notebook.uri)}`);
-            await this.notebookEnvironmentMapper.removeEnvironmentForNotebook(notebook.uri);
-
-            return this.pickAndSetupEnvironment(notebook, notebookKey, token);
-        }
-
-        const existingController = this.notebookControllers.get(notebookKey);
-
-        // Environment and controller already configured - but verify interpreter path still matches
-        if (existingController) {
-            if (!this.isControllerInterpreterValid(existingController, environment.venvPath)) {
-                const expectedInterpreter = this.getVenvInterpreterUri(environment.venvPath);
-                logger.warn(
-                    `Controller interpreter path mismatch! Expected: ${expectedInterpreter.fsPath}, Got: ${existingController.connection.interpreter?.uri.fsPath}. Recreating controller.`
-                );
-
-                existingController.dispose();
-                this.notebookControllers.delete(notebookKey);
-
-                return this.setupKernelForEnvironment(notebook, environment, notebookKey, token);
-            }
-
-            logger.info(`Environment "${environment.name}" already configured for ${getDisplayPath(notebook.uri)}`);
+        if (this.isKernelReady(notebookKey, interpreter.id)) {
+            logger.info(`Controller already configured for ${getDisplayPath(notebook.uri)}`);
 
             return true;
         }
 
-        // Environment exists but controller is missing - set it up
-        logger.info(
-            `Environment "${environment.name}" configured but controller missing for ${getDisplayPath(
-                notebook.uri
-            )}, triggering setup`
-        );
+        // Consent before installing into the user's interpreter. Declining or cancelling is not a
+        // failure: execution simply does not proceed and no error UI is raised.
+        let dependency: DeepnoteToolkitDependencyResponse;
 
-        return this.setupKernelForEnvironment(notebook, environment, notebookKey, token);
-    }
+        try {
+            dependency = await this.toolkitDependencyService.ensureToolkitInstalled(interpreter, notebook.uri, token);
+        } catch (error) {
+            if (token.isCancellationRequested || isCancellationError(error as Error)) {
+                logger.info(`deepnote-toolkit install cancelled for ${getDisplayPath(notebook.uri)}`);
 
-    /**
-     * Pick an environment and set up the kernel for a notebook.
-     */
-    private async pickAndSetupEnvironment(
-        notebook: NotebookDocument,
-        notebookKey: string,
-        token: CancellationToken
-    ): Promise<boolean> {
-        Cancellation.throwIfCanceled(token);
+                return false;
+            }
 
-        logger.info(`No environment configured for ${getDisplayPath(notebook.uri)}, showing picker`);
-        const selectedEnvironment = await this.pickEnvironment(notebook.uri);
-
-        if (!selectedEnvironment) {
-            logger.info(`User cancelled environment selection for ${getDisplayPath(notebook.uri)}`);
+            await this.handleKernelSelectionError(error, notebook);
 
             return false;
         }
 
-        Cancellation.throwIfCanceled(token);
+        if (dependency === DeepnoteToolkitDependencyResponse.failed) {
+            await this.handleKernelSelectionError(
+                new Error(l10n.t('Failed to install {0}.', 'deepnote-toolkit')),
+                notebook
+            );
 
-        await this.notebookEnvironmentMapper.setEnvironmentForNotebook(notebook.uri, selectedEnvironment.id);
-
-        const result = await this.setupKernelForEnvironment(notebook, selectedEnvironment, notebookKey, token);
-
-        if (result) {
-            this.analytics.trackEvent({ eventName: 'select_environment' });
-            logger.info(`Environment "${selectedEnvironment.name}" configured for ${getDisplayPath(notebook.uri)}`);
+            return false;
         }
 
-        return result;
-    }
+        // The prompt only reports the choice; the switch runs here, once this check has settled and
+        // released its shared entry. applyInterpreter owns any further re-picks, so this stays one
+        // level deep rather than recursing through the picker.
+        if (dependency === DeepnoteToolkitDependencyResponse.selectDifferentInterpreter) {
+            const picked = await this.pickInterpreter();
 
-    /**
-     * Set up the kernel for a given environment.
-     */
-    private async setupKernelForEnvironment(
-        notebook: NotebookDocument,
-        environment: DeepnoteEnvironment,
-        notebookKey: string,
-        token: CancellationToken
-    ): Promise<boolean> {
+            if (!picked) {
+                return false;
+            }
+
+            const applied = await this.applyInterpreter(notebook, picked);
+
+            return !!applied && this.isKernelReady(notebookKey, applied.id);
+        }
+
+        if (dependency !== DeepnoteToolkitDependencyResponse.ok) {
+            logger.info(
+                `deepnote-toolkit unavailable for ${getDisplayPath(notebook.uri)} (${
+                    DeepnoteToolkitDependencyResponse[dependency]
+                }), kernel not started`
+            );
+
+            return false;
+        }
+
+        // Captured before setup, which overwrites it.
+        const previousInterpreterId = this.notebookInterpreterIds.get(notebookKey);
+
         try {
-            await window.withProgress(
+            const ready = await window.withProgress(
                 {
                     location: ProgressLocation.Notification,
                     title: l10n.t('Setting up Deepnote kernel...'),
                     cancellable: true
                 },
                 async (progress, progressToken) => {
-                    await this.ensureKernelSelectedWithConfiguration(
-                        notebook,
-                        environment,
-                        notebookKey,
-                        progress,
-                        progressToken
-                    );
+                    // The caller's token is cancelled when the notebook closes; the progress token
+                    // only when the user clicks Cancel. Setup has to observe both.
+                    const setupToken = wrapCancellationTokens(token, progressToken);
+
+                    try {
+                        // An interpreter change needs the teardown rebuildController does — stop the
+                        // old LSP clients and drop the old server handle — or language features and
+                        // the advertised server stay on the interpreter we just moved off.
+                        if (previousInterpreterId && previousInterpreterId !== interpreter.id) {
+                            // The toolkit gate above already settled for this interpreter, so the
+                            // rebuild's own gate cannot ask for another one here.
+                            return (await this.rebuildController(notebook, progress, setupToken.token)) === 'rebuilt';
+                        }
+
+                        await this.ensureKernelSelectedWithInterpreter(
+                            notebook,
+                            interpreter,
+                            notebookKey,
+                            progress,
+                            setupToken.token
+                        );
+
+                        return true;
+                    } finally {
+                        setupToken.dispose();
+                    }
                 }
             );
+
+            if (!ready) {
+                return false;
+            }
         } catch (error) {
             if (token.isCancellationRequested || isCancellationError(error as Error)) {
                 logger.info(`Kernel setup cancelled for ${getDisplayPath(notebook.uri)}`);
-
                 return false;
             }
             throw error;
         }
 
-        const createdController = this.notebookControllers.get(notebookKey);
-
-        if (!createdController) {
-            logger.warn(
-                `Controller not created for "${environment.name}" on ${getDisplayPath(notebook.uri)} after setup`
-            );
-
-            return false;
-        }
-
-        return true;
+        return !!this.notebookControllers.get(notebookKey);
     }
 
     /**
-     * Clear the controller selection for a notebook using a specific environment.
-     * This is used when deleting an environment to unselect its controller from any open notebooks.
+     * Puts the notebook's language features back on the interpreter it was using before a switch that
+     * did not complete. Best effort: the notebook still has a working kernel either way, so a failure
+     * to restart LSP is logged rather than raised over whatever caused the switch to fail.
      */
-    public clearControllerForEnvironment(notebook: NotebookDocument, environmentId: string): void {
-        const selectedController = this.controllerRegistration.getSelected(notebook);
-        if (!selectedController || selectedController.connection.kind !== 'startUsingDeepnoteKernel') {
+    private async restoreLspClients(notebook: NotebookDocument, interpreterId: string | undefined): Promise<void> {
+        // A setup abandoned because the notebook closed also lands here, and putting language servers
+        // back on a notebook nobody has open leaks the pylsp process onDidCloseNotebook just stopped.
+        if (!interpreterId || notebook.isClosed) {
             return;
         }
 
-        const expectedHandle = createDeepnoteServerConfigHandle(environmentId, notebook.uri);
+        try {
+            const interpreter = await this.interpreterService.getInterpreterDetails(interpreterId);
 
-        if (selectedController.connection.serverProviderHandle.handle === expectedHandle) {
-            // Unselect the controller by setting affinity to Default
-            selectedController.controller.updateNotebookAffinity(notebook, NotebookControllerAffinity.Default);
-            logger.info(
-                `Cleared controller for notebook ${getDisplayPath(notebook.uri)} (environment ${environmentId})`
-            );
+            if (!interpreter) {
+                return;
+            }
+
+            // Stop first: a failure late in the setup can leave clients already running on the new
+            // interpreter, and startLspClients treats a live client as nothing to do.
+            await this.lspClientManager.stopLspClients(notebook.uri);
+            await this.lspClientManager.startLspClients(notebook.uri, interpreter);
+        } catch (error) {
+            logger.warn(`Could not restore LSP clients for ${getDisplayPath(notebook.uri)}`, error);
         }
-    }
-
-    private getVenvInterpreterUri(venvPath: Uri): Uri {
-        return process.platform === 'win32'
-            ? Uri.joinPath(venvPath, 'Scripts', 'python.exe')
-            : Uri.joinPath(venvPath, 'bin', 'python');
     }
 
     /**
-     * Check if a controller's interpreter path matches the expected venv path.
-     * Returns true when no interpreter is present (nothing to validate) or when paths match.
+     * True when the notebook's controller is bound to a running server for this interpreter. A
+     * controller registered at open time carries no baseUrl and is deliberately not "ready".
      */
-    private isControllerInterpreterValid(
-        controller: { connection: { interpreter?: { uri: Uri } } },
-        venvPath: Uri
-    ): boolean {
-        const existingInterpreter = controller.connection.interpreter;
+    private isKernelReady(notebookKey: string, interpreterId: string): boolean {
+        return (
+            this.notebookControllers.has(notebookKey) &&
+            this.notebookInterpreterIds.get(notebookKey) === interpreterId &&
+            !!this.notebookConnectionMetadata.get(notebookKey)?.baseUrl
+        );
+    }
 
-        if (!existingInterpreter) {
-            return true;
+    /**
+     * Registers a controller for the notebook's active interpreter without starting anything, so the
+     * notebook has a real, correctly named kernel to select the moment it opens. Its connection
+     * carries no baseUrl; the first execution starts the server and updates it in place.
+     */
+    private async registerControllerForNotebook(notebook: NotebookDocument): Promise<void> {
+        const interpreter = await this.notebookInterpreters.resolve(notebook.uri);
+
+        if (!interpreter) {
+            logger.warn(`No active Python interpreter for ${getDisplayPath(notebook.uri)}, no kernel offered`);
+
+            // Without a controller the execution gate never runs, so this is the only place the
+            // prompt can reach a user who has no Python extension at all.
+            if (!this.promptedToInstallPython && !this.pythonExtensionChecker.isPythonExtensionInstalled) {
+                this.promptedToInstallPython = true;
+                await this.pythonExtensionChecker.showPythonExtensionInstallRequiredPrompt();
+            }
+
+            return;
         }
 
-        const expectedInterpreter = this.getVenvInterpreterUri(venvPath);
+        // onDidCloseNotebook has already cleared this notebook and does not fire twice, so anything
+        // registered now would outlive it.
+        if (notebook.isClosed) {
+            return;
+        }
 
-        return existingInterpreter.uri.fsPath === expectedInterpreter.fsPath;
+        const notebookKey = getNotebookKey(notebook.uri);
+        const connection = DeepnoteKernelConnectionMetadata.create({
+            interpreter,
+            kernelSpec: PENDING_KERNEL_SPEC,
+            baseUrl: '',
+            id: `deepnote-notebook-${notebookKey}`,
+            projectFilePath: notebookKey,
+            serverProviderHandle: {
+                extensionId: JVSC_EXTENSION_ID,
+                id: 'deepnote-server',
+                handle: createDeepnoteServerConfigHandle(interpreter.id, notebook.uri)
+            },
+            environmentName: getDisplayPath(interpreter.uri),
+            notebookName: notebookKey
+        });
+
+        const [controller] = this.controllerRegistration.addOrUpdate(connection, [DEEPNOTE_NOTEBOOK_TYPE]);
+
+        if (!controller) {
+            logger.error(`Failed to register a Deepnote controller for ${getDisplayPath(notebook.uri)}`);
+
+            return;
+        }
+
+        this.notebookConnectionMetadata.set(notebookKey, connection);
+        this.notebookInterpreterIds.set(notebookKey, interpreter.id);
+        this.notebookControllers.set(notebookKey, controller);
+        this.controllerRegistration.trackActiveInterpreterControllers([controller]);
+
+        const cts = new CancellationTokenSource();
+
+        try {
+            await this.ensureControllerSelectedForNotebook(notebook, controller, cts.token);
+        } finally {
+            cts.dispose();
+        }
+    }
+
+    /** Ids are derived from the notebook, so a replacement carries the disposed one's — only identity separates them. */
+    private untrackDisposedController(notebookKey: string, controller: IVSCodeNotebookController) {
+        if (this.notebookControllers.get(notebookKey) !== controller) {
+            logger.info(`Controller for ${notebookKey} disposed; a newer one has replaced it`);
+
+            return;
+        }
+
+        logger.info(`Controller for ${notebookKey} disposed; removing it from tracking`);
+        this.notebookControllers.delete(notebookKey);
     }
 
     /**
@@ -881,7 +965,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * Includes retry logic since the editor might not be visible immediately when the document opens.
      */
     private async findNotebookEditor(notebook: NotebookDocument): Promise<NotebookEditor | undefined> {
-        // Try to find immediately
         let editor = window.visibleNotebookEditors.find(
             (e) => getNotebookKey(e.notebook.uri) === getNotebookKey(notebook.uri)
         );
@@ -890,7 +973,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             return editor;
         }
 
-        // If not found, wait briefly and retry (editor might not be visible yet)
         for (let i = 0; i < NOTEBOOK_EDITOR_RETRY_COUNT; i++) {
             await new Promise((resolve) => setTimeout(resolve, NOTEBOOK_EDITOR_RETRY_DELAY_MS));
 
@@ -907,56 +989,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     /**
-     * Create and select a placeholder controller for a notebook without a configured environment.
-     */
-    private async selectPlaceholderController(notebook: NotebookDocument): Promise<void> {
-        const placeholder = this.createPlaceholderController(notebook);
-        placeholder.updateNotebookAffinity(notebook, NotebookControllerAffinity.Preferred);
-
-        const notebookEditor = await this.findNotebookEditor(notebook);
-
-        if (notebookEditor) {
-            await commands.executeCommand('notebook.selectKernel', {
-                notebookEditor: notebookEditor,
-                id: placeholder.id,
-                extension: JVSC_EXTENSION_ID
-            });
-        } else {
-            logger.warn(
-                `Could not find NotebookEditor for ${getDisplayPath(notebook.uri)}, kernel may not be selected`
-            );
-        }
-    }
-
-    /**
      * Handle kernel selection errors with user-friendly messages and actions
      */
     public async handleKernelSelectionError(error: unknown, notebook: NotebookDocument): Promise<void> {
         // A user-initiated Stop is not a failure, so it must not raise the error UI.
         if (error instanceof Error && isCancellationError(error)) {
             logger.info(`Kernel selection cancelled for ${getDisplayPath(notebook.uri)}`);
-
-            return;
-        }
-
-        if (error instanceof DeepnoteToolkitMissingError) {
-            const installAction = l10n.t('Install');
-            const changeEnvironmentAction = l10n.t('Change Environment');
-            const selectedAction = await window.showWarningMessage(
-                l10n.t(
-                    'Running Deepnote projects requires deepnote-toolkit[server]=={0} to be installed in the selected environment',
-                    DEEPNOTE_TOOLKIT_VERSION
-                ),
-                { modal: true },
-                installAction,
-                changeEnvironmentAction
-            );
-
-            if (selectedAction === installAction) {
-                await this.installToolkitAndNotify(error.venvPath, notebook);
-            } else if (selectedAction === changeEnvironmentAction) {
-                void commands.executeCommand('deepnote.environments.selectForNotebook', { notebook });
-            }
 
             return;
         }
@@ -1015,41 +1053,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
     }
 
     /**
-     * Install deepnote-toolkit in an existing venv and rebuild the controller.
-     */
-    private async installToolkitAndNotify(venvPath: string, notebook: NotebookDocument): Promise<void> {
-        try {
-            await window.withProgress(
-                {
-                    location: ProgressLocation.Notification,
-                    title: l10n.t('Installing deepnote-toolkit...'),
-                    cancellable: true
-                },
-                async (progress, token) => {
-                    await this.toolkitInstaller.installToolkitInExistingVenv(Uri.file(venvPath), token);
-
-                    // After successful installation, rebuild the controller to use the new environment
-                    progress.report({ message: l10n.t('Starting kernel...') });
-                    await this.rebuildController(notebook, progress, token);
-                }
-            );
-
-            void window.showInformationMessage(l10n.t('deepnote-toolkit installed successfully'));
-        } catch (installError) {
-            if (installError instanceof Error && isCancellationError(installError)) {
-                logger.info('deepnote-toolkit installation cancelled');
-
-                return;
-            }
-
-            logger.error('Failed to install deepnote-toolkit', installError);
-            const errorMessage = installError instanceof Error ? installError.message : String(installError);
-
-            void window.showErrorMessage(l10n.t('Failed to install deepnote-toolkit: {0}', errorMessage));
-        }
-    }
-
-    /**
      * Read and hash the existing requirements.txt file if it exists.
      * Returns the same hash format as computeRequirementsHash for comparison.
      */
@@ -1083,79 +1086,5 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             logger.warn(`Failed to read existing requirements.txt: ${error}`);
             return '';
         }
-    }
-
-    /**
-     * Create a placeholder controller for a notebook without a configured environment.
-     * Each notebook gets its own placeholder with a unique ID.
-     * The placeholder's executeHandler shows the environment picker when user tries to run cells.
-     */
-    private createPlaceholderController(notebook: NotebookDocument): NotebookController {
-        const notebookKey = getNotebookKey(notebook.uri);
-
-        // Check if we already have one
-        const existing = this.placeholderControllers.get(notebookKey);
-
-        if (existing) {
-            return existing;
-        }
-
-        const controller = notebooks.createNotebookController(
-            `deepnote-placeholder-${notebookKey}`,
-            DEEPNOTE_NOTEBOOK_TYPE,
-            l10n.t('Deepnote: Select Environment')
-        );
-
-        controller.supportsExecutionOrder = true;
-        controller.supportedLanguages = ['python', 'sql', 'markdown', 'plaintext'];
-
-        // Environment picker only; execution goes through the real controller on retry.
-        controller.executeHandler = async (cells, doc) => {
-            logger.info(
-                `Placeholder controller execute handler called for ${getDisplayPath(doc.uri)} with ${
-                    cells.length
-                } cells`
-            );
-
-            if (!workspace.isTrusted) {
-                logger.info(`Workspace is not trusted, skipping environment setup for ${getDisplayPath(doc.uri)}`);
-
-                return;
-            }
-
-            // Create a cancellation token that cancels when the notebook is closed
-            const cts = new CancellationTokenSource();
-            const closeListener = workspace.onDidCloseNotebookDocument((closedDoc) => {
-                if (getNotebookKey(closedDoc.uri) === getNotebookKey(doc.uri)) {
-                    logger.info(`Notebook closed during environment setup, cancelling operation`);
-                    cts.cancel();
-                }
-            });
-
-            try {
-                const hasEnvironment = await this.ensureEnvironmentConfiguredBeforeExecution(doc, cts.token);
-
-                if (!hasEnvironment) {
-                    logger.info(`User cancelled environment selection, not executing cells`);
-
-                    return;
-                }
-
-                void window.showInformationMessage(l10n.t('Environment ready. Run the cells again to execute them.'));
-            } catch (error) {
-                if (isCancellationError(error)) {
-                    logger.info(`Environment setup cancelled for ${getDisplayPath(doc.uri)}`);
-                } else {
-                    logger.error(`Error in placeholder controller execute handler`, error);
-                }
-            } finally {
-                closeListener.dispose();
-                cts.dispose();
-            }
-        };
-
-        this.placeholderControllers.set(notebookKey, controller);
-
-        return controller;
     }
 }

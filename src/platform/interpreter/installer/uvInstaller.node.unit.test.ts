@@ -7,12 +7,14 @@ import * as sinon from 'sinon';
 import esmock from 'esmock';
 import { IServiceContainer } from '../../ioc/types';
 import { IProcessServiceFactory, IProcessService } from '../../common/process/types.node';
-import { ModuleInstallerType, ModuleInstallFlags } from './types';
+import { ModuleInstallerType, ModuleInstallFlags, Product } from './types';
 import { ExecutionInstallArgs } from './moduleInstaller.node';
 import { PythonEnvironment } from '../../pythonEnvironments/info';
 import { Environment } from '@vscode/python-extension';
 import { Uri } from 'vscode';
 import type { UvInstaller } from './uvInstaller.node';
+import { translateProductToModule } from './utils';
+import { DEEPNOTE_TOOLKIT_PACKAGES, DEEPNOTE_TOOLKIT_VERSION } from '../../common/constants';
 
 suite('UvInstaller', () => {
     let UvInstallerClass: typeof import('./uvInstaller.node').UvInstaller;
@@ -113,6 +115,23 @@ suite('UvInstaller', () => {
                 '--python',
                 Uri.file('/path/to/python').fsPath,
                 'jupyter'
+            ]);
+        });
+
+        test('Should expand deepnote-toolkit into its pinned spec plus companion packages', async () => {
+            getInterpreterInfoStub.resolves(mockInterpreterInfo);
+            const moduleName = translateProductToModule(Product.deepnoteToolkit);
+
+            const result = await testableInstaller.testGetExecutionArgs(moduleName, mockPythonEnvironment);
+
+            assert.equal(result.exe, 'uv');
+            assert.deepEqual(result.args, [
+                'pip',
+                'install',
+                '--python',
+                Uri.file('/path/to/python').fsPath,
+                `deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`,
+                ...DEEPNOTE_TOOLKIT_PACKAGES
             ]);
         });
 

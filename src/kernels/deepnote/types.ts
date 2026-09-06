@@ -9,14 +9,6 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { getTelemetrySafeHashedString } from '../../platform/telemetry/helpers';
 import { JupyterServerProviderHandle } from '../jupyter/types';
 import { IJupyterKernelSpec } from '../types';
-import { CreateDeepnoteEnvironmentOptions, DeepnoteEnvironment } from './environments/deepnoteEnvironment';
-import toolkitSpec from './toolkitSpec.json';
-import { AssertNonAnyString, AssertNonAnyStringArray } from '../../platform/common/utils/typescript';
-
-export interface VenvAndToolkitInstallation {
-    pythonInterpreter: PythonEnvironment;
-    toolkitVersion: string;
-}
 
 /**
  * Connection metadata for Deepnote Toolkit Kernels.
@@ -33,7 +25,6 @@ export class DeepnoteKernelConnectionMetadata {
     public readonly serverProviderHandle: JupyterServerProviderHandle;
     public readonly serverInfo?: DeepnoteServerInfo; // Store server info for connection
     public readonly environmentName?: string; // Name of the Deepnote environment for display purposes
-    public readonly projectName?: string; // Name of the project for display purposes
     public readonly notebookName?: string; // Name of the notebook for display purposes
 
     private constructor(options: {
@@ -45,7 +36,6 @@ export class DeepnoteKernelConnectionMetadata {
         serverProviderHandle: JupyterServerProviderHandle;
         serverInfo?: DeepnoteServerInfo;
         environmentName?: string;
-        projectName?: string;
         notebookName?: string;
     }) {
         this.interpreter = options.interpreter;
@@ -56,7 +46,6 @@ export class DeepnoteKernelConnectionMetadata {
         this.serverProviderHandle = options.serverProviderHandle;
         this.serverInfo = options.serverInfo;
         this.environmentName = options.environmentName;
-        this.projectName = options.projectName;
         this.notebookName = options.notebookName;
     }
 
@@ -69,7 +58,6 @@ export class DeepnoteKernelConnectionMetadata {
         serverProviderHandle: JupyterServerProviderHandle;
         serverInfo?: DeepnoteServerInfo;
         environmentName?: string;
-        projectName?: string;
         notebookName?: string;
     }) {
         return new DeepnoteKernelConnectionMetadata(options);
@@ -91,95 +79,54 @@ export class DeepnoteKernelConnectionMetadata {
     }
 }
 
-export const IDeepnoteToolkitInstaller = Symbol('IDeepnoteToolkitInstaller');
-export interface IDeepnoteToolkitInstaller {
-    /**
-     * Ensures deepnote-toolkit is installed in a dedicated virtual environment.
-     * Environment-based method.
-     * @param baseInterpreter The base Python interpreter to use for creating the venv
-     * @param venvPath The path where the venv should be created
-     * @param managedVenv Whether the venv is managed by this extension (created by us)
-     * @param token Cancellation token to cancel the operation
-     * @returns The Python interpreter from the venv and the toolkit version
-     * @throws {DeepnoteVenvCreationError} If venv creation fails
-     * @throws {DeepnoteToolkitInstallError} If toolkit installation fails
-     */
-    ensureVenvAndToolkit(
-        baseInterpreter: PythonEnvironment,
-        venvPath: vscode.Uri,
-        managedVenv: boolean,
-        token?: vscode.CancellationToken
-    ): Promise<VenvAndToolkitInstallation>;
+export enum DeepnoteToolkitDependencyResponse {
+    /** The toolkit is present, or the user approved the install and it succeeded. */
+    ok,
+    /** The user declined or cancelled. Not a failure — nothing should be reported as an error. */
+    cancel,
+    /** The user chose to point the workspace at a different interpreter instead. */
+    selectDifferentInterpreter,
+    /** The install ran and did not succeed. */
+    failed
+}
 
-    /**
-     * Install additional packages in the venv.
-     * @param venvPath The path to the venv
-     * @param packages List of package names to install
-     * @param token Cancellation token to cancel the operation
-     */
-    installAdditionalPackages(
-        venvPath: vscode.Uri,
-        packages: string[],
-        token?: vscode.CancellationToken
-    ): Promise<void>;
+/**
+ * How a controller rebuild ended. `selectDifferentInterpreter` is kept apart from `notRebuilt`
+ * because only it is worth retrying: the user asked for another interpreter rather than declining,
+ * so the caller picks one and rebuilds again instead of putting the previous pin back.
+ */
+export type DeepnoteControllerRebuild = 'rebuilt' | 'notRebuilt' | 'selectDifferentInterpreter';
 
+export const IDeepnoteToolkitDependencyService = Symbol('IDeepnoteToolkitDependencyService');
+export interface IDeepnoteToolkitDependencyService {
     /**
-     * Install deepnote-toolkit in an existing external venv.
-     * This is used when the user has an external venv without toolkit installed.
-     * @param venvPath Path to the existing venv
-     * @param token Cancellation token to cancel the operation
-     * @returns The venv Python interpreter and toolkit version if successful
-     * @throws {DeepnoteToolkitInstallError} If toolkit installation fails
+     * Ensures deepnote-toolkit is available in the interpreter, prompting for consent first.
+     * @param interpreter The interpreter the kernel will run in
+     * @param resource The notebook the check is running for, used for logging
+     * @param token Cancellation token to cancel the check or the install
      */
-    installToolkitInExistingVenv(
-        venvPath: vscode.Uri,
-        token?: vscode.CancellationToken
-    ): Promise<VenvAndToolkitInstallation>;
-
-    /**
-     * Gets the venv Python interpreter if toolkit is installed, undefined otherwise.
-     * @param deepnoteFileUri The URI of the .deepnote file
-     */
-    getVenvInterpreter(deepnoteFileUri: vscode.Uri): Promise<PythonEnvironment | undefined>;
-
-    /**
-     * Gets the hash for the venv directory/kernel spec name based on file path.
-     * @param deepnoteFileUri The URI of the .deepnote file
-     * @returns The hash string used for venv directory and kernel spec naming
-     */
-    getVenvHash(deepnoteFileUri: vscode.Uri): string;
+    ensureToolkitInstalled(
+        interpreter: PythonEnvironment,
+        resource: vscode.Uri | undefined,
+        token: vscode.CancellationToken
+    ): Promise<DeepnoteToolkitDependencyResponse>;
 }
 
 export const IDeepnoteServerStarter = Symbol('IDeepnoteServerStarter');
 export interface IDeepnoteServerStarter {
     /**
-     * Starts a deepnote-toolkit Jupyter server for a kernel environment.
-     * Environment-based method.
+     * Starts a deepnote-toolkit Jupyter server using the active Python interpreter.
+     * Handles checking/installing deepnote-toolkit via the IInstaller infrastructure.
      * @param interpreter The Python interpreter to use
-     * @param venvPath The path to the venv
-     * @param managedVenv Whether the venv is managed by this extension (created by us)
-     * @param environmentId The environment ID (for server management)
      * @param deepnoteFileUri The URI of the .deepnote file
      * @param token Cancellation token to cancel the operation
      * @returns Connection information (URL, port, etc.)
      */
     startServer(
         interpreter: PythonEnvironment,
-        venvPath: vscode.Uri,
-        managedVenv: boolean,
-        additionalPackages: string[],
-        environmentId: string,
         deepnoteFileUri: vscode.Uri,
         token?: vscode.CancellationToken
     ): Promise<DeepnoteServerInfo>;
-
-    /**
-     * Stops the deepnote-toolkit server for a kernel environment.
-     * @param environmentId The environment ID
-     * @param token Cancellation token to cancel the operation
-     */
-    // stopServer(environmentId: string, token?: vscode.CancellationToken): Promise<void>;
-    stopServer(deepnoteFileUri: vscode.Uri, token?: vscode.CancellationToken): Promise<void>;
 
     /**
      * Disposes all server processes and resources.
@@ -228,31 +175,12 @@ export interface IServerHandleRegistry {
 export const IDeepnoteKernelAutoSelector = Symbol('IDeepnoteKernelAutoSelector');
 export interface IDeepnoteKernelAutoSelector {
     /**
-     * Clear the controller selection for a notebook using a specific environment.
-     * This is used when deleting an environment to unselect its controller from any open notebooks.
-     * @param notebook The notebook document
-     * @param environmentId The environment ID
-     */
-    clearControllerForEnvironment(notebook: vscode.NotebookDocument, environmentId: string): void;
-
-    /**
      * Ensure an environment is configured for the notebook before execution.
      * If not configured, shows picker and sets up the kernel.
      * @returns true if environment is ready, false if user cancelled
      */
     ensureEnvironmentConfiguredBeforeExecution(
         notebook: vscode.NotebookDocument,
-        token: vscode.CancellationToken
-    ): Promise<boolean>;
-
-    /**
-     * Automatically selects and starts a Deepnote kernel for the given notebook.
-     * @param notebook The notebook document
-     * @param token Cancellation token to cancel the operation
-     */
-    ensureKernelSelected(
-        notebook: vscode.NotebookDocument,
-        progress: { report(value: { message?: string; increment?: number }): void },
         token: vscode.CancellationToken
     ): Promise<boolean>;
 
@@ -265,137 +193,28 @@ export interface IDeepnoteKernelAutoSelector {
 
     /**
      * Force rebuild the controller for a notebook by clearing cached controller and metadata.
-     * This is used when switching environments to ensure a new controller is created.
+     * This is used when switching interpreters to ensure a new controller is created.
      * @param notebook The notebook document
      * @param token Cancellation token to cancel the operation
+     * @returns How the rebuild ended — see {@link DeepnoteControllerRebuild}
      */
     rebuildController(
         notebook: vscode.NotebookDocument,
         progress: { report(value: { message?: string; increment?: number }): void },
         token: vscode.CancellationToken
-    ): Promise<void>;
-}
-
-export const IDeepnoteEnvironmentManager = Symbol('IDeepnoteEnvironmentManager');
-export interface IDeepnoteEnvironmentManager {
-    /**
-     * Initialize the manager by loading environments from storage
-     */
-    initialize(): Promise<void>;
-
-    /**
-     * Wait for initialization to complete
-     */
-    waitForInitialization(): Promise<void>;
-
-    /**
-     * Create a new kernel environment
-     * @param options Environment creation options
-     * @param token Cancellation token to cancel the operation
-     */
-    createEnvironment(
-        options: CreateDeepnoteEnvironmentOptions,
-        token?: vscode.CancellationToken
-    ): Promise<DeepnoteEnvironment>;
-
-    /**
-     * Get all environments
-     */
-    listEnvironments(): DeepnoteEnvironment[];
-
-    /**
-     * Get a specific environment by ID
-     */
-    getEnvironment(id: string): DeepnoteEnvironment | undefined;
-
-    /**
-     * Update an environment's metadata
-     */
-    updateEnvironment(
-        id: string,
-        updates: Partial<Pick<DeepnoteEnvironment, 'name' | 'packages' | 'description'>>
-    ): Promise<void>;
-
-    /**
-     * Delete an environment
-     * @param id The environment ID
-     * @param token Cancellation token to cancel the operation
-     */
-    deleteEnvironment(id: string, token?: vscode.CancellationToken): Promise<void>;
-
-    /**
-     * Update the last used timestamp for an environment
-     */
-    updateLastUsed(id: string): Promise<void>;
-
-    /**
-     * Event fired when environments change
-     */
-    onDidChangeEnvironments: vscode.Event<void>;
-
-    /**
-     * Dispose of all resources
-     */
-    dispose(): void;
-}
-
-export const IDeepnoteNotebookEnvironmentMapper = Symbol('IDeepnoteNotebookEnvironmentMapper');
-export interface IDeepnoteNotebookEnvironmentMapper {
-    /**
-     * Get the environment ID selected for a notebook
-     * @param notebookUri The notebook URI (without query/fragment)
-     * @returns Environment ID, or undefined if not set
-     */
-    getEnvironmentForNotebook(notebookUri: vscode.Uri): string | undefined;
-
-    /**
-     * Set the environment for a notebook
-     * @param notebookUri The notebook URI (without query/fragment)
-     * @param environmentId The environment ID
-     */
-    setEnvironmentForNotebook(notebookUri: vscode.Uri, environmentId: string): Promise<void>;
-
-    /**
-     * Remove the environment mapping for a notebook
-     * @param notebookUri The notebook URI (without query/fragment)
-     */
-    removeEnvironmentForNotebook(notebookUri: vscode.Uri): Promise<void>;
-
-    /**
-     * Get all notebooks using a specific environment
-     * @param environmentId The environment ID
-     * @returns Array of notebook URIs
-     */
-    getNotebooksUsingEnvironment(environmentId: string): vscode.Uri[];
-
-    /**
-     * Get all notebook-to-environment mappings
-     * @returns Map of notebookUri.fsPath → environmentId
-     */
-    getAllMappings(): ReadonlyMap<string, string>;
-
-    /**
-     * Event fired when an environment mapping is removed for a notebook
-     */
-    onDidRemoveEnvironment: vscode.Event<{ notebookUri: vscode.Uri }>;
-
-    /**
-     * Event fired when an environment is set for a notebook
-     */
-    onDidSetEnvironment: vscode.Event<{ notebookUri: vscode.Uri; environmentId: string }>;
+    ): Promise<DeepnoteControllerRebuild>;
 }
 
 export const IDeepnoteLspClientManager = Symbol('IDeepnoteLspClientManager');
 export interface IDeepnoteLspClientManager {
     /**
-     * Start LSP clients for a Deepnote server
-     * @param serverInfo Server information
+     * Start LSP clients for a notebook. The clients are independent processes spawned from the
+     * interpreter, not connections to the toolkit server, so no running server is required.
      * @param notebookUri The notebook URI for which to start LSP clients
-     * @param interpreter The Python interpreter from the venv
+     * @param interpreter The Python interpreter to run the language server from
      * @param token Optional cancellation token to cancel the operation
      */
     startLspClients(
-        serverInfo: DeepnoteServerInfo,
         notebookUri: vscode.Uri,
         interpreter: PythonEnvironment,
         token?: vscode.CancellationToken
@@ -415,11 +234,5 @@ export interface IDeepnoteLspClientManager {
     stopAllClients(token?: vscode.CancellationToken): Promise<void>;
 }
 
-true satisfies AssertNonAnyString<typeof toolkitSpec.version>;
-true satisfies AssertNonAnyStringArray<typeof toolkitSpec.packages>;
-
-export const DEEPNOTE_TOOLKIT_VERSION: string = toolkitSpec.version;
-
-export const DEEPNOTE_TOOLKIT_PACKAGES: string[] = toolkitSpec.packages;
 export const DEEPNOTE_DEFAULT_PORT = 8888;
 export const DEEPNOTE_NOTEBOOK_TYPE = 'deepnote';

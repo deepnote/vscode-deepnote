@@ -7,7 +7,7 @@ import { ModuleInstaller } from './moduleInstaller.node';
 import { ModuleInstallerType, ModuleInstallFlags, Product } from './types';
 import { PythonEnvironment } from '../../pythonEnvironments/info';
 import { IServiceContainer } from '../../ioc/types';
-import { translateProductToModule } from './utils';
+import { translateModuleToPackages, translateProductToModule } from './utils';
 import { Environment } from '@vscode/python-extension';
 import { getEnvExtApi } from '../../api/python-envs/pythonEnvsApi';
 import {
@@ -86,7 +86,7 @@ export class PythonEnvsApiInstaller extends ModuleInstaller {
             }
 
             const installOptions: PackageManagementOptions = {
-                install: [moduleName],
+                install: translateModuleToPackages(moduleName),
                 upgrade: Boolean(flags && flags & ModuleInstallFlags.upgrade),
                 showSkipOption: false
             };

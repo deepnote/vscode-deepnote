@@ -5,10 +5,8 @@ export type TelemetryEventName =
     | 'authenticate_integration'
     | 'configure_integration'
     | 'copy_notebook_details'
-    | 'create_environment'
     | 'create_notebook'
     | 'create_project'
-    | 'delete_environment'
     | 'delete_integration'
     | 'delete_notebook'
     | 'duplicate_notebook'
@@ -24,11 +22,9 @@ export type TelemetryEventName =
     | 'rename_project'
     | 'reset_integration'
     | 'save_integration'
-    | 'select_environment'
     | 'split_notebook'
     | 'switch_sql_integration'
-    | 'toggle_snapshots'
-    | 'update_environment';
+    | 'toggle_snapshots';
 
 /** Result of a tracked command, so telemetry can separate user drop-off from real failures. */
 export type CommandOutcome = 'completed' | 'cancelled' | 'failed';
@@ -39,10 +35,8 @@ export interface TelemetryEventProperties {
     authenticate_integration: { integrationType: string; outcome: CommandOutcome };
     configure_integration: { integrationType: string };
     copy_notebook_details: undefined;
-    create_environment: { hasDescription: boolean; packageCount: number };
     create_notebook: { outcome: CommandOutcome; source: 'toolbar' | 'project_menu' };
     create_project: { outcome: CommandOutcome };
-    delete_environment: undefined;
     delete_integration: { integrationType: string };
     delete_notebook: { outcome: CommandOutcome };
     duplicate_notebook: { outcome: CommandOutcome };
@@ -70,12 +64,10 @@ export interface TelemetryEventProperties {
     rename_project: { outcome: CommandOutcome };
     reset_integration: { integrationType: string };
     save_integration: { integrationType: string; authMethod?: 'service-account' | 'google-oauth' };
-    select_environment: undefined;
     split_notebook: { notebookCount: number; outcome: CommandOutcome };
     /** `fromEnvFile` is file-ONLY, not file-configured: false when the id is also in the project roster. */
     switch_sql_integration: { fromEnvFile: boolean; integrationType: string };
     toggle_snapshots: { enabled: boolean };
-    update_environment: { field: 'name' | 'packages'; packageCount?: number };
 }
 
 /** Distributes over `E` so a union of event names yields a union of `{ eventName, properties }` shapes. */

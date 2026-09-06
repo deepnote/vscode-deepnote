@@ -7,10 +7,12 @@ import { ProductNames } from './productNames';
 import {
     IInstallationChannelManager,
     IInstaller,
+    IModuleInstaller,
     InstallerResponse,
     IProductPathService,
     IProductService,
     ModuleInstallFlags,
+    ModuleInstallerType,
     Product,
     ProductType
 } from './types';
@@ -94,7 +96,26 @@ export class DataScienceInstaller {
         silent?: boolean
     ): Promise<InstallerResponse> {
         const channels = this.serviceContainer.get<IInstallationChannelManager>(IInstallationChannelManager);
-        const installer = await channels.getInstallationChannel(product, interpreter);
+        let installer: IModuleInstaller | undefined;
+
+        if (product === Product.deepnoteToolkit) {
+            // deepnote-toolkit is PyPI-only and conda's `pkg[extra]` brackets mean build constraints,
+            // not extras, so conda can never install it. pip is the last resort for a conda/poetry/
+            // pipenv env whose own tool is unreachable — PipInstaller excludes itself from those types.
+            const supported = await channels.getInstallationChannels(interpreter);
+            installer = supported.find((i) => i.type !== ModuleInstallerType.Conda);
+            if (!installer && (await this.isInstalled(Product.pip, interpreter))) {
+                installer = this.serviceContainer
+                    .getAll<IModuleInstaller>(IModuleInstaller)
+                    .find((i) => i.type === ModuleInstallerType.Pip);
+            }
+            if (!installer) {
+                channels.showNoInstallersMessage(interpreter);
+            }
+        } else {
+            installer = await channels.getInstallationChannel(product, interpreter);
+        }
+
         if (!installer) {
             return InstallerResponse.Ignore;
         }

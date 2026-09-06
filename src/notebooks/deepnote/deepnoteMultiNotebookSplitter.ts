@@ -4,11 +4,11 @@ import { isSingleNotebookDeepnoteFile, splitByNotebooks } from '@deepnote/conver
 
 import { ITelemetryService } from '../../platform/analytics/types';
 import { ILogger } from '../../platform/logging/types';
-import type { IDeepnoteNotebookEnvironmentMapper } from '../../kernels/deepnote/types';
 import { DEEPNOTE_NOTEBOOK_TYPE } from '../../kernels/deepnote/types';
 import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
 import { allocateSiblingUri } from './deepnoteSiblingFileAllocator';
 import { getFileStem } from './deepnoteNotebookFileFactory';
+import type { IDeepnoteNotebookInterpreters } from './deepnoteNotebookInterpreters';
 
 const SPLIT_ACTION = l10n.t('Split into separate files');
 
@@ -21,31 +21,31 @@ const MAX_LEGACY_ALLOCATION_ATTEMPTS = 10_000;
 /**
  * On opening a legacy multi-notebook `.deepnote` file, prompts to split it into one single-notebook
  * sibling file per notebook and retire the original as `<name>.deepnote.legacy`. No automatic rewrite.
- * The environment mapper is undefined on the web target, where env migration is a desktop-only no-op.
+ * The interpreter store is undefined on the web target, where pin migration is a desktop-only no-op.
  */
 export class DeepnoteMultiNotebookSplitter {
     private readonly analytics: ITelemetryService;
 
     private readonly disposables: Disposable[] = [];
 
-    private readonly envMapper: IDeepnoteNotebookEnvironmentMapper | undefined;
-
     private readonly exists: (uri: Uri) => Promise<boolean>;
 
     private readonly logger: ILogger;
+
+    private readonly notebookInterpreters: IDeepnoteNotebookInterpreters | undefined;
 
     private readonly promptedUris = new Set<string>();
 
     private readonly refreshTree: () => void;
 
     constructor(
-        envMapper: IDeepnoteNotebookEnvironmentMapper | undefined,
+        notebookInterpreters: IDeepnoteNotebookInterpreters | undefined,
         refreshTree: () => void,
         logger: ILogger,
         exists: (uri: Uri) => Promise<boolean>,
         analytics: ITelemetryService
     ) {
-        this.envMapper = envMapper;
+        this.notebookInterpreters = notebookInterpreters;
         this.refreshTree = refreshTree;
         this.logger = logger;
         this.exists = exists;
@@ -158,8 +158,8 @@ export class DeepnoteMultiNotebookSplitter {
 
             const deepnoteFile = await readDeepnoteProjectFile(fileUri);
             const parentDir = Uri.joinPath(fileUri, '..');
-            const envMapper = this.envMapper;
-            const originalEnv = envMapper?.getEnvironmentForNotebook(fileUri);
+            const interpreters = this.notebookInterpreters;
+            const pinnedInterpreter = interpreters?.get(fileUri);
 
             // Write all children before retiring the original (see step below).
             const entries = splitByNotebooks(deepnoteFile, getFileStem(fileUri));
@@ -187,12 +187,12 @@ export class DeepnoteMultiNotebookSplitter {
                 newUris.push(targetUri);
             }
 
-            // Migrate the environment selection onto each new file (desktop-only).
-            if (envMapper && originalEnv) {
+            // Carry the interpreter selection onto each new file (desktop-only).
+            if (interpreters && pinnedInterpreter) {
                 for (const newUri of newUris) {
-                    // Register the revert BEFORE the set: the mapper mutates memory before the persist that can reject.
-                    rollbacks.push(() => envMapper.removeEnvironmentForNotebook(newUri));
-                    await envMapper.setEnvironmentForNotebook(newUri, originalEnv);
+                    // Register the revert BEFORE the set: the store mutates memory before the persist that can reject.
+                    rollbacks.push(() => interpreters.set(newUri, undefined));
+                    await interpreters.set(newUri, pinnedInterpreter);
                 }
             }
 
@@ -206,13 +206,11 @@ export class DeepnoteMultiNotebookSplitter {
             renamed = true;
             rollbacks.push(() => workspace.fs.rename(legacyUri, fileUri, { overwrite: false }));
 
-            if (envMapper) {
-                // Restore the original mapping on rollback before removing it here.
-                if (originalEnv) {
-                    rollbacks.push(() => envMapper.setEnvironmentForNotebook(fileUri, originalEnv));
-                }
+            if (interpreters && pinnedInterpreter) {
+                // Restore the original's pin on rollback before removing it here.
+                rollbacks.push(() => interpreters.set(fileUri, pinnedInterpreter));
 
-                await envMapper.removeEnvironmentForNotebook(fileUri);
+                await interpreters.set(fileUri, undefined);
             }
 
             this.refreshTree();

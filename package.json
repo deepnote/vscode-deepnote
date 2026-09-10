@@ -1171,6 +1171,14 @@
             ],
             "commandPalette": [
                 {
+                    "command": "deepnote.renameProject",
+                    "when": "false"
+                },
+                {
+                    "command": "deepnote.renameNotebook",
+                    "when": "false"
+                },
+                {
                     "command": "deepnote.replayPylanceLog",
                     "title": "%deepnote.commandPalette.deepnote.replayPylanceLog.title%",
                     "when": "deepnote.development && isWorkspaceTrusted"

@@ -60,3 +60,28 @@ export async function waitForNotification(
         return undefined;
     }
 }
+
+/** Polls until no visible notification matches `pattern`; resolves immediately when none does. */
+export async function waitForNotificationToClear(pattern: RegExp, timeout: number): Promise<void> {
+    const driver = VSBrowser.instance.driver;
+
+    await driver.wait(
+        async () => {
+            const notifications = await new Workbench().getNotifications().catch((error) => {
+                console.warn('[deepnote-e2e] get notifications:', error);
+
+                return [] as Notification[];
+            });
+            for (const notification of notifications) {
+                const message = await notification.getMessage().catch(() => '');
+                if (pattern.test(message)) {
+                    return false;
+                }
+            }
+
+            return true;
+        },
+        timeout,
+        `timed out waiting for the notification matching ${pattern} to clear`
+    );
+}

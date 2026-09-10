@@ -183,6 +183,45 @@ export async function readRenderedOutput(): Promise<string> {
 }
 
 /**
+ * Concatenated `aria-label`s from the drawn chart. Vega captions each axis with its scale domain in
+ * full, unlike the tick labels, which it truncates to the available width.
+ */
+export async function readChartAriaLabels(): Promise<string> {
+    return readInsideNotebookWebview(async (webView) => {
+        const elements = await webView.findWebElements(By.css('svg.marks [aria-label]'));
+        const labels = await Promise.all(elements.map((element) => element.getAttribute('aria-label')));
+
+        return labels.filter(Boolean).join('\n');
+    });
+}
+
+/**
+ * Polls until Vega has drawn a chart in the notebook webview; throws with the webview text on
+ * timeout. Vega puts `.marks` on the rendered root only once the chart draws.
+ */
+export async function awaitRenderedChart(timeout: number, context: string): Promise<void> {
+    const driver = VSBrowser.instance.driver;
+    const deadline = Date.now() + timeout;
+
+    while (Date.now() < deadline) {
+        const count = await readInsideNotebookWebview(async (webView) =>
+            String((await webView.findWebElements(By.css('svg.marks, canvas.marks'))).length)
+        );
+        if (Number(count) > 0) {
+            return;
+        }
+
+        await driver.sleep(OUTPUT_POLL_INTERVAL);
+    }
+
+    const text = await readNotebookWebviewText();
+    throw new Error(
+        `Timed out after ${timeout}ms waiting for a Vega chart to draw (${context}). ` +
+            `Notebook webview text: ${JSON.stringify(text)}`
+    );
+}
+
+/**
  * Polls the notebook webview until every marker in `markers` is rendered and none of `absentMarkers`
  * is, then returns the text it settled on. `context` names the state being waited for; it is only
  * used to make the timeout message say what did not happen.

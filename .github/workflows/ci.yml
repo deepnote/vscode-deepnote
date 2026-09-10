@@ -269,3 +269,39 @@ jobs:
 
       - name: Run audit for all dependencies
         run: npx better-npm-audit audit
+
+  build-without-optional-deps:
+    name: Build without optional deps
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: 'npm'
+          node-version-file: '.nvmrc'
+
+      - name: Install dependencies without optional packages
+        run: |
+          # Simulates an arm64 Mac, where npm drops the optional `zeromqold` fallback because it
+          # has no darwin-arm64 prebuild and cannot be compiled without cmake and Python distutils.
+          npm ci --omit=optional --prefer-offline --no-audit
+          # The Tailwind and lightningcss native binaries are optional too, but the bundle needs them.
+          # Restore only those, still omitting the rest, without touching package.json or the lockfile.
+          npm install --omit=optional --no-save --no-audit \
+            "lightningcss-linux-x64-gnu@$(node -p "require('./package.json').optionalDependencies['lightningcss-linux-x64-gnu']")" \
+            "@tailwindcss/oxide-linux-x64-gnu@$(node -p "require('./package.json').optionalDependencies['@tailwindcss/oxide-linux-x64-gnu']")"
+          test ! -e node_modules/zeromqold
+
+      - name: Build extension bundle
+        run: npm run esbuild-all
+
+      - name: Verify bundle
+        run: |
+          test -f dist/node_modules/zeromq/prebuilds/linux-x64/node.napi.glibc.node
+          test ! -e dist/node_modules/zeromqold

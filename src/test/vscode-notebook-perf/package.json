@@ -34,7 +34,7 @@
     "@vscode/test-electron": "^2.5.2",
     "glob": "^7.1.2",
     "mocha": "^10.8.2",
-    "typescript": "^5.3.3"
+    "typescript": "^7.0.2"
   },
   "displayName": "Notebook Performance Test",
   "engines": {

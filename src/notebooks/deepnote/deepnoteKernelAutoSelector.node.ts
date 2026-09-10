@@ -60,6 +60,7 @@ import { PythonEnvironmentQuickPickItemProvider } from '../../platform/interpret
 import { BaseProviderBasedQuickPick } from '../../platform/common/providerBasedQuickPick';
 import { InputFlowAction } from '../../platform/common/utils/multiStepInput';
 import { logger } from '../../platform/logging';
+import * as path from '../../platform/vscode-path/path';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
@@ -706,16 +707,32 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * @throws Error if no suitable kernel spec is found
      */
     public selectKernelSpec(kernelSpecs: IJupyterKernelSpec[]): IJupyterKernelSpec {
-        const kernelSpec =
-            kernelSpecs.find((s) => s.language === 'python') ||
-            kernelSpecs.find((s) => s.name === 'python3') ||
-            kernelSpecs[0];
-
-        if (!kernelSpec) {
+        if (kernelSpecs.length === 0) {
             throw new Error('No kernel specs available on Deepnote server');
         }
 
-        return kernelSpec;
+        // A spec whose argv[0] is an absolute path that no longer exists cannot start: Jupyter fails
+        // with a bare ENOENT that names neither the spec nor the interpreter. Older extension versions
+        // wrote such specs into the venv, keyed on the venv's directory name, so a venv reached through
+        // a moved, restored or linked path still carries one, and it sorts ahead of `python3`.
+        const runnable = kernelSpecs.filter((spec) => {
+            const runs = !path.isAbsolute(spec.executable) || fs.existsSync(spec.executable);
+
+            if (!runs) {
+                logger.warn(`Ignoring kernel spec ${spec.name}: it launches ${spec.executable}, which does not exist`);
+            }
+
+            return runs;
+        });
+        const candidates = runnable.length > 0 ? runnable : kernelSpecs;
+
+        // ipykernel's own `python3` spec launches a relative `python`, which the server resolves to the
+        // interpreter it runs on, so it is the one that keeps the notebook on the selected interpreter.
+        return (
+            candidates.find((spec) => spec.name === 'python3') ||
+            candidates.find((spec) => spec.language === 'python') ||
+            candidates[0]
+        );
     }
 
     /**

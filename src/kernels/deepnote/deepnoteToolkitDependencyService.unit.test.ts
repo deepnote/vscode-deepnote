@@ -1,18 +1,24 @@
 import { assert } from 'chai';
 import { PythonExtension } from '@vscode/python-extension';
 import * as sinon from 'sinon';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
 import { setPythonApi } from '../../platform/interpreter/helpers';
 import { resolvableInstance } from '../../test/datascience/helpers';
 
 import { IInstaller, InstallerResponse, Product } from '../../platform/interpreter/installer/types';
+import { IPythonExecutionFactory, IPythonExecutionService } from '../../platform/interpreter/types.node';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
-import { Commands } from '../../platform/common/constants';
+import { Commands, DEEPNOTE_TOOLKIT_VERSION } from '../../platform/common/constants';
 import { Common } from '../../platform/common/utils/localize';
-import { DeepnoteToolkitDependencyService } from './deepnoteToolkitDependencyService.node';
+import {
+    DeepnoteToolkitDependencyService,
+    ToolkitProbe,
+    isOlderRelease,
+    toolkitState
+} from './deepnoteToolkitDependencyService.node';
 import { DeepnoteToolkitDependencyResponse } from './types';
 
 suite('DeepnoteToolkitDependencyService', () => {
@@ -25,6 +31,7 @@ suite('DeepnoteToolkitDependencyService', () => {
     const notCancelled = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) };
 
     let installer: IInstaller;
+    let python: IPythonExecutionService;
     let service: DeepnoteToolkitDependencyService;
 
     /** Makes the consent prompt resolve to `choice` (undefined = the user dismissed it). */
@@ -34,10 +41,34 @@ suite('DeepnoteToolkitDependencyService', () => {
         ).thenResolve(choice as never);
     }
 
+    /** What the metadata probe prints in the interpreter. */
+    function probeReports(probe: ToolkitProbe) {
+        when(python.exec(anything(), anything())).thenResolve({
+            stdout: `${JSON.stringify({ version: probe.version ?? null, server: probe.server })}\n`,
+            stderr: ''
+        });
+    }
+
+    const missing: ToolkitProbe = { server: false };
+    const current: ToolkitProbe = { version: DEEPNOTE_TOOLKIT_VERSION, server: true };
+
+    /** Whether the one prompt shown was worded as an update rather than a first install. */
+    function promptedForUpdate(): boolean {
+        verify(
+            mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything(), anything())
+        ).once();
+        const [message] = capture(mockedVSCodeNamespaces.window.showInformationMessage).last();
+
+        return String(message).includes('requires an update');
+    }
+
     setup(() => {
         resetVSCodeMocks();
         installer = mock<IInstaller>();
-        service = new DeepnoteToolkitDependencyService(instance(installer));
+        python = mock<IPythonExecutionService>();
+        const factory = mock<IPythonExecutionFactory>();
+        when(factory.createActivatedEnvironment(anything())).thenResolve(resolvableInstance(python));
+        service = new DeepnoteToolkitDependencyService(instance(installer), instance(factory));
 
         // The prompt names the environment via getPythonEnvDisplayName, which reads the Python API.
         const mockedApi = mock<PythonExtension>();
@@ -54,7 +85,7 @@ suite('DeepnoteToolkitDependencyService', () => {
     });
 
     test('does not prompt when the toolkit is already installed', async () => {
-        when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(true);
+        probeReports(current);
 
         const result = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
 
@@ -65,8 +96,107 @@ suite('DeepnoteToolkitDependencyService', () => {
         verify(installer.install(anything(), anything(), anything())).never();
     });
 
+    suite('version and [server] extra gate (#489)', () => {
+        test('a toolkit older than the pin gets the update prompt, and Install brings it to the pin', async () => {
+            probeReports({ version: '0.0.1', server: true });
+            when(installer.install(anything(), anything(), anything())).thenResolve(InstallerResponse.Installed);
+            answerPrompt(Common.install);
+
+            const result = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
+
+            assert.strictEqual(result, DeepnoteToolkitDependencyResponse.ok);
+            assert.isTrue(promptedForUpdate(), 'the prompt must say the toolkit needs an update');
+            // The installer's pip line is `install -U deepnote-toolkit[server]==<pin>`, so the same
+            // install both upgrades and pulls in the extra.
+            verify(installer.install(Product.deepnoteToolkit, anything(), anything())).once();
+        });
+
+        test('a toolkit installed without [server] gets the update prompt, not a server startup failure', async () => {
+            probeReports({ version: DEEPNOTE_TOOLKIT_VERSION, server: false });
+            answerPrompt(undefined);
+
+            const result = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
+
+            assert.strictEqual(result, DeepnoteToolkitDependencyResponse.cancel);
+            assert.isTrue(promptedForUpdate(), 'the prompt must say the toolkit needs an update');
+        });
+
+        test('a missing toolkit gets the install wording, not the update one', async () => {
+            probeReports(missing);
+            answerPrompt(undefined);
+
+            await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
+
+            assert.isFalse(promptedForUpdate(), 'a missing toolkit is an install, not an update');
+        });
+
+        test('a newer toolkit passes, so a developer on an unreleased build is not asked to downgrade', async () => {
+            probeReports({ version: '999.0.0.dev0', server: true });
+
+            const result = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
+
+            assert.strictEqual(result, DeepnoteToolkitDependencyResponse.ok);
+            verify(
+                mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything(), anything())
+            ).never();
+        });
+
+        test('falls back to the import check when the probe cannot run', async () => {
+            when(python.exec(anything(), anything())).thenReject(new Error('spawn EACCES'));
+            when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(true);
+
+            const result = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
+
+            assert.strictEqual(result, DeepnoteToolkitDependencyResponse.ok);
+        });
+
+        test('treats unparsable probe output as a failed probe', async () => {
+            when(python.exec(anything(), anything())).thenResolve({ stdout: 'Traceback...', stderr: '' });
+            when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+            answerPrompt(undefined);
+
+            const result = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
+
+            assert.strictEqual(result, DeepnoteToolkitDependencyResponse.cancel);
+        });
+
+        suite('toolkitState', () => {
+            test('ok only when present, at least the pin, and with the extra', () => {
+                assert.strictEqual(toolkitState({ version: '2.5.1', server: true }, '2.5.1'), 'ok');
+                assert.strictEqual(toolkitState({ version: '2.6.0', server: true }, '2.5.1'), 'ok');
+                assert.strictEqual(toolkitState({ version: '2.5.0', server: true }, '2.5.1'), 'needsUpdate');
+                assert.strictEqual(toolkitState({ version: '2.5.1', server: false }, '2.5.1'), 'needsUpdate');
+                assert.strictEqual(toolkitState({ server: false }, '2.5.1'), 'missing');
+                assert.strictEqual(toolkitState({ server: true }, '2.5.1'), 'missing');
+            });
+        });
+
+        suite('isOlderRelease', () => {
+            test('compares release segments numerically', () => {
+                assert.isTrue(isOlderRelease('2.5.1', '2.5.2'));
+                assert.isTrue(isOlderRelease('2.9.9', '2.10.0'));
+                assert.isTrue(isOlderRelease('2.5', '2.5.1'));
+                assert.isFalse(isOlderRelease('2.5.1', '2.5.1'));
+                assert.isFalse(isOlderRelease('2.5.1.0', '2.5.1'));
+                assert.isFalse(isOlderRelease('3.0.0', '2.5.1'));
+            });
+
+            test('ignores pre-release and local suffixes', () => {
+                assert.isFalse(isOlderRelease('2.5.1rc1', '2.5.1'));
+                assert.isFalse(isOlderRelease('2.6.0.dev0', '2.5.1'));
+                assert.isFalse(isOlderRelease('2.5.1+local', '2.5.1'));
+                assert.isTrue(isOlderRelease('2.5.0.dev0', '2.5.1'));
+            });
+
+            test('does not call a version it cannot read older', () => {
+                assert.isFalse(isOlderRelease('editable', '2.5.1'));
+                assert.isFalse(isOlderRelease('', '2.5.1'));
+            });
+        });
+    });
+
     test('installs only after the user consents', async () => {
-        when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+        probeReports(missing);
         when(installer.install(anything(), anything(), anything())).thenResolve(InstallerResponse.Installed);
         answerPrompt('Install');
 
@@ -77,7 +207,7 @@ suite('DeepnoteToolkitDependencyService', () => {
     });
 
     test('does NOT install when the user dismisses the prompt', async () => {
-        when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+        probeReports(missing);
         answerPrompt(undefined);
 
         const result = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
@@ -87,7 +217,7 @@ suite('DeepnoteToolkitDependencyService', () => {
     });
 
     test('reports the interpreter change without installing or opening the picker itself', async () => {
-        when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+        probeReports(missing);
         answerPrompt('Select a different Interpreter');
 
         const result = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
@@ -100,7 +230,7 @@ suite('DeepnoteToolkitDependencyService', () => {
     });
 
     test('settles the shared entry, so a re-check for the same interpreter prompts again', async () => {
-        when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+        probeReports(missing);
         answerPrompt('Select a different Interpreter');
 
         await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
@@ -113,7 +243,7 @@ suite('DeepnoteToolkitDependencyService', () => {
     });
 
     test('reports a cancelled install as cancel, not failure', async () => {
-        when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+        probeReports(missing);
         when(installer.install(anything(), anything(), anything())).thenResolve(InstallerResponse.Cancelled);
         answerPrompt('Install');
 
@@ -123,7 +253,7 @@ suite('DeepnoteToolkitDependencyService', () => {
     });
 
     test('reports an install that did not take as failed', async () => {
-        when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+        probeReports(missing);
         when(installer.install(anything(), anything(), anything())).thenResolve(InstallerResponse.Ignore);
         answerPrompt('Install');
 
@@ -133,7 +263,7 @@ suite('DeepnoteToolkitDependencyService', () => {
     });
     suite('concurrent callers', () => {
         test('two notebooks on one interpreter get one prompt and one install', async () => {
-            when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+            probeReports(missing);
             answerPrompt(Common.install);
 
             let releaseInstall!: () => void;
@@ -161,7 +291,7 @@ suite('DeepnoteToolkitDependencyService', () => {
         });
 
         test('a later call prompts again once the first has settled', async () => {
-            when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+            probeReports(missing);
             answerPrompt(undefined);
 
             await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
@@ -173,7 +303,7 @@ suite('DeepnoteToolkitDependencyService', () => {
         });
 
         test('a joined caller whose notebook closed reports cancel, without stopping the install', async () => {
-            when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+            probeReports(missing);
             answerPrompt(Common.install);
             when(installer.install(Product.deepnoteToolkit, anything(), anything())).thenResolve(
                 InstallerResponse.Installed
@@ -191,7 +321,7 @@ suite('DeepnoteToolkitDependencyService', () => {
         });
 
         test('different interpreters are not deduplicated against each other', async () => {
-            when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(false);
+            probeReports(missing);
             answerPrompt(undefined);
             const other: PythonEnvironment = { id: '/envs/other/bin/python', uri: Uri.file('/envs/other/bin/python') };
 

@@ -16,6 +16,7 @@ import {
     createWorkspaceFolder
 } from '../deepnoteTestHelpers';
 import { buildPostgresIntegration } from './federatedAuth/federatedAuthTestHelpers';
+import { RawProjectIntegration } from './existingIntegrationPicker';
 import { IntegrationManager } from './integrationManager';
 import {
     IIntegrationDetector,
@@ -32,7 +33,7 @@ const OTHER_URI = Uri.file('/ws/other.deepnote');
 
 const SHARED_CONFIG = buildPostgresIntegration({ id: 'pg-shared', name: 'Shared Postgres' });
 
-function projectFile(projectId: string, notebookId: string, integrations: ProjectIntegration[]): DeepnoteFile {
+function projectFile(projectId: string, notebookId: string, integrations: RawProjectIntegration[]): DeepnoteFile {
     return createDeepnoteFile({
         project: createDeepnoteProject({
             id: projectId,
@@ -192,6 +193,24 @@ suite('IntegrationManager.addExistingIntegration', () => {
         assert.isTrue(refreshSpy.notCalled);
         verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
         verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
+    });
+
+    test('keeps roster entries the panel cannot manage (pandas-dataframe) when attaching', async () => {
+        currentProject = projectFile(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID, [
+            { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' }
+        ]);
+
+        const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
+
+        assert.strictEqual(outcome, 'completed');
+
+        const expectedRoster = [
+            { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' },
+            { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
+        ];
+        assert.deepStrictEqual(writes.get(CURRENT_URI.fsPath)?.project.integrations, expectedRoster);
+        assert.deepStrictEqual(cacheUpdates, [expectedRoster]);
+        assert.strictEqual(quickPickItems?.length, 1, 'the DuckDB entry is neither offered nor a candidate');
     });
 
     test('does not offer an integration the current project already has', async () => {

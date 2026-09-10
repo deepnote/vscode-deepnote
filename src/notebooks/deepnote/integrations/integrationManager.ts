@@ -6,7 +6,6 @@ import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
-import { isConfigurableDatabaseIntegrationType } from '../../../platform/notebooks/deepnote/integrationTypes';
 import {
     IIntegrationDetector,
     IIntegrationEnvLiveRefresher,
@@ -14,12 +13,13 @@ import {
     IIntegrationStorage,
     IIntegrationWebviewProvider
 } from './types';
-import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { IDeepnoteNotebookManager } from '../../types';
 import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 import {
     attachExistingIntegration,
     collectReusableIntegrations,
     integrationTypeLabel,
+    RawProjectIntegration,
     ReusableIntegration
 } from './existingIntegrationPicker';
 
@@ -207,18 +207,15 @@ export class IntegrationManager implements IIntegrationManager {
         return uri ? String(uri) : undefined;
     }
 
-    /** The project's roster as the notebook manager caches it, narrowed to the types the panel can manage. */
-    private getCachedRoster(projectId: string, notebookId: string): ProjectIntegration[] {
+    /**
+     * The project's roster exactly as the notebook manager caches it. Entries are never filtered here: this array
+     * is what `attachExistingIntegration` persists, so narrowing it (e.g. dropping `pandas-dataframe`) would
+     * rewrite the project's integrations rather than add to them. Callers derive their own exclusion set from it.
+     */
+    private getCachedRoster(projectId: string, notebookId: string): RawProjectIntegration[] {
         const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
-        const roster: ProjectIntegration[] = [];
 
-        for (const entry of project?.project.integrations ?? []) {
-            if (isConfigurableDatabaseIntegrationType(entry.type)) {
-                roster.push({ id: entry.id, name: entry.name, type: entry.type });
-            }
-        }
-
-        return roster;
+        return [...(project?.project.integrations ?? [])];
     }
 
     /** Re-applies integration env in the project's running kernels and re-renders the panel with the new roster. */

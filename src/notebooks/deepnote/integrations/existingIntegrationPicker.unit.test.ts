@@ -11,6 +11,7 @@ import {
     attachExistingIntegration,
     collectReusableIntegrations,
     integrationTypeLabel,
+    RawProjectIntegration,
     ReusableIntegration
 } from './existingIntegrationPicker';
 import { buildGoogleOauthIntegration, buildPostgresIntegration } from './federatedAuth/federatedAuthTestHelpers';
@@ -310,6 +311,31 @@ suite('existingIntegrationPicker', () => {
                 { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
             ];
             assert.deepStrictEqual(result, { activePersisted: true, siblingsFailed: 0 });
+            assert.deepStrictEqual(cacheUpdates, [{ projectId: CURRENT_PROJECT_ID, integrations: expectedRoster }]);
+            assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, expectedRoster);
+        });
+
+        test('passes roster entries of types it cannot manage (e.g. pandas-dataframe) through verbatim', async () => {
+            const { writes } = stubWorkspace({
+                projects: [{ uri: activeUri, projectId: CURRENT_PROJECT_ID }]
+            });
+            const currentIntegrations: RawProjectIntegration[] = [
+                { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' },
+                { id: 'future', name: 'Unknown to this build', type: 'some-future-type' }
+            ];
+
+            await attachExistingIntegration({
+                activeFileUri: activeUri,
+                currentIntegrations,
+                integration: shared,
+                notebookManager,
+                projectId: CURRENT_PROJECT_ID
+            });
+
+            const expectedRoster = [
+                ...currentIntegrations,
+                { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
+            ];
             assert.deepStrictEqual(cacheUpdates, [{ projectId: CURRENT_PROJECT_ID, integrations: expectedRoster }]);
             assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, expectedRoster);
         });

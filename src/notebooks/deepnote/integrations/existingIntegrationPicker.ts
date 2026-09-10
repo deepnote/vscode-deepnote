@@ -1,3 +1,4 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { RelativePattern, Uri, workspace } from 'vscode';
 
 import * as localize from '../../../platform/common/utils/localize';
@@ -38,6 +39,9 @@ export function integrationTypeLabel(type: ConfigurableDatabaseIntegrationType):
     return INTEGRATION_TYPE_LABELS[type] ?? type;
 }
 
+/** A roster entry exactly as the `.deepnote` file records it; `type` is not narrowed to the types this build knows. */
+export type RawProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']>[number];
+
 /**
  * A SecretStorage integration declared by at least one *other* project in the workspace, so it can be linked into
  * the current project without re-entering credentials.
@@ -71,8 +75,11 @@ export interface CollectReusableIntegrationsResult {
 
 export interface AttachExistingIntegrationParams {
     activeFileUri: Uri;
-    /** The current project's roster as cached by the notebook manager; the new entry is appended to it. */
-    currentIntegrations: readonly ProjectIntegration[];
+    /**
+     * The current project's roster exactly as cached by the notebook manager. Every entry passes through to the
+     * write verbatim (including `pandas-dataframe` and any type this build does not know), so nothing is pruned.
+     */
+    currentIntegrations: readonly RawProjectIntegration[];
     integration: ReusableIntegration;
     notebookManager: IDeepnoteNotebookManager;
     projectId: string;
@@ -195,10 +202,13 @@ export async function collectReusableIntegrations(
 export function attachExistingIntegration(params: AttachExistingIntegrationParams): Promise<PersistIntegrationsResult> {
     const { activeFileUri, currentIntegrations, integration, notebookManager, projectId } = params;
 
-    const integrations: ProjectIntegration[] = [
+    const linked: ProjectIntegration = { id: integration.id, name: integration.name, type: integration.type };
+    // Cast rather than narrow: validating the existing entries would silently drop any type this build does not
+    // know about (`pandas-dataframe` included), which is pruning by another name.
+    const integrations = [
         ...currentIntegrations.filter((entry) => entry.id !== integration.id),
-        { id: integration.id, name: integration.name, type: integration.type }
-    ];
+        linked
+    ] as ProjectIntegration[];
 
     return persistProjectIntegrations({ activeFileUri, integrations, notebookManager, projectId });
 }

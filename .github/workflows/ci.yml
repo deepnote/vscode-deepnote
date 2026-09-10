@@ -96,10 +96,12 @@ jobs:
         if: "!cancelled() && github.event_name != 'pull_request'"
         run: qlty smells --all
 
-      # osv-scanner declares skip_upstream, so only --all ever sees a lockfile; reporting-only until triaged.
+      # osv-scanner declares skip_upstream, so only --all ever sees a lockfile. The root
+      # package-lock.json is too large for qlty to analyze (better-npm-audit gates it in the
+      # audit-* jobs), so in practice this gates src/test/vscode-notebook-perf/package-lock.json.
       - name: Run qlty dependency scan
         if: '!cancelled()'
-        run: qlty check --all --filter=osv-scanner --no-fail
+        run: qlty check --all --filter=osv-scanner
 
   build:
     name: Build & Test

@@ -42,6 +42,9 @@
   },
   "main": "./out/extension.js",
   "name": "vscode-notebook-perf",
+  "overrides": {
+    "serialize-javascript@<7.0.5": "7.0.5"
+  },
   "publisher": "ms-toolsai",
   "scripts": {
     "compile": "tsc -p .",

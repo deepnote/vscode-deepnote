@@ -186,6 +186,12 @@
                 "icon": "$(database)"
             },
             {
+                "command": "deepnote.setSqlReturnVariableType",
+                "title": "%deepnote.commands.setSqlReturnVariableType.title%",
+                "category": "Deepnote",
+                "enablement": "notebookType == 'deepnote'"
+            },
+            {
                 "command": "deepnote.addBigNumberChartBlock",
                 "title": "%deepnote.commands.addBigNumberChartBlock.title%",
                 "category": "Deepnote",
@@ -1230,6 +1236,10 @@
                 {
                     "command": "deepnote.interactive.copyCell",
                     "when": "false"
+                },
+                {
+                    "command": "deepnote.setSqlReturnVariableType",
+                    "when": "notebookType == 'deepnote'"
                 },
                 {
                     "command": "deepnote.exportAsPythonScript",

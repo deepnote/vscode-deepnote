@@ -262,6 +262,7 @@
     "deepnote.commands.importJupyterNotebook.title": "Import Jupyter Notebook",
     "deepnote.commands.addAgentBlock.title": "Add Agent Block",
     "deepnote.commands.addSqlBlock.title": "Add SQL Block",
+    "deepnote.commands.setSqlReturnVariableType.title": "Set SQL Block Return Type",
     "deepnote.commands.addBigNumberChartBlock.title": "Add Big Number Block",
     "deepnote.commands.addChartBlock.title": "Add Chart Block",
     "deepnote.commands.addInputTextBlock.title": "Add Input Text Block",

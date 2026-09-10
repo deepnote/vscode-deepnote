@@ -33,7 +33,8 @@ import { persistProjectIntegrations } from './integrations/projectIntegrationsWr
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
 import { logger } from '../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
-import type { DeepnoteFile } from '@deepnote/blocks';
+import { SqlReturnVariableType } from '../../platform/common/utils/localize';
+import type { DeepnoteFile, SqlCellVariableType } from '@deepnote/blocks';
 import {
     DatabaseIntegrationConfig,
     DatabaseIntegrationType,
@@ -49,6 +50,24 @@ type RawProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']
 interface LocalQuickPickItem extends QuickPickItem {
     id: string;
 }
+
+/** QuickPick item for one SQL return type */
+interface ReturnVariableTypeQuickPickItem extends QuickPickItem {
+    returnVariableType: SqlCellVariableType;
+}
+
+/** What a SQL block returns when `deepnote_return_variable_type` is absent or unrecognized. */
+const DEFAULT_RETURN_VARIABLE_TYPE: SqlCellVariableType = 'dataframe';
+
+const returnVariableTypeLabels: Record<SqlCellVariableType, string> = {
+    dataframe: SqlReturnVariableType.dataframeLabel,
+    query_preview: SqlReturnVariableType.queryPreviewLabel
+};
+
+const returnVariableTypeDetails: Record<SqlCellVariableType, string> = {
+    dataframe: SqlReturnVariableType.dataframeDetail,
+    query_preview: SqlReturnVariableType.queryPreviewDetail
+};
 
 const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string> = {
     alloydb: l10n.t('Google AlloyDB'),
@@ -72,7 +91,7 @@ const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string>
 };
 
 /**
- * Provides status bar items for SQL cells showing the integration name and variable name
+ * Provides status bar items for SQL cells showing the integration name, variable name and return type
  */
 @injectable()
 export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvider, IExtensionSyncActivationService {
@@ -112,40 +131,30 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         // Register command to update SQL variable name
         this.disposables.push(
             commands.registerCommand('deepnote.updateSqlVariableName', async (cell?: NotebookCell) => {
-                if (!cell) {
-                    // Fall back to the active notebook cell
-                    const activeEditor = window.activeNotebookEditor;
-                    if (activeEditor && activeEditor.selection) {
-                        cell = activeEditor.notebook.cellAt(activeEditor.selection.start);
-                    }
+                const targetCell = this.resolveTargetCell(cell);
+                if (targetCell) {
+                    await this.updateVariableName(targetCell);
                 }
-
-                if (!cell) {
-                    void window.showErrorMessage(l10n.t('No active notebook cell'));
-                    return;
-                }
-
-                await this.updateVariableName(cell);
             })
         );
 
         // Register command to switch SQL integration
         this.disposables.push(
             commands.registerCommand('deepnote.switchSqlIntegration', async (cell?: NotebookCell) => {
-                if (!cell) {
-                    // Fall back to the active notebook cell
-                    const activeEditor = window.activeNotebookEditor;
-                    if (activeEditor && activeEditor.selection) {
-                        cell = activeEditor.notebook.cellAt(activeEditor.selection.start);
-                    }
+                const targetCell = this.resolveTargetCell(cell);
+                if (targetCell) {
+                    await this.switchIntegration(targetCell);
                 }
+            })
+        );
 
-                if (!cell) {
-                    void window.showErrorMessage(l10n.t('No active notebook cell'));
-                    return;
+        // Register command to choose what a SQL block returns (DataFrame vs. query preview for chaining)
+        this.disposables.push(
+            commands.registerCommand('deepnote.setSqlReturnVariableType', async (cell?: NotebookCell) => {
+                const targetCell = this.resolveTargetCell(cell);
+                if (targetCell) {
+                    await this.setReturnVariableType(targetCell);
                 }
-
-                await this.switchIntegration(cell);
             })
         );
 
@@ -209,6 +218,9 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         // Always add variable status bar item for SQL cells
         items.push(this.createVariableStatusBarItem(cell));
+
+        // Always add the return type item: it is what makes query chaining reachable from the UI
+        items.push(this.createReturnVariableTypeStatusBarItem(cell));
 
         return items;
     }
@@ -288,6 +300,34 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         };
     }
 
+    private createReturnVariableTypeStatusBarItem(cell: NotebookCell): NotebookCellStatusBarItem {
+        const returnVariableType = this.getReturnVariableType(cell);
+
+        return {
+            text: SqlReturnVariableType.statusBarText(returnVariableTypeLabels[returnVariableType]),
+            alignment: 1, // NotebookCellStatusBarAlignment.Left
+            priority: 80,
+            tooltip: SqlReturnVariableType.statusBarTooltip,
+            command: {
+                title: SqlReturnVariableType.changeCommandTitle,
+                command: 'deepnote.setSqlReturnVariableType',
+                arguments: [cell]
+            }
+        };
+    }
+
+    private getReturnVariableType(cell: NotebookCell): SqlCellVariableType {
+        const metadata = cell.metadata;
+        if (metadata && typeof metadata === 'object') {
+            const returnVariableType = (metadata as Record<string, unknown>).deepnote_return_variable_type;
+            if (returnVariableType === 'query_preview') {
+                return returnVariableType;
+            }
+        }
+
+        return DEFAULT_RETURN_VARIABLE_TYPE;
+    }
+
     private getVariableName(cell: NotebookCell): string {
         const metadata = cell.metadata;
         if (metadata && typeof metadata === 'object') {
@@ -298,6 +338,82 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         }
 
         return 'df';
+    }
+
+    /**
+     * The cell a status bar command acts on: the one it was invoked with, else the active notebook cell (command
+     * palette). The palette entry is gated on the notebook type only, so the active cell is used only when it is a
+     * SQL cell; the metadata these commands write has no meaning on any other cell. Reports an error and returns
+     * `undefined` when there is no SQL cell to act on.
+     */
+    private resolveTargetCell(cell?: NotebookCell): NotebookCell | undefined {
+        if (cell) {
+            return cell;
+        }
+
+        const activeEditor = window.activeNotebookEditor;
+        if (activeEditor && activeEditor.selection) {
+            const activeCell = activeEditor.notebook.cellAt(activeEditor.selection.start);
+            if (activeCell.document.languageId === 'sql') {
+                return activeCell;
+            }
+        }
+
+        void window.showErrorMessage(l10n.t('No active SQL cell'));
+
+        return undefined;
+    }
+
+    /**
+     * Lets the user pick what the block assigns to its variable. `query_preview` is what enables SQL query
+     * chaining: the toolkit returns a lazy `DeepnoteQueryPreview`, and a later SQL block that references the
+     * variable has this block's query inlined as a CTE instead of a materialized DataFrame.
+     */
+    private async setReturnVariableType(cell: NotebookCell): Promise<void> {
+        const currentReturnVariableType = this.getReturnVariableType(cell);
+
+        const items: ReturnVariableTypeQuickPickItem[] = (['dataframe', 'query_preview'] as const).map(
+            (returnVariableType) => ({
+                label: returnVariableTypeLabels[returnVariableType],
+                description:
+                    returnVariableType === currentReturnVariableType
+                        ? SqlReturnVariableType.currentlySelected
+                        : undefined,
+                detail: returnVariableTypeDetails[returnVariableType],
+                returnVariableType
+            })
+        );
+
+        const selected = await window.showQuickPick(items, {
+            placeHolder: SqlReturnVariableType.pickerPlaceholder
+        });
+
+        if (!selected || selected.returnVariableType === currentReturnVariableType) {
+            return;
+        }
+
+        // Update cell metadata; the serializer persists it to the .deepnote file
+        const edit = new WorkspaceEdit();
+        const updatedMetadata = {
+            ...cell.metadata,
+            deepnote_return_variable_type: selected.returnVariableType
+        };
+
+        edit.set(cell.notebook.uri, [NotebookEdit.updateCellMetadata(cell.index, updatedMetadata)]);
+
+        const success = await workspace.applyEdit(edit);
+        if (!success) {
+            void window.showErrorMessage(SqlReturnVariableType.updateFailed);
+            return;
+        }
+
+        // Trigger status bar update
+        this._onDidChangeCellStatusBarItems.fire();
+
+        this.analytics.trackEvent({
+            eventName: 'switch_sql_return_variable_type',
+            properties: { returnVariableType: selected.returnVariableType }
+        });
     }
 
     private async updateVariableName(cell: NotebookCell): Promise<void> {

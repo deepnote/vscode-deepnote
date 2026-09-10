@@ -774,9 +774,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
     // REAL TDD Tests - These should FAIL if bugs exist
     suite('Bug Detection: Kernel Selection', () => {
-        test('Should select the first Python kernel from available specs', () => {
-            // The selectKernelSpec method selects the first Python kernel available
-
+        test('prefers the python3 spec ipykernel ships, which launches the interpreter the server runs on', () => {
             const kernelSpecs: IJupyterKernelSpec[] = [
                 createMockKernelSpec('.env', '.env Python', 'python'),
                 createMockKernelSpec('python3', 'Python 3', 'python')
@@ -784,9 +782,57 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
 
             const selected = selector.selectKernelSpec(kernelSpecs);
 
-            // Should select the first Python kernel
-            assert.strictEqual(selected.language, 'python', 'Should select a Python kernel');
-            assert.strictEqual(selected.name, '.env', 'Should select the first Python kernel');
+            assert.strictEqual(selected.name, 'python3');
+        });
+
+        test('falls back to the first Python spec when there is no python3', () => {
+            const kernelSpecs: IJupyterKernelSpec[] = [
+                createMockKernelSpec('javascript', 'JavaScript', 'javascript'),
+                createMockKernelSpec('.env', '.env Python', 'python'),
+                createMockKernelSpec('other', 'Other Python', 'python')
+            ];
+
+            const selected = selector.selectKernelSpec(kernelSpecs);
+
+            assert.strictEqual(selected.name, '.env');
+        });
+
+        test('skips a spec that launches an interpreter which no longer exists (#472)', () => {
+            // What an older extension version left in a venv it reached through a since-deleted path.
+            const stale = {
+                ...createMockKernelSpec('deepnote-venv', 'Deepnote (.venv)', 'python'),
+                executable: '/tmp/deepnote-e2e-root-s2WWxz/.venv/bin/python',
+                argv: ['/tmp/deepnote-e2e-root-s2WWxz/.venv/bin/python', '-m', 'ipykernel_launcher']
+            };
+            const kernelSpecs: IJupyterKernelSpec[] = [stale, createMockKernelSpec('.env', '.env Python', 'python')];
+
+            const selected = selector.selectKernelSpec(kernelSpecs);
+
+            assert.strictEqual(selected.name, '.env', 'a spec Jupyter can only fail to spawn must never be chosen');
+        });
+
+        test('keeps a spec whose absolute interpreter does exist', () => {
+            const live = {
+                ...createMockKernelSpec('python3', 'Python 3', 'python'),
+                executable: process.execPath,
+                argv: [process.execPath, '-m', 'ipykernel_launcher']
+            };
+
+            const selected = selector.selectKernelSpec([live]);
+
+            assert.strictEqual(selected.name, 'python3');
+        });
+
+        test('still returns a spec when every one of them looks stale, rather than nothing', () => {
+            const stale = {
+                ...createMockKernelSpec('deepnote-venv', 'Deepnote (.venv)', 'python'),
+                executable: '/gone/venv/bin/python',
+                argv: ['/gone/venv/bin/python']
+            };
+
+            const selected = selector.selectKernelSpec([stale]);
+
+            assert.strictEqual(selected.name, 'deepnote-venv');
         });
 
         test('Should fall back to python3 named kernel when no python language kernel exists first', () => {
@@ -1516,7 +1562,8 @@ function createMockKernelSpec(name: string, displayName: string, language: strin
         name,
         display_name: displayName,
         language,
-        executable: '/usr/bin/python3',
+        // Relative, as ipykernel's own spec is: the server resolves it to the interpreter it runs on.
+        executable: 'python3',
         argv: ['python3', '-m', 'ipykernel_launcher', '-f', '{connection_file}']
     };
 }

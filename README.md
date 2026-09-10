@@ -54,18 +54,19 @@ Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/i
 
 Open the Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`) and type `Deepnote` to see all available commands:
 
-| Command                            | Description                                        |
-| ---------------------------------- | -------------------------------------------------- |
-| `Deepnote: Refresh Explorer`       | Refresh the Deepnote project explorer              |
-| `Deepnote: Open Notebook`          | Open a specific notebook from a Deepnote project   |
-| `Deepnote: Open File`              | Open the raw .deepnote project file                |
-| `Deepnote: Reveal in Explorer`     | Show active notebook information in the explorer   |
-| `Deepnote: Manage Integrations`    | Configure database connections and credentials     |
-| `Deepnote: New Project`            | Create a new Deepnote project                      |
-| `Deepnote: Import Notebook`        | Import an existing notebook into your project      |
-| `Notebook: Select Notebook Kernel` | Select or switch kernels within your notebook      |
-| `Notebook: Change Cell Language`   | Change the language of the cell currently in focus |
-| `Deepnote: Enable Snapshots`       | Enable snapshot mode for the current workspace     |
+| Command                            | Description                                                             |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `Deepnote: Refresh Explorer`       | Refresh the Deepnote project explorer                                   |
+| `Deepnote: Open Notebook`          | Open a specific notebook from a Deepnote project                        |
+| `Deepnote: Open File`              | Open the raw .deepnote project file                                     |
+| `Deepnote: Reveal in Explorer`     | Show active notebook information in the explorer                        |
+| `Deepnote: Show Project Explorer`  | Show the Deepnote sidebar and select the active notebook when available |
+| `Deepnote: Manage Integrations`    | Configure database connections and credentials                          |
+| `Deepnote: New Project`            | Create a new Deepnote project                                           |
+| `Deepnote: Import Notebook`        | Import an existing notebook into your project                           |
+| `Notebook: Select Notebook Kernel` | Select or switch kernels within your notebook                           |
+| `Notebook: Change Cell Language`   | Change the language of the cell currently in focus                      |
+| `Deepnote: Enable Snapshots`       | Enable snapshot mode for the current workspace                          |
 
 ### Database integrations
 

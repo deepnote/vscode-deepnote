@@ -46,35 +46,75 @@ const TOOLKIT_PROBE = [
     'print(json.dumps(r))'
 ].join('\n');
 
-/**
- * Numeric release segments of a version, so `2.6.0.dev0` reads as 2.6.0 and `2.5.1rc1` as 2.5.1.
- * Undefined when the version does not start with a number, which no PyPI release does.
- */
-function releaseSegments(version: string): number[] | undefined {
-    const match = /^\s*v?(\d+(?:\.\d+)*)/.exec(version);
+const PRE_RELEASE_RANK: Record<string, number> = { a: 0, alpha: 0, b: 1, beta: 1, c: 2, rc: 2, pre: 2, preview: 2 };
 
-    return match ? match[1].split('.').map(Number) : undefined;
+/** Rank of a final release among pre-release kinds: above every `a`/`b`/`rc`. */
+const FINAL_RANK = 3;
+
+/** Rank of a `.devN` with no pre-release tag: below every `a`/`b`/`rc`, as PEP 440 orders it. */
+const DEV_ONLY_RANK = -1;
+
+const VERSION_PATTERN =
+    /^\s*v?(\d+(?:\.\d+)*)(?:[-._]?(a|alpha|b|beta|c|rc|pre|preview)[-._]?(\d*))?(?:[-._]?post[-._]?(\d*))?(?:[-._]?dev[-._]?(\d*))?(?:\+.*)?\s*$/i;
+
+/**
+ * A version as a sort key in PEP 440 order: release segments, then pre-release kind and number,
+ * then post-release, then dev-release. So `2.5.1.dev0 < 2.5.1a1 < 2.5.1rc1 < 2.5.1 < 2.5.1.post1`,
+ * and a local suffix (`+…`) is ignored. Undefined when the version does not start with a number,
+ * which no PyPI release does.
+ */
+function versionKey(version: string): number[] | undefined {
+    const match = VERSION_PATTERN.exec(version);
+
+    if (!match) {
+        return undefined;
+    }
+
+    const [, release, preKind, preNumber, postNumber, devNumber] = match;
+    const hasPre = preKind !== undefined;
+    const hasPost = postNumber !== undefined;
+    const hasDev = devNumber !== undefined;
+    const preRank = hasPre ? PRE_RELEASE_RANK[preKind.toLowerCase()] : hasDev && !hasPost ? DEV_ONLY_RANK : FINAL_RANK;
+
+    return [
+        ...release.split('.').map(Number),
+        // Release segments are padded to the longer of the two when compared, so the tail starts
+        // at a fixed offset from the end instead.
+        Number.NaN,
+        preRank,
+        hasPre ? Number(preNumber || '0') : 0,
+        hasPost ? Number(postNumber || '0') : -1,
+        hasDev ? Number(devNumber || '0') : Number.POSITIVE_INFINITY
+    ];
 }
 
 /**
- * Whether `installed` is an older release than `pinned`. Pre-release and local suffixes are ignored,
- * and a version that cannot be read at all is not treated as older: an editable checkout of the
- * toolkit is a deliberate choice, not something to prompt about on every run.
+ * Whether `installed` is an older release than `pinned`, in PEP 440 order, so a release candidate
+ * or dev build of the pinned version still counts as older and is updated. A version that cannot
+ * be read at all is not treated as older: an editable checkout of the toolkit is a deliberate
+ * choice, not something to prompt about on every run.
  */
 export function isOlderRelease(installed: string, pinned: string): boolean {
-    const a = releaseSegments(installed);
-    const b = releaseSegments(pinned);
+    const a = versionKey(installed);
+    const b = versionKey(pinned);
 
     if (!a || !b) {
         return false;
     }
 
-    for (let i = 0; i < Math.max(a.length, b.length); i++) {
-        const left = a[i] ?? 0;
-        const right = b[i] ?? 0;
+    // Pad the release segments (everything before the NaN marker) to the same length with zeros.
+    const releaseLength = Math.max(a.findIndex(Number.isNaN), b.findIndex(Number.isNaN));
+    const pad = (key: number[]) => {
+        const marker = key.findIndex(Number.isNaN);
 
-        if (left !== right) {
-            return left < right;
+        return [...key.slice(0, marker), ...new Array(releaseLength - marker).fill(0), ...key.slice(marker + 1)];
+    };
+    const left = pad(a);
+    const right = pad(b);
+
+    for (let i = 0; i < left.length; i++) {
+        if (left[i] !== right[i]) {
+            return left[i] < right[i];
         }
     }
 

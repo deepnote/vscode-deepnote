@@ -27,6 +27,11 @@ import { isSnapshotFile } from './snapshots/snapshotFiles';
 
 type CommandOutcome = 'completed' | 'cancelled' | 'failed';
 
+const DEEPNOTE_EXPLORER_VIEW_ID = 'deepnoteExplorer';
+// VS Code auto-registers `<viewId>.focus` for every contributed view; it opens the owning view container even
+// when that container is hidden or collapsed.
+const DEEPNOTE_EXPLORER_FOCUS_COMMAND = `${DEEPNOTE_EXPLORER_VIEW_ID}.focus`;
+
 /**
  * Manages the Deepnote explorer tree view and its commands. Sibling `.deepnote` files are grouped
  * by `project.id`; project-scoped commands span the group, notebook-scoped ones a single leaf/child.
@@ -44,7 +49,7 @@ export class DeepnoteExplorerView {
     ) {}
 
     public activate(): void {
-        this.treeView = window.createTreeView('deepnoteExplorer', {
+        this.treeView = window.createTreeView(DEEPNOTE_EXPLORER_VIEW_ID, {
             treeDataProvider: this.treeDataProvider,
             showCollapseAll: true
         });
@@ -457,6 +462,10 @@ export class DeepnoteExplorerView {
         );
 
         this.extensionContext.subscriptions.push(
+            commands.registerCommand(Commands.RevealDeepnoteExplorer, () => this.revealExplorer())
+        );
+
+        this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.NewProject, async () => {
                 const outcome = await this.newProject();
                 this.analytics.trackEvent({ eventName: 'create_project', properties: { outcome } });
@@ -766,29 +775,67 @@ export class DeepnoteExplorerView {
             return;
         }
 
-        // Try to reveal the notebook in the explorer
-        try {
-            const treeItem = await this.treeDataProvider.findTreeItem(projectId, notebookId);
+        // Fall back to describing the notebook when it cannot be selected in the tree.
+        const fallbackMessage = `Active notebook: ${notebookMetadata?.deepnoteNotebookName || 'Untitled'} in project ${
+            notebookMetadata?.deepnoteProjectName || 'Untitled'
+        }`;
 
-            if (treeItem) {
-                await this.treeView.reveal(treeItem, { select: true, focus: true, expand: true });
-            } else {
-                // Fall back to showing information if node not found
-                await window.showInformationMessage(
-                    `Active notebook: ${notebookMetadata?.deepnoteNotebookName || 'Untitled'} in project ${
-                        notebookMetadata?.deepnoteProjectName || 'Untitled'
-                    }`
-                );
+        try {
+            if (!(await this.revealNotebookInTree(projectId, notebookId))) {
+                await window.showInformationMessage(fallbackMessage);
             }
         } catch (error) {
-            // Fall back to showing information if reveal fails
             this.logger.error('Failed to reveal notebook in explorer', error);
-            await window.showInformationMessage(
-                `Active notebook: ${notebookMetadata?.deepnoteNotebookName || 'Untitled'} in project ${
-                    notebookMetadata?.deepnoteProjectName || 'Untitled'
-                }`
-            );
+            await window.showInformationMessage(fallbackMessage);
         }
+    }
+
+    /**
+     * Opens the Deepnote view container with the explorer focused, then selects the active Deepnote notebook in the
+     * tree when there is one. Unlike `revealActiveNotebook`, this never surfaces a message: it backs the notebook
+     * toolbar button, so showing the explorer is the outcome that matters and a missed selection is only logged.
+     */
+    private async revealExplorer(): Promise<void> {
+        // Capture the editor before moving focus to the sidebar.
+        const activeEditor = window.activeNotebookEditor;
+
+        try {
+            await commands.executeCommand(DEEPNOTE_EXPLORER_FOCUS_COMMAND);
+        } catch (error) {
+            this.logger.error('Failed to focus the Deepnote explorer view', error);
+        }
+
+        if (!activeEditor || activeEditor.notebook.notebookType !== 'deepnote') {
+            return;
+        }
+
+        const notebookMetadata = activeEditor.notebook.metadata;
+        const projectId = notebookMetadata?.deepnoteProjectId;
+        const notebookId = notebookMetadata?.deepnoteNotebookId;
+
+        if (!projectId || !notebookId) {
+            return;
+        }
+
+        try {
+            await this.revealNotebookInTree(projectId, notebookId);
+        } catch (error) {
+            // The tree may still be loading; the explorer is already visible, so this is not worth a toast.
+            this.logger.warn('Failed to reveal the active notebook after showing the Deepnote explorer', error);
+        }
+    }
+
+    /** Selects the notebook in the tree; returns false when it is not (yet) part of the tree. */
+    private async revealNotebookInTree(projectId: string, notebookId: string): Promise<boolean> {
+        const treeItem = await this.treeDataProvider.findTreeItem(projectId, notebookId);
+
+        if (!treeItem) {
+            return false;
+        }
+
+        await this.treeView.reveal(treeItem, { select: true, focus: true, expand: true });
+
+        return true;
     }
 
     private async newProject(): Promise<CommandOutcome> {

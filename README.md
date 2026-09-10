@@ -60,6 +60,7 @@ Open the Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`) and type `Deepnote` t
 | `Deepnote: Open Notebook`          | Open a specific notebook from a Deepnote project   |
 | `Deepnote: Open File`              | Open the raw .deepnote project file                |
 | `Deepnote: Reveal in Explorer`     | Show active notebook information in the explorer   |
+| `Deepnote: Show Project Explorer`  | Show the Deepnote sidebar and select the notebook  |
 | `Deepnote: Manage Integrations`    | Configure database connections and credentials     |
 | `Deepnote: New Project`            | Create a new Deepnote project                      |
 | `Deepnote: Import Notebook`        | Import an existing notebook into your project      |

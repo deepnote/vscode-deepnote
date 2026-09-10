@@ -73,6 +73,7 @@ Provides the sidebar UI for browsing and opening Deepnote notebooks.
 -   `deepnote.openNotebook`: Open a specific notebook
 -   `deepnote.openFile`: Open the raw .deepnote file
 -   `deepnote.revealInExplorer`: Show active notebook info
+-   `deepnote.revealExplorer`: Show the Deepnote sidebar and select the active notebook (notebook toolbar button)
 
 ### 5. Tree Data Provider (`deepnoteTreeDataProvider.ts`)
 

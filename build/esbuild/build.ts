@@ -570,9 +570,22 @@ async function copyZeroMQ() {
         filter: (src) => shouldCopyFileFromZmqFolder(src)
     });
 }
+/**
+ * `zeromqold` is an optional dependency: it ships no darwin-arm64 prebuild and compiling it from
+ * source needs cmake plus a Python with distutils, so npm skips it on Apple Silicon.
+ * The extension only uses it as a runtime fallback when `zeromq` fails to load, so a build
+ * without it is still valid on the machine that produced it.
+ */
 async function copyZeroMQOld() {
     const source = path.join(extensionFolder, 'node_modules', 'zeromqold');
     const target = path.join(extensionFolder, 'dist', 'node_modules', 'zeromqold');
+    if (!(await fs.pathExists(source))) {
+        console.warn(
+            colors.yellow(`Warning: optional dependency zeromqold not found at ${source}. `) +
+                colors.yellow('Skipping copy; the zeromq fallback binary will not be bundled.')
+        );
+        return;
+    }
     await fs.ensureDir(path.dirname(target));
     await fs.ensureDir(target);
     await fs.copy(source, target, {

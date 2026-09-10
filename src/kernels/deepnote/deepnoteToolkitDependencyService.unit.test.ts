@@ -205,6 +205,23 @@ suite('DeepnoteToolkitDependencyService', () => {
                 assert.isTrue(isOlderRelease('2.5.1', '2.5.1.post1'));
             });
 
+            test('accepts every PEP 440 post-release spelling and orders it after the final release', () => {
+                assert.isTrue(isOlderRelease('2.5.0-r1', '2.5.1'), 'a post-release of an older version is still older');
+                assert.isTrue(isOlderRelease('2.5.0.rev1', '2.5.1'));
+                assert.isTrue(isOlderRelease('2.5.0-1', '2.5.1'), 'implicit post-release');
+                assert.isFalse(isOlderRelease('2.5.1-r1', '2.5.1'));
+                assert.isFalse(isOlderRelease('2.5.1.rev1', '2.5.1'));
+                assert.isFalse(isOlderRelease('2.5.1-1', '2.5.1'));
+                assert.isFalse(isOlderRelease('2.5.1r1', '2.5.1rc1'), '`r` is a post-release, not a release candidate');
+                assert.isTrue(isOlderRelease('2.5.1', '2.5.1-1'));
+                assert.isTrue(isOlderRelease('2.5.1.post', '2.5.1.post1'), 'a bare `post` is post-release 0');
+                assert.isTrue(isOlderRelease('2.5.1-1', '2.5.1.post2'));
+                assert.isFalse(
+                    isOlderRelease('2.5.1-1', '2.5.1.post1'),
+                    'spellings of the same post-release are equal'
+                );
+            });
+
             test('does not call a version it cannot read older', () => {
                 assert.isFalse(isOlderRelease('editable', '2.5.1'));
                 assert.isFalse(isOlderRelease('', '2.5.1'));

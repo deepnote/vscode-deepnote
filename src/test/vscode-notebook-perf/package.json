@@ -30,9 +30,9 @@
     "@types/mocha": "^9.1.0",
     "@types/node": "^18.15.0",
     "@types/vscode": "^1.78.0",
-    "@vscode/test-cli": "^0.0.8",
+    "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^2.5.2",
-    "glob": "^7.1.2",
+    "glob": "^13.0.6",
     "mocha": "^10.8.2",
     "typescript": "^5.3.3"
   },
@@ -43,6 +43,9 @@
   "main": "./out/extension.js",
   "name": "vscode-notebook-perf",
   "overrides": {
+    "mocha": {
+      "diff": "5.2.2"
+    },
     "serialize-javascript@<7.0.5": "7.0.5"
   },
   "publisher": "ms-toolsai",

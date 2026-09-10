@@ -531,7 +531,8 @@ async function buildAll() {
             copyZeroMQOld(),
             copyNodeGypBuild(),
             buildVSCodeJsonRPC(),
-            buildSqlLanguageServer()
+            buildSqlLanguageServer(),
+            buildDeepnoteCli()
         );
     }
 
@@ -634,6 +635,44 @@ async function copyIPyWidgets8() {
     );
     const target = path.join(extensionFolder, 'dist', 'renderers', 'ipywidgets8', 'ipywidgets.js');
     await copyBundleIfExists(source, target, '@vscode/jupyter-ipywidgets8 bundle');
+}
+
+/**
+ * Bundles the Deepnote CLI (`@deepnote/cli`) into `dist/deepnoteCli.cjs` and copies its skill files to
+ * `dist/skills/`, so the extension can run `deepnote install-skills` itself rather than pip-installing
+ * `deepnote-cli` into the user's interpreter. The CLI resolves its skill directory relative to its own
+ * `__dirname`, so `dist/skills/deepnote` is where it looks. `@shikijs/cli` is replaced by a stub: see
+ * `stubs/shikijs-cli.js`.
+ */
+async function buildDeepnoteCli() {
+    const cliPackage = path.join(extensionFolder, 'node_modules', '@deepnote', 'cli');
+    const outfile = path.join(extensionFolder, 'dist', 'deepnoteCli.cjs');
+    const stubShiki: Plugin = {
+        name: 'stub-shikijs-cli',
+        setup(build) {
+            build.onResolve({ filter: /^@shikijs\/cli$/ }, () => ({
+                path: path.join(__dirname, 'stubs', 'shikijs-cli.js')
+            }));
+        }
+    };
+
+    await esbuild.build({
+        entryPoints: [path.join(cliPackage, 'dist', 'bin.js')],
+        bundle: true,
+        platform: 'node',
+        target: 'node20',
+        outfile,
+        format: 'cjs',
+        minify: true,
+        sourcemap: false,
+        plugins: [stubShiki],
+        logLevel: 'warning'
+    });
+
+    const skillsSource = path.join(cliPackage, 'dist', 'skills');
+    const skillsTarget = path.join(extensionFolder, 'dist', 'skills');
+    await fs.remove(skillsTarget);
+    await fs.copy(skillsSource, skillsTarget);
 }
 
 async function buildSqlLanguageServer() {

@@ -6,12 +6,7 @@ import { Uri } from 'vscode';
 import { IProcessService, IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
-import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getPrivateMethod = (obj: any, methodName: string) => {
-    return obj[methodName].bind(obj);
-};
+import { BUNDLED_CLI_PATH, DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 
 suite('DeepnoteAgentSkillsManager', () => {
     let manager: DeepnoteAgentSkillsManager;
@@ -24,13 +19,20 @@ suite('DeepnoteAgentSkillsManager', () => {
         uri: Uri.file('/home/user/.venvs/test-venv/bin/python')
     } as PythonEnvironment;
 
-    function configureVSCodeMocks(appName: string, workspaceFolders?: any[]) {
+    function configureVSCodeMocks(appName: string, workspaceFolders?: unknown[]) {
         resetVSCodeMocks();
         reset(mockedVSCodeNamespaces.env);
         reset(mockedVSCodeNamespaces.workspace);
 
         when(mockedVSCodeNamespaces.env.appName).thenReturn(appName);
-        when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(workspaceFolders as any);
+        when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(workspaceFolders as never);
+    }
+
+    /** Runs the (private) install for `interpreter` to completion. */
+    function updateSkills(interpreter: PythonEnvironment): Promise<void> {
+        return (
+            manager as unknown as { updateSkillsInBackground(i: PythonEnvironment): Promise<void> }
+        ).updateSkillsInBackground(interpreter);
     }
 
     setup(() => {
@@ -47,41 +49,35 @@ suite('DeepnoteAgentSkillsManager', () => {
     });
 
     suite('updateSkillsInBackground', () => {
-        test('should run pip upgrade then install-skills', async () => {
-            const updateSkills: (interpreter: PythonEnvironment) => Promise<void> = getPrivateMethod(
-                manager,
-                'updateSkillsInBackground'
-            );
-
+        test('runs the bundled CLI on the editor Node, and nothing through pip', async () => {
             await updateSkills(testInterpreter);
 
-            assert.strictEqual(execStub.callCount, 2);
+            assert.strictEqual(execStub.callCount, 1, 'one spawn: no pip install precedes install-skills any more');
 
-            const [executable, args] = execStub.firstCall.args;
+            const [executable, args, options] = execStub.firstCall.args;
 
-            assert.strictEqual(executable, testInterpreter.uri.fsPath);
-            assert.deepStrictEqual(args, ['-m', 'pip', 'install', '--upgrade', 'deepnote-cli']);
+            assert.strictEqual(executable, process.execPath);
+            assert.deepStrictEqual(args, [BUNDLED_CLI_PATH, 'install-skills', '--agent', 'cursor']);
+            assert.strictEqual(options.env.ELECTRON_RUN_AS_NODE, '1', 'the Electron binary has to run as plain Node');
+            assert.match(BUNDLED_CLI_PATH, /dist[\\/]deepnoteCli\.cjs$/);
         });
 
-        test('should call install-skills with correct agent and cwd', async () => {
-            const updateSkills: (interpreter: PythonEnvironment) => Promise<void> = getPrivateMethod(
-                manager,
-                'updateSkillsInBackground'
-            );
-
+        test('installs into the workspace folder, and tells the CLI which interpreter the project runs on', async () => {
             await updateSkills(testInterpreter);
 
-            const [executable, args, options] = execStub.secondCall.args;
-            const expectedBin = Uri.joinPath(testInterpreter.uri, '..', 'deepnote').fsPath;
+            const [, , options] = execStub.firstCall.args;
 
-            assert.strictEqual(executable, expectedBin);
-            assert.deepStrictEqual(args, ['install-skills', '--agent', 'cursor']);
             assert.strictEqual(options.cwd, workspaceFolder.uri.fsPath);
-            assert.strictEqual(
-                options.env.DEEPNOTE_PYTHON,
-                testInterpreter.uri.fsPath,
-                'the CLI is told which interpreter the project runs on'
-            );
+            assert.strictEqual(options.env.DEEPNOTE_PYTHON, testInterpreter.uri.fsPath);
+        });
+
+        test('never touches the interpreter itself', async () => {
+            await updateSkills(testInterpreter);
+
+            for (const call of execStub.getCalls()) {
+                assert.notStrictEqual(call.args[0], testInterpreter.uri.fsPath, 'no python -m pip ...');
+                assert.notInclude(call.args[1], 'pip');
+            }
         });
     });
 
@@ -89,8 +85,7 @@ suite('DeepnoteAgentSkillsManager', () => {
         test('should mark environment as processed after first call', () => {
             manager.ensureSkillsUpdated('env-1', testInterpreter);
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const processed = (manager as any).processedEnvironments as Set<string>;
+            const processed = (manager as unknown as { processedEnvironments: Set<string> }).processedEnvironments;
 
             assert.isTrue(processed.has('env-1'));
         });
@@ -99,8 +94,7 @@ suite('DeepnoteAgentSkillsManager', () => {
             manager.ensureSkillsUpdated('env-1', testInterpreter);
             manager.ensureSkillsUpdated('env-2', testInterpreter);
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const processed = (manager as any).processedEnvironments as Set<string>;
+            const processed = (manager as unknown as { processedEnvironments: Set<string> }).processedEnvironments;
 
             assert.isTrue(processed.has('env-1'));
             assert.isTrue(processed.has('env-2'));
@@ -112,95 +106,44 @@ suite('DeepnoteAgentSkillsManager', () => {
             manager.ensureSkillsUpdated('env-1', testInterpreter);
             manager.ensureSkillsUpdated('env-1', testInterpreter);
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const processed = (manager as any).processedEnvironments as Set<string>;
+            const processed = (manager as unknown as { processedEnvironments: Set<string> }).processedEnvironments;
 
             assert.strictEqual(processed.size, 1);
         });
     });
 
     suite('editor detection', () => {
-        test('should detect Cursor', async () => {
-            configureVSCodeMocks('Cursor', [workspaceFolder]);
-            manager = new DeepnoteAgentSkillsManager(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (manager as any).processServiceFactory
-            );
-
-            const updateSkills: (interpreter: PythonEnvironment) => Promise<void> = getPrivateMethod(
-                manager,
-                'updateSkillsInBackground'
-            );
-
+        async function agentFor(appName: string): Promise<string> {
+            configureVSCodeMocks(appName, [workspaceFolder]);
             await updateSkills(testInterpreter);
 
-            assert.deepStrictEqual(execStub.secondCall.args[1], ['install-skills', '--agent', 'cursor']);
+            return execStub.lastCall.args[1][3];
+        }
+
+        test('should detect Cursor', async () => {
+            assert.strictEqual(await agentFor('Cursor'), 'cursor');
         });
 
         test('should detect Windsurf', async () => {
-            configureVSCodeMocks('Windsurf', [workspaceFolder]);
-            manager = new DeepnoteAgentSkillsManager(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (manager as any).processServiceFactory
-            );
+            assert.strictEqual(await agentFor('Windsurf'), 'windsurf');
+        });
 
-            const updateSkills: (interpreter: PythonEnvironment) => Promise<void> = getPrivateMethod(
-                manager,
-                'updateSkillsInBackground'
-            );
-
-            await updateSkills(testInterpreter);
-
-            assert.deepStrictEqual(execStub.secondCall.args[1], ['install-skills', '--agent', 'windsurf']);
+        test('should detect Antigravity', async () => {
+            assert.strictEqual(await agentFor('Antigravity'), 'antigravity');
         });
 
         test('should default to github copilot for VS Code', async () => {
-            configureVSCodeMocks('Visual Studio Code', [workspaceFolder]);
-            manager = new DeepnoteAgentSkillsManager(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (manager as any).processServiceFactory
-            );
-
-            const updateSkills: (interpreter: PythonEnvironment) => Promise<void> = getPrivateMethod(
-                manager,
-                'updateSkillsInBackground'
-            );
-
-            await updateSkills(testInterpreter);
-
-            assert.deepStrictEqual(execStub.secondCall.args[1], ['install-skills', '--agent', 'github copilot']);
+            assert.strictEqual(await agentFor('Visual Studio Code'), 'github copilot');
         });
 
         test('should default to github copilot for unknown editors', async () => {
-            configureVSCodeMocks('SomeUnknownEditor', [workspaceFolder]);
-            manager = new DeepnoteAgentSkillsManager(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (manager as any).processServiceFactory
-            );
-
-            const updateSkills: (interpreter: PythonEnvironment) => Promise<void> = getPrivateMethod(
-                manager,
-                'updateSkillsInBackground'
-            );
-
-            await updateSkills(testInterpreter);
-
-            assert.deepStrictEqual(execStub.secondCall.args[1], ['install-skills', '--agent', 'github copilot']);
+            assert.strictEqual(await agentFor('SomeUnknownEditor'), 'github copilot');
         });
     });
 
     suite('edge cases', () => {
         test('should skip when no workspace folder is open', async () => {
             configureVSCodeMocks('Cursor', undefined);
-            manager = new DeepnoteAgentSkillsManager(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (manager as any).processServiceFactory
-            );
-
-            const updateSkills: (interpreter: PythonEnvironment) => Promise<void> = getPrivateMethod(
-                manager,
-                'updateSkillsInBackground'
-            );
 
             await updateSkills(testInterpreter);
 
@@ -209,15 +152,6 @@ suite('DeepnoteAgentSkillsManager', () => {
 
         test('should skip when workspace folders array is empty', async () => {
             configureVSCodeMocks('Cursor', []);
-            manager = new DeepnoteAgentSkillsManager(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (manager as any).processServiceFactory
-            );
-
-            const updateSkills: (interpreter: PythonEnvironment) => Promise<void> = getPrivateMethod(
-                manager,
-                'updateSkillsInBackground'
-            );
 
             await updateSkills(testInterpreter);
 
@@ -225,13 +159,12 @@ suite('DeepnoteAgentSkillsManager', () => {
         });
 
         test('should swallow errors in ensureSkillsUpdated', () => {
-            execStub.rejects(new Error('pip failure'));
+            execStub.rejects(new Error('spawn failure'));
 
             // ensureSkillsUpdated is fire-and-forget -- it must not throw
             manager.ensureSkillsUpdated('env-error', testInterpreter);
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const processed = (manager as any).processedEnvironments as Set<string>;
+            const processed = (manager as unknown as { processedEnvironments: Set<string> }).processedEnvironments;
 
             assert.isTrue(processed.has('env-error'));
         });

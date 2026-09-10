@@ -256,6 +256,7 @@
     "deepnote.commands.enableSnapshots.title": "Enable Snapshots",
     "deepnote.commands.disableSnapshots.title": "Disable Snapshots",
     "deepnote.commands.manageIntegrations.title": "Manage Integrations",
+    "deepnote.commands.addExistingIntegration.title": "Add Existing Integration",
     "deepnote.commands.authenticateIntegration.title": "Authenticate Integration",
     "deepnote.commands.newProject.title": "New Project",
     "deepnote.commands.importNotebook.title": "Import Notebook",

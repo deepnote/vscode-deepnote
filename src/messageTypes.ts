@@ -186,6 +186,7 @@ export type LocalizedMessages = {
     integrationsCancel: string;
     integrationsSave: string;
     integrationsAddNewIntegration: string;
+    integrationsAddExistingIntegration: string;
     integrationsDatabase: string;
     integrationsDataWarehousesLakes: string;
     integrationsDatabases: string;

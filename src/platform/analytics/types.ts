@@ -12,6 +12,7 @@ export type TelemetryEventName =
     | 'delete_integration'
     | 'delete_notebook'
     | 'duplicate_notebook'
+    | 'add_existing_integration'
     | 'execute_cell'
     | 'execute_notebook'
     | 'export_notebook'
@@ -57,6 +58,8 @@ export interface TelemetryEventProperties {
      * No `outcome`: nothing here is a command the user waits on — there is no progress UI and no cancel, so
      * `'cancelled'` is unreachable and a partial pass has no defensible single value. The counts carry it.
      */
+    /** A SecretStorage integration from another project in the workspace was linked into this project's roster. */
+    add_existing_integration: { integrationType: string; outcome: CommandOutcome };
     refresh_integration_env: {
         /** Notebooks the refresh ran over, including ones skipped for having no started kernel. */
         attemptedCount: number;

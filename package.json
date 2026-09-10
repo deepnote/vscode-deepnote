@@ -145,6 +145,12 @@
                 "icon": "$(plug)"
             },
             {
+                "command": "deepnote.addExistingIntegration",
+                "title": "%deepnote.commands.addExistingIntegration.title%",
+                "category": "Deepnote",
+                "icon": "$(link)"
+            },
+            {
                 "command": "deepnote.authenticateIntegration",
                 "title": "%deepnote.commands.authenticateIntegration.title%",
                 "category": "Deepnote"

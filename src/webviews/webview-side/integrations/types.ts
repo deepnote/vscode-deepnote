@@ -62,4 +62,5 @@ export type WebviewOutboundMessage =
     | { type: 'reset'; integrationId: string }
     | { type: 'delete'; integrationId: string }
     | { type: 'signOut'; integrationId: string }
+    | { type: 'addExisting' }
     | AuthenticateMessage;

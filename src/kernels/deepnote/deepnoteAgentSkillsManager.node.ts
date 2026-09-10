@@ -84,8 +84,11 @@ export class DeepnoteAgentSkillsManager {
         const deepnoteBin = Uri.joinPath(venvBinDir, 'deepnote');
         logger.info(`Running deepnote install-skills --agent "${agentName}" in ${workspaceRoot.fsPath}`);
 
+        // DEEPNOTE_PYTHON is how the CLI is told which interpreter a project runs on (it also reads the
+        // `.vscode/deepnote.json` sidecar); set it on every CLI spawn so the two never disagree.
         const installResult = await processService.exec(deepnoteBin.fsPath, ['install-skills', '--agent', agentName], {
             cwd: workspaceRoot.fsPath,
+            env: { ...process.env, DEEPNOTE_PYTHON: venvInterpreter.uri.fsPath },
             throwOnStdErr: false
         });
 

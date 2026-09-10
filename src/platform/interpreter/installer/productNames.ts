@@ -12,3 +12,4 @@ ProductNames.set(Product.kernelspec, 'kernelspec');
 ProductNames.set(Product.pandas, 'pandas');
 ProductNames.set(Product.pip, 'pip');
 ProductNames.set(Product.ensurepip, 'ensurepip');
+ProductNames.set(Product.deepnoteToolkit, 'deepnote-toolkit');

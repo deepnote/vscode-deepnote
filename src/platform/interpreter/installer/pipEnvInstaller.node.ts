@@ -15,6 +15,7 @@ import { getInterpreterWorkspaceFolder } from './helpers';
 import { Environment } from '@vscode/python-extension';
 import { getEnvironmentType } from '../helpers';
 import { workspace } from 'vscode';
+import { translateModuleToPackages } from './utils';
 
 export const pipenvName = 'pipenv';
 
@@ -66,7 +67,7 @@ export class PipEnvInstaller extends ModuleInstaller {
             flags & ModuleInstallFlags.reInstall ||
             flags & ModuleInstallFlags.updateDependencies ||
             flags & ModuleInstallFlags.upgrade;
-        const args = [update ? 'update' : 'install', moduleName, '--dev'];
+        const args = [update ? 'update' : 'install', ...translateModuleToPackages(moduleName), '--dev'];
         const workspaceFolder = getInterpreterWorkspaceFolder(interpreter);
         return {
             args,

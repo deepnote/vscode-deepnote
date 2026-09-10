@@ -49,6 +49,10 @@ import { trackInterpreterDiscovery, trackPythonExtensionActivation } from '../..
 import { findPythonEnvBelongingToFolder } from '../../notebooks/controllers/preferredKernelConnectionService.node';
 import { DisposableMap } from '../common/utils/lifecycle';
 
+// The Python extension completes its Jupyter handshake asynchronously; if the callback has not
+// landed by then it never will (see failApiIfHandshakeNeverLands).
+const PYTHON_API_HANDSHAKE_TIMEOUT = 5_000;
+
 export function deserializePythonEnvironment(
     pythonVersion: Partial<PythonEnvironment_PythonApi> | undefined,
     pythonEnvId: string
@@ -161,6 +165,25 @@ export class OldPythonApiProvider implements IPythonApiProvider {
         return extension?.exports;
     }
 
+    /**
+     * The Python extension ends the handshake by calling `registerPythonApi` on the extension it
+     * knows as `ms-toolsai.jupyter`. This fork ships under a different id, so that callback never
+     * arrives and every `getApi()` awaiter would hang forever. Fail the promise instead — callers
+     * already degrade to unactivated execution when activation variables are unavailable.
+     */
+    private failApiIfHandshakeNeverLands() {
+        const timer = setTimeout(() => {
+            if (!this.api.resolved && !this.api.rejected) {
+                logger.warn('Python extension did not complete the Jupyter API handshake; continuing without it');
+                this.api.reject(new PythonExtensionApiNotExportedError());
+            }
+        }, PYTHON_API_HANDSHAKE_TIMEOUT);
+
+        // Nothing may be awaiting the promise at rejection time.
+        this.api.promise.catch(noop);
+        this.disposables.push({ dispose: () => clearTimeout(timer) });
+    }
+
     public setApi(api: PythonApi): void {
         // Never allow accessing python API (we don't want to ever use the API and run code in untrusted API).
         // Don't assume Python API will always be disabled in untrusted workspaces.
@@ -219,6 +242,7 @@ export class OldPythonApiProvider implements IPythonApiProvider {
             this.api.reject(new PythonExtensionApiNotExportedError());
         } else {
             pythonExtension.exports.jupyter.registerHooks();
+            this.failApiIfHandshakeNeverLands();
         }
         this._pythonExtensionHooked.resolve();
     }

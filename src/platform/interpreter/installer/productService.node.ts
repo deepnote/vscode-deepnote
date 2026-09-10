@@ -20,6 +20,7 @@ export class ProductService implements IProductService {
         this.ProductTypes.set(Product.pandas, ProductType.DataScience);
         this.ProductTypes.set(Product.pip, ProductType.DataScience);
         this.ProductTypes.set(Product.ensurepip, ProductType.DataScience);
+        this.ProductTypes.set(Product.deepnoteToolkit, ProductType.DataScience);
     }
     public getProductType(product: Product): ProductType {
         return this.ProductTypes.get(product)!;

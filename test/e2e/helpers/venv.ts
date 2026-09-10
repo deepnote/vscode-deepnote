@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import toolkitSpec from '../../../src/kernels/deepnote/toolkitSpec.json';
+import toolkitSpec from '../../../src/platform/common/toolkitSpec.json';
 import { PREBAKED_VENV_DIR_NAME } from './constants';
 
 const REPO_ROOT = process.cwd();
@@ -18,6 +18,7 @@ const VENV_DIR = process.env.DEEPNOTE_E2E_VENV_DIR
 const SETTINGS_SOURCE = path.join(REPO_ROOT, 'test', 'e2e', 'settings.json');
 const SETTINGS_TARGET = path.join(REPO_ROOT, 'test', 'e2e', 'settings.generated.json');
 
+/** The interpreter inside the pre-baked venv. Suites run against it as the active interpreter. */
 function venvPython(): string {
     return process.platform === 'win32'
         ? path.join(VENV_DIR, 'Scripts', 'python.exe')
@@ -134,13 +135,20 @@ export function ensureManagedVenv(): string {
 }
 
 /**
- * Writes the settings file extest hands VS Code: the committed base plus `python.venvPath`, which is
- * what makes the Python extension discover the baked venv and offer it in the interpreter quick pick.
- * Returns the path to pass to `extest -o`.
+ * Writes the settings file extest hands VS Code: the committed base plus the two interpreter
+ * settings. Returns the path to pass to `extest -o`.
  *
- * Generated rather than committed because `venvPath` only takes an absolute path, known at run time.
- * It has to land in *user* settings — the setting is `scope: machine`, so VS Code ignores it in a
- * workspace `.vscode/settings.json` — and extest writes this file to the test instance's User dir.
+ * `python.defaultInterpreterPath` is what makes every temp workspace resolve to an interpreter that
+ * already has deepnote-toolkit, so opening a notebook registers a controller and running a cell goes
+ * straight to execution — no consent prompt, no provisioning. A suite that needs a different
+ * interpreter overrides it in its own workspace `.vscode/settings.json`; the setting is
+ * `scope: machine-overridable`, so the workspace value wins.
+ *
+ * `python.venvPath` makes the Python extension discover the venv as an environment rather than a
+ * bare path, which is what populates the `folderUri` the server starter reads.
+ *
+ * Generated rather than committed because both only take absolute paths, known at run time. They
+ * have to land in *user* settings, which is where extest writes this file.
  *
  * Deliberately not a `.venv` symlink inside each workspace: the extension names the kernel spec after
  * the venv directory and writes it INTO the venv, keeping the first one it finds
@@ -150,7 +158,11 @@ export function ensureManagedVenv(): string {
  */
 export function writeGeneratedSettings(): string {
     const base = JSON.parse(fs.readFileSync(SETTINGS_SOURCE, 'utf8')) as Record<string, unknown>;
-    const settings = { ...base, 'python.venvPath': path.dirname(VENV_DIR) };
+    const settings = {
+        ...base,
+        'python.defaultInterpreterPath': venvPython(),
+        'python.venvPath': path.dirname(VENV_DIR)
+    };
 
     fs.writeFileSync(SETTINGS_TARGET, `${JSON.stringify(settings, undefined, 4)}\n`, 'utf8');
 

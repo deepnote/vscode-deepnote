@@ -13,13 +13,11 @@ import {
     copyFixtureIntoDir,
     copyFixtureToTempDir,
     copySnapshotIntoDir,
-    createEnvironment,
     createScreenshotter,
     openFolderViaDialog,
     openWorkspaceFile,
     readRenderedOutput,
     runOnceAndAwaitOutput,
-    selectEnvironmentForNotebook,
     waitForNotification
 } from '../../helpers';
 
@@ -87,7 +85,6 @@ describe('Deepnote — a legacy project-scoped snapshot still loads its saved ou
 describe('Deepnote — new snapshots are notebook-scoped and do not bleed between siblings', function () {
     this.timeout(SUITE_TIMEOUT);
 
-    const ENV_NAME = 'E2E Snapshots Env';
     const SIBLINGS = [
         { file: 'marketing-overview.deepnote', output: 'overview', notebookId: 'e-nb-overview' },
         { file: 'marketing-campaigns.deepnote', output: 'campaigns', notebookId: 'e-nb-campaigns' }
@@ -110,8 +107,6 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
         await openFolderViaDialog(tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        await createEnvironment(ENV_NAME);
-
         for (const sib of SIBLINGS) {
             // Keep exactly ONE editor open: "Run All" is located via `findElements(...)[0]` (first
             // toolbar in DOM order), so a lingering prior editor's button would be picked and hang the run.
@@ -125,7 +120,6 @@ describe('Deepnote — new snapshots are notebook-scoped and do not bleed betwee
                 WORKBENCH_TIMEOUT,
                 `${sib.file} did not open`
             );
-            await selectEnvironmentForNotebook(ENV_NAME, sib.file);
             await runOnceAndAwaitOutput(sib.file, sib.output, FIRST_RUN_OUTPUT_TIMEOUT);
         }
 

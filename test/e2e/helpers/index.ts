@@ -1,6 +1,5 @@
 export * from './assertions';
 export * from './constants';
-export * from './deepnoteEnvironment';
 export * from './deepnoteTree';
 export * from './fixtures';
 export * from './mockOpenAiServer';

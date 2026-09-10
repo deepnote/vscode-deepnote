@@ -3,19 +3,18 @@
  *
  * It exercises the full Deepnote happy path through the *real* VS Code UI:
  *   1. open a one-notebook `.deepnote` file containing `print("hello world")`
- *   2. create a Deepnote environment            (command `deepnote.environments.create`)
- *   3. select that environment for the notebook (command `deepnote.environments.selectForNotebook`)
- *      — this builds and selects the notebook's kernel controller ("kernel connected")
- *   4. run the cell                             (the notebook toolbar's "Run All" button)
- *   5. assert the rendered stdout output contains "hello world"
+ *   2. run the cell (the notebook toolbar's "Run All" button) — the click is what starts the
+ *      kernel, since the controller registered on open connects lazily on first execution
+ *   3. assert the rendered stdout output contains "hello world"
  *
  * The reusable interaction helpers live in `test/e2e/helpers/`; this file is only the suite wiring.
  *
  * Prerequisites:
  *   - The Python extension (`ms-python.python`) must be installed in the test instance
- *     (`npm run setup:e2e:deps`) and at least one Python interpreter must be discoverable.
- *   - Creating the environment provisions a venv and the Deepnote toolkit, which needs network
- *     access; the first kernel start can take a few minutes.
+ *     (`npm run setup:e2e:deps`).
+ *   - The active interpreter must already provide deepnote-toolkit. `npm run setup:e2e:venv` bakes
+ *     it into `.venv-e2e` and pins that interpreter for every workspace; without it the run stops on
+ *     the install-consent prompt.
  */
 
 import { expect } from 'chai';
@@ -26,11 +25,9 @@ import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
-    createEnvironment,
     openFolderViaDialog,
     openWorkspaceFile,
-    runOnceAndAwaitOutput,
-    selectEnvironmentForNotebook
+    runOnceAndAwaitOutput
 } from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'hello-world.deepnote';
@@ -39,8 +36,6 @@ const EXPECTED_OUTPUT = 'hello world';
 describe('Deepnote E2E — run "hello world"', function () {
     // Per-test timeout for the whole suite (overrides the mocharc default for these tests).
     this.timeout(SUITE_TIMEOUT);
-
-    const environmentName = 'E2E Hello Env';
 
     // Captured in `before` and invoked in `after` to remove the throwaway temp dir.
     let cleanupTempDir: (() => void) | undefined;
@@ -90,10 +85,7 @@ describe('Deepnote E2E — run "hello world"', function () {
         }
     });
 
-    it('creates an environment, connects the kernel, runs the cell and renders output', async function () {
-        await createEnvironment(environmentName);
-        await selectEnvironmentForNotebook(environmentName, NOTEBOOK_FILE_NAME);
-
+    it('connects the kernel on first run and renders the cell output', async function () {
         const renderedOutput = await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, EXPECTED_OUTPUT, FIRST_RUN_OUTPUT_TIMEOUT);
         expect(renderedOutput).to.contain(EXPECTED_OUTPUT);
     });

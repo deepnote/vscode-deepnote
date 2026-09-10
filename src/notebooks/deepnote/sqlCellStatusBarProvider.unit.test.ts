@@ -74,7 +74,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isDefined(result);
         assert.isArray(result);
         const items = result as any[];
-        assert.strictEqual(items.length, 2);
+        assert.strictEqual(items.length, 3);
 
         // Check "No integration connected" status bar item
         const integrationItem = items[0];
@@ -93,6 +93,47 @@ suite('SqlCellStatusBarProvider', () => {
         assert.strictEqual(variableItem.command.command, 'deepnote.updateSqlVariableName');
         assert.deepStrictEqual(variableItem.command.arguments, [cell]);
         assert.strictEqual(variableItem.priority, 90);
+
+        // Check return type status bar item (defaults to DataFrame when the metadata is absent)
+        const returnTypeItem = items[2];
+        assert.strictEqual(returnTypeItem.text, 'Return: DataFrame');
+        assert.strictEqual(returnTypeItem.alignment, 1);
+        assert.isDefined(returnTypeItem.command);
+        assert.strictEqual(returnTypeItem.command.command, 'deepnote.setSqlReturnVariableType');
+        assert.deepStrictEqual(returnTypeItem.command.arguments, [cell]);
+        assert.strictEqual(returnTypeItem.priority, 80);
+        assert.include(returnTypeItem.tooltip, 'Query preview');
+        assert.include(returnTypeItem.tooltip, 'chained');
+    });
+
+    test('shows Query preview return type when metadata selects query_preview', async () => {
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: {
+                sql_integration_id: DATAFRAME_SQL_INTEGRATION_ID,
+                deepnote_return_variable_type: 'query_preview'
+            }
+        });
+
+        const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
+
+        const items = result as any[];
+        assert.strictEqual(items.length, 3);
+        assert.strictEqual(items[2].text, 'Return: Query preview');
+        assert.strictEqual(items[2].command.command, 'deepnote.setSqlReturnVariableType');
+        assert.deepStrictEqual(items[2].command.arguments, [cell]);
+    });
+
+    test('falls back to DataFrame return type for an unrecognized metadata value', async () => {
+        const cell = createMockCell({
+            languageId: 'sql',
+            metadata: { sql_integration_id: DATAFRAME_SQL_INTEGRATION_ID, deepnote_return_variable_type: 'not-a-type' }
+        });
+
+        const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
+
+        const items = result as any[];
+        assert.strictEqual(items[2].text, 'Return: DataFrame');
     });
 
     test('returns status bar items for SQL cells with dataframe integration ID', async () => {
@@ -106,7 +147,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isDefined(result);
         assert.isArray(result);
         const items = result as any[];
-        assert.strictEqual(items.length, 2);
+        assert.strictEqual(items.length, 3);
 
         // Check integration status bar item
         const integrationItem = items[0];
@@ -158,7 +199,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isDefined(result);
         assert.isArray(result);
         const items = result as any[];
-        assert.strictEqual(items.length, 2);
+        assert.strictEqual(items.length, 3);
 
         // Check integration status bar item
         const integrationItem = items[0];
@@ -279,7 +320,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isDefined(result);
         assert.isArray(result);
         const items = result as any[];
-        assert.strictEqual(items.length, 2);
+        assert.strictEqual(items.length, 3);
         assert.strictEqual(items[0].text, '$(database) Unknown integration (configure)');
         assert.strictEqual(items[0].alignment, 1);
         assert.strictEqual(items[0].command.command, 'deepnote.switchSqlIntegration');
@@ -316,7 +357,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isDefined(result);
         assert.isArray(result);
         const items = result as any[];
-        assert.strictEqual(items.length, 2);
+        assert.strictEqual(items.length, 3);
         assert.strictEqual(items[0].text, '$(database) Production Database (configure)');
         assert.strictEqual(items[0].alignment, 1);
         assert.strictEqual(items[0].command.command, 'deepnote.switchSqlIntegration');
@@ -339,7 +380,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isDefined(result);
         assert.isArray(result);
         const items = result as any[];
-        assert.strictEqual(items.length, 1);
+        assert.strictEqual(items.length, 2);
 
         // Check variable status bar item is still shown
         const variableItem = items[0];
@@ -380,7 +421,7 @@ suite('SqlCellStatusBarProvider', () => {
         assert.isDefined(result);
         assert.isArray(result);
         const items = result as any[];
-        assert.strictEqual(items.length, 2);
+        assert.strictEqual(items.length, 3);
 
         // Check variable status bar item shows custom name
         const variableItem = items[1];
@@ -433,6 +474,67 @@ suite('SqlCellStatusBarProvider', () => {
             activateProvider.activate();
 
             verify(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).once();
+        });
+
+        test('registers deepnote.setSqlReturnVariableType command', () => {
+            activateProvider.activate();
+
+            verify(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.setSqlReturnVariableType', anything())
+            ).once();
+        });
+
+        test('setSqlReturnVariableType command handler falls back to active cell when no cell provided', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.setSqlReturnVariableType', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            const cell = createMockCell({ languageId: 'sql' });
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {
+                    cellAt: (_index: number) => cell
+                },
+                selection: { start: 0 }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Query preview', returnVariableType: 'query_preview' } as any)
+            );
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            // Invoke the handler without a cell argument
+            await commandHandler!();
+
+            // Verify that the active cell was used
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+        });
+
+        test('setSqlReturnVariableType command handler shows error when no cell and no active editor', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.setSqlReturnVariableType', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            await commandHandler!();
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
         });
 
         test('updateSqlVariableName command handler falls back to active cell when no cell provided', async () => {
@@ -1451,6 +1553,177 @@ suite('SqlCellStatusBarProvider', () => {
 
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+        });
+    });
+
+    suite('setSqlReturnVariableType command handler', () => {
+        let commandDisposables: IDisposableRegistry;
+        let commandProvider: SqlCellStatusBarProvider;
+        let commandTelemetry: ITelemetryService;
+        let setReturnVariableTypeHandler: Function;
+
+        setup(() => {
+            resetVSCodeMocks();
+            commandDisposables = [];
+            commandTelemetry = mock<ITelemetryService>();
+            commandProvider = new SqlCellStatusBarProvider(
+                commandDisposables,
+                instance(mock<IIntegrationStorage>()),
+                instance(mock<IDeepnoteNotebookManager>()),
+                instance(commandTelemetry),
+                emptySqlIntegrationEnvVars()
+            );
+
+            // Capture the command handler
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.setSqlReturnVariableType', anything())
+            ).thenCall((_, handler) => {
+                setReturnVariableTypeHandler = handler;
+                return {
+                    dispose: () => {
+                        return;
+                    }
+                };
+            });
+
+            commandProvider.activate();
+        });
+
+        teardown(() => {
+            resetVSCodeMocks();
+        });
+
+        test('offers DataFrame and Query preview, marking the current one', async () => {
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { deepnote_return_variable_type: 'query_preview' }
+            });
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            await setReturnVariableTypeHandler(cell);
+
+            const [items, options] = capture(mockedVSCodeNamespaces.window.showQuickPick).last();
+            assert.deepStrictEqual(
+                (items as any[]).map((item) => ({
+                    label: item.label,
+                    description: item.description,
+                    returnVariableType: item.returnVariableType
+                })),
+                [
+                    { label: 'DataFrame', description: undefined, returnVariableType: 'dataframe' },
+                    { label: 'Query preview', description: 'Currently selected', returnVariableType: 'query_preview' }
+                ]
+            );
+            assert.isNotEmpty((items as any[])[0].detail);
+            assert.isNotEmpty((items as any[])[1].detail);
+            assert.strictEqual((options as any).placeHolder, 'Select what this SQL block returns');
+        });
+
+        test('switches a DataFrame block to query preview and reports it', async () => {
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { deepnote_variable_name: 'df_1', deepnote_return_variable_type: 'dataframe' }
+            });
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Query preview', returnVariableType: 'query_preview' } as any)
+            );
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            const statusBarChangeHandler = createEventHandler(
+                commandProvider,
+                'onDidChangeCellStatusBarItems',
+                commandDisposables
+            );
+
+            await setReturnVariableTypeHandler(cell);
+
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            assert.strictEqual(statusBarChangeHandler.count, 1, 'onDidChangeCellStatusBarItems should fire once');
+            verify(
+                commandTelemetry.trackEvent(
+                    deepEqual({
+                        eventName: 'switch_sql_return_variable_type',
+                        properties: { returnVariableType: 'query_preview' }
+                    })
+                )
+            ).once();
+        });
+
+        test('switches a query preview block back to DataFrame', async () => {
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { deepnote_return_variable_type: 'query_preview' }
+            });
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'DataFrame', returnVariableType: 'dataframe' } as any)
+            );
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            await setReturnVariableTypeHandler(cell);
+
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
+            verify(
+                commandTelemetry.trackEvent(
+                    deepEqual({
+                        eventName: 'switch_sql_return_variable_type',
+                        properties: { returnVariableType: 'dataframe' }
+                    })
+                )
+            ).once();
+        });
+
+        test('does not update if user dismisses the picker', async () => {
+            const cell = createMockCell({ languageId: 'sql' });
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve(undefined)
+            );
+
+            await setReturnVariableTypeHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            verify(commandTelemetry.trackEvent(anything())).never();
+        });
+
+        test('does not update if the current return type is picked again', async () => {
+            // No metadata at all resolves to DataFrame, so picking DataFrame is a no-op.
+            const cell = createMockCell({ languageId: 'sql' });
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'DataFrame', returnVariableType: 'dataframe' } as any)
+            );
+
+            await setReturnVariableTypeHandler(cell);
+
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            verify(commandTelemetry.trackEvent(anything())).never();
+        });
+
+        test('shows error message and reports nothing if workspace edit fails', async () => {
+            const cell = createMockCell({ languageId: 'sql' });
+
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ label: 'Query preview', returnVariableType: 'query_preview' } as any)
+            );
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(false));
+
+            const statusBarChangeHandler = createEventHandler(
+                commandProvider,
+                'onDidChangeCellStatusBarItems',
+                commandDisposables
+            );
+
+            await setReturnVariableTypeHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage('Failed to update the SQL return type')).once();
+            assert.strictEqual(statusBarChangeHandler.count, 0);
+            verify(commandTelemetry.trackEvent(anything())).never();
         });
     });
 });

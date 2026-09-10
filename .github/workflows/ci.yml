@@ -65,7 +65,9 @@ jobs:
   qlty:
     name: Qlty Check
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 10
+    env:
+      UPSTREAM_REF: origin/${{ github.base_ref }}
 
     steps:
       - name: Checkout code
@@ -77,11 +79,27 @@ jobs:
       - name: Install qlty
         uses: qltysh/qlty-action/install@08a0a862c159eae9b9003081da6663d96efef637 # v2.3.0
 
-      - name: Run qlty check
-        run: qlty check
+      - name: Run qlty check (pull request)
+        if: github.event_name == 'pull_request'
+        run: qlty check --upstream "$UPSTREAM_REF"
 
-      - name: Run qlty code smells analysis
-        run: qlty smells
+      - name: Run qlty code smells analysis (pull request)
+        # A custom `if:` still implies success(), so !cancelled() is what survives a failed check above.
+        if: "!cancelled() && github.event_name == 'pull_request'"
+        run: qlty smells --upstream "$UPSTREAM_REF"
+
+      - name: Run qlty check (full tree)
+        if: github.event_name != 'pull_request'
+        run: qlty check --all --filter=actionlint,trufflehog
+
+      - name: Run qlty code smells analysis (full tree)
+        if: "!cancelled() && github.event_name != 'pull_request'"
+        run: qlty smells --all
+
+      # osv-scanner declares skip_upstream, so only --all ever sees a lockfile; reporting-only until triaged.
+      - name: Run qlty dependency scan
+        if: '!cancelled()'
+        run: qlty check --all --filter=osv-scanner --no-fail
 
   build:
     name: Build & Test
@@ -105,8 +123,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci --prefer-offline --no-audit
-          # Verify Tailwind CSS native modules are installed for Linux (npm optional deps bug)
-          # See: https://github.com/npm/cli/issues/4828
+          # Workaround for the npm optional-deps bug: https://github.com/npm/cli/issues/4828
           node -e "try { require('lightningcss'); } catch { process.exit(1); }" 2>/dev/null || npm install lightningcss-linux-x64-gnu
           node -e "try { require('@tailwindcss/oxide'); } catch { process.exit(1); }" 2>/dev/null || npm install @tailwindcss/oxide-linux-x64-gnu
 
@@ -227,7 +244,6 @@ jobs:
         run: npm ci --prefer-offline --no-audit
 
       - name: Run audit for production dependencies
-        # Uses better-npm-audit with .nsprc exceptions file
         run: npx better-npm-audit audit --production
 
   audit-all:
@@ -250,5 +266,4 @@ jobs:
         run: npm ci --prefer-offline --no-audit
 
       - name: Run audit for all dependencies
-        # Uses better-npm-audit with .nsprc exceptions file
         run: npx better-npm-audit audit

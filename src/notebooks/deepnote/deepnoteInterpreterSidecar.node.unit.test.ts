@@ -66,7 +66,9 @@ suite('DeepnoteInterpreterSidecar', () => {
     function sidecar(settingsFolder = '.vscode') {
         const content = files.get(Uri.joinPath(WORKSPACE, settingsFolder, 'deepnote.json').fsPath);
 
-        return content === undefined ? undefined : (JSON.parse(content) as { mappings: Record<string, unknown> });
+        return content === undefined
+            ? undefined
+            : (JSON.parse(content) as Record<string, unknown> & { mappings: Record<string, unknown> });
     }
 
     test('writes the interpreter under the project id, in the workspace folder .vscode directory', async () => {
@@ -94,6 +96,21 @@ suite('DeepnoteInterpreterSidecar', () => {
         assert.deepStrictEqual(sidecar()?.mappings, {
             other: { pythonInterpreter: '/envs/other/bin/python' },
             [PROJECT_ID]: { pythonInterpreter: INTERPRETER.uri.fsPath }
+        });
+    });
+
+    test('keeps top-level keys it does not know about', async () => {
+        files.set(
+            Uri.joinPath(WORKSPACE, '.vscode', 'deepnote.json').fsPath,
+            JSON.stringify({ version: 2, mappings: {}, notes: { owner: 'someone else' } })
+        );
+
+        await new DeepnoteInterpreterSidecar().record(notebook(), INTERPRETER);
+
+        assert.deepStrictEqual(sidecar(), {
+            version: 2,
+            mappings: { [PROJECT_ID]: { pythonInterpreter: INTERPRETER.uri.fsPath } },
+            notes: { owner: 'someone else' }
         });
     });
 

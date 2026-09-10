@@ -619,10 +619,6 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // interpreter with no matching connection, and isKernelReady would stay true for it forever.
         this.notebookInterpreterIds.set(notebookKey, interpreter.id);
 
-        // The kernel is now committed to this interpreter, so publish it for the Deepnote CLI and MCP
-        // server. Not awaited: the file is for other tools, and must not hold up or fail the kernel.
-        void this.interpreterSidecar.record(notebook, interpreter);
-
         const projectId = notebook.metadata?.deepnoteProjectId;
         const notebookId = notebook.metadata?.deepnoteNotebookId;
         const project =
@@ -653,6 +649,12 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
 
         // Auto-select the controller
         await this.ensureControllerSelectedForNotebook(notebook, controller, progressToken);
+
+        // Setup is complete, so publish the interpreter for the Deepnote CLI and MCP server. Not
+        // awaited: the file is for other tools, and must not hold up or fail the kernel.
+        this.interpreterSidecar.record(notebook, interpreter).catch((error) => {
+            logger.warn(`Failed to record the interpreter for ${getDisplayPath(notebook.uri)}`, error);
+        });
 
         logger.info(`Successfully set up kernel with interpreter: ${interpreter.id}`);
         progress.report({ message: 'Kernel ready!' });

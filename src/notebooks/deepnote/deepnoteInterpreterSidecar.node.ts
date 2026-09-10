@@ -15,7 +15,8 @@ interface SidecarEntry {
     pythonInterpreter: string;
 }
 
-interface SidecarFile {
+/** Other top-level keys are carried through untouched, so the file can grow without this writer knowing. */
+interface SidecarFile extends Record<string, unknown> {
     mappings: Record<string, SidecarEntry>;
 }
 
@@ -97,14 +98,22 @@ export class DeepnoteInterpreterSidecar implements IDeepnoteInterpreterSidecar {
         return Uri.joinPath(folder.uri, getEditorSettingsFolder(), SIDECAR_FILENAME);
     }
 
-    /** Entries for other projects are kept as written, so several projects in one folder coexist. */
+    /**
+     * Entries for other projects, and any other top-level keys, are kept as written, so several
+     * projects in one folder coexist and nothing another tool put in the file is lost.
+     */
     private async readSidecar(sidecarUri: Uri): Promise<SidecarFile> {
         try {
             const raw = await workspace.fs.readFile(sidecarUri);
-            const parsed = JSON.parse(Buffer.from(raw).toString('utf-8')) as Partial<SidecarFile> | undefined;
+            const parsed = JSON.parse(Buffer.from(raw).toString('utf-8')) as Partial<SidecarFile> | null;
 
-            if (parsed?.mappings && typeof parsed.mappings === 'object') {
-                return { mappings: parsed.mappings };
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const mappings =
+                    parsed.mappings && typeof parsed.mappings === 'object' && !Array.isArray(parsed.mappings)
+                        ? parsed.mappings
+                        : {};
+
+                return { ...parsed, mappings };
             }
         } catch {
             // Missing or unreadable: start over rather than fail the record.

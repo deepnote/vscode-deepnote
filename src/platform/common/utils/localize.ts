@@ -837,6 +837,24 @@ export namespace Integrations {
     export const cancel = l10n.t('Cancel');
     export const save = l10n.t('Save');
     export const addNewIntegration = l10n.t('Add New Integration');
+    export const addExistingIntegration = l10n.t('Add Existing Integration');
+    export const addExistingIntegrationPlaceholder = l10n.t(
+        'Select an integration configured in another project of this workspace'
+    );
+    export const addExistingIntegrationNoneAvailable = l10n.t(
+        'No integrations from other projects in this workspace are available to add. Integrations configured only in .deepnote.env.yaml already apply to every project under it.'
+    );
+    export const addExistingIntegrationConflictsSkipped = (count: number) =>
+        l10n.t(
+            '{0} integration(s) were skipped because another project declares them with a different type than the stored configuration.',
+            count
+        );
+    export const addExistingIntegrationSucceeded = (integrationName: string) =>
+        l10n.t('Added integration "{0}" to this project.', integrationName);
+    export const addExistingIntegrationFailed = l10n.t(
+        'Failed to add the integration to the notebook file. Please try again.'
+    );
+    export const addExistingIntegrationUsedIn = (projectNames: string) => l10n.t('Used in: {0}', projectNames);
     export const database = l10n.t('Database');
     export const dataWarehousesLakes = l10n.t('Data Warehouses & Lakes');
     export const databases = l10n.t('Databases');

@@ -4,6 +4,8 @@ import { ConfigurableDatabaseIntegrationType } from './types';
 import { integrationTypeLabels, integrationTypeIcons } from './integrationUtils';
 
 export interface IIntegrationTypeSelectorProps {
+    /** Opens the extension-side picker of integrations other projects in the workspace already configured. */
+    onAddExisting: () => void;
     onSelectType: (type: ConfigurableDatabaseIntegrationType) => void;
 }
 
@@ -111,10 +113,15 @@ const DATABASE_INTEGRATION_TYPES: IntegrationTypeInfo[] = [
     }
 ];
 
-export const IntegrationTypeSelector: React.FC<IIntegrationTypeSelectorProps> = ({ onSelectType }) => {
+export const IntegrationTypeSelector: React.FC<IIntegrationTypeSelectorProps> = ({ onAddExisting, onSelectType }) => {
     return (
         <div className="integration-type-selector">
-            <h2>{getLocString('integrationsAddNewIntegration', 'Add New Integration')}</h2>
+            <div className="integration-type-selector-header">
+                <h2>{getLocString('integrationsAddNewIntegration', 'Add New Integration')}</h2>
+                <button type="button" className="secondary" onClick={onAddExisting}>
+                    {getLocString('integrationsAddExistingIntegration', 'Add Existing Integration')}
+                </button>
+            </div>
 
             <div className="integration-type-section">
                 <h3 className="integration-type-section-title">

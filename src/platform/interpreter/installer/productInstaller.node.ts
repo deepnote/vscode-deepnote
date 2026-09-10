@@ -99,15 +99,22 @@ export class DataScienceInstaller {
         let installer: IModuleInstaller | undefined;
 
         if (product === Product.deepnoteToolkit) {
-            // deepnote-toolkit is PyPI-only and conda's `pkg[extra]` brackets mean build constraints,
-            // not extras, so conda can never install it. pip is the last resort for a conda/poetry/
-            // pipenv env whose own tool is unreachable — PipInstaller excludes itself from those types.
-            const supported = await channels.getInstallationChannels(interpreter);
-            installer = supported.find((i) => i.type !== ModuleInstallerType.Conda);
-            if (!installer && (await this.isInstalled(Product.pip, interpreter))) {
-                installer = this.serviceContainer
-                    .getAll<IModuleInstaller>(IModuleInstaller)
-                    .find((i) => i.type === ModuleInstallerType.Pip);
+            const allInstallers = this.serviceContainer.getAll<IModuleInstaller>(IModuleInstaller);
+            // deepnote-toolkit[server] resolves to ~200 wheels (~950 MB). The channel manager only
+            // offers uv when nothing else applies, but uv installs that set in a fraction of pip's
+            // time, so take it whenever the `uv` binary is available for this interpreter.
+            const uvInstaller = allInstallers.find((i) => i.type === ModuleInstallerType.UV);
+            if (uvInstaller && (await uvInstaller.isSupported(interpreter))) {
+                installer = uvInstaller;
+            } else {
+                // deepnote-toolkit is PyPI-only and conda's `pkg[extra]` brackets mean build constraints,
+                // not extras, so conda can never install it. pip is the last resort for a conda/poetry/
+                // pipenv env whose own tool is unreachable — PipInstaller excludes itself from those types.
+                const supported = await channels.getInstallationChannels(interpreter);
+                installer = supported.find((i) => i.type !== ModuleInstallerType.Conda);
+                if (!installer && (await this.isInstalled(Product.pip, interpreter))) {
+                    installer = allInstallers.find((i) => i.type === ModuleInstallerType.Pip);
+                }
             }
             if (!installer) {
                 channels.showNoInstallersMessage(interpreter);

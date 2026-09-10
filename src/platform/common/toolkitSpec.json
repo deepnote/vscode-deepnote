@@ -1,4 +1,4 @@
 {
     "version": "2.5.1",
-    "packages": ["ipykernel", "python-lsp-server[all]"]
+    "packages": ["ipykernel", "deepnote-python-lsp-server[all]==1.13.1rc2"]
 }

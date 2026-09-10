@@ -18,13 +18,20 @@ concurrency:
 
 jobs:
   e2e:
-    name: E2E (${{ matrix.group }})
+    name: E2E (${{ matrix.group }}, ${{ matrix.installer }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         group: [agent, execution, files, interpreter, workspace]
+        # Which tool the extension installs deepnote-toolkit with. Runners have no uv, so every shard
+        # exercises the pip channel; the interpreter suite runs a second time with uv on PATH, which
+        # the extension prefers for the toolkit install (productInstaller.node.ts).
+        installer: [pip]
+        include:
+          - group: interpreter
+            installer: uv
     env:
       # Keep ExTester's downloads (test VS Code, ChromeDriver, settings, screenshots) inside the
       # workspace so the artifact-upload paths are predictable. Both this and .test-extensions are
@@ -47,6 +54,13 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
+
+      - name: Install uv # the extension picks it for the toolkit install whenever it is on PATH
+        if: matrix.installer == 'uv'
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: src/platform/common/toolkitSpec.json
 
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit
@@ -105,6 +119,8 @@ jobs:
         run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:ci
         env:
           E2E_GROUP: ${{ matrix.group }}
+          # interpreterKernel.e2e.test.ts reads back which tool installed the toolkit.
+          E2E_EXPECT_TOOLKIT_INSTALLER: ${{ matrix.installer }}
 
       # Written even when the tests fail, so a shard that ran is never mistaken for one that was
       # never scheduled. verify-coverage collects these.
@@ -116,14 +132,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-ran-${{ matrix.group }}
+          name: e2e-ran-${{ matrix.group }}-${{ matrix.installer }}
           path: shard-ran/
 
       - name: Upload failure screenshots
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-screenshots-${{ matrix.group }}
+          name: e2e-screenshots-${{ matrix.group }}-${{ matrix.installer }}
           path: ${{ env.TEST_RESOURCES }}/screenshots/**/*.png
           if-no-files-found: ignore
           retention-days: 14

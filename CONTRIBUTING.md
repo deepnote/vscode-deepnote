@@ -111,17 +111,20 @@ After completing the setup steps, you can run the Deepnote extension in developm
    ```
 
 2. **Start the watch task** (for automatic recompilation)
+
    - Press `Ctrl+Shift+B` (Windows/Linux) or `⇧⌘B` (macOS)
    - Select `watch` from the task list
    - This will continuously compile your changes in the background
 
 3. **Launch the Extension Development Host**
+
    - Press `F5` or click the Run and Debug icon in the sidebar
    - Select `Extension` from the dropdown menu
    - Click the green play button
    - A new VS Code window will open with `[Extension Development Host]` in the title
 
 4. **Test your changes**
+
    - The Extension Development Host has the Deepnote extension loaded
    - Open a Deepnote project or notebook file (`.deepnote`)
    - Test the functionality you're working on
@@ -160,16 +163,19 @@ Edit `.vscode/launch.json` and add environment variables:
 ```
 
 **Set breakpoints:**
+
 - Click in the gutter next to line numbers in your TypeScript code
 - Breakpoints will pause execution in the Extension Development Host
 - Inspect variables in the Debug sidebar
 
 **View logs:**
+
 - Debug Console: Shows console.log output and errors
 - Output panel: Select "Deepnote" from the dropdown to see extension-specific logs
 - Terminal: Shows build output from the watch task
 
 **Common issues:**
+
 - If changes don't appear, try `npm run clean` and restart the watch task
 - If breakpoints don't work, ensure source maps are enabled (they are by default)
 - If the extension doesn't load, check the Debug Console for errors
@@ -337,6 +343,10 @@ A few things worth knowing before you debug a failure:
 - **CI shards by directory**, one job per group, so a new group directory must also be added to the matrix
   in `.github/workflows/e2e.yml` — the `verify-coverage` job fails the build if a group ran nowhere, or if
   a suite sits directly in `test/e2e/suite/`.
+- **`suite/interpreter/` runs twice in CI**, once with pip and once with uv on PATH, because the extension
+  prefers uv for the toolkit install when it is available. The shard sets `E2E_EXPECT_TOOLKIT_INSTALLER`
+  and the suite reads back which tool wrote the toolkit's dist-info. Leave it unset locally and either
+  installer passes.
 
 ### Testing Python scripts
 

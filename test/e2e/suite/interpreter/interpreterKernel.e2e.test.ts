@@ -20,6 +20,9 @@
  *   - The Python extension (`ms-python.python`) must be installed in the test instance.
  *   - `python3` must be on PATH and able to create a venv (CI installs `python3.12-venv`).
  *   - Network access: the toolkit is installed from PyPI, which is slow.
+ *   - Optional: `E2E_EXPECT_TOOLKIT_INSTALLER=pip|uv` asserts which tool the extension installed
+ *     with. CI runs this suite twice, once per installer, so both the pip channel and the preferred
+ *     uv path are exercised. `uv` must be on PATH for the extension to pick it.
  */
 
 import { expect } from 'chai';
@@ -56,6 +59,12 @@ const SIDECAR_WRITE_TIMEOUT = 15_000;
 
 /** How long the notebook is watched to prove that merely opening it installs nothing. */
 const NO_INSTALL_OBSERVATION_MS = 15_000;
+
+/**
+ * Which tool CI expects the toolkit to have been installed with, read back from the `INSTALLER` file
+ * pip and uv each write into the distribution's dist-info. Unset locally: any installer passes.
+ */
+const EXPECTED_TOOLKIT_INSTALLER = process.env.E2E_EXPECT_TOOLKIT_INSTALLER;
 
 /** Path to the interpreter inside a venv, for the platform the test is running on. */
 function venvPython(venvDir: string): string {
@@ -102,6 +111,38 @@ function readRecordedInterpreter(sidecarPath: string, projectId: string): string
 function isToolkitInstalled(python: string): boolean {
     try {
         execFileSync(python, ['-c', 'import deepnote_toolkit'], { stdio: 'ignore' });
+
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** The `INSTALLER` marker of an installed distribution (`pip`, `uv`, ...), or undefined when absent. */
+function readInstallerMarker(python: string, distribution: string): string | undefined {
+    try {
+        return execFileSync(
+            python,
+            [
+                '-c',
+                'import sys; from importlib.metadata import distribution; print(distribution(sys.argv[1]).read_text("INSTALLER") or "")',
+                distribution
+            ],
+            { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+        ).trim();
+    } catch {
+        return undefined;
+    }
+}
+
+/** True when the named distribution is installed in the given interpreter. */
+function isDistributionInstalled(python: string, distribution: string): boolean {
+    try {
+        execFileSync(
+            python,
+            ['-c', 'import sys; from importlib.metadata import distribution; distribution(sys.argv[1])', distribution],
+            { stdio: 'ignore' }
+        );
 
         return true;
     } catch {
@@ -206,6 +247,27 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
             KERNEL_CONNECT_TIMEOUT,
             'deepnote-toolkit was never installed into the active interpreter'
         );
+
+        // toolkitSpec.json pins the deepnote-python-lsp-server fork directly instead of upstream
+        // python-lsp-server: both ship the `pylsp` module, so the upstream package must not be there
+        // to overwrite the fork's files.
+        expect(
+            isDistributionInstalled(interpreter, 'deepnote-python-lsp-server'),
+            'the pylsp fork the toolkit depends on must be installed'
+        ).to.equal(true);
+        expect(
+            isDistributionInstalled(interpreter, 'python-lsp-server'),
+            'upstream python-lsp-server must not be installed alongside the fork'
+        ).to.equal(false);
+
+        // The extension prefers uv for this install whenever the binary is on PATH and otherwise falls
+        // back to pip; CI sets the expectation per shard so a regression in that choice fails here.
+        if (EXPECTED_TOOLKIT_INSTALLER !== undefined) {
+            expect(
+                readInstallerMarker(interpreter, 'deepnote-toolkit'),
+                `deepnote-toolkit should have been installed with ${EXPECTED_TOOLKIT_INSTALLER}`
+            ).to.equal(EXPECTED_TOOLKIT_INSTALLER);
+        }
 
         // No second click: consent updates the existing controller's connection in place, so the run
         // that triggered the prompt is the run that executes.

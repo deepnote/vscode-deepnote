@@ -342,7 +342,9 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
     /**
      * The cell a status bar command acts on: the one it was invoked with, else the active notebook cell (command
-     * palette). Reports an error and returns `undefined` when neither exists.
+     * palette). The palette entry is gated on the notebook type only, so the active cell is used only when it is a
+     * SQL cell; the metadata these commands write has no meaning on any other cell. Reports an error and returns
+     * `undefined` when there is no SQL cell to act on.
      */
     private resolveTargetCell(cell?: NotebookCell): NotebookCell | undefined {
         if (cell) {
@@ -351,10 +353,13 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
         const activeEditor = window.activeNotebookEditor;
         if (activeEditor && activeEditor.selection) {
-            return activeEditor.notebook.cellAt(activeEditor.selection.start);
+            const activeCell = activeEditor.notebook.cellAt(activeEditor.selection.start);
+            if (activeCell.document.languageId === 'sql') {
+                return activeCell;
+            }
         }
 
-        void window.showErrorMessage(l10n.t('No active notebook cell'));
+        void window.showErrorMessage(l10n.t('No active SQL cell'));
 
         return undefined;
     }

@@ -516,6 +516,35 @@ suite('SqlCellStatusBarProvider', () => {
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).once();
         });
 
+        test('setSqlReturnVariableType command handler shows error when the active cell is not a SQL cell', async () => {
+            let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
+            when(
+                mockedVSCodeNamespaces.commands.registerCommand('deepnote.setSqlReturnVariableType', anything())
+            ).thenCall((_name, handler) => {
+                commandHandler = handler;
+                return { dispose: () => undefined };
+            });
+
+            const pythonCell = createMockCell({ languageId: 'python' });
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: {
+                    cellAt: (_index: number) => pythonCell
+                },
+                selection: { start: 0 }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+
+            activateProvider.activate();
+            assert.isDefined(commandHandler, 'Command handler should be registered');
+
+            await commandHandler!();
+
+            // The return type must never be written to a non-SQL cell
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+        });
+
         test('setSqlReturnVariableType command handler shows error when no cell and no active editor', async () => {
             let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
             when(

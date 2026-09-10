@@ -54,8 +54,12 @@ const FINAL_RANK = 3;
 /** Rank of a `.devN` with no pre-release tag: below every `a`/`b`/`rc`, as PEP 440 orders it. */
 const DEV_ONLY_RANK = -1;
 
+/**
+ * PEP 440 with its permitted spellings: `rc`/`c`/`pre`/`preview` for release candidates, `post`/`rev`/`r`
+ * for post-releases, and the implicit `-N` post-release (`2.5.1-1` is `2.5.1.post1`).
+ */
 const VERSION_PATTERN =
-    /^\s*v?(\d+(?:\.\d+)*)(?:[-._]?(a|alpha|b|beta|c|rc|pre|preview)[-._]?(\d*))?(?:[-._]?post[-._]?(\d*))?(?:[-._]?dev[-._]?(\d*))?(?:\+.*)?\s*$/i;
+    /^\s*v?(\d+(?:\.\d+)*)(?:[-._]?(a|alpha|b|beta|c|rc|pre|preview)[-._]?(\d*))?(?:[-._]?(?:post|rev|r)[-._]?(\d*)|-(\d+))?(?:[-._]?dev[-._]?(\d*))?(?:\+.*)?\s*$/i;
 
 /**
  * A version as a sort key in PEP 440 order: release segments, then pre-release kind and number,
@@ -70,7 +74,8 @@ function versionKey(version: string): number[] | undefined {
         return undefined;
     }
 
-    const [, release, preKind, preNumber, postNumber, devNumber] = match;
+    const [, release, preKind, preNumber, explicitPost, implicitPost, devNumber] = match;
+    const postNumber = explicitPost ?? implicitPost;
     const hasPre = preKind !== undefined;
     const hasPost = postNumber !== undefined;
     const hasDev = devNumber !== undefined;

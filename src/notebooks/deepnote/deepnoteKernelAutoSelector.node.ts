@@ -64,6 +64,7 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { computeRequirementsHash } from './deepnoteProjectUtils';
+import { IDeepnoteInterpreterSidecar } from './deepnoteInterpreterSidecar.node';
 import { IDeepnoteNotebookInterpreters } from './deepnoteNotebookInterpreters';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 
@@ -120,7 +121,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         private readonly notebookInterpreters: IDeepnoteNotebookInterpreters,
         @inject(PythonEnvironmentQuickPickItemProvider)
         private readonly environmentQuickPickProvider: PythonEnvironmentQuickPickItemProvider,
-        @inject(PythonEnvironmentFilter) private readonly environmentFilter: PythonEnvironmentFilter
+        @inject(PythonEnvironmentFilter) private readonly environmentFilter: PythonEnvironmentFilter,
+        @inject(IDeepnoteInterpreterSidecar) private readonly interpreterSidecar: IDeepnoteInterpreterSidecar
     ) {}
 
     public activate() {
@@ -616,6 +618,10 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         // and controller above: a throw in between would otherwise leave the id pointing at an
         // interpreter with no matching connection, and isKernelReady would stay true for it forever.
         this.notebookInterpreterIds.set(notebookKey, interpreter.id);
+
+        // The kernel is now committed to this interpreter, so publish it for the Deepnote CLI and MCP
+        // server. Not awaited: the file is for other tools, and must not hold up or fail the kernel.
+        void this.interpreterSidecar.record(notebook, interpreter);
 
         const projectId = notebook.metadata?.deepnoteProjectId;
         const notebookId = notebook.metadata?.deepnoteNotebookId;

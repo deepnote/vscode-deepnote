@@ -22,6 +22,7 @@ import { IJupyterRequestCreator } from '../../kernels/jupyter/types';
 import { IConfigurationService } from '../../platform/common/types';
 import { IDeepnoteNotebookManager } from '../types';
 import { IKernelProvider, IKernel, IJupyterKernelSpec, KernelConnectionMetadata } from '../../kernels/types';
+import { IDeepnoteInterpreterSidecar } from './deepnoteInterpreterSidecar.node';
 import { IDeepnoteNotebookInterpreters } from './deepnoteNotebookInterpreters';
 import { IDeepnoteRequirementsHelper } from './deepnoteRequirementsHelper.node';
 import {
@@ -56,6 +57,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
     let registry: ServerHandleRegistry;
     let mockToolkitDependencyService: IDeepnoteToolkitDependencyService;
     let mockNotebookInterpreters: IDeepnoteNotebookInterpreters;
+    let mockInterpreterSidecar: IDeepnoteInterpreterSidecar;
     let mockEnvironmentQuickPickProvider: PythonEnvironmentQuickPickItemProvider;
     let mockEnvironmentFilter: PythonEnvironmentFilter;
 
@@ -100,6 +102,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
         });
         mockEnvironmentQuickPickProvider = mock<PythonEnvironmentQuickPickItemProvider>();
         mockEnvironmentFilter = mock<PythonEnvironmentFilter>();
+        mockInterpreterSidecar = mock<IDeepnoteInterpreterSidecar>();
+        when(mockInterpreterSidecar.record(anything(), anything())).thenResolve();
         when(mockToolkitDependencyService.ensureToolkitInstalled(anything(), anything(), anything())).thenResolve(
             DeepnoteToolkitDependencyResponse.ok
         );
@@ -157,7 +161,8 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             instance(mockToolkitDependencyService),
             instance(mockNotebookInterpreters),
             instance(mockEnvironmentQuickPickProvider),
-            instance(mockEnvironmentFilter)
+            instance(mockEnvironmentFilter),
+            instance(mockInterpreterSidecar)
         );
     });
 
@@ -1227,6 +1232,9 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
                 INTERPRETER_A,
                 'a half-finished setup must not claim the notebook now runs on the new interpreter'
             );
+            // The sidecar is what the Deepnote CLI runs the project on, so it must not name an
+            // interpreter the notebook never reached.
+            verify(mockInterpreterSidecar.record(anything(), anything())).never();
         });
     });
 
@@ -1283,6 +1291,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             assert.isUndefined(registry.get(notebookKey), 'the server handle must not be tracked');
             verify(mockServerProvider.registerServer(anything(), anything())).never();
             verify(mockControllerRegistration.addOrUpdate(anything(), anything())).never();
+            verify(mockInterpreterSidecar.record(anything(), anything())).never();
         });
     });
 

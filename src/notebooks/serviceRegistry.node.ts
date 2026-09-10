@@ -80,6 +80,7 @@ import {
 } from '../kernels/deepnote/types';
 import { DeepnoteAgentSkillsManager } from '../kernels/deepnote/deepnoteAgentSkillsManager.node';
 import { DeepnoteServerStarter } from '../kernels/deepnote/deepnoteServerStarter.node';
+import { DeepnoteInterpreterSidecar, IDeepnoteInterpreterSidecar } from './deepnote/deepnoteInterpreterSidecar.node';
 import { DeepnoteKernelAutoSelector } from './deepnote/deepnoteKernelAutoSelector.node';
 import { DeepnoteNotebookInterpreters, IDeepnoteNotebookInterpreters } from './deepnote/deepnoteNotebookInterpreters';
 import { DeepnoteServerProvider } from '../kernels/deepnote/deepnoteServerProvider.node';
@@ -263,6 +264,7 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         IDeepnoteNotebookInterpreters,
         DeepnoteNotebookInterpreters
     );
+    serviceManager.addSingleton<IDeepnoteInterpreterSidecar>(IDeepnoteInterpreterSidecar, DeepnoteInterpreterSidecar);
     serviceManager.addSingleton<IDeepnoteKernelAutoSelector>(IDeepnoteKernelAutoSelector, DeepnoteKernelAutoSelector);
     serviceManager.addBinding(IDeepnoteKernelAutoSelector, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteLspClientManager>(IDeepnoteLspClientManager, DeepnoteLspClientManager);

@@ -60,3 +60,40 @@ export async function waitForNotification(
         return undefined;
     }
 }
+
+/**
+ * Polls until no visible notification matches `pattern`; resolves immediately when none does. A failed read
+ * (the toast list re-rendering mid-poll, a stale notification handle) counts as "still visible" rather than
+ * "cleared", so a caller never proceeds on the strength of an observation that did not happen.
+ */
+export async function waitForNotificationToClear(pattern: RegExp, timeout: number): Promise<void> {
+    const driver = VSBrowser.instance.driver;
+
+    await driver.wait(
+        async () => {
+            const notifications = await new Workbench().getNotifications().catch((error) => {
+                console.warn('[deepnote-e2e] get notifications:', error);
+
+                return undefined;
+            });
+            if (notifications === undefined) {
+                return false;
+            }
+
+            for (const notification of notifications) {
+                const message = await notification.getMessage().catch((error) => {
+                    console.warn('[deepnote-e2e] read notification message:', error);
+
+                    return undefined;
+                });
+                if (message === undefined || pattern.test(message)) {
+                    return false;
+                }
+            }
+
+            return true;
+        },
+        timeout,
+        `timed out waiting for the notification matching ${pattern} to clear`
+    );
+}

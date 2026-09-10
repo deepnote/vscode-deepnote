@@ -177,115 +177,134 @@
                 "command": "deepnote.addAgentBlock",
                 "title": "%deepnote.commands.addAgentBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(hubot)"
+                "icon": "$(hubot)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addSqlBlock",
                 "title": "%deepnote.commands.addSqlBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(database)"
+                "icon": "$(database)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addBigNumberChartBlock",
                 "title": "%deepnote.commands.addBigNumberChartBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(graph)"
+                "icon": "$(graph)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addChartBlock",
                 "title": "%deepnote.commands.addChartBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(graph-line)"
+                "icon": "$(graph-line)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addInputTextBlock",
                 "title": "%deepnote.commands.addInputTextBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(symbol-text)"
+                "icon": "$(symbol-text)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addInputTextareaBlock",
                 "title": "%deepnote.commands.addInputTextareaBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(note)"
+                "icon": "$(note)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addInputSelectBlock",
                 "title": "%deepnote.commands.addInputSelectBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(list-selection)"
+                "icon": "$(list-selection)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addInputSliderBlock",
                 "title": "%deepnote.commands.addInputSliderBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(settings-more-action)"
+                "icon": "$(settings-more-action)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addInputCheckboxBlock",
                 "title": "%deepnote.commands.addInputCheckboxBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(check)"
+                "icon": "$(check)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addInputDateBlock",
                 "title": "%deepnote.commands.addInputDateBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(calendar)"
+                "icon": "$(calendar)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addInputDateRangeBlock",
                 "title": "%deepnote.commands.addInputDateRangeBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(calendar)"
+                "icon": "$(calendar)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addInputFileBlock",
                 "title": "%deepnote.commands.addInputFileBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(file)"
+                "icon": "$(file)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addButtonBlock",
                 "title": "%deepnote.commands.addButtonBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(add)"
+                "icon": "$(add)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addInputBlock",
                 "title": "%deepnote.commands.addInputBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(symbol-parameter)"
+                "icon": "$(symbol-parameter)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addTextBlock",
                 "title": "%deepnote.commands.addTextBlock.title%",
                 "category": "Deepnote",
-                "icon": "$(text-size)"
+                "icon": "$(text-size)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addTextBlockParagraph",
                 "title": "%deepnote.commands.addTextBlockParagraph.title%",
                 "category": "Deepnote",
-                "icon": "$(text-size)"
+                "icon": "$(text-size)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addTextBlockHeading1",
                 "title": "%deepnote.commands.addTextBlockHeading1.title%",
                 "category": "Deepnote",
-                "icon": "$(text-size)"
+                "icon": "$(text-size)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addTextBlockHeading2",
                 "title": "%deepnote.commands.addTextBlockHeading2.title%",
                 "category": "Deepnote",
-                "icon": "$(text-size)"
+                "icon": "$(text-size)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.addTextBlockHeading3",
                 "title": "%deepnote.commands.addTextBlockHeading3.title%",
                 "category": "Deepnote",
-                "icon": "$(text-size)"
+                "icon": "$(text-size)",
+                "enablement": "notebookType == 'deepnote'"
             },
             {
                 "command": "deepnote.newNotebook",
@@ -686,21 +705,21 @@
                     "light": "resources/light/restart-kernel.svg",
                     "dark": "resources/dark/restart-kernel.svg"
                 },
-                "enablement": "isWorkspaceTrusted && (deepnote.interactive.canRestartNotebookKernel || (notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.notebookeditor.canrestartNotebookkernel))"
+                "enablement": "isWorkspaceTrusted && (deepnote.interactive.canRestartNotebookKernel || (notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.notebookeditor.canrestartNotebookkernel) || (notebookType == 'deepnote' && deepnote.notebookeditor.canrestartNotebookkernel))"
             },
             {
                 "command": "deepnote.restartkernelandrunallcells",
                 "title": "%deepnote.command.deepnote.restartkernelandrunallcells.title%",
                 "shortTitle": "%deepnote.command.deepnote.restartkernelandrunallcells.shorttitle%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && (deepnote.interactive.canRestartNotebookKernel || (notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.notebookeditor.canrestartNotebookkernel))"
+                "enablement": "isWorkspaceTrusted && (deepnote.interactive.canRestartNotebookKernel || (notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.notebookeditor.canrestartNotebookkernel) || (notebookType == 'deepnote' && deepnote.notebookeditor.canrestartNotebookkernel))"
             },
             {
                 "command": "deepnote.restartkernelandrunuptoselectedcell",
                 "title": "%deepnote.command.deepnote.restartkernelandrunuptoselectedcell.title%",
                 "shortTitle": "%deepnote.command.deepnote.restartkernelandrunuptoselectedcell.title%",
                 "category": "Jupyter",
-                "enablement": "isWorkspaceTrusted && (notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.notebookeditor.canrestartNotebookkernel)"
+                "enablement": "isWorkspaceTrusted && ((notebookKernel =~ /^ms-toolsai.jupyter\\// && deepnote.notebookeditor.canrestartNotebookkernel) || (notebookType == 'deepnote' && deepnote.notebookeditor.canrestartNotebookkernel))"
             },
             {
                 "command": "deepnote.notebookeditor.addcellbelow",
@@ -990,6 +1009,12 @@
                     "command": "deepnote.restartkernel",
                     "title": "%deepnote.command.deepnote.restartkernel.title%",
                     "group": "navigation@1",
+                    "when": "notebookType == 'deepnote' && isWorkspaceTrusted && deepnote.notebookeditor.canrestartNotebookkernel && config.notebook.globalToolbar != true"
+                },
+                {
+                    "command": "deepnote.restartkernel",
+                    "title": "%deepnote.command.deepnote.restartkernel.title%",
+                    "group": "navigation@1",
                     "when": "notebookKernel =~ /^ms-toolsai.jupyter\\// && notebookType == 'jupyter-notebook' && isWorkspaceTrusted && deepnote.notebookeditor.canrestartNotebookkernel && config.notebook.globalToolbar != true"
                 },
                 {
@@ -1066,6 +1091,11 @@
                     "command": "deepnote.addTextBlock",
                     "group": "navigation@8",
                     "when": "notebookType == 'deepnote'"
+                },
+                {
+                    "command": "deepnote.restartkernel",
+                    "group": "navigation/execute@5",
+                    "when": "notebookType == 'deepnote' && isWorkspaceTrusted"
                 },
                 {
                     "command": "deepnote.restartkernel",

@@ -94,6 +94,12 @@
                 "icon": "$(reveal)"
             },
             {
+                "command": "deepnote.revealExplorer",
+                "title": "%deepnote.commands.revealExplorer.title%",
+                "category": "Deepnote",
+                "icon": "$(list-tree)"
+            },
+            {
                 "command": "deepnote.enableSnapshots",
                 "title": "%deepnote.commands.enableSnapshots.title%",
                 "category": "Deepnote"
@@ -987,6 +993,11 @@
             ],
             "editor/title": [
                 {
+                    "command": "deepnote.revealExplorer",
+                    "group": "navigation@-2",
+                    "when": "notebookType == 'deepnote' && config.notebook.globalToolbar != true"
+                },
+                {
                     "command": "deepnote.restartkernel",
                     "title": "%deepnote.command.deepnote.restartkernel.title%",
                     "group": "navigation@1",
@@ -1017,6 +1028,11 @@
                 }
             ],
             "notebook/toolbar": [
+                {
+                    "command": "deepnote.revealExplorer",
+                    "group": "navigation@-2",
+                    "when": "notebookType == 'deepnote'"
+                },
                 {
                     "command": "deepnote.openInDeepnote",
                     "group": "navigation@-1",

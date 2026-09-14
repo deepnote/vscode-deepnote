@@ -41,22 +41,13 @@ Extensions: Show Recommended Extensions
 
 Then install all the extensions listed under "Workspace Recommendations".
 
-On Apple Silicon, you will have to use system versions of `libsodium` and `libzmq` instead of the bundled ones. Also, you'll need to use Python 3.11 or older.
+No native toolchain is needed on Apple Silicon. `zeromq` ships a darwin-arm64 prebuild, and the
+legacy `zeromqold` fallback is an optional dependency: it has no arm64 prebuild and compiling it
+needs cmake plus a Python with `distutils`, so npm skips it when the build fails. The extension
+only loads `zeromqold` if `zeromq` fails to load, and the published `.vsix` is built on Linux
+where it installs normally, so a local build without it is fine.
 
-```shell
-brew update
-brew install cmake pkg-config libsodium zeromq
-
-export CMAKE_POLICY_VERSION_MINIMUM=3.5
-export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig"
-export CPPFLAGS="-I$(brew --prefix libsodium)/include -I$(brew --prefix zeromq)/include"
-export LDFLAGS="-L$(brew --prefix libsodium)/lib -L$(brew --prefix zeromq)/lib"
-
-npm_config_build_from_source=true npm install zeromq@
-
-```
-
-Install the dependecies:
+Install the dependencies:
 
 ```shell
 npm install

@@ -82,10 +82,11 @@ function makeExtensionContext(): IExtensionContext {
     return { subscriptions: [] } as unknown as IExtensionContext;
 }
 
-function makeNotebookDocument(): NotebookDocument {
+function makeNotebookDocument(metadata?: Record<string, unknown>, notebookType = 'deepnote'): NotebookDocument {
     return {
         uri: Uri.parse('file:///test/notebook.deepnote'),
-        notebookType: 'deepnote',
+        notebookType,
+        metadata,
         version: 1,
         isDirty: false,
         isUntitled: false,
@@ -227,6 +228,111 @@ suite('DeepnoteExplorerView', () => {
                 // Expected in test environment
                 assert.isString(error.message, 'revealActiveNotebook method exists');
             }
+        });
+    });
+
+    suite('revealExplorer', () => {
+        const EXPLORER_FOCUS_COMMAND = 'deepnoteExplorer.focus';
+        const notebookMetadata = { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' };
+        const treeItem = { label: 'Quick Notes' } as unknown as DeepnoteTreeItem;
+        let treeDataProvider: DeepnoteTreeDataProvider;
+        let findTreeItem: sinon.SinonStub;
+        let reveal: sinon.SinonStub;
+
+        function stubActiveNotebook(metadata?: Record<string, unknown>, notebookType?: string): void {
+            when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn({
+                notebook: makeNotebookDocument(metadata, notebookType)
+            } as unknown as NotebookEditor);
+        }
+
+        setup(() => {
+            reveal = sinon.stub().resolves();
+            when(mockedVSCodeNamespaces.window.createTreeView(anything(), anything())).thenReturn({
+                reveal,
+                dispose: () => undefined
+            } as never);
+
+            treeDataProvider = new DeepnoteTreeDataProvider(mockLogger);
+            findTreeItem = sinon.stub(treeDataProvider, 'findTreeItem').resolves(treeItem);
+
+            explorerView = new DeepnoteExplorerView(mockExtensionContext, mockLogger, treeDataProvider, mockAnalytics);
+            explorerView.activate();
+        });
+
+        teardown(() => {
+            sinon.restore();
+        });
+
+        test('focuses the explorer view and reveals the active Deepnote notebook', async () => {
+            stubActiveNotebook(notebookMetadata);
+
+            await handlerFor(Commands.RevealDeepnoteExplorer)();
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand(EXPLORER_FOCUS_COMMAND)).once();
+            assert.deepStrictEqual(findTreeItem.firstCall.args, ['project-1', 'notebook-1']);
+            assert.deepStrictEqual(reveal.firstCall.args, [treeItem, { select: true, focus: true, expand: true }]);
+        });
+
+        test('only focuses the explorer view when no notebook editor is active', async () => {
+            await handlerFor(Commands.RevealDeepnoteExplorer)();
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand(EXPLORER_FOCUS_COMMAND)).once();
+            assert.isFalse(findTreeItem.called);
+            assert.isFalse(reveal.called);
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).never();
+            verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).never();
+        });
+
+        test('only focuses the explorer view when the active notebook is not a Deepnote notebook', async () => {
+            stubActiveNotebook(notebookMetadata, 'jupyter-notebook');
+
+            await handlerFor(Commands.RevealDeepnoteExplorer)();
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand(EXPLORER_FOCUS_COMMAND)).once();
+            assert.isFalse(findTreeItem.called);
+            assert.isFalse(reveal.called);
+        });
+
+        test('only focuses the explorer view when the active notebook has no Deepnote metadata', async () => {
+            stubActiveNotebook({});
+
+            await handlerFor(Commands.RevealDeepnoteExplorer)();
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand(EXPLORER_FOCUS_COMMAND)).once();
+            assert.isFalse(findTreeItem.called);
+            verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).never();
+        });
+
+        test('does not reveal or notify when the notebook is not in the tree yet', async () => {
+            stubActiveNotebook(notebookMetadata);
+            findTreeItem.resolves(undefined);
+
+            await handlerFor(Commands.RevealDeepnoteExplorer)();
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand(EXPLORER_FOCUS_COMMAND)).once();
+            assert.isFalse(reveal.called);
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).never();
+        });
+
+        test('swallows reveal failures without notifying the user', async () => {
+            stubActiveNotebook(notebookMetadata);
+            reveal.rejects(new Error('tree not loaded'));
+
+            await handlerFor(Commands.RevealDeepnoteExplorer)();
+
+            verify(mockedVSCodeNamespaces.commands.executeCommand(EXPLORER_FOCUS_COMMAND)).once();
+            verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).never();
+        });
+
+        test('still reveals the active notebook when focusing the view fails', async () => {
+            stubActiveNotebook(notebookMetadata);
+            when(mockedVSCodeNamespaces.commands.executeCommand(EXPLORER_FOCUS_COMMAND)).thenReject(
+                new Error('no such command')
+            );
+
+            await handlerFor(Commands.RevealDeepnoteExplorer)();
+
+            assert.deepStrictEqual(reveal.firstCall.args, [treeItem, { select: true, focus: true, expand: true }]);
         });
     });
 

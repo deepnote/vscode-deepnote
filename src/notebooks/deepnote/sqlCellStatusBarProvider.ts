@@ -342,24 +342,22 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
 
     /**
      * The cell a status bar command acts on: the one it was invoked with, else the active notebook cell (command
-     * palette). The palette entry is gated on the notebook type only, so the active cell is used only when it is a
-     * SQL cell; the metadata these commands write has no meaning on any other cell. Reports an error and returns
-     * `undefined` when there is no SQL cell to act on.
+     * palette). Either way the cell must be a SQL cell: the palette entry is gated on the notebook type only, and
+     * `executeCommand` can pass any cell, but the metadata these commands write has no meaning on any other cell.
+     * Reports an error and returns `undefined` when there is no SQL cell to act on.
      */
     private resolveTargetCell(cell?: NotebookCell): NotebookCell | undefined {
-        if (cell) {
-            return cell;
-        }
-
         const activeEditor = window.activeNotebookEditor;
-        if (activeEditor && activeEditor.selection) {
-            const activeCell = activeEditor.notebook.cellAt(activeEditor.selection.start);
-            if (activeCell.document.languageId === 'sql') {
-                return activeCell;
-            }
+        const targetCell =
+            cell ??
+            (activeEditor && activeEditor.selection
+                ? activeEditor.notebook.cellAt(activeEditor.selection.start)
+                : undefined);
+        if (targetCell && targetCell.document.languageId === 'sql') {
+            return targetCell;
         }
 
-        void window.showErrorMessage(l10n.t('No active SQL cell'));
+        void window.showErrorMessage(l10n.t('No SQL cell selected'));
 
         return undefined;
     }

@@ -222,6 +222,7 @@ export namespace Commands {
     export const OpenDeepnoteNotebook = 'deepnote.openNotebook';
     export const OpenDeepnoteFile = 'deepnote.openFile';
     export const RevealInDeepnoteExplorer = 'deepnote.revealInExplorer';
+    export const RevealDeepnoteExplorer = 'deepnote.revealExplorer';
     export const CopyNotebookDetails = 'deepnote.copyNotebookDetails';
     export const EnableSnapshots = 'deepnote.enableSnapshots';
     export const DisableSnapshots = 'deepnote.disableSnapshots';

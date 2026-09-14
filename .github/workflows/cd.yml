@@ -38,7 +38,7 @@ jobs:
         id: package-version
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Extension version: $VERSION"
 
       - name: Extract and sanitize branch name
@@ -71,7 +71,7 @@ jobs:
           # The package script creates vscode-deepnote-insiders.vsix
           # Rename it to include version and branch
           mv vscode-deepnote-insiders.vsix "vscode-deepnote-${{ steps.package-version.outputs.version }}-${{ steps.branch-name.outputs.branch }}.vsix"
-          ls -lh *.vsix
+          ls -lh ./*.vsix
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -83,21 +83,23 @@ jobs:
 
       - name: Add summary
         run: |
-          echo "## 📦 Extension Packaged Successfully" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ steps.package-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** ${{ steps.branch-name.outputs.branch }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Installation Instructions" >> $GITHUB_STEP_SUMMARY
-          echo "1. Download the artifact from the Actions tab" >> $GITHUB_STEP_SUMMARY
-          echo "2. Extract the .vsix file from the zip" >> $GITHUB_STEP_SUMMARY
-          echo "3. Install in VS Code:" >> $GITHUB_STEP_SUMMARY
-          echo "   - Open VS Code" >> $GITHUB_STEP_SUMMARY
-          echo "   - Go to Extensions view (Ctrl+Shift+X / Cmd+Shift+X)" >> $GITHUB_STEP_SUMMARY
-          echo "   - Click the '...' menu → 'Install from VSIX...'" >> $GITHUB_STEP_SUMMARY
-          echo "   - Select the downloaded .vsix file" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Alternatively, use the command line:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "code --install-extension vscode-deepnote-${{ steps.package-version.outputs.version }}-${{ steps.branch-name.outputs.branch }}.vsix" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## 📦 Extension Packaged Successfully
+
+          **Version:** ${{ steps.package-version.outputs.version }}
+          **Branch:** ${{ steps.branch-name.outputs.branch }}
+
+          ### Installation Instructions
+          1. Download the artifact from the Actions tab
+          2. Extract the .vsix file from the zip
+          3. Install in VS Code:
+             - Open VS Code
+             - Go to Extensions view (Ctrl+Shift+X / Cmd+Shift+X)
+             - Click the '...' menu → 'Install from VSIX...'
+             - Select the downloaded .vsix file
+
+          Alternatively, use the command line:
+          ```bash
+          code --install-extension vscode-deepnote-${{ steps.package-version.outputs.version }}-${{ steps.branch-name.outputs.branch }}.vsix
+          ```
+          EOF

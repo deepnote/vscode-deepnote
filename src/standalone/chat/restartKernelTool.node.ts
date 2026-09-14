@@ -32,7 +32,7 @@ export class RestartKernelTool extends BaseTool<RestartKernelToolParams> {
     ) {
         const restarted = await this.notebookCommandHandler.restartKernel(notebook.uri, true);
         if (!restarted) {
-            const failureMessageString = `The kernel for the notebook at ${notebook.uri} was not restarted because the restart failed; the error has been shown to the user.`;
+            const failureMessageString = `The kernel for the notebook at ${notebook.uri} could not be restarted, either because no kernel is running or because the restart failed.`;
             return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(failureMessageString)]);
         }
 

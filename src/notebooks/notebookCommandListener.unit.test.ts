@@ -38,6 +38,8 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
     let initNotebookRunner: IDeepnoteInitNotebookRunner;
     let configurationService: IConfigurationService;
     let initDone: Deferred<void>;
+    let listener: NotebookCommandListener;
+    let kernelStatusProvider: IKernelStatusProvider;
 
     setup(() => {
         resetVSCodeMocks();
@@ -95,7 +97,11 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
         initNotebookRunner = mock<IDeepnoteInitNotebookRunner>();
         when(initNotebookRunner.waitForInit(anything())).thenCall(() => initDone.promise);
 
-        const listener = new NotebookCommandListener(
+        // The chat tool restarts with the UI disabled, which hides the restart progress for the duration.
+        kernelStatusProvider = mock<IKernelStatusProvider>();
+        when(kernelStatusProvider.hideRestartProgress(anything())).thenReturn({ dispose: () => undefined });
+
+        listener = new NotebookCommandListener(
             disposables,
             instance(mock<NotebookCellLanguageService>()),
             instance(configurationService),
@@ -103,7 +109,7 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
             instance(mock<IDataScienceErrorHandler>()),
             new NotebookEditorProvider(),
             instance(mock<IServiceContainer>()),
-            instance(mock<IKernelStatusProvider>()),
+            instance(kernelStatusProvider),
             instance(initNotebookRunner)
         );
         listener.activate();
@@ -182,5 +188,36 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
         await waitFor(() => executedCommands.includes('notebook.cell.execute'));
         assert.deepStrictEqual(executedCommands, ['restart', 'notebook.cell.execute']);
         verify(mockedVSCodeNamespaces.commands.executeCommand('notebook.cell.execute', anything())).once();
+    });
+
+    // `restartKernel` is the handler behind the chat `restart_deepnote_notebook_kernel` tool, which reports the
+    // result to the model, so it has to say whether a restart actually happened.
+    test('restartKernel resolves true once the restart has completed', async () => {
+        const restarted = await listener.restartKernel(notebook.uri, true);
+
+        assert.isTrue(restarted);
+        assert.strictEqual(wrapKernelMethod.callCount, 1);
+        assert.strictEqual(wrapKernelMethod.firstCall.args[1], 'restart');
+    });
+
+    test('restartKernel resolves false when the restart fails', async () => {
+        wrapKernelMethod.callsFake(async () => {
+            throw new Error('kernel died');
+        });
+        when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenResolve(undefined);
+
+        const restarted = await listener.restartKernel(notebook.uri, true);
+
+        assert.isFalse(restarted);
+        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+    });
+
+    test('restartKernel resolves false when the notebook has no kernel', async () => {
+        when(kernelProvider.get(notebook)).thenReturn(undefined);
+
+        const restarted = await listener.restartKernel(notebook.uri, true);
+
+        assert.isFalse(restarted);
+        assert.strictEqual(wrapKernelMethod.callCount, 0, 'nothing to restart');
     });
 });

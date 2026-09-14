@@ -36,7 +36,11 @@ import { IKernelStatusProvider } from '../kernels/kernelStatusProvider';
 
 export const INotebookCommandHandler = Symbol('INotebookCommandHandler');
 export interface INotebookCommandHandler {
-    restartKernel(notebookUri: Uri | undefined, disableUI: boolean): Promise<void>;
+    /**
+     * Restarts the kernel of `notebookUri` (or of the active notebook). Resolves `true` once the restart has
+     * completed, `false` when there is no kernel or the restart failed (the failure is already shown to the user).
+     */
+    restartKernel(notebookUri: Uri | undefined, disableUI: boolean): Promise<boolean>;
 }
 /**
  * Registers commands specific to the notebook UI
@@ -258,11 +262,13 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         return this.wrapKernelMethod('restart', kernel).catch(() => false);
     }
 
-    public async restartKernel(notebookUri: Uri | undefined, disableUI: boolean = false): Promise<void> {
+    public async restartKernel(notebookUri: Uri | undefined, disableUI: boolean = false): Promise<boolean> {
         const kernel = this.findKernel(notebookUri);
-        if (kernel) {
-            await this.wrapKernelMethod('restart', kernel, disableUI);
+        if (!kernel) {
+            return false;
         }
+
+        return this.wrapKernelMethod('restart', kernel, disableUI);
     }
 
     private readonly pendingRestartInterrupt = new WeakMap<IKernel, Promise<boolean>>();

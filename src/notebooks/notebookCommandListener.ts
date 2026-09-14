@@ -176,38 +176,50 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     }
 
     private async restartKernelAndRunAllCells(notebookUri: Uri | undefined) {
-        await this.restartKernelAndWaitForInit(this.findKernel(notebookUri));
-        this.runAllCells();
+        if (await this.restartKernelAndWaitForInit(this.findKernel(notebookUri))) {
+            this.runAllCells();
+        }
     }
 
     private async restartKernelAndRunUpToSelectedCell() {
         const activeNBE = this.notebookEditorProvider.activeNotebookEditor;
-
-        if (activeNBE) {
-            const selectionEnd = activeNBE.selection.end;
-            await this.restartKernelAndWaitForInit(this.findKernel(activeNBE.notebook.uri));
-            commands
-                .executeCommand('notebook.cell.execute', {
-                    ranges: [{ start: 0, end: selectionEnd }],
-                    document: activeNBE.notebook.uri
-                })
-                .then(noop, noop);
+        if (!activeNBE) {
+            return;
         }
+
+        const selectionEnd = activeNBE.selection.end;
+        if (!(await this.restartKernelAndWaitForInit(this.findKernel(activeNBE.notebook.uri)))) {
+            return;
+        }
+
+        commands
+            .executeCommand('notebook.cell.execute', {
+                ranges: [{ start: 0, end: selectionEnd }],
+                document: activeNBE.notebook.uri
+            })
+            .then(noop, noop);
     }
 
     /**
      * Restarts `kernel` and, for a Deepnote notebook with an init notebook, waits for that init run too, so
-     * cells run afterwards see the initialised state instead of racing it.
+     * cells run afterwards see the initialised state instead of racing it. Resolves `false` when the user
+     * declined the restart or it failed, so callers do not run cells on a kernel that was not restarted.
+     * Without a kernel there is nothing to restart and the run itself starts one, so that resolves `true`.
      */
-    private async restartKernelAndWaitForInit(kernel: IKernel | undefined): Promise<void> {
+    private async restartKernelAndWaitForInit(kernel: IKernel | undefined): Promise<boolean> {
         if (!kernel) {
-            return;
+            return true;
         }
 
-        const restarted = await this.restartKernelImpl(kernel);
-        if (restarted && this.initNotebookRunner) {
+        if (!(await this.restartKernelImpl(kernel))) {
+            return false;
+        }
+
+        if (this.initNotebookRunner) {
             await this.initNotebookRunner.waitForInit(kernel);
         }
+
+        return true;
     }
 
     /** The kernel of `notebookUri`, or of the active notebook when no URI is given (the Command Palette passes none). */
@@ -218,7 +230,10 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         return document ? this.kernelProvider.get(document) : undefined;
     }
 
-    /** Restarts `kernel`, asking first when the setting says so. Resolves `true` once a restart has completed. */
+    /**
+     * Restarts `kernel`, asking first when the setting says so. Resolves `true` once a restart has completed,
+     * `false` when the user declined or the restart failed (the failure is already shown to the user).
+     */
     private async restartKernelImpl(kernel: IKernel | undefined): Promise<boolean> {
         if (!kernel) {
             return false;
@@ -240,26 +255,22 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
             }
         }
 
-        await this.wrapKernelMethod('restart', kernel).catch(noop);
-
-        return true;
+        return this.wrapKernelMethod('restart', kernel).catch(() => false);
     }
 
     public async restartKernel(notebookUri: Uri | undefined, disableUI: boolean = false): Promise<void> {
-        const uri = notebookUri ?? this.notebookEditorProvider.activeNotebookEditor?.notebook.uri;
-        const document = workspace.notebookDocuments.find((document) => document.uri.toString() === uri?.toString());
-        const kernel = document ? this.kernelProvider.get(document) : undefined;
+        const kernel = this.findKernel(notebookUri);
         if (kernel) {
-            return this.wrapKernelMethod('restart', kernel, disableUI);
+            await this.wrapKernelMethod('restart', kernel, disableUI);
         }
     }
 
-    private readonly pendingRestartInterrupt = new WeakMap<IKernel, Promise<void>>();
+    private readonly pendingRestartInterrupt = new WeakMap<IKernel, Promise<boolean>>();
     private async wrapKernelMethod(
         currentContext: 'interrupt' | 'restart',
         kernel: IKernel,
         disableUI: boolean = false
-    ): Promise<void> {
+    ): Promise<boolean> {
         const notebook = kernel.notebook;
         // We don't want to create multiple restarts/interrupt requests for the same kernel.
         const pendingPromise = this.pendingRestartInterrupt.get(kernel);
@@ -302,9 +313,13 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
                 } else {
                     window.showErrorMessage(ex.toString()).then(noop, noop);
                 }
+
+                return false;
             } finally {
                 disposable.dispose();
             }
+
+            return true;
         })();
         promise
             .finally(() => {

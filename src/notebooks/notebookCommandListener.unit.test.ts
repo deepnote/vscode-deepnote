@@ -36,6 +36,7 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
     let wrapKernelMethod: sinon.SinonStub;
     let executedCommands: string[];
     let initNotebookRunner: IDeepnoteInitNotebookRunner;
+    let configurationService: IConfigurationService;
     let initDone: Deferred<void>;
 
     setup(() => {
@@ -79,7 +80,7 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
         when(kernelProvider.get(notebook)).thenReturn(kernel);
         when(kernelProvider.getKernelExecution(anything())).thenReturn({ pendingCells: [] } as any);
 
-        const configurationService = mock<IConfigurationService>();
+        configurationService = mock<IConfigurationService>();
         when(configurationService.getSettings(anything())).thenReturn({ askForKernelRestart: false } as any);
 
         // Resolve with nothing: a ts-mockito instance answers `.then`, so returning `kernel` would never settle.
@@ -148,6 +149,31 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
         await command;
         await waitFor(() => executedCommands.includes('notebook.execute'));
         assert.deepStrictEqual(executedCommands, ['restart', 'notebook.execute']);
+    });
+
+    test('Restart Kernel and Run All Cells does not run cells when the user declines the restart', async () => {
+        when(configurationService.getSettings(anything())).thenReturn({ askForKernelRestart: true } as any);
+        when(
+            mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything(), anything())
+        ).thenResolve(undefined);
+
+        await handlers.get(Commands.RestartKernelAndRunAllCells)!();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        assert.deepStrictEqual(executedCommands, [], 'neither a restart nor a run may happen');
+    });
+
+    test('Restart Kernel and Run All Cells does not run cells when the restart fails', async () => {
+        wrapKernelMethod.callsFake(async () => {
+            throw new Error('kernel died');
+        });
+        when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenResolve(undefined);
+
+        await handlers.get(Commands.RestartKernelAndRunAllCells)!();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        assert.deepStrictEqual(executedCommands, [], 'cells must not run after a failed restart');
+        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
     });
 
     test('Restart Kernel and Run Up To Selected Cell with no arguments restarts, then runs to the selection', async () => {

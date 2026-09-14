@@ -2800,7 +2800,6 @@
         "vscode-tas-client": "^0.1.84",
         "ws": "^6.2.4",
         "zeromq": "^6.5.0",
-        "zeromqold": "npm:zeromq@^6.0.0-beta.6",
         "zod": "^4.1.12"
     },
     "devDependencies": {
@@ -2946,7 +2945,8 @@
     "optionalDependencies": {
         "@tailwindcss/oxide-linux-x64-gnu": "4.1.14",
         "fsevents": "^2.3.2",
-        "lightningcss-linux-x64-gnu": "1.30.1"
+        "lightningcss-linux-x64-gnu": "1.30.1",
+        "zeromqold": "npm:zeromq@^6.0.0-beta.6"
     },
     "overrides": {
         "braces": "3.0.3",

@@ -10,6 +10,7 @@ import { IKernelStatusProvider } from '../kernels/kernelStatusProvider';
 import { IKernel, IKernelProvider } from '../kernels/types';
 import { Commands } from '../platform/common/constants';
 import { IConfigurationService, IDisposable } from '../platform/common/types';
+import { createDeferred, Deferred } from '../platform/common/utils/async';
 import { dispose } from '../platform/common/utils/lifecycle';
 import { IServiceContainer } from '../platform/ioc/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../test/vscode-mock';
@@ -17,6 +18,7 @@ import { KernelConnector } from './controllers/kernelConnector';
 import { NotebookCellLanguageService } from './languages/cellLanguageService';
 import { NotebookCommandListener } from './notebookCommandListener';
 import { NotebookEditorProvider } from './notebookEditorProvider';
+import { IDeepnoteInitNotebookRunner } from './types';
 
 type CommandHandler = (...args: unknown[]) => unknown;
 
@@ -33,6 +35,8 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
     let notebook: NotebookDocument;
     let wrapKernelMethod: sinon.SinonStub;
     let executedCommands: string[];
+    let initNotebookRunner: IDeepnoteInitNotebookRunner;
+    let initDone: Deferred<void>;
 
     setup(() => {
         resetVSCodeMocks();
@@ -78,11 +82,17 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
         const configurationService = mock<IConfigurationService>();
         when(configurationService.getSettings(anything())).thenReturn({ askForKernelRestart: false } as any);
 
+        // Resolve with nothing: a ts-mockito instance answers `.then`, so returning `kernel` would never settle.
         wrapKernelMethod = sinon.stub(KernelConnector, 'wrapKernelMethod').callsFake(async () => {
             executedCommands.push('restart');
 
-            return kernel;
+            return undefined as unknown as IKernel;
         });
+
+        initDone = createDeferred<void>();
+        initDone.resolve();
+        initNotebookRunner = mock<IDeepnoteInitNotebookRunner>();
+        when(initNotebookRunner.waitForInit(anything())).thenCall(() => initDone.promise);
 
         const listener = new NotebookCommandListener(
             disposables,
@@ -92,7 +102,8 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
             instance(mock<IDataScienceErrorHandler>()),
             new NotebookEditorProvider(),
             instance(mock<IServiceContainer>()),
-            instance(mock<IKernelStatusProvider>())
+            instance(mock<IKernelStatusProvider>()),
+            instance(initNotebookRunner)
         );
         listener.activate();
     });
@@ -120,6 +131,21 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
     test('Restart Kernel and Run All Cells with no arguments restarts before running', async () => {
         await handlers.get(Commands.RestartKernelAndRunAllCells)!();
 
+        await waitFor(() => executedCommands.includes('notebook.execute'));
+        assert.deepStrictEqual(executedCommands, ['restart', 'notebook.execute']);
+    });
+
+    test('Restart Kernel and Run All Cells waits for the init notebook before running', async () => {
+        initDone = createDeferred<void>();
+
+        const command = handlers.get(Commands.RestartKernelAndRunAllCells)!();
+        await waitFor(() => executedCommands.includes('restart'));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        assert.deepStrictEqual(executedCommands, ['restart'], 'cells must not run while init is in flight');
+        verify(initNotebookRunner.waitForInit(kernel)).once();
+
+        initDone.resolve();
+        await command;
         await waitFor(() => executedCommands.includes('notebook.execute'));
         assert.deepStrictEqual(executedCommands, ['restart', 'notebook.execute']);
     });

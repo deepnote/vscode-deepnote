@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { inject, injectable } from 'inversify';
+import { inject, injectable, optional } from 'inversify';
 
 import {
     ConfigurationTarget,
@@ -24,7 +24,7 @@ import { IKernel, IKernelProvider } from '../kernels/types';
 import { getDisplayPath } from '../platform/common/platform/fs-paths';
 import { DataScience } from '../platform/common/utils/localize';
 import { logger } from '../platform/logging';
-import { INotebookEditorProvider } from './types';
+import { IDeepnoteInitNotebookRunner, INotebookEditorProvider } from './types';
 import { IServiceContainer } from '../platform/ioc/types';
 import { endCellAndDisplayErrorsInCell } from '../kernels/execution/helpers';
 import { chainWithPendingUpdates } from '../kernels/execution/notebookUpdater';
@@ -52,7 +52,10 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         @inject(IDataScienceErrorHandler) private errorHandler: IDataScienceErrorHandler,
         @inject(INotebookEditorProvider) private notebookEditorProvider: INotebookEditorProvider,
         @inject(IServiceContainer) private serviceContainer: IServiceContainer,
-        @inject(IKernelStatusProvider) private kernelStatusProvider: IKernelStatusProvider
+        @inject(IKernelStatusProvider) private kernelStatusProvider: IKernelStatusProvider,
+        @inject(IDeepnoteInitNotebookRunner)
+        @optional()
+        private readonly initNotebookRunner: IDeepnoteInitNotebookRunner | undefined
     ) {}
 
     activate(): void {
@@ -81,9 +84,11 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
                 Commands.RestartKernel,
                 (context?: { notebookEditor: { notebookUri: Uri } } | Uri) => {
                     if (context && 'notebookEditor' in context) {
-                        return this.restartKernelImpl(context?.notebookEditor?.notebookUri).catch(noop);
+                        return this.restartKernelImpl(this.findKernel(context?.notebookEditor?.notebookUri)).catch(
+                            noop
+                        );
                     } else {
-                        return this.restartKernelImpl(context).catch(noop);
+                        return this.restartKernelImpl(this.findKernel(context)).catch(noop);
                     }
                 }
             )
@@ -171,7 +176,7 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     }
 
     private async restartKernelAndRunAllCells(notebookUri: Uri | undefined) {
-        await this.restartKernelImpl(notebookUri);
+        await this.restartKernelAndWaitForInit(this.findKernel(notebookUri));
         this.runAllCells();
     }
 
@@ -179,45 +184,65 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         const activeNBE = this.notebookEditorProvider.activeNotebookEditor;
 
         if (activeNBE) {
-            await this.restartKernelImpl(activeNBE.notebook.uri);
+            const selectionEnd = activeNBE.selection.end;
+            await this.restartKernelAndWaitForInit(this.findKernel(activeNBE.notebook.uri));
             commands
                 .executeCommand('notebook.cell.execute', {
-                    ranges: [{ start: 0, end: activeNBE.selection.end }],
+                    ranges: [{ start: 0, end: selectionEnd }],
                     document: activeNBE.notebook.uri
                 })
                 .then(noop, noop);
         }
     }
 
-    private async restartKernelImpl(notebookUri: Uri | undefined): Promise<void> {
-        const uri = notebookUri ?? this.notebookEditorProvider.activeNotebookEditor?.notebook.uri;
-        const document = workspace.notebookDocuments.find((document) => document.uri.toString() === uri?.toString());
-
-        if (document === undefined) {
+    /**
+     * Restarts `kernel` and, for a Deepnote notebook with an init notebook, waits for that init run too, so
+     * cells run afterwards see the initialised state instead of racing it.
+     */
+    private async restartKernelAndWaitForInit(kernel: IKernel | undefined): Promise<void> {
+        if (!kernel) {
             return;
         }
 
-        const kernel = this.kernelProvider.get(document);
+        const restarted = await this.restartKernelImpl(kernel);
+        if (restarted && this.initNotebookRunner) {
+            await this.initNotebookRunner.waitForInit(kernel);
+        }
+    }
 
-        if (kernel) {
-            logger.debug(`Restart kernel command handler for ${getDisplayPath(document.uri)}`);
-            if (await this.shouldAskForRestart(document.uri)) {
-                // Ask the user if they want us to restart or not.
-                const message = DataScience.restartKernelMessage;
-                const yes = DataScience.restartKernelMessageYes;
-                const dontAskAgain = DataScience.restartKernelMessageDontAskAgain;
+    /** The kernel of `notebookUri`, or of the active notebook when no URI is given (the Command Palette passes none). */
+    private findKernel(notebookUri: Uri | undefined): IKernel | undefined {
+        const uri = notebookUri ?? this.notebookEditorProvider.activeNotebookEditor?.notebook.uri;
+        const document = workspace.notebookDocuments.find((document) => document.uri.toString() === uri?.toString());
 
-                const response = await window.showInformationMessage(message, { modal: true }, yes, dontAskAgain);
-                if (response === dontAskAgain) {
-                    await this.disableAskForRestart(document.uri);
-                    this.wrapKernelMethod('restart', kernel).catch(noop);
-                } else if (response === yes) {
-                    this.wrapKernelMethod('restart', kernel).catch(noop);
-                }
-            } else {
-                this.wrapKernelMethod('restart', kernel).catch(noop);
+        return document ? this.kernelProvider.get(document) : undefined;
+    }
+
+    /** Restarts `kernel`, asking first when the setting says so. Resolves `true` once a restart has completed. */
+    private async restartKernelImpl(kernel: IKernel | undefined): Promise<boolean> {
+        if (!kernel) {
+            return false;
+        }
+
+        const notebookUri = kernel.notebook.uri;
+        logger.debug(`Restart kernel command handler for ${getDisplayPath(notebookUri)}`);
+        if (await this.shouldAskForRestart(notebookUri)) {
+            // Ask the user if they want us to restart or not.
+            const message = DataScience.restartKernelMessage;
+            const yes = DataScience.restartKernelMessageYes;
+            const dontAskAgain = DataScience.restartKernelMessageDontAskAgain;
+
+            const response = await window.showInformationMessage(message, { modal: true }, yes, dontAskAgain);
+            if (response === dontAskAgain) {
+                await this.disableAskForRestart(notebookUri);
+            } else if (response !== yes) {
+                return false;
             }
         }
+
+        await this.wrapKernelMethod('restart', kernel).catch(noop);
+
+        return true;
     }
 
     public async restartKernel(notebookUri: Uri | undefined, disableUI: boolean = false): Promise<void> {

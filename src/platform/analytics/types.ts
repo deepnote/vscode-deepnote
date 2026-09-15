@@ -27,6 +27,7 @@ export type TelemetryEventName =
     | 'select_environment'
     | 'split_notebook'
     | 'switch_sql_integration'
+    | 'switch_sql_return_variable_type'
     | 'toggle_snapshots'
     | 'update_environment';
 
@@ -74,6 +75,7 @@ export interface TelemetryEventProperties {
     split_notebook: { notebookCount: number; outcome: CommandOutcome };
     /** `fromEnvFile` is file-ONLY, not file-configured: false when the id is also in the project roster. */
     switch_sql_integration: { fromEnvFile: boolean; integrationType: string };
+    switch_sql_return_variable_type: { returnVariableType: 'dataframe' | 'query_preview' };
     toggle_snapshots: { enabled: boolean };
     update_environment: { field: 'name' | 'packages'; packageCount?: number };
 }

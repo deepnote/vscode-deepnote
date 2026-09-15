@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import { NotebookDocument, NotebookEditor, Uri, type Event } from 'vscode';
+import type { IKernel } from '../kernels/types';
 import { Resource } from '../platform/common/types';
 import type { EnvironmentPath } from '@vscode/python-extension';
 import type { DeepnoteFile } from '@deepnote/blocks';
@@ -53,4 +54,14 @@ export interface IDeepnoteNotebookManager {
      * @returns `true` if at least one cached entry was found and updated, `false` otherwise
      */
     updateProjectIntegrations(projectId: string, integrations: ProjectIntegration[]): boolean;
+}
+
+export const IDeepnoteInitNotebookRunner = Symbol('IDeepnoteInitNotebookRunner');
+export interface IDeepnoteInitNotebookRunner {
+    /**
+     * Resolves once the init notebook run triggered by the latest start or restart of `kernel` has finished,
+     * or immediately when none is in flight. The run is registered synchronously with the kernel's
+     * start/restart events, so a listener of those same events can await it.
+     */
+    waitForInit(kernel: IKernel): Promise<void>;
 }

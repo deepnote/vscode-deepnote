@@ -20,6 +20,8 @@ import { IExtensionSyncActivationService } from '../../platform/activation/types
 import { ITelemetryService } from '../../platform/analytics/types';
 import { IConfigurationService, IDisposableRegistry } from '../../platform/common/types';
 import { Commands } from '../../platform/common/constants';
+import { isDeepnoteNotebook } from '../../platform/common/utils';
+import { DataScience } from '../../platform/common/utils/localize';
 import { notebookUpdaterUtils } from '../../kernels/execution/notebookUpdater';
 import { WrappedError } from '../../platform/errors/types';
 import { formatInputBlockCellContent, getInputBlockLanguage } from './inputBlockContentFormatter';
@@ -242,10 +244,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
      * cells with a different owner and the stale-run cleanup would never match them.
      */
     public async addAgentBlock(): Promise<void> {
-        const editor = window.activeNotebookEditor;
-        if (!editor) {
-            throw new Error(l10n.t('No active notebook editor found'));
-        }
+        const editor = this.getActiveDeepnoteNotebookEditor();
         const document = editor.notebook;
         const agentBlockExistsMessage = l10n.t('This notebook already contains an agent block.');
 
@@ -303,10 +302,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     public async addSqlBlock(): Promise<void> {
-        const editor = window.activeNotebookEditor;
-        if (!editor) {
-            throw new Error(l10n.t('No active notebook editor found'));
-        }
+        const editor = this.getActiveDeepnoteNotebookEditor();
         const document = editor.notebook;
         const selection = editor.selection;
         const cells = editor.notebook.getCells();
@@ -349,10 +345,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     public async addBigNumberChartBlock(): Promise<void> {
-        const editor = window.activeNotebookEditor;
-        if (!editor) {
-            throw new Error(l10n.t('No active notebook editor found'));
-        }
+        const editor = this.getActiveDeepnoteNotebookEditor();
         const document = editor.notebook;
         const selection = editor.selection;
 
@@ -392,11 +385,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     public async addChartBlock(): Promise<void> {
-        const editor = window.activeNotebookEditor;
-
-        if (!editor) {
-            throw new WrappedError(l10n.t('No active notebook editor found'));
-        }
+        const editor = this.getActiveDeepnoteNotebookEditor();
 
         const document = editor.notebook;
         const selection = editor.selection;
@@ -449,10 +438,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     public async addInputBlock(blockType: InputBlockType): Promise<void> {
-        const editor = window.activeNotebookEditor;
-        if (!editor) {
-            throw new Error(l10n.t('No active notebook editor found'));
-        }
+        const editor = this.getActiveDeepnoteNotebookEditor();
         const document = editor.notebook;
         const selection = editor.selection;
         const cells = editor.notebook.getCells();
@@ -504,10 +490,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             'text-cell-h3': l10n.t('Heading 3')
         } as const satisfies Record<TextBlockType, string>;
 
-        const editor = window.activeNotebookEditor;
-        if (!editor) {
-            throw new Error(l10n.t('No active notebook editor found'));
-        }
+        const editor = this.getActiveDeepnoteNotebookEditor();
 
         const items: (QuickPickItem & { textBlockType: TextBlockType })[] = TEXT_BLOCK_TYPES.map((textBlockType) => {
             const label = TEXT_BLOCK_TYPE_LABELS[textBlockType];
@@ -547,10 +530,8 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             button: l10n.t('Button')
         } as const satisfies Record<InputBlockType, string>;
 
-        const editor = window.activeNotebookEditor;
-        if (!editor) {
-            throw new Error(l10n.t('No active notebook editor found'));
-        }
+        // Fail fast, before the picker, when the active notebook is not a Deepnote notebook.
+        this.getActiveDeepnoteNotebookEditor();
 
         const items: (QuickPickItem & { inputBlockType: InputBlockType })[] = INPUT_BLOCK_TYPES.map(
             (inputBlockType) => {
@@ -580,10 +561,7 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
     }
 
     public async addTextBlockCommandHandler({ textBlockType }: { textBlockType: TextBlockType }): Promise<void> {
-        const editor = window.activeNotebookEditor;
-        if (!editor) {
-            throw new Error(l10n.t('No active notebook editor found'));
-        }
+        const editor = this.getActiveDeepnoteNotebookEditor();
 
         await this.addTextBlock({ editor, textBlockType });
     }
@@ -660,6 +638,23 @@ export class DeepnoteNotebookCommandListener implements IExtensionSyncActivation
             logger.error('Failed to enable snapshots', error);
             void window.showErrorMessage(l10n.t('Failed to enable snapshots.'));
         }
+    }
+
+    /**
+     * The add-block commands are contributed with `enablement: notebookType == 'deepnote'`, which gates the
+     * palette and toolbar. This gives programmatic `executeCommand` callers the same answer, so a Deepnote-shaped
+     * cell never lands in an `.ipynb` or Interactive Window.
+     */
+    private getActiveDeepnoteNotebookEditor(): NotebookEditor {
+        const editor = window.activeNotebookEditor;
+        if (!editor) {
+            throw new Error(l10n.t('No active notebook editor found'));
+        }
+        if (!isDeepnoteNotebook(editor.notebook)) {
+            throw new Error(DataScience.deepnoteBlocksRequireDeepnoteNotebook);
+        }
+
+        return editor;
     }
 
     private trackAddBlock(blockType: string): void {

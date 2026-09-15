@@ -2,9 +2,10 @@
 // Licensed under the MIT License.
 
 import { injectable } from 'inversify';
-import { Uri, NotebookEditor, window, workspace } from 'vscode';
+import { NotebookDocument, NotebookEditor, Uri, window, workspace } from 'vscode';
+import { JupyterNotebookView } from '../platform/common/constants';
 import { Resource } from '../platform/common/types';
-import { getResourceType } from '../platform/common/utils';
+import { isDeepnoteNotebook } from '../platform/common/utils';
 import { getComparisonKey } from '../platform/vscode-path/resources';
 import { IEmbedNotebookEditorProvider, INotebookEditorProvider } from './types';
 import { getOSType, OSType } from '../platform/common/utils/platform';
@@ -16,6 +17,14 @@ import { getOSType, OSType } from '../platform/common/utils/platform';
  * This is also responsible for tracking all notebooks that open and then keeping the VS Code notebook models updated with changes we made to our underlying model.
  * E.g. when cells are executed the results in our model is updated, this tracks those changes and syncs VSC cells with those updates.
  */
+/**
+ * Notebooks whose kernels this extension drives: `.ipynb` documents and Deepnote notebooks. Interactive Windows
+ * are notebooks too, but they are found through the embedded providers.
+ */
+function isKernelNotebook(document: NotebookDocument): boolean {
+    return document.notebookType === JupyterNotebookView || isDeepnoteNotebook(document);
+}
+
 @injectable()
 export class NotebookEditorProvider implements INotebookEditorProvider {
     private providers: Set<IEmbedNotebookEditorProvider> = new Set();
@@ -26,10 +35,9 @@ export class NotebookEditorProvider implements INotebookEditorProvider {
 
     findNotebookEditor(resource: Resource) {
         const key = resource ? getComparisonKey(resource, true) : 'false';
-        const notebook =
-            getResourceType(resource) === 'notebook'
-                ? workspace.notebookDocuments.find((item) => getComparisonKey(item.uri, true) === key)
-                : undefined;
+        const notebook = workspace.notebookDocuments.find(
+            (item) => isKernelNotebook(item) && getComparisonKey(item.uri, true) === key
+        );
         const targetNotebookEditor =
             notebook && window.activeNotebookEditor?.notebook === notebook ? window.activeNotebookEditor : undefined;
 

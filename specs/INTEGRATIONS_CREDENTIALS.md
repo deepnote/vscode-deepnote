@@ -433,6 +433,20 @@ Orchestrates the integration management UI and commands.
 3. Manager opens webview with integration list
 4. Optionally pre-selects a specific integration for configuration
 
+**Add Existing Integration** (`deepnote.addExistingIntegration`, also the "Add Existing Integration" button in the
+webview, implemented in `existingIntegrationPicker.ts`):
+
+1. Scans every `.deepnote` file in the workspace folders (snapshots excluded) and collects the roster entries of
+   _other_ projects whose id has a config in SecretStorage; ids already on the active project's roster are skipped,
+   as are file-only (`.deepnote.env.yaml`) integrations, which already apply workspace-wide.
+2. Shows a QuickPick (name, type, "Used in: <projects>"). An id whose roster type disagrees with the stored config's
+   type is dropped with a warning rather than offered.
+3. On selection, appends `{ id, name, type }` to the active project's roster via `persistProjectIntegrations`.
+   Nothing is copied in SecretStorage: configs (and federated refresh tokens) are keyed by integration id alone, and
+   the roster entry is what scopes an integration to a project, so the linked project resolves the same credentials.
+4. Re-runs the integration env refresh in the project's running kernels and re-shows the panel, since no storage
+   change event fires for a roster-only edit.
+
 #### 4. **Integration Webview** (`integrationWebview.ts`)
 
 Provides the webview-based UI for managing integration credentials.

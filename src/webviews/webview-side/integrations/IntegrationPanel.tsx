@@ -212,6 +212,10 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
         setSelectedIntegrationType(undefined);
     };
 
+    const handleAddExisting = () => {
+        postOutbound({ type: 'addExisting' });
+    };
+
     const handleSelectIntegrationType = (type: ConfigurableDatabaseIntegrationType) => {
         // Generate a new UUID for the integration
         const newId = generateUuid();
@@ -239,7 +243,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 onSignOut={handleSignOut}
             />
 
-            <IntegrationTypeSelector onSelectType={handleSelectIntegrationType} />
+            <IntegrationTypeSelector onAddExisting={handleAddExisting} onSelectType={handleSelectIntegrationType} />
 
             {selectedIntegrationId && selectedIntegrationType && (
                 <ConfigurationForm

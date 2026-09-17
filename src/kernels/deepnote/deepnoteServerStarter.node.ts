@@ -159,7 +159,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
             promise: (contextToStop
                 ? this.stopServerForEnvironment(contextToStop, deepnoteFileUri)
                 : Promise.resolve()
-            ).then(() => this.startServerForEnvironment(contextToStart, interpreter, deepnoteFileUri, token))
+            ).then(() => this.startServerForFile(contextToStart, interpreter, deepnoteFileUri, token))
         };
         this.pendingOperations.set(fileKey, operation);
 
@@ -185,7 +185,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * - Lock file creation (after start, using returned PID)
      * - Output channel logging (via process stdout/stderr streams)
      */
-    private async startServerForEnvironment(
+    private async startServerForFile(
         projectContext: ProjectContext,
         interpreter: PythonEnvironment,
         deepnoteFileUri: Uri,

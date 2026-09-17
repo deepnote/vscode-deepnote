@@ -194,6 +194,17 @@ suite('DeepnoteInterpreterSidecar', () => {
         assert.strictEqual(writes, 0);
     });
 
+    test('writes nothing for a notebook that belongs to none of the open folders', async () => {
+        when(mockedVSCodeNamespaces.workspace.getWorkspaceFolder(anything())).thenReturn(undefined);
+
+        await new DeepnoteInterpreterSidecar().record(
+            notebook(PROJECT_ID, Uri.file('/elsewhere/project.deepnote')),
+            INTERPRETER
+        );
+
+        assert.strictEqual(writes, 0);
+    });
+
     test('resolves rather than rejects when the write fails', async () => {
         const fs = mock<typeof import('vscode').workspace.fs>();
         when(fs.readFile(anything())).thenReject(new Error('ENOENT'));

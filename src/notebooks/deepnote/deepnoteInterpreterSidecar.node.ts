@@ -89,7 +89,7 @@ export class DeepnoteInterpreterSidecar implements IDeepnoteInterpreterSidecar {
     }
 
     private getSidecarUri(notebookUri: Uri): Uri | undefined {
-        const folder = workspace.getWorkspaceFolder(notebookUri) ?? workspace.workspaceFolders?.[0];
+        const folder = workspace.getWorkspaceFolder(notebookUri);
 
         if (!folder) {
             return undefined;

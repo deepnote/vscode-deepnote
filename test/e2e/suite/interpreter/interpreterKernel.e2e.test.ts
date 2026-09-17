@@ -227,8 +227,12 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
         expect(renderedOutput).to.contain(EXPECTED_OUTPUT);
 
         // The cell printed sys.prefix: the kernel must be the venv this test created, which is what
-        // separates "active interpreter" from the old Deepnote-managed environment.
-        expect(renderedOutput).to.contain(venvDir);
+        // separates "active interpreter" from the old Deepnote-managed environment. Either spelling
+        // of the path counts: os.tmpdir() is itself a symlink on macOS, and Python reports it resolved.
+        expect([venvDir, fs.realpathSync(venvDir)].some((dir) => renderedOutput.includes(dir))).to.equal(
+            true,
+            `the kernel must run inside ${venvDir}`
+        );
 
         // The sidecar is the contract with the Deepnote CLI and MCP server (deepnote/deepnote#518):
         // they run this project on the interpreter recorded here when none is given explicitly. It

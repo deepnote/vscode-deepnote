@@ -135,6 +135,7 @@ suite('DeepnoteToolkitInstaller - cancellation', () => {
         });
         // Kernel spec already present, so the fast path runs the probe exec and nothing else.
         when(mockFs.exists(anything())).thenResolve(true);
+        when(mockFs.readFile(anything())).thenResolve(JSON.stringify({ argv: [fakePython.fsPath] }));
 
         const result = await installer.ensureVenvAndToolkit(venvInterpreter, venvPath, false, cts.token);
 
@@ -159,6 +160,7 @@ suite('DeepnoteToolkitInstaller - cancellation', () => {
             stderr: ''
         });
         when(mockFs.exists(anything())).thenResolve(true);
+        when(mockFs.readFile(anything())).thenResolve(JSON.stringify({ argv: [fakePython.fsPath] }));
 
         await installer.ensureVenvAndToolkit(venvInterpreter, venvPath, false, cts.token);
 
@@ -167,6 +169,25 @@ suite('DeepnoteToolkitInstaller - cancellation', () => {
             checkedPath.fsPath,
             Uri.joinPath(venvPath, 'share', 'jupyter', 'kernels', 'deepnote-venv', 'kernel.json').fsPath,
             'a cancelled ipykernel install leaves the directory behind, so only kernel.json proves it finished'
+        );
+    });
+
+    test('a kernel spec naming an interpreter outside this venv is replaced, not trusted', async () => {
+        seedInterpreterCache(venvPath);
+        when(mockFs.exists(anything())).thenResolve(true);
+        when(mockFs.readFile(anything())).thenResolve(
+            JSON.stringify({ argv: ['/gone/venv/bin/python', '-m', 'ipykernel_launcher', '-f', '{connection_file}'] })
+        );
+        when(mockProcessService.exec(anything(), anything(), anything())).thenResolve({ stdout: '1.2.3\n', stderr: '' });
+
+        await installer.ensureVenvAndToolkit(venvInterpreter, venvPath, false, cts.token);
+
+        // Exec 0 is the toolkit version probe; the reinstall is what must follow it.
+        const [, args] = capture(mockProcessService.exec).second();
+        assert.deepStrictEqual(
+            args.slice(0, 5),
+            ['-m', 'ipykernel', 'install', '--prefix', venvPath.fsPath],
+            'a spec that cannot launch this venv is worse than no spec: Jupyter fails with a bare ENOENT'
         );
     });
 

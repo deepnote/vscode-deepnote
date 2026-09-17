@@ -8,6 +8,7 @@ import { resolvePythonExecutable } from '@deepnote/runtime-core';
 
 import { Cancellation, isCancellationError } from '../../platform/common/cancellation';
 import { STANDARD_OUTPUT_CHANNEL } from '../../platform/common/constants';
+import { arePathsSame } from '../../platform/common/platform/fileUtils';
 import { IFileSystem } from '../../platform/common/platform/types';
 import { ExecutionResult, IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IExtensionContext, IOutputChannel } from '../../platform/common/types';
@@ -521,12 +522,20 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
 
         const kernelSpecName = this.getKernelSpecName(venvPath);
         const kernelSpecPath = Uri.joinPath(venvPath, 'share', 'jupyter', 'kernels', kernelSpecName);
+        const kernelJson = Uri.joinPath(kernelSpecPath, 'kernel.json');
 
         // Keyed on kernel.json, not the directory: a cancelled ipykernel install leaves the
         // directory behind, and that must not short-circuit the reinstall.
-        if (await this.fs.exists(Uri.joinPath(kernelSpecPath, 'kernel.json'))) {
-            logger.info(`Kernel spec already exists at ${kernelSpecPath.fsPath}`);
-            return;
+        if (await this.fs.exists(kernelJson)) {
+            if (await this.kernelSpecRunsInterpreter(kernelJson, venvInterpreter.uri)) {
+                logger.info(`Kernel spec already exists at ${kernelSpecPath.fsPath}`);
+                return;
+            }
+
+            // ipykernel install replaces the whole directory, so the stale spec needs no removal.
+            logger.warn(
+                `Kernel spec at ${kernelSpecPath.fsPath} does not launch ${venvInterpreter.uri.fsPath}; reinstalling`
+            );
         }
 
         logger.info(`Installing kernel spec '${kernelSpecName}' for venv at ${venvPath.fsPath}...`);
@@ -548,6 +557,21 @@ export class DeepnoteToolkitInstaller implements IDeepnoteToolkitInstaller {
         );
 
         logger.info(`Kernel spec installed successfully to ${kernelSpecPath.fsPath}`);
+    }
+
+    private async kernelSpecRunsInterpreter(kernelJson: Uri, expectedInterpreter: Uri): Promise<boolean> {
+        try {
+            const content = await this.fs.readFile(kernelJson);
+            const parsed = JSON.parse(content);
+            const specInterpreter =
+                Array.isArray(parsed.argv) && typeof parsed.argv[0] === 'string' ? parsed.argv[0] : undefined;
+            if (!specInterpreter) {
+                return false;
+            }
+            return arePathsSame(specInterpreter, expectedInterpreter.fsPath);
+        } catch {
+            return false;
+        }
     }
 
     public getVenvHash(deepnoteFileUri: Uri): string {

@@ -156,10 +156,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
         const contextToStart = existingContext;
         const operation = {
             type: 'start' as const,
-            promise: (contextToStop
-                ? this.stopServerForEnvironment(contextToStop, deepnoteFileUri)
-                : Promise.resolve()
-            ).then(() => this.startServerForFile(contextToStart, interpreter, deepnoteFileUri, token))
+            promise: (contextToStop ? this.stopServerForFile(contextToStop, deepnoteFileUri) : Promise.resolve()).then(
+                () => this.startServerForFile(contextToStart, interpreter, deepnoteFileUri, token)
+            )
         };
         this.pendingOperations.set(fileKey, operation);
 
@@ -266,7 +265,7 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
      * new interpreter, so this context is the only thing still holding the old server: skipping the
      * stop would leave a process that neither `dispose` nor a later `startServer` can reach.
      */
-    private async stopServerForEnvironment(projectContext: ProjectContext, deepnoteFileUri: Uri): Promise<void> {
+    private async stopServerForFile(projectContext: ProjectContext, deepnoteFileUri: Uri): Promise<void> {
         const fileKey = deepnoteFileUri.fsPath;
 
         const { serverInfo } = projectContext;

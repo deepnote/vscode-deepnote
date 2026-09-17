@@ -3,7 +3,6 @@
 
 export const WORKBENCH_TIMEOUT = 60_000;
 export const QUICK_PICK_TIMEOUT = 30_000;
-export const ENV_CREATED_TIMEOUT = 120_000;
 export const KERNEL_CONNECT_TIMEOUT = 300_000;
 
 // Mocha per-test timeout applied to the whole suite (overrides the .mocharc default). Stays just
@@ -11,10 +10,10 @@ export const KERNEL_CONNECT_TIMEOUT = 300_000;
 // Deepnote toolkit provisioning).
 export const SUITE_TIMEOUT = 1_320_000; // 22 min
 
-// A single "Run All" against an already-selected kernel must render output within this window. It
-// sits well above a healthy first run (the kernel is bound before the click — see
-// selectEnvironmentForNotebook) and below the multi-minute stall a dropped first run would cause,
-// so the kernel-binding regression fails here instead of being masked by re-runs.
+// A single "Run All" must render output within this window. It sits well above a healthy first run
+// (the interpreter already carries the toolkit, so nothing is provisioned) and below the multi-minute
+// stall a dropped first run would cause, so the kernel-binding regression fails here instead of
+// being masked by re-runs.
 export const FIRST_RUN_OUTPUT_TIMEOUT = 120_000;
 
 // How often to poll the output webview for the expected text.
@@ -22,19 +21,6 @@ export const OUTPUT_POLL_INTERVAL = 1_500;
 
 // How long to wait for the notebook output iframe (`#active-frame`) to become switchable.
 export const OUTPUT_FRAME_SWITCH_TIMEOUT = 5_000;
-
-export const INTERPRETER_RETRY_DELAY = 5_000;
-export const MAX_CREATE_ATTEMPTS = 6;
-
-// How long to wait for the interpreter quick pick to open after issuing the create-environment
-// command. When no interpreter has been discovered yet the command shows a "No Python interpreters
-// found" notification and returns instead, so this wait elapses and the attempt is retried.
-export const INTERPRETER_PROMPT_TIMEOUT = 5_000;
-
-// How long to wait for an optional input box (packages/description) to appear after confirming the
-// environment name. When the name already exists the create command short-circuits with an "already
-// exists" notification and opens no further inputs, so this wait elapses and the prompts are skipped.
-export const OPTIONAL_PROMPT_TIMEOUT = 5_000;
 
 // The in-window simple file/folder dialog needs a beat to resolve a typed path before it accepts.
 export const DIALOG_RESOLVE_DELAY = 1_500;
@@ -51,11 +37,6 @@ export const EDITOR_ACTIVE_TIMEOUT = 15_000;
 // so reading them cannot accidentally match the cell's source in the editor.
 export const OUTPUT_SELECTOR = '.output_container, .output, .rendered-output';
 
-// Where the managed venv lives. The directory name is what identifies it in the interpreter quick
-// pick; the bare '.venv' marker can only tell venv-shaped interpreters apart from the rest, since it
-// is also a substring of '.venv-e2e'.
+// Where the managed venv lives. Suites run against its interpreter, pinned in the generated user
+// settings (helpers/venv.ts).
 export const PREBAKED_VENV_DIR_NAME = '.venv-e2e';
-export const ANY_VENV_MARKER = '.venv';
-
-// Only elapses when the venv is missing, so it stays well under QUICK_PICK_TIMEOUT.
-export const PREBAKED_VENV_FILTER_TIMEOUT = 10_000;

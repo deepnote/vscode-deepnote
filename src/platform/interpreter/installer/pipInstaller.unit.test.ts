@@ -22,6 +22,7 @@ import { PythonExtension } from '@vscode/python-extension';
 import sinon from 'sinon';
 import { resolvableInstance } from '../../../test/datascience/helpers';
 import { setPythonApi } from '../helpers';
+import { DEEPNOTE_TOOLKIT_PACKAGES, DEEPNOTE_TOOLKIT_VERSION } from '../../common/constants';
 
 suite('Pip installer', async () => {
     let serviceContainer: IServiceContainer;
@@ -195,4 +196,30 @@ suite('Pip installer', async () => {
                 verify(pythonExecutionService.execObservable(anything(), anything())).once();
             });
         });
+
+    test('Installs deepnote-toolkit under its pip name, pinned, with the spec companion packages', async () => {
+        const interpreter: PythonEnvironment = {
+            uri: Uri.file('foobar'),
+            id: Uri.file('foobar').fsPath
+        };
+        when(environments.known).thenReturn([{ id: interpreter.id, tools: [EnvironmentType.Venv] } as any]);
+        when(pythonExecutionService.isModuleInstalled('pip')).thenResolve(true);
+        when(proc.exitCode).thenReturn(0);
+        subject.fire({ out: '', source: 'stdout' });
+        subject.resolve();
+
+        const cancellationToken = new CancellationTokenSource();
+        disposables.push(cancellationToken);
+
+        await pipInstaller.installModule(Product.deepnoteToolkit, interpreter, cancellationToken);
+
+        assert.deepEqual(capture(pythonExecutionService.execObservable).first()[0], [
+            '-m',
+            'pip',
+            'install',
+            '-U',
+            `deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`,
+            ...DEEPNOTE_TOOLKIT_PACKAGES
+        ]);
+    });
 });

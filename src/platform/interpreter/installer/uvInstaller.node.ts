@@ -9,6 +9,7 @@ import { ModuleInstallerType, ModuleInstallFlags } from './types';
 import { PythonEnvironment } from '../../pythonEnvironments/info';
 import { Environment } from '@vscode/python-extension';
 import { getInterpreterInfo } from '../helpers';
+import { translateModuleToPackages } from './utils';
 
 /**
  * Installer that uses the UV to manage packages.
@@ -65,7 +66,7 @@ export class UvInstaller extends ModuleInstaller {
         if (flags && flags & ModuleInstallFlags.upgrade) {
             args.push('--upgrade');
         }
-        args.push('--python', env.executable.uri?.fsPath || env.path, moduleName);
+        args.push('--python', env.executable.uri?.fsPath || env.path, ...translateModuleToPackages(moduleName));
         return {
             exe: 'uv',
             args

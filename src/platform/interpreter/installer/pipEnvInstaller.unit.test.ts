@@ -1,10 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import assert from 'assert';
 import { expect } from 'chai';
 import * as sinon from 'sinon';
 import * as TypeMoq from 'typemoq';
 import { Uri } from 'vscode';
 import { IInterpreterService } from '../../../platform/interpreter/contracts';
+import { Product } from '../../../platform/interpreter/installer/types';
+import { translateProductToModule } from '../../../platform/interpreter/installer/utils';
+import { DEEPNOTE_TOOLKIT_PACKAGES, DEEPNOTE_TOOLKIT_VERSION } from '../../../platform/common/constants';
 import { IServiceContainer } from '../../../platform/ioc/types';
 import { EnvironmentType } from '../../../platform/pythonEnvironments/info';
 import { instance, mock, when } from 'ts-mockito';
@@ -144,5 +148,22 @@ suite('PipEnv installer', async () => {
         } as any);
         const result = await pipEnvInstaller.isSupported(resource);
         expect(result).to.equal(false, 'Should be false');
+    });
+
+    test('Spreads deepnote-toolkit companion packages into the install args', async () => {
+        const interpreter = {
+            uri: Uri.file('foobar'),
+            id: Uri.file('foobar').fsPath
+        };
+        const moduleName = translateProductToModule(Product.deepnoteToolkit);
+
+        const result = await (pipEnvInstaller as any).getExecutionArgs(moduleName, interpreter);
+
+        assert.deepStrictEqual(result.args, [
+            'install',
+            `deepnote-toolkit[server]==${DEEPNOTE_TOOLKIT_VERSION}`,
+            ...DEEPNOTE_TOOLKIT_PACKAGES,
+            '--dev'
+        ]);
     });
 });

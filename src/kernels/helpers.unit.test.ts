@@ -5,7 +5,8 @@ import * as sinon from 'sinon';
 import { assert } from 'chai';
 import { when, instance, mock, anything } from 'ts-mockito';
 import { Uri } from 'vscode';
-import { getDisplayNameOrNameOfKernelConnection } from './helpers';
+import { getDisplayNameOrNameOfKernelConnection, getKernelDisplayPathFromKernelConnection } from './helpers';
+import { DeepnoteKernelConnectionMetadata } from './deepnote/types';
 import {
     IJupyterKernelSpec,
     LiveRemoteKernelConnectionMetadata,
@@ -261,6 +262,63 @@ suite('Kernel Connection Helpers', () => {
             assert.strictEqual(name, 'kspecname (.env)');
         });
     });
+    suite('Deepnote kernels', () => {
+        const venv = { uri: Uri.file('/work/.venv/bin/python'), id: '/work/.venv/bin/python' };
+
+        function deepnoteConnection(interpreter?: PythonEnvironment) {
+            return DeepnoteKernelConnectionMetadata.create({
+                id: 'deepnote-notebook-1',
+                baseUrl: 'http://127.0.0.1:8888',
+                kernelSpec: {
+                    argv: [],
+                    display_name: 'deepnote-kernelspec-name',
+                    name: 'python3',
+                    executable: 'python',
+                    language: 'python'
+                },
+                serverProviderHandle: { extensionId: 'ext', id: 'deepnote-server', handle: 'handle' },
+                interpreter
+            });
+        }
+
+        test('is named after the environment, not the Deepnote project', () => {
+            whenKnownEnvironments(environments).thenReturn([
+                {
+                    id: venv.id,
+                    path: venv.uri.fsPath,
+                    environment: { name: '.venv', type: 'VirtualEnvironment' },
+                    version: { major: 3, minor: 12, micro: 13, sysVersion: '3.12.13' }
+                }
+            ]);
+
+            const name = getDisplayNameOrNameOfKernelConnection(deepnoteConnection(venv as PythonEnvironment));
+
+            assert.strictEqual(name, '.venv (Python 3.12.13)');
+        });
+
+        test('describes the interpreter, resolving a relative kernelspec executable via the environment', () => {
+            whenKnownEnvironments(environments).thenReturn([
+                {
+                    id: venv.id,
+                    path: venv.uri.fsPath,
+                    environment: { name: '.venv', type: 'VirtualEnvironment', folderUri: Uri.file('/work/.venv') },
+                    version: { major: 3, minor: 12, micro: 13, sysVersion: '3.12.13' }
+                }
+            ]);
+
+            // The toolkit server serves the stock ipykernel spec, whose executable is a bare "python".
+            const displayPath = getKernelDisplayPathFromKernelConnection(deepnoteConnection(venv as PythonEnvironment));
+
+            assert.strictEqual(displayPath?.fsPath, Uri.file('/work/.venv').fsPath);
+        });
+
+        test('falls back to the kernelspec name when there is no interpreter', () => {
+            const name = getDisplayNameOrNameOfKernelConnection(deepnoteConnection(undefined));
+
+            assert.strictEqual(name, 'deepnote-kernelspec-name');
+        });
+    });
+
     suite('Python kernels (started using kernelspec)', () => {
         test('Display name if language is python', () => {
             const name = getDisplayNameOrNameOfKernelConnection(

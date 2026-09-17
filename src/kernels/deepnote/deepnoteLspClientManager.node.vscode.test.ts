@@ -3,7 +3,6 @@ import { anything, instance, mock, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
 import { DeepnoteLspClientManager } from './deepnoteLspClientManager.node';
-import { createMockChildProcess } from './deepnoteTestHelpers.node';
 import { IDisposableRegistry } from '../../platform/common/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
@@ -75,18 +74,10 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
             uri: Uri.file('/nonexistent/path/to/python')
         } as PythonEnvironment;
 
-        const mockServerInfo = {
-            url: 'http://localhost:8888',
-            jupyterPort: 8888,
-            lspPort: 8889,
-            token: 'test-token',
-            process: createMockChildProcess()
-        };
-
         // This will attempt to start LSP clients but may fail if pylsp isn't installed
         // We're mainly testing that the code path executes without crashing
         try {
-            await lspClientManager.startLspClients(mockServerInfo, testNotebookUri, mockInterpreter);
+            await lspClientManager.startLspClients(testNotebookUri, mockInterpreter);
 
             // If successful, clean up
             await lspClientManager.stopLspClients(testNotebookUri);
@@ -127,18 +118,10 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
             uri: Uri.file('/nonexistent/path/to/python')
         } as PythonEnvironment;
 
-        const mockServerInfo = {
-            url: 'http://localhost:8888',
-            jupyterPort: 8888,
-            lspPort: 8889,
-            token: 'test-token',
-            process: createMockChildProcess()
-        };
-
         try {
             // Try to start clients twice for the same notebook
-            await lspClientManager.startLspClients(mockServerInfo, testNotebookUri, mockInterpreter);
-            await lspClientManager.startLspClients(mockServerInfo, testNotebookUri, mockInterpreter);
+            await lspClientManager.startLspClients(testNotebookUri, mockInterpreter);
+            await lspClientManager.startLspClients(testNotebookUri, mockInterpreter);
 
             // Clean up
             await lspClientManager.stopLspClients(testNotebookUri);
@@ -159,17 +142,9 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
             uri: Uri.file('/nonexistent/path/to/python')
         } as PythonEnvironment;
 
-        const mockServerInfo = {
-            url: 'http://localhost:8888',
-            jupyterPort: 8888,
-            lspPort: 8889,
-            token: 'test-token',
-            process: createMockChildProcess()
-        };
-
         try {
             // First start
-            await lspClientManager.startLspClients(mockServerInfo, testNotebookUri, mockInterpreter);
+            await lspClientManager.startLspClients(testNotebookUri, mockInterpreter);
 
             // Stop clients (simulating environment switch cleanup)
             await lspClientManager.stopLspClients(testNotebookUri);
@@ -181,7 +156,7 @@ suite('DeepnoteLspClientManager Integration Tests', () => {
             } as PythonEnvironment;
 
             // This should NOT throw "command already exists" error
-            await lspClientManager.startLspClients(mockServerInfo, testNotebookUri, newMockInterpreter);
+            await lspClientManager.startLspClients(testNotebookUri, newMockInterpreter);
 
             // Clean up
             await lspClientManager.stopLspClients(testNotebookUri);

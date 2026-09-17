@@ -18,11 +18,9 @@ import {
     awaitCellStatusBarItems,
     clickCellStatusBarItem,
     copyFixtureToTempDir,
-    createEnvironment,
     openFolderViaDialog,
     openWorkspaceFile,
-    runOnceAndAwaitOutput,
-    selectEnvironmentForNotebook
+    runOnceAndAwaitOutput
 } from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'sql-query-chaining.deepnote';
@@ -37,8 +35,6 @@ const EXPECTED_OUTPUT = 'chained_rows_1234';
 
 describe('Deepnote E2E — chain SQL blocks through a query preview', function () {
     this.timeout(SUITE_TIMEOUT);
-
-    const environmentName = 'E2E SQL Chaining Env';
 
     let cleanupTempDir: (() => void) | undefined;
 
@@ -91,9 +87,6 @@ describe('Deepnote E2E — chain SQL blocks through a query preview', function (
         // The metadata edit re-renders the item; the second block keeps its DataFrame item.
         await awaitCellStatusBarItems(QUERY_PREVIEW_STATUS_BAR_TEXT, 1, WORKBENCH_TIMEOUT);
         await awaitCellStatusBarItems(DATAFRAME_STATUS_BAR_TEXT, 1, WORKBENCH_TIMEOUT);
-
-        await createEnvironment(environmentName);
-        await selectEnvironmentForNotebook(environmentName, NOTEBOOK_FILE_NAME);
 
         // "Run All" executes the preview block first, then the block that chains onto its variable.
         const renderedOutput = await runOnceAndAwaitOutput(

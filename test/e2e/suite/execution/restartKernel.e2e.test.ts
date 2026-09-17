@@ -22,13 +22,11 @@ import {
     clickRestartKernel,
     clickRunAll,
     copyFixtureToTempDir,
-    createEnvironment,
     dismissAllNotifications,
     openFolderViaDialog,
     openWorkspaceFile,
     readRenderedOutput,
     runOnceAndAwaitOutput,
-    selectEnvironmentForNotebook,
     waitForNotification,
     waitForNotificationToClear
 } from '../../helpers';
@@ -70,8 +68,6 @@ async function runAndAwaitProbe(candidates: number[], timeout: number): Promise<
 describe('Deepnote E2E — Restart Kernel from the notebook toolbar', function () {
     this.timeout(SUITE_TIMEOUT);
 
-    const environmentName = 'E2E Restart Env';
-
     let cleanupTempDir: (() => void) | undefined;
 
     before(async function () {
@@ -109,9 +105,6 @@ describe('Deepnote E2E — Restart Kernel from the notebook toolbar', function (
     });
 
     it('restarts the kernel from the toolbar button and drops the kernel state', async function () {
-        await createEnvironment(environmentName);
-        await selectEnvironmentForNotebook(environmentName, NOTEBOOK_FILE_NAME);
-
         // First run starts the kernel; the second proves the probe really reads state left in the kernel,
         // otherwise a "1" after the restart would prove nothing.
         await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, `${PROBE_PREFIX}1`, FIRST_RUN_OUTPUT_TIMEOUT);

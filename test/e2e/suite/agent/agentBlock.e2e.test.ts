@@ -26,14 +26,12 @@ import {
     confirmModalDialog,
     copyFixtureIntoDir,
     copyFixtureToTempDir,
-    createEnvironment,
     createScreenshotter,
     dismissAllNotifications,
     openFolderViaDialog,
     openWorkspaceFile,
     pointExtensionHostAtMockServer,
     readCellLayoutHeight,
-    selectEnvironmentForNotebook,
     startMockOpenAiServer,
     storeMockOpenAiApiKey
 } from '../../helpers';
@@ -49,7 +47,6 @@ const CODE_TOOL_NAME = 'add_code_block';
 const MARKDOWN_TOOL_NAME = 'add_markdown_block';
 // Leg 3 match: agentCellExecutionHandler add_markdown_block tool result.
 const MARKDOWN_BLOCK_ADDED_TEXT = 'Markdown block added.';
-const ENVIRONMENT_NAME = 'E2E Agent Env';
 const AGENT_RUN_TIMEOUT = 60_000;
 const PYTHON_OUTPUT_MARKER = 'agent-generated-python-ran';
 const GENERATED_PYTHON = `print("${PYTHON_OUTPUT_MARKER}")`;
@@ -246,14 +243,11 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
         await openFolderViaDialog(copy.tempDir);
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
 
-        // createEnvironment needs an active deepnote notebook; which one does not matter, and each
-        // group below binds the kernel for the notebook it actually runs.
         await openOnly(AGENT_FILE);
-        await createEnvironment(ENVIRONMENT_NAME);
 
         await dismissAllNotifications();
         await storeMockOpenAiApiKey();
-        await screenshot('environment-created');
+        await screenshot('workspace-open');
     });
 
     async function releaseMockServer(): Promise<void> {
@@ -295,12 +289,11 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
     });
 
     describe('one agent block on its own', function () {
-        // Opens and binds the notebook this group runs, so the group does not care what ran before
-        // it. Closing and reopening drops the block's generated cells, which is why it happens here
-        // once and never between the tests below.
+        // Opens the notebook this group runs, so the group does not care what ran before it. Closing
+        // and reopening drops the block's generated cells, which is why it happens here once and
+        // never between the tests below.
         before(async function () {
             await openOnly(AGENT_FILE);
-            await selectEnvironmentForNotebook(ENVIRONMENT_NAME, AGENT_FILE);
             await dismissAllNotifications();
         });
 
@@ -624,7 +617,6 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
             ]);
 
             await openOnly(BATCH_FILE);
-            await selectEnvironmentForNotebook(ENVIRONMENT_NAME, BATCH_FILE);
             await dismissAllNotifications();
             await clickRunAll(BATCH_FILE);
 
@@ -674,7 +666,6 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
             ]);
 
             await openOnly(STOP_FILE);
-            await selectEnvironmentForNotebook(ENVIRONMENT_NAME, STOP_FILE);
             await dismissAllNotifications();
             await clickRunAll(STOP_FILE);
 
@@ -720,7 +711,6 @@ describe('Deepnote — running an agent block against a stand-in OpenAI API', fu
     describe('re-running an agent block that already carries a transcript', function () {
         before(async function () {
             await openOnly(HEIGHT_FILE);
-            await selectEnvironmentForNotebook(ENVIRONMENT_NAME, HEIGHT_FILE);
             await dismissAllNotifications();
         });
 

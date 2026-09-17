@@ -17,12 +17,10 @@ import {
     WORKBENCH_TIMEOUT,
     awaitRenderedChart,
     copyFixtureToTempDir,
-    createEnvironment,
     openFolderViaDialog,
     openWorkspaceFile,
     readChartAriaLabels,
-    runOnceAndAwaitOutput,
-    selectEnvironmentForNotebook
+    runOnceAndAwaitOutput
 } from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'chart-column-types.deepnote';
@@ -46,8 +44,6 @@ const FORBIDDEN_OUTPUT = [
 
 describe('Deepnote E2E — render a chart block', function () {
     this.timeout(SUITE_TIMEOUT);
-
-    const environmentName = 'E2E Chart Env';
 
     let cleanupTempDir: (() => void) | undefined;
 
@@ -85,9 +81,6 @@ describe('Deepnote E2E — render a chart block', function () {
     });
 
     it('charts UUID and microsecond timestamp columns without a serialization or parse error', async function () {
-        await createEnvironment(environmentName);
-        await selectEnvironmentForNotebook(environmentName, NOTEBOOK_FILE_NAME);
-
         const renderedOutput = await runOnceAndAwaitOutput(
             NOTEBOOK_FILE_NAME,
             DATA_CELL_OUTPUT,

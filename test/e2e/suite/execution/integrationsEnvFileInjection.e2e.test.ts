@@ -13,11 +13,9 @@ import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
-    createEnvironment,
     openFolderViaDialog,
     openWorkspaceFile,
-    runOnceAndAwaitOutput,
-    selectEnvironmentForNotebook
+    runOnceAndAwaitOutput
 } from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'integrations-env-file.deepnote';
@@ -49,7 +47,6 @@ const DOTENV_CONTENT = 'DEMO_DB_HOST=injected-host.example.com\n';
 describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`', function () {
     this.timeout(SUITE_TIMEOUT);
 
-    const environmentName = 'E2E Integrations Env';
 
     let cleanupTempDir: (() => void) | undefined;
     // The temp workspace dir, so the live-refresh assertion can rewrite `.env`.
@@ -98,9 +95,6 @@ describe('Deepnote E2E — inject integration env var from `.deepnote.env.yaml`'
     });
 
     it('injects `PROD_POSTGRES_HOST` from `.env`, then live-refreshes it on a `.env` change without a restart', async function () {
-        await createEnvironment(environmentName);
-        await selectEnvironmentForNotebook(environmentName, NOTEBOOK_FILE_NAME);
-
         const first = await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, EXPECTED_OUTPUT, FIRST_RUN_OUTPUT_TIMEOUT);
         expect(first).to.contain(EXPECTED_OUTPUT);
 

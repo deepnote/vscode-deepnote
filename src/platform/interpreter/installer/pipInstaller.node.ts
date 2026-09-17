@@ -8,7 +8,7 @@ import { _SCRIPTS_DIR } from '../internal/scripts/index.node';
 import { ModuleInstallerType, ModuleInstallFlags, Product, IInstaller } from './types';
 import { EnvironmentType, PythonEnvironment } from '../../pythonEnvironments/info';
 import { IServiceContainer } from '../../ioc/types';
-import { translateProductToModule } from './utils';
+import { translateModuleToPackages, translateProductToModule } from './utils';
 import { IPythonExecutionFactory } from '../types.node';
 import { getPinnedPackages } from './pinnedPackages';
 import { Environment } from '@vscode/python-extension';
@@ -85,8 +85,10 @@ export class PipInstaller extends ModuleInstaller {
         if (getEnvironmentType(interpreter) === EnvironmentType.Unknown) {
             args.push('--user');
         }
+        const pipPackages = translateModuleToPackages(moduleName);
+
         return {
-            args: ['-m', 'pip', ...args, moduleName].concat(getPinnedPackages('pip', moduleName))
+            args: ['-m', 'pip', ...args, ...pipPackages].concat(getPinnedPackages('pip', moduleName))
         };
     }
     private isPipAvailable(interpreter: PythonEnvironment | Environment): Promise<boolean> {

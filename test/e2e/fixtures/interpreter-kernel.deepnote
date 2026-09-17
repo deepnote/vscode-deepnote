@@ -1,0 +1,23 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-interpreter-kernel-project
+  name: E2E Interpreter Kernel
+  notebooks:
+    - id: e2e-interpreter-kernel-notebook
+      name: Interpreter Kernel
+      blocks:
+        - id: e2e-interpreter-kernel-block
+          blockGroup: e2e-interpreter-kernel-group
+          type: code
+          content: |-
+            import sys
+            print("interpreter-kernel-ok")
+            print(sys.prefix)
+          sortingKey: a0
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

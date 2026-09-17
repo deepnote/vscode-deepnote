@@ -2,23 +2,26 @@ import { assert } from 'chai';
 import * as fakeTimers from '@sinonjs/fake-timers';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { Uri } from 'vscode';
+import { CancellationTokenSource, Uri } from 'vscode';
 
 import { serializeProjectFile } from '../../notebooks/deepnote/deepnoteTestHelpers';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { IAsyncDisposableRegistry, IOutputChannel } from '../../platform/common/types';
+import { PythonExtension } from '@vscode/python-extension';
+import { setPythonApi } from '../../platform/interpreter/helpers';
 import { IUserpodApiEndpoints } from '../../platform/notebooks/deepnote/types';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import {
     __getStartServerCalls,
     __getStopServerCalls,
-    __resetRuntimeCoreMock
+    __resetRuntimeCoreMock,
+    __setStopServerImpl
 } from '../../test/mocks/deepnoteRuntimeCore';
 import { stubReadFile } from '../../test/mocks/vscodeFs';
+import { resolvableInstance } from '../../test/datascience/helpers';
 import { resetVSCodeMocks } from '../../test/vscode-mock';
 import { DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 import { DeepnoteServerStarter } from './deepnoteServerStarter.node';
-import { IDeepnoteToolkitInstaller } from './types';
 
 /**
  * Unit tests for DeepnoteServerStarter.
@@ -33,14 +36,16 @@ suite('DeepnoteServerStarter', () => {
         id: '/usr/bin/python3',
         uri: Uri.file('/usr/bin/python3')
     };
-    const venvPath = Uri.file('/venvs/env1');
+    const otherInterpreter: PythonEnvironment = {
+        id: '/envs/other/bin/python',
+        uri: Uri.file('/envs/other/bin/python')
+    };
     // Two notebooks in the SAME project directory but different files (sibling files).
     const uriA = Uri.file('/workspace/project/notebook-a.deepnote');
     const uriB = Uri.file('/workspace/project/notebook-b.deepnote');
 
     let serverStarter: DeepnoteServerStarter;
     let mockProcessServiceFactory: IProcessServiceFactory;
-    let mockToolkitInstaller: IDeepnoteToolkitInstaller;
     let mockAgentSkillsManager: DeepnoteAgentSkillsManager;
     let mockOutputChannel: IOutputChannel;
     let mockAsyncRegistry: IAsyncDisposableRegistry;
@@ -51,7 +56,6 @@ suite('DeepnoteServerStarter', () => {
         resetVSCodeMocks();
 
         mockProcessServiceFactory = mock<IProcessServiceFactory>();
-        mockToolkitInstaller = mock<IDeepnoteToolkitInstaller>();
         mockAgentSkillsManager = mock<DeepnoteAgentSkillsManager>();
         mockOutputChannel = mock<IOutputChannel>();
         mockAsyncRegistry = mock<IAsyncDisposableRegistry>();
@@ -59,22 +63,21 @@ suite('DeepnoteServerStarter', () => {
 
         when(mockAsyncRegistry.push(anything())).thenReturn();
         when(mockOutputChannel.appendLine(anything())).thenReturn();
-
         when(mockUserpodApiEndpoints.ready).thenReturn(Promise.resolve());
         when(mockUserpodApiEndpoints.baseUrl).thenReturn(undefined);
 
-        // The toolkit install step runs before runtime-core's startServer; stub it so the
-        // start path reaches startServer. (ts-mockito methods that are not stubbed return null.)
-        when(mockToolkitInstaller.ensureVenvAndToolkit(anything(), anything(), anything(), anything())).thenResolve({
-            pythonInterpreter: interpreter,
-            toolkitVersion: '1.0.0'
-        });
-        when(mockToolkitInstaller.installAdditionalPackages(anything(), anything(), anything())).thenResolve();
         when(mockAgentSkillsManager.ensureSkillsUpdated(anything(), anything())).thenReturn();
+
+        // startServer derives the env path via getCachedEnvironment, which needs the Python API.
+        const mockedApi = mock<PythonExtension>();
+        sinon.stub(PythonExtension, 'api').resolves(resolvableInstance(mockedApi));
+        const environments = mock<PythonExtension['environments']>();
+        when(mockedApi.environments).thenReturn(instance(environments));
+        when(environments.known).thenReturn([]);
+        setPythonApi(instance(mockedApi));
 
         serverStarter = new DeepnoteServerStarter(
             instance(mockProcessServiceFactory),
-            instance(mockToolkitInstaller),
             instance(mockAgentSkillsManager),
             instance(mockOutputChannel),
             instance(mockAsyncRegistry),
@@ -83,6 +86,7 @@ suite('DeepnoteServerStarter', () => {
     });
 
     teardown(async () => {
+        setPythonApi(undefined as any);
         sinon.restore();
         await serverStarter.dispose();
     });
@@ -100,8 +104,8 @@ suite('DeepnoteServerStarter', () => {
             when(mockUserpodApiEndpoints.getAuthToken('project-a')).thenReturn('token-a');
             when(mockUserpodApiEndpoints.getAuthToken('project-b')).thenReturn('token-b');
 
-            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriB);
+            await serverStarter.startServer(interpreter, uriA);
+            await serverStarter.startServer(interpreter, uriB);
 
             assert.deepStrictEqual(
                 __getStartServerCalls().map((c) => c.env),
@@ -126,10 +130,10 @@ suite('DeepnoteServerStarter', () => {
         });
     });
 
-    suite('per-notebook keying (startServer/stopServer)', () => {
+    suite('per-notebook keying', () => {
         test('starts SEPARATE servers for two different notebook URIs in the same dir (catches cross-sibling server reuse)', async () => {
-            const infoA = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-            const infoB = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriB);
+            const infoA = await serverStarter.startServer(interpreter, uriA);
+            const infoB = await serverStarter.startServer(interpreter, uriB);
 
             // runtime-core startServer must be invoked once per notebook — NOT reused across siblings.
             const calls = __getStartServerCalls();
@@ -147,8 +151,8 @@ suite('DeepnoteServerStarter', () => {
             // Simulate a live server: the health probe (GET {url}/api) succeeds.
             const fetchStub = sinon.stub(globalThis, 'fetch').resolves(new Response());
 
-            const first = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-            const second = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
+            const first = await serverStarter.startServer(interpreter, uriA);
+            const second = await serverStarter.startServer(interpreter, uriA);
 
             assert.strictEqual(
                 __getStartServerCalls().length,
@@ -162,42 +166,95 @@ suite('DeepnoteServerStarter', () => {
             );
         });
 
-        test('spawns a FRESH server when the same notebook starts again after stopServer (catches stale server-info reuse)', async () => {
-            // Health probes report "running" for everything; a stopped notebook must still respawn.
-            sinon.stub(globalThis, 'fetch').resolves(new Response());
+        test('passes the interpreter executable to runtime-core, not a derived directory', async () => {
+            await serverStarter.startServer(interpreter, uriA);
 
-            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-            await serverStarter.stopServer(uriA);
-            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-
-            assert.strictEqual(__getStartServerCalls().length, 2, 'restart after stop must spawn a new server');
+            assert.strictEqual(
+                __getStartServerCalls()[0].pythonEnv,
+                interpreter.uri.fsPath,
+                'runtime-core resolves a directory by probing for a generic python; only the exact executable is safe'
+            );
         });
 
-        test('stopServer(uriA) tears down ONLY notebook A; B keeps running (catches cross-notebook teardown)', async () => {
-            const infoA = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-            await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriB);
+        test('switching interpreter stops the old server and spawns a fresh one (catches stale server-info reuse)', async () => {
+            // Health probes report "running" for everything; a different interpreter must still respawn.
+            sinon.stub(globalThis, 'fetch').resolves(new Response());
 
-            await serverStarter.stopServer(uriA);
+            const first = await serverStarter.startServer(interpreter, uriA);
+            await serverStarter.startServer(otherInterpreter, uriA);
+
+            assert.strictEqual(__getStartServerCalls().length, 2, 'a different interpreter must spawn a new server');
+            assert.deepStrictEqual(__getStopServerCalls(), [first], "the old interpreter's server must be stopped");
+        });
+
+        test('switching interpreter for notebook A leaves B running (catches cross-notebook teardown)', async () => {
+            const infoA = await serverStarter.startServer(interpreter, uriA);
+            await serverStarter.startServer(interpreter, uriB);
+
+            await serverStarter.startServer(otherInterpreter, uriA);
 
             assert.deepStrictEqual(__getStopServerCalls(), [infoA], "only notebook A's server must be stopped");
         });
 
-        test('stopServer for a notebook with NO running server is a safe no-op (does not throw, does not call runtime-core stop)', async () => {
-            // Never started anything for this URI.
-            await serverStarter.stopServer(Uri.file('/workspace/project/never-started.deepnote'));
+        test('two concurrent starts across an interpreter switch spawn ONE server (catches an untracked leaked server)', async () => {
+            // Health probes report "running", so the joined caller reuses the server rather than
+            // starting a second one.
+            sinon.stub(globalThis, 'fetch').resolves(new Response());
+
+            const first = await serverStarter.startServer(interpreter, uriA);
+
+            // Hold the teardown open so both callers sit inside the switch window at once.
+            let releaseStop!: () => void;
+            const stopped = new Promise<void>((resolve) => (releaseStop = resolve));
+            __setStopServerImpl(() => stopped);
+
+            const both = Promise.all([
+                serverStarter.startServer(otherInterpreter, uriA),
+                serverStarter.startServer(otherInterpreter, uriA)
+            ]);
+
+            releaseStop();
+            const [a, b] = await both;
+            __setStopServerImpl(null);
 
             assert.strictEqual(
-                __getStopServerCalls().length,
-                0,
-                'stopping a notebook with no server must not invoke runtime-core stopServer'
+                __getStartServerCalls().length,
+                2,
+                'the second caller must join the in-flight switch, not spawn a server nothing can stop'
             );
+            assert.strictEqual(a, b, 'both callers must receive the same server');
+            assert.notStrictEqual(a.url, first.url, 'the switch must produce a new server');
+        });
+
+        test('a cancelled interpreter switch still stops the old server (catches an orphaned process)', async () => {
+            const first = await serverStarter.startServer(interpreter, uriA);
+            const cts = new CancellationTokenSource();
+
+            // Cancelled before the switch is scheduled, as it is when the user dismisses the
+            // progress notification while an earlier operation on this notebook is still running.
+            cts.cancel();
+
+            try {
+                await serverStarter.startServer(otherInterpreter, uriA, cts.token).then(
+                    () => assert.fail('a cancelled switch must not resolve'),
+                    () => undefined
+                );
+
+                assert.deepStrictEqual(
+                    __getStopServerCalls(),
+                    [first],
+                    "the old interpreter's server must be stopped even when the switch is cancelled"
+                );
+            } finally {
+                cts.dispose();
+            }
         });
     });
 
     suite('dispose', () => {
         test('stops every running server; a second dispose is a no-op', async () => {
-            const infoA = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
-            const infoB = await serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriB);
+            const infoA = await serverStarter.startServer(interpreter, uriA);
+            const infoB = await serverStarter.startServer(interpreter, uriB);
 
             await serverStarter.dispose();
             await serverStarter.dispose();
@@ -225,7 +282,7 @@ suite('DeepnoteServerStarter', () => {
                     })
                 );
 
-                const startPromise = serverStarter.startServer(interpreter, venvPath, true, [], 'env1', uriA);
+                const startPromise = serverStarter.startServer(interpreter, uriA);
 
                 let disposeResolved = false;
                 const disposePromise = serverStarter.dispose().then(() => {

@@ -18,6 +18,15 @@ updates:
       interval: monthly
     labels:
       - 'skip news'
+  # The perf-test fixture has its own lockfile that the root `npm ci` never installs,
+  # so it only gets updates from here (and is gated by the qlty osv-scanner CI step).
+  - package-ecosystem: 'npm'
+    directory: /src/test/vscode-notebook-perf
+    schedule:
+      interval: weekly
+    labels:
+      - 'skip news'
+
   # Activate when we feel ready to keep up with frequency.
   # - package-ecosystem: 'npm'
   #   directory: /

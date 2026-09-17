@@ -1,0 +1,32 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-sql-query-chaining-project
+  name: E2E SQL Query Chaining
+  notebooks:
+    - id: e2e-sql-query-chaining-notebook
+      name: SQL Query Chaining
+      blocks:
+        - id: e2e-sql-source-block
+          blockGroup: e2e-sql-source-group
+          type: sql
+          content: SELECT range AS id FROM range(1234)
+          sortingKey: a0
+          metadata:
+            deepnote_variable_name: source_rows
+            deepnote_return_variable_type: dataframe
+            sql_integration_id: deepnote-dataframe-sql
+        - id: e2e-sql-chained-block
+          blockGroup: e2e-sql-chained-group
+          type: sql
+          content: SELECT 'chained_rows_' || COUNT(*) AS chained_marker FROM source_rows
+          sortingKey: a1
+          metadata:
+            deepnote_variable_name: chained_rows
+            deepnote_return_variable_type: dataframe
+            sql_integration_id: deepnote-dataframe-sql
+      executionMode: block
+      isModule: false
+  settings: {}

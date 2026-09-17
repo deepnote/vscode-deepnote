@@ -759,6 +759,9 @@ export namespace DataScience {
         'A Data Viewer Extension is required to view data frames. Click Yes to see recommended extensions.'
     );
     export const selectExternalDataViewer = l10n.t('Select DataFrame Viewer');
+    export const deepnoteBlocksRequireDeepnoteNotebook = l10n.t(
+        'Deepnote blocks can only be added to Deepnote notebooks.'
+    );
 }
 export namespace WebViews {
     export const collapseSingle = l10n.t('Collapse');
@@ -816,6 +819,23 @@ export namespace WebViews {
     export const dataframePageOf = l10n.t('Page {0} of {1}');
     export const dataframeCopyTable = l10n.t('Copy table');
     export const dataframeExportTable = l10n.t('Export table');
+}
+
+export namespace SqlReturnVariableType {
+    export const dataframeLabel = l10n.t('DataFrame');
+    export const queryPreviewLabel = l10n.t('Query preview');
+    export const statusBarText = (label: string) => l10n.t('Return: {0}', label);
+    export const statusBarTooltip = l10n.t(
+        'What this SQL block assigns to its variable.\nDataFrame runs the query and materializes the full result.\nQuery preview keeps a lazy reference to the query (with a 100-row preview) that later SQL blocks can query directly, so they are chained into a single query.\nClick to change'
+    );
+    export const dataframeDetail = l10n.t('Run the query and store the full result as a pandas DataFrame');
+    export const queryPreviewDetail = l10n.t(
+        'Keep a lazy reference to the query so later SQL blocks can chain onto it (100-row preview)'
+    );
+    export const currentlySelected = l10n.t('Currently selected');
+    export const pickerPlaceholder = l10n.t('Select what this SQL block returns');
+    export const changeCommandTitle = l10n.t('Change Return Type');
+    export const updateFailed = l10n.t('Failed to update the SQL return type');
 }
 
 export namespace Integrations {

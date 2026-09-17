@@ -146,7 +146,7 @@ export class ActiveEditorContextService implements IExtensionSyncActivationServi
 
     private updateContextOfActiveNotebookKernel(activeEditor?: NotebookEditor) {
         const kernel =
-            activeEditor && activeEditor.notebook.notebookType === JupyterNotebookView
+            activeEditor && (isJupyterNotebook(activeEditor.notebook) || isDeepnoteNotebook(activeEditor.notebook))
                 ? this.kernelProvider.get(activeEditor.notebook)
                 : undefined;
         if (kernel) {
@@ -217,7 +217,7 @@ export class ActiveEditorContextService implements IExtensionSyncActivationServi
         if (notebook.notebookType === InteractiveWindowView) {
             this.updateContextOfActiveInteractiveWindowKernel();
         } else if (
-            notebook.notebookType === JupyterNotebookView &&
+            (isJupyterNotebook(notebook) || isDeepnoteNotebook(notebook)) &&
             notebook === window.activeNotebookEditor?.notebook
         ) {
             this.updateContextOfActiveNotebookKernel(window.activeNotebookEditor);

@@ -1,4 +1,4 @@
-import { By, EditorView, VSBrowser, WebView } from 'vscode-extension-tester';
+import { By, EditorView, VSBrowser, WebElement, WebView } from 'vscode-extension-tester';
 
 import { OUTPUT_FRAME_SWITCH_TIMEOUT, OUTPUT_POLL_INTERVAL, OUTPUT_SELECTOR, WORKBENCH_TIMEOUT } from './constants';
 import { dismissAllNotifications } from './notifications';
@@ -9,7 +9,11 @@ import { dismissAllNotifications } from './notifications';
  * (`deepnote.ispythonornativeactive`, …) that are not reliably set under automation, so driving them
  * through `Workbench.executeCommand` can silently miss and trigger the wrong command.
  */
-async function clickNotebookToolbarButton(notebookFileName: string, ariaLabel: string): Promise<void> {
+async function clickNotebookToolbarButton(
+    notebookFileName: string,
+    ariaLabel: string,
+    match: 'exact' | 'prefix' = 'exact'
+): Promise<void> {
     const driver = VSBrowser.instance.driver;
 
     await new EditorView().openEditor(notebookFileName);
@@ -21,8 +25,17 @@ async function clickNotebookToolbarButton(notebookFileName: string, ariaLabel: s
     await driver.wait(
         async () => {
             try {
-                const [button] = await driver.findElements(By.css(`a.action-label[aria-label="${ariaLabel}"]`));
+                const operator = match === 'prefix' ? '^=' : '=';
+                const [button] = await driver.findElements(
+                    By.css(`a.action-label[aria-label${operator}"${ariaLabel}"]`)
+                );
                 if (!button) {
+                    return false;
+                }
+
+                // A contributed action whose `enablement` is false still renders, greyed out; clicking it is a
+                // silent no-op, so keep polling until it is actually enabled.
+                if ((await button.getAttribute('aria-disabled')) === 'true') {
                     return false;
                 }
 
@@ -58,11 +71,45 @@ export async function clickInterrupt(notebookFileName: string): Promise<void> {
 }
 
 /**
- * Clicks the notebook cell status bar item whose text contains `label`. Cell chrome lives in the
- * main window DOM (not the output iframe), so this switches out of the webview first and matches on
- * `textContent` — Selenium's `getText()` is empty for items scrolled out of view.
+ * Clicks the toolbar's "Restart Kernel" button — `deepnote.restartkernel`, contributed to `notebook/toolbar` for
+ * `notebookType == 'deepnote'`. Matched on the aria-label prefix so a keybinding suffix cannot hide it; the only
+ * other restart command, "Restart Kernel and Run All Cells", is not in the toolbar.
  */
-export async function clickCellStatusBarItem(label: string): Promise<void> {
+export async function clickRestartKernel(notebookFileName: string): Promise<void> {
+    return clickNotebookToolbarButton(notebookFileName, 'Restart Kernel', 'prefix');
+}
+
+const CELL_STATUS_BAR_ITEM_SELECTOR = '.cell-statusbar-container .cell-status-item';
+
+/**
+ * The cell status bar items whose text contains `label`, ordered top to bottom as the user sees them.
+ * Cell chrome lives in the main window DOM (not the output iframe), so callers switch out of the
+ * webview first. Matches on `textContent` — Selenium's `getText()` is empty for items scrolled out
+ * of view. Sorted by screen position rather than DOM order because VS Code's notebook list recycles
+ * rows, so DOM order need not follow cell order.
+ */
+async function findCellStatusBarItems(label: string): Promise<WebElement[]> {
+    const driver = VSBrowser.instance.driver;
+    const matches: { item: WebElement; top: number }[] = [];
+
+    for (const item of await driver.findElements(By.css(CELL_STATUS_BAR_ITEM_SELECTOR))) {
+        const text = (await item.getAttribute('textContent')) ?? '';
+        if (!text.includes(label)) {
+            continue;
+        }
+
+        const { y } = await item.getRect();
+        matches.push({ item, top: y });
+    }
+
+    return matches.sort((a, b) => a.top - b.top).map((match) => match.item);
+}
+
+/**
+ * Clicks the notebook cell status bar item whose text contains `label`. When several cells show the
+ * same item, `occurrence` picks which one, counted top to bottom from 0.
+ */
+export async function clickCellStatusBarItem(label: string, occurrence = 0): Promise<void> {
     const driver = VSBrowser.instance.driver;
 
     await new WebView().switchBack().catch((error) => {
@@ -74,19 +121,15 @@ export async function clickCellStatusBarItem(label: string): Promise<void> {
     await driver.wait(
         async () => {
             try {
-                for (const item of await driver.findElements(By.css('.cell-statusbar-container .cell-status-item'))) {
-                    const text = (await item.getAttribute('textContent')) ?? '';
-                    if (!text.includes(label)) {
-                        continue;
-                    }
-
-                    await driver.executeScript('arguments[0].scrollIntoView({block: "center"})', item);
-                    await item.click();
-
-                    return true;
+                const item = (await findCellStatusBarItems(label))[occurrence];
+                if (!item) {
+                    return false;
                 }
 
-                return false;
+                await driver.executeScript('arguments[0].scrollIntoView({block: "center"})', item);
+                await item.click();
+
+                return true;
             } catch (error) {
                 console.warn('[deepnote-e2e] locate/click cell status bar item (retrying):', error);
 
@@ -94,7 +137,33 @@ export async function clickCellStatusBarItem(label: string): Promise<void> {
             }
         },
         WORKBENCH_TIMEOUT,
-        `notebook cell status bar item "${label}" did not appear or could not be clicked`
+        `notebook cell status bar item "${label}" (occurrence ${occurrence}) did not appear or could not be clicked`
+    );
+}
+
+/**
+ * Polls until at least `count` cell status bar items contain `label`, so a metadata edit can be
+ * asserted through the UI it re-renders. Switches out of the output webview first.
+ */
+export async function awaitCellStatusBarItems(label: string, count: number, timeout: number): Promise<void> {
+    const driver = VSBrowser.instance.driver;
+
+    await new WebView().switchBack().catch((error) => {
+        console.warn('[deepnote-e2e] switch back before reading cell status bar items:', error);
+    });
+
+    await driver.wait(
+        async () => {
+            try {
+                return (await findCellStatusBarItems(label)).length >= count;
+            } catch (error) {
+                console.warn('[deepnote-e2e] read cell status bar items (retrying):', error);
+
+                return false;
+            }
+        },
+        timeout,
+        `expected ${count} notebook cell status bar item(s) containing "${label}"`
     );
 }
 

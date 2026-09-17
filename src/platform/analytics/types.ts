@@ -24,7 +24,9 @@ export type TelemetryEventName =
     | 'save_integration'
     | 'split_notebook'
     | 'switch_sql_integration'
-    | 'toggle_snapshots';
+    | 'switch_sql_return_variable_type'
+    | 'toggle_snapshots'
+    | 'update_environment';
 
 /** Result of a tracked command, so telemetry can separate user drop-off from real failures. */
 export type CommandOutcome = 'completed' | 'cancelled' | 'failed';
@@ -67,6 +69,7 @@ export interface TelemetryEventProperties {
     split_notebook: { notebookCount: number; outcome: CommandOutcome };
     /** `fromEnvFile` is file-ONLY, not file-configured: false when the id is also in the project roster. */
     switch_sql_integration: { fromEnvFile: boolean; integrationType: string };
+    switch_sql_return_variable_type: { returnVariableType: 'dataframe' | 'query_preview' };
     toggle_snapshots: { enabled: boolean };
 }
 

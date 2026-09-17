@@ -22,7 +22,7 @@ import { IDisposableRegistry } from '../../platform/common/types';
 import { getDisplayPath } from '../../platform/common/platform/fs-paths.node';
 import { readDeepnoteProjectFile } from '../../platform/deepnote/deepnoteProjectFileReader';
 import { resolveProjectIdForNotebook } from '../../platform/deepnote/deepnoteProjectIdResolver';
-import { IDeepnoteNotebookManager } from '../types';
+import { IDeepnoteInitNotebookRunner, IDeepnoteNotebookManager } from '../types';
 
 const DEEPNOTE_FILE_EXTENSION = '.deepnote';
 const SNAPSHOT_FILE_SUFFIX = '.snapshot.deepnote';
@@ -57,11 +57,13 @@ else:
  * per project/URI — so a same-environment restart re-initializes correctly.
  */
 @injectable()
-export class DeepnoteInitNotebookRunner implements IExtensionSyncActivationService {
+export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, IExtensionSyncActivationService {
     // Kernels that have already run init in their current lifetime; entries are collected on dispose.
     private readonly initRunByKernel = new WeakSet<IKernel>();
     // In-flight init run per kernel, so a restart can cancel a still-running start-triggered run.
     private readonly inFlightInitByKernel = new WeakMap<IKernel, CancellationTokenSource>();
+    // The run started by the latest start/restart of each kernel, for callers that must run cells after init.
+    private readonly inFlightRuns = new WeakMap<IKernel, Promise<void>>();
 
     constructor(
         @inject(IDeepnoteNotebookManager) private readonly notebookManager: IDeepnoteNotebookManager,
@@ -80,7 +82,7 @@ export class DeepnoteInitNotebookRunner implements IExtensionSyncActivationServi
             return;
         }
 
-        await this.runInitForKernel(kernel);
+        await this.trackRun(kernel, this.runInitForKernel(kernel));
 
         // Mark even when no init was found — only affects THIS kernel; a new kernel re-scans.
         this.initRunByKernel.add(kernel);
@@ -89,8 +91,24 @@ export class DeepnoteInitNotebookRunner implements IExtensionSyncActivationServi
     private async onDidRestartKernel(kernel: IKernel): Promise<void> {
         // A restart loses all in-kernel state, so re-run init unconditionally.
         this.inFlightInitByKernel.get(kernel)?.cancel();
-        await this.runInitForKernel(kernel);
+        await this.trackRun(kernel, this.runInitForKernel(kernel));
         this.initRunByKernel.add(kernel);
+    }
+
+    public waitForInit(kernel: IKernel): Promise<void> {
+        return this.inFlightRuns.get(kernel) ?? Promise.resolve();
+    }
+
+    /** Registers `run` synchronously, so a listener of the same kernel event can await it via `waitForInit`. */
+    private async trackRun(kernel: IKernel, run: Promise<void>): Promise<void> {
+        this.inFlightRuns.set(kernel, run);
+        try {
+            await run;
+        } finally {
+            if (this.inFlightRuns.get(kernel) === run) {
+                this.inFlightRuns.delete(kernel);
+            }
+        }
     }
 
     /**

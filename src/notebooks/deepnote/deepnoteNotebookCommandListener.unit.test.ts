@@ -9,6 +9,7 @@ import {
     NotebookRange,
     NotebookCellKind,
     NotebookCellData,
+    Uri,
     WorkspaceEdit
 } from 'vscode';
 
@@ -32,6 +33,7 @@ import {
     createDeepnoteNotebook,
     createDeepnoteProject,
     createMockCell,
+    createMockNotebook,
     createMockNotebookWithCells
 } from './deepnoteTestHelpers';
 
@@ -736,6 +738,51 @@ suite('DeepnoteNotebookCommandListener', () => {
             assert.isTrue(chainStub.calledOnce, 'chainWithPendingUpdates should be called');
         });
 
+        suite('on a non-Deepnote notebook', () => {
+            const ADD_BLOCK_COMMANDS: Array<{ name: string; invoke: () => Promise<void> }> = [
+                { name: 'addAgentBlock', invoke: () => commandListener.addAgentBlock() },
+                { name: 'addSqlBlock', invoke: () => commandListener.addSqlBlock() },
+                { name: 'addBigNumberChartBlock', invoke: () => commandListener.addBigNumberChartBlock() },
+                { name: 'addChartBlock', invoke: () => commandListener.addChartBlock() },
+                { name: 'addInputBlock', invoke: () => commandListener.addInputBlock('input-text') },
+                { name: 'addInputBlockThroughPicker', invoke: () => commandListener.addInputBlockThroughPicker() },
+                { name: 'addTextBlockThroughPicker', invoke: () => commandListener.addTextBlockThroughPicker() },
+                {
+                    name: 'addTextBlockCommandHandler',
+                    invoke: () => commandListener.addTextBlockCommandHandler({ textBlockType: 'text-cell-p' })
+                }
+            ];
+
+            function createJupyterNotebookEditor(): NotebookEditor {
+                const selection = new NotebookRange(0, 1);
+
+                return {
+                    notebook: createMockNotebook({
+                        notebookType: 'jupyter-notebook',
+                        uri: Uri.file('/test/notebook.ipynb'),
+                        cells: [createMockCell({ text: 'print(1)', notebookType: 'jupyter-notebook' })]
+                    }),
+                    selection,
+                    selections: [selection],
+                    visibleRanges: [],
+                    revealRange: sandbox.stub()
+                };
+            }
+
+            for (const { name, invoke } of ADD_BLOCK_COMMANDS) {
+                test(`${name} refuses to insert a Deepnote block into a Jupyter notebook`, async () => {
+                    // `enablement` gates the palette; this covers programmatic executeCommand callers.
+                    when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(createJupyterNotebookEditor());
+                    when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenResolve(undefined);
+                    const chainStub = sandbox.stub(notebookUpdater.notebookUpdaterUtils, 'chainWithPendingUpdates');
+
+                    await assert.isRejected(invoke(), Error, 'Deepnote blocks can only be added to Deepnote notebooks');
+
+                    assert.isFalse(chainStub.called, 'no cell edit may reach a non-Deepnote notebook');
+                });
+            }
+        });
+
         suite('addSqlBlock', () => {
             test('should add SQL block at the end when no selection exists', async () => {
                 // Setup mocks
@@ -1347,11 +1394,7 @@ suite('DeepnoteNotebookCommandListener', () => {
                 when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(undefined);
 
                 // Call the method and expect rejection
-                await assert.isRejected(
-                    commandListener.addChartBlock(),
-                    WrappedError,
-                    'No active notebook editor found'
-                );
+                await assert.isRejected(commandListener.addChartBlock(), Error, 'No active notebook editor found');
             });
 
             test('should throw error when chainWithPendingUpdates fails', async () => {

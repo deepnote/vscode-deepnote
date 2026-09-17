@@ -41,7 +41,6 @@ suite('DeepnoteToolkitDependencyService', () => {
         ).thenResolve(choice as never);
     }
 
-    /** What the metadata probe prints in the interpreter. */
     function probeReports(probe: ToolkitProbe) {
         when(python.exec(anything(), anything())).thenResolve({
             stdout: `${JSON.stringify({ version: probe.version ?? null, server: probe.server })}\n`,
@@ -52,7 +51,7 @@ suite('DeepnoteToolkitDependencyService', () => {
     const missing: ToolkitProbe = { server: false };
     const current: ToolkitProbe = { version: DEEPNOTE_TOOLKIT_VERSION, server: true };
 
-    /** Whether the one prompt shown was worded as an update rather than a first install. */
+    /** Asserts exactly one prompt was shown, and returns whether it was worded as an update. */
     function promptedForUpdate(): boolean {
         verify(
             mockedVSCodeNamespaces.window.showInformationMessage(anything(), anything(), anything(), anything())
@@ -96,7 +95,7 @@ suite('DeepnoteToolkitDependencyService', () => {
         verify(installer.install(anything(), anything(), anything())).never();
     });
 
-    suite('version and [server] extra gate (#489)', () => {
+    suite('version and [server] extra gate', () => {
         test('a toolkit older than the pin gets the update prompt, and Install brings it to the pin', async () => {
             probeReports({ version: '0.0.1', server: true });
             when(installer.install(anything(), anything(), anything())).thenResolve(InstallerResponse.Installed);

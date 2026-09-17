@@ -16,8 +16,8 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { getComparisonKey } from '../../platform/vscode-path/resources';
 import { DeepnoteToolkitDependencyResponse, IDeepnoteToolkitDependencyService } from './types';
 
-/** What the probe found in an interpreter. `version` is absent when the distribution is not installed. */
 export interface ToolkitProbe {
+    /** Absent when the distribution is not installed. */
     version?: string;
     /** Whether `jupyter_server` imports, i.e. the toolkit was installed with its `[server]` extra. */
     server: boolean;
@@ -26,9 +26,8 @@ export interface ToolkitProbe {
 export type ToolkitState = 'ok' | 'missing' | 'needsUpdate';
 
 /**
- * Reads distribution metadata rather than importing `deepnote_toolkit`: the import costs seconds and
- * floods the log, and would still say nothing about the version. `jupyter_server` is what the
- * `[server]` extra brings in, and what the toolkit server refuses to start without.
+ * Reads distribution metadata rather than importing `deepnote_toolkit`, which costs seconds and floods
+ * the log. The toolkit server refuses to start without `jupyter_server`.
  */
 const TOOLKIT_PROBE = [
     'import json',
@@ -48,24 +47,18 @@ const TOOLKIT_PROBE = [
 
 const PRE_RELEASE_RANK: Record<string, number> = { a: 0, alpha: 0, b: 1, beta: 1, c: 2, rc: 2, pre: 2, preview: 2 };
 
-/** Rank of a final release among pre-release kinds: above every `a`/`b`/`rc`. */
 const FINAL_RANK = 3;
 
-/** Rank of a `.devN` with no pre-release tag: below every `a`/`b`/`rc`, as PEP 440 orders it. */
+/** PEP 440 sorts a bare `X.devN`, with no pre- or post-release segment, before every pre-release of `X`. */
 const DEV_ONLY_RANK = -1;
 
-/**
- * PEP 440 with its permitted spellings: `rc`/`c`/`pre`/`preview` for release candidates, `post`/`rev`/`r`
- * for post-releases, and the implicit `-N` post-release (`2.5.1-1` is `2.5.1.post1`).
- */
+/** PEP 440 including its alternate spellings, e.g. `2.5.1-1` for `2.5.1.post1`. Epochs (`1!2.0`) do not match. */
 const VERSION_PATTERN =
     /^\s*v?(\d+(?:\.\d+)*)(?:[-._]?(a|alpha|b|beta|c|rc|pre|preview)[-._]?(\d*))?(?:[-._]?(?:post|rev|r)[-._]?(\d*)|-(\d+))?(?:[-._]?dev[-._]?(\d*))?(?:\+.*)?\s*$/i;
 
 /**
- * A version as a sort key in PEP 440 order: release segments, then pre-release kind and number,
- * then post-release, then dev-release. So `2.5.1.dev0 < 2.5.1a1 < 2.5.1rc1 < 2.5.1 < 2.5.1.post1`,
- * and a local suffix (`+…`) is ignored. Undefined when the version does not start with a number,
- * which no PyPI release does.
+ * Sort key in PEP 440 order: `2.5.1.dev0 < 2.5.1a1 < 2.5.1rc1 < 2.5.1 < 2.5.1.post1`. The local segment
+ * (`+…`) is ignored, which never changes whether a version sorts before a public release.
  */
 function versionKey(version: string): number[] | undefined {
     const match = VERSION_PATTERN.exec(version);
@@ -83,8 +76,7 @@ function versionKey(version: string): number[] | undefined {
 
     return [
         ...release.split('.').map(Number),
-        // Release segments are padded to the longer of the two when compared, so the tail starts
-        // at a fixed offset from the end instead.
+        // Marks where the variable-length release ends, so isOlderRelease can zero-pad it.
         Number.NaN,
         preRank,
         hasPre ? Number(preNumber || '0') : 0,
@@ -94,10 +86,8 @@ function versionKey(version: string): number[] | undefined {
 }
 
 /**
- * Whether `installed` is an older release than `pinned`, in PEP 440 order, so a release candidate
- * or dev build of the pinned version still counts as older and is updated. A version that cannot
- * be read at all is not treated as older: an editable checkout of the toolkit is a deliberate
- * choice, not something to prompt about on every run.
+ * Whether `installed` sorts before `pinned` in PEP 440 order. False when either cannot be parsed,
+ * since a wrong "older" holds the kernel back behind an update prompt.
  */
 export function isOlderRelease(installed: string, pinned: string): boolean {
     const a = versionKey(installed);
@@ -107,7 +97,6 @@ export function isOlderRelease(installed: string, pinned: string): boolean {
         return false;
     }
 
-    // Pad the release segments (everything before the NaN marker) to the same length with zeros.
     const releaseLength = Math.max(a.findIndex(Number.isNaN), b.findIndex(Number.isNaN));
     const pad = (key: number[]) => {
         const marker = key.findIndex(Number.isNaN);
@@ -127,9 +116,9 @@ export function isOlderRelease(installed: string, pinned: string): boolean {
 }
 
 /**
- * Whether the interpreter can run the toolkit server as this extension expects: the distribution is
- * present, at least the pinned release, and installed with the `[server]` extra. A newer release
- * passes, so toolkit developers are not asked to downgrade.
+ * The extension and the toolkit co-evolve, so a release older than `pinned` needs an update, as does one
+ * without the `[server]` extra: `pip install -U deepnote-toolkit[server]==<pin>` repairs both. A newer
+ * release is `ok`, so it is never downgraded.
  */
 export function toolkitState(probe: ToolkitProbe, pinned: string = DEEPNOTE_TOOLKIT_VERSION): ToolkitState {
     if (!probe.version) {
@@ -150,11 +139,6 @@ export function toolkitState(probe: ToolkitProbe, pinned: string = DEEPNOTE_TOOL
  * It cannot reuse that service directly: `installMissingDependencies` is keyed on a
  * `KernelConnectionMetadata`, and a Deepnote connection cannot exist until the toolkit server is
  * running and has reported the kernels it offers — which is precisely what this check gates.
- *
- * The gate is on version and extra, not presence: the extension and the toolkit co-evolve, so a
- * toolkit older than the pin, or one installed without `[server]`, gets the same consent prompt
- * worded as an update. The install itself is `pip install -U deepnote-toolkit[server]==<pin>`, which
- * repairs both.
  */
 @injectable()
 export class DeepnoteToolkitDependencyService implements IDeepnoteToolkitDependencyService {
@@ -278,9 +262,8 @@ export class DeepnoteToolkitDependencyService implements IDeepnoteToolkitDepende
     }
 
     /**
-     * Runs the metadata probe in the interpreter. When the probe itself cannot run, the check falls
-     * back to the import test the installer uses, so a broken environment still gets the install
-     * prompt rather than an opaque failure.
+     * Falls back to the installer's import test when the probe cannot run, so a broken environment
+     * still gets the install prompt rather than an opaque failure.
      */
     private async probe(interpreter: PythonEnvironment): Promise<ToolkitState> {
         try {

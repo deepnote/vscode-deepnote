@@ -711,10 +711,9 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
             throw new Error('No kernel specs available on Deepnote server');
         }
 
-        // A spec whose argv[0] is an absolute path that no longer exists cannot start: Jupyter fails
-        // with a bare ENOENT that names neither the spec nor the interpreter. Older extension versions
-        // wrote such specs into the venv, keyed on the venv's directory name, so a venv reached through
-        // a moved, restored or linked path still carries one, and it sorts ahead of `python3`.
+        // Older extension versions wrote a spec into the venv naming the interpreter by the absolute path
+        // it was first reached through. Once that path is gone (venv moved, restored elsewhere, or the
+        // link to it deleted), every start fails with a bare ENOENT that never mentions the spec.
         const runnable = kernelSpecs.filter((spec) => {
             const runs = !path.isAbsolute(spec.executable) || fs.existsSync(spec.executable);
 
@@ -726,8 +725,8 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
         });
         const candidates = runnable.length > 0 ? runnable : kernelSpecs;
 
-        // ipykernel's own `python3` spec launches a relative `python`, which the server resolves to the
-        // interpreter it runs on, so it is the one that keeps the notebook on the selected interpreter.
+        // ipykernel's own `python3` spec launches plain `python`, which Jupyter replaces with the
+        // interpreter the server runs on, keeping the notebook on the one the user selected.
         return (
             candidates.find((spec) => spec.name === 'python3') ||
             candidates.find((spec) => spec.language === 'python') ||

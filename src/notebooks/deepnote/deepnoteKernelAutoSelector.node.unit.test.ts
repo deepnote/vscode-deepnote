@@ -797,8 +797,7 @@ suite('DeepnoteKernelAutoSelector - rebuildController', () => {
             assert.strictEqual(selected.name, '.env');
         });
 
-        test('skips a spec that launches an interpreter which no longer exists (#472)', () => {
-            // What an older extension version left in a venv it reached through a since-deleted path.
+        test('skips a spec that launches an interpreter which no longer exists', () => {
             const stale = {
                 ...createMockKernelSpec('deepnote-venv', 'Deepnote (.venv)', 'python'),
                 executable: '/tmp/deepnote-e2e-root-s2WWxz/.venv/bin/python',
@@ -1562,7 +1561,7 @@ function createMockKernelSpec(name: string, displayName: string, language: strin
         name,
         display_name: displayName,
         language,
-        // Relative, as ipykernel's own spec is: the server resolves it to the interpreter it runs on.
+        // Relative, like ipykernel's own spec, so selectKernelSpec never drops it as missing.
         executable: 'python3',
         argv: ['python3', '-m', 'ipykernel_launcher', '-f', '{connection_file}']
     };

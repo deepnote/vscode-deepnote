@@ -25,8 +25,7 @@ export type TelemetryEventName =
     | 'split_notebook'
     | 'switch_sql_integration'
     | 'switch_sql_return_variable_type'
-    | 'toggle_snapshots'
-    | 'update_environment';
+    | 'toggle_snapshots';
 
 /** Result of a tracked command, so telemetry can separate user drop-off from real failures. */
 export type CommandOutcome = 'completed' | 'cancelled' | 'failed';

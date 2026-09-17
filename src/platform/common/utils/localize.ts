@@ -755,6 +755,9 @@ export namespace DataScience {
         'A Data Viewer Extension is required to view data frames. Click Yes to see recommended extensions.'
     );
     export const selectExternalDataViewer = l10n.t('Select DataFrame Viewer');
+    export const deepnoteBlocksRequireDeepnoteNotebook = l10n.t(
+        'Deepnote blocks can only be added to Deepnote notebooks.'
+    );
 }
 export namespace WebViews {
     export const collapseSingle = l10n.t('Collapse');

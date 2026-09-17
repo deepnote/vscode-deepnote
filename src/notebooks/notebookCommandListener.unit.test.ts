@@ -157,6 +157,34 @@ suite('Notebook Command Listener - restart commands from the Command Palette', (
         assert.deepStrictEqual(executedCommands, ['restart', 'notebook.execute']);
     });
 
+    test('Restart Kernel and Run All Cells keeps its target when the active notebook changes during init', async () => {
+        initDone = createDeferred<void>();
+        const initStarted = createDeferred<void>();
+        when(initNotebookRunner.waitForInit(kernel)).thenCall(() => {
+            initStarted.resolve();
+
+            return initDone.promise;
+        });
+
+        const command = handlers.get(Commands.RestartKernelAndRunAllCells)!();
+        await initStarted.promise;
+
+        const otherDocument = mock<NotebookDocument>();
+        when(otherDocument.uri).thenReturn(Uri.file('/workspace/other.deepnote'));
+        when(otherDocument.notebookType).thenReturn('deepnote');
+        const otherNotebook = instance(otherDocument);
+        const otherEditor = mock<NotebookEditor>();
+        when(otherEditor.notebook).thenReturn(otherNotebook);
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook, otherNotebook]);
+        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(instance(otherEditor));
+
+        initDone.resolve();
+        await command;
+        await waitFor(() => executedCommands.includes('notebook.execute'));
+
+        verify(mockedVSCodeNamespaces.commands.executeCommand('notebook.execute', notebook.uri)).once();
+    });
+
     test('Restart Kernel and Run All Cells does not run cells when the user declines the restart', async () => {
         when(configurationService.getSettings(anything())).thenReturn({ askForKernelRestart: true } as any);
         when(

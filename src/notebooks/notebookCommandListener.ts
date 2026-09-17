@@ -116,9 +116,12 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
         );
     }
 
-    private runAllCells() {
-        if (window.activeNotebookEditor) {
-            commands.executeCommand('notebook.execute').then(noop, noop);
+    private runAllCells(notebookUri: Uri) {
+        const isOpen = workspace.notebookDocuments.some(
+            (document) => document.uri.toString() === notebookUri.toString()
+        );
+        if (isOpen) {
+            commands.executeCommand('notebook.execute', notebookUri).then(noop, noop);
         }
     }
 
@@ -180,8 +183,13 @@ export class NotebookCommandListener implements INotebookCommandHandler, IExtens
     }
 
     private async restartKernelAndRunAllCells(notebookUri: Uri | undefined) {
-        if (await this.restartKernelAndWaitForInit(this.findKernel(notebookUri))) {
-            this.runAllCells();
+        const uri = notebookUri ?? this.notebookEditorProvider.activeNotebookEditor?.notebook.uri;
+        if (!uri) {
+            return;
+        }
+
+        if (await this.restartKernelAndWaitForInit(this.findKernel(uri))) {
+            this.runAllCells(uri);
         }
     }
 

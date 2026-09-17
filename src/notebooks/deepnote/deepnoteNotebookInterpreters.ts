@@ -12,7 +12,8 @@ const STORAGE_KEY = 'deepnote.notebookInterpreters';
 /**
  * Keys written by the Deepnote environments feature, removed in favour of plain interpreters. Read
  * so a workspace that had an environment selected keeps running on that environment's venv, which
- * already has the toolkit installed. Nothing writes them any more.
+ * already has the toolkit installed. Nothing adds to them; an explicit unpin drops that notebook's
+ * entry, so the removal is not undone by the next session rebuilding the map from storage.
  */
 const LEGACY_MAPPING_KEY = 'deepnote.notebookEnvironmentMappings';
 const LEGACY_ENVIRONMENTS_KEY = 'deepnote.kernelEnvironments';
@@ -72,7 +73,7 @@ export interface IDeepnoteNotebookInterpreters {
  */
 @injectable()
 export class DeepnoteNotebookInterpreters implements IDeepnoteNotebookInterpreters {
-    private readonly legacy: ReadonlyMap<string, string>;
+    private readonly legacy: Map<string, string>;
 
     private pinned: Record<string, string>;
 
@@ -116,10 +117,28 @@ export class DeepnoteNotebookInterpreters implements IDeepnoteNotebookInterprete
         this.pinned = interpreter ? { ...rest, [key]: interpreter.toString() } : rest;
 
         await this.context.workspaceState.update(STORAGE_KEY, this.pinned);
+
+        if (!interpreter) {
+            await this.forgetLegacyMapping(key);
+        }
+    }
+
+    /** The stored mapping keyed on fsPath, so the entry is matched the way `readLegacyMappings` resolved it. */
+    private async forgetLegacyMapping(key: string): Promise<void> {
+        if (!this.legacy.delete(key)) {
+            return;
+        }
+
+        const mappings = this.context.workspaceState.get<Record<string, string>>(LEGACY_MAPPING_KEY) ?? {};
+        const remaining = Object.entries(mappings).filter(
+            ([notebookPath]) => Uri.file(notebookPath).toString() !== key
+        );
+
+        await this.context.workspaceState.update(LEGACY_MAPPING_KEY, Object.fromEntries(remaining));
     }
 
     /** Resolves the old notebook-path -> environment-id -> interpreter chain into one lookup. */
-    private readLegacyMappings(): ReadonlyMap<string, string> {
+    private readLegacyMappings(): Map<string, string> {
         const mappings = this.context.workspaceState.get<Record<string, string>>(LEGACY_MAPPING_KEY);
 
         if (!mappings || Object.keys(mappings).length === 0) {

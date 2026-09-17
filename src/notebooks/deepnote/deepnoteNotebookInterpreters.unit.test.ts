@@ -134,6 +134,36 @@ suite('DeepnoteNotebookInterpreters', () => {
         assert.strictEqual(pins.get(NOTEBOOK)?.toString(), INTERPRETER.toString());
     });
 
+    test('an explicit unpin outranks the old environment selection', async () => {
+        const pins = store({
+            workspace: { 'deepnote.notebookEnvironmentMappings': { [NOTEBOOK.fsPath]: 'env-1' } },
+            global: { 'deepnote.kernelEnvironments': [legacyEnvironment('env-1', LEGACY_INTERPRETER)] }
+        });
+
+        await pins.set(NOTEBOOK, undefined);
+
+        assert.isUndefined(pins.get(NOTEBOOK));
+    });
+
+    test('an unpinned notebook does not pick the old environment selection back up in a later session', async () => {
+        const shared = context({
+            workspace: {
+                'deepnote.notebookEnvironmentMappings': {
+                    [NOTEBOOK.fsPath]: 'env-1',
+                    [OTHER_NOTEBOOK.fsPath]: 'env-1'
+                }
+            },
+            global: { 'deepnote.kernelEnvironments': [legacyEnvironment('env-1', LEGACY_INTERPRETER)] }
+        });
+
+        await new DeepnoteNotebookInterpreters(shared, interpreterService()).set(NOTEBOOK, undefined);
+
+        const later = new DeepnoteNotebookInterpreters(shared, interpreterService());
+
+        assert.isUndefined(later.get(NOTEBOOK));
+        assert.strictEqual(later.get(OTHER_NOTEBOOK)?.toString(), LEGACY_INTERPRETER.toString());
+    });
+
     test('ignores an old selection whose environment no longer exists', () => {
         const pins = store({
             workspace: { 'deepnote.notebookEnvironmentMappings': { [NOTEBOOK.fsPath]: 'deleted-env' } },

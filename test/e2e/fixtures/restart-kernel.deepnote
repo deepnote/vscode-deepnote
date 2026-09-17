@@ -1,0 +1,22 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-restart-kernel-project
+  name: E2E Restart Kernel
+  notebooks:
+    - id: e2e-restart-kernel-notebook
+      name: Restart Kernel
+      blocks:
+        - id: e2e-restart-probe-block
+          blockGroup: e2e-group
+          type: code
+          content: |-
+            counter = globals().get("counter", 0) + 1
+            print(f"RESTART_PROBE:{counter}")
+          sortingKey: a0
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

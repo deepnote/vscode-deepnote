@@ -39,7 +39,7 @@ import { NotebookPythonEnvironmentService } from './notebookEnvironmentService.n
 import { CellOutputMimeTypeTracker } from './outputs/cellOutputMimeTypeTracker';
 import { NotebookTracebackFormatter } from './outputs/tracebackFormatter';
 import { InterpreterPackageTracker } from './telemetry/interpreterPackageTracker.node';
-import { INotebookEditorProvider, INotebookPythonEnvironmentService } from './types';
+import { IDeepnoteInitNotebookRunner, INotebookEditorProvider, INotebookPythonEnvironmentService } from './types';
 import { DeepnoteActivationService } from './deepnote/deepnoteActivationService';
 import { DeepnoteNotebookManager } from './deepnote/deepnoteNotebookManager';
 import { IDeepnoteNotebookManager } from './types';
@@ -268,10 +268,8 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     serviceManager.addBinding(IDeepnoteKernelAutoSelector, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteLspClientManager>(IDeepnoteLspClientManager, DeepnoteLspClientManager);
     serviceManager.addBinding(IDeepnoteLspClientManager, IExtensionSyncActivationService);
-    serviceManager.addSingleton<IExtensionSyncActivationService>(
-        IExtensionSyncActivationService,
-        DeepnoteInitNotebookRunner
-    );
+    serviceManager.addSingleton<IDeepnoteInitNotebookRunner>(IDeepnoteInitNotebookRunner, DeepnoteInitNotebookRunner);
+    serviceManager.addBinding(IDeepnoteInitNotebookRunner, IExtensionSyncActivationService);
     serviceManager.addSingleton<IDeepnoteRequirementsHelper>(IDeepnoteRequirementsHelper, DeepnoteRequirementsHelper);
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

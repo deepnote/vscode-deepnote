@@ -9,7 +9,11 @@ import { dismissAllNotifications } from './notifications';
  * (`deepnote.ispythonornativeactive`, …) that are not reliably set under automation, so driving them
  * through `Workbench.executeCommand` can silently miss and trigger the wrong command.
  */
-async function clickNotebookToolbarButton(notebookFileName: string, ariaLabel: string): Promise<void> {
+async function clickNotebookToolbarButton(
+    notebookFileName: string,
+    ariaLabel: string,
+    match: 'exact' | 'prefix' = 'exact'
+): Promise<void> {
     const driver = VSBrowser.instance.driver;
 
     await new EditorView().openEditor(notebookFileName);
@@ -21,8 +25,17 @@ async function clickNotebookToolbarButton(notebookFileName: string, ariaLabel: s
     await driver.wait(
         async () => {
             try {
-                const [button] = await driver.findElements(By.css(`a.action-label[aria-label="${ariaLabel}"]`));
+                const operator = match === 'prefix' ? '^=' : '=';
+                const [button] = await driver.findElements(
+                    By.css(`a.action-label[aria-label${operator}"${ariaLabel}"]`)
+                );
                 if (!button) {
+                    return false;
+                }
+
+                // A contributed action whose `enablement` is false still renders, greyed out; clicking it is a
+                // silent no-op, so keep polling until it is actually enabled.
+                if ((await button.getAttribute('aria-disabled')) === 'true') {
                     return false;
                 }
 
@@ -55,6 +68,15 @@ export async function clickRunAll(notebookFileName: string): Promise<void> {
  */
 export async function clickInterrupt(notebookFileName: string): Promise<void> {
     return clickNotebookToolbarButton(notebookFileName, 'Interrupt');
+}
+
+/**
+ * Clicks the toolbar's "Restart Kernel" button — `deepnote.restartkernel`, contributed to `notebook/toolbar` for
+ * `notebookType == 'deepnote'`. Matched on the aria-label prefix so a keybinding suffix cannot hide it; the only
+ * other restart command, "Restart Kernel and Run All Cells", is not in the toolbar.
+ */
+export async function clickRestartKernel(notebookFileName: string): Promise<void> {
+    return clickNotebookToolbarButton(notebookFileName, 'Restart Kernel', 'prefix');
 }
 
 /**

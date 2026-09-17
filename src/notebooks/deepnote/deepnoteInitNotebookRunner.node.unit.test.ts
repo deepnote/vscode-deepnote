@@ -392,4 +392,37 @@ suite('DeepnoteInitNotebookRunner', () => {
             'a sibling whose project.id does not match must be rejected as an init source'
         );
     });
+    test('waitForInit resolves immediately when no init run is in flight for the kernel', async () => {
+        const kernel = makeKernel(MAIN_FILE_NAME);
+
+        await runner.waitForInit(kernel);
+    });
+
+    test('waitForInit resolves only after the restart-triggered init run has finished', async () => {
+        putFile(MAIN_FILE_NAME, makeMainProjectEntry(PROJECT_ID, INIT_NOTEBOOK_ID));
+        putFile(SIBLING_INIT_FILE_NAME, makeNotebookFile(PROJECT_ID, INIT_NOTEBOOK_ID, [SIBLING_INIT_CODE]));
+        const kernel = makeKernel(MAIN_FILE_NAME);
+        let finishInitBlock: () => void = () => undefined;
+        executeHiddenSpy.callsFake(
+            () =>
+                new Promise<never[]>((resolve) => {
+                    finishInitBlock = () => resolve([]);
+                })
+        );
+
+        // The run must be registered synchronously with the event, so a listener of the same event can await it.
+        onDidRestartKernel.fire(kernel);
+        let resolved = false;
+        const waited = runner.waitForInit(kernel).then(() => {
+            resolved = true;
+        });
+
+        await waitFor(() => executeHiddenSpy.callCount >= 1);
+        await settle();
+        assert.isFalse(resolved, 'waitForInit must stay pending while the init block executes');
+
+        finishInitBlock();
+        await waited;
+        assert.isTrue(resolved);
+    });
 });

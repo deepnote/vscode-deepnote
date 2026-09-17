@@ -77,6 +77,11 @@ suite('DeepnoteAgentSkillsManager', () => {
             assert.strictEqual(executable, expectedBin);
             assert.deepStrictEqual(args, ['install-skills', '--agent', 'cursor']);
             assert.strictEqual(options.cwd, workspaceFolder.uri.fsPath);
+            assert.strictEqual(
+                options.env.DEEPNOTE_PYTHON,
+                testInterpreter.uri.fsPath,
+                'the CLI is told which interpreter the project runs on'
+            );
         });
     });
 

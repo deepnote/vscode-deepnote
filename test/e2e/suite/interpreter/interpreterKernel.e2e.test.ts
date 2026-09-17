@@ -6,6 +6,8 @@
  *   2. running a cell detects that deepnote-toolkit is missing and asks for consent (modal prompt)
  *   3. on "Install" the toolkit goes into the workspace's *active interpreter*, not a managed venv
  *   4. the server starts, the connection is updated in place, and that same run executes the cell
+ *   5. the interpreter the kernel started on is recorded in `.vscode/deepnote.json`, keyed by the
+ *      project id, which is how the Deepnote CLI and MCP server run the project on that interpreter
  *
  * The workspace's active interpreter is a bare venv this test creates, so the install path runs on
  * every execution rather than only on a machine that happens to be missing the package. The cell
@@ -45,7 +47,12 @@ import {
 } from '../../helpers';
 
 const NOTEBOOK_FILE_NAME = 'interpreter-kernel.deepnote';
+/** `project.id` in the fixture; the sidecar is keyed by it. */
+const PROJECT_ID = 'e2e-interpreter-kernel-project';
 const EXPECTED_OUTPUT = 'interpreter-kernel-ok';
+
+/** The sidecar is written right after the controller is registered, so well before the cell output lands. */
+const SIDECAR_WRITE_TIMEOUT = 15_000;
 
 /** How long the notebook is watched to prove that merely opening it installs nothing. */
 const NO_INSTALL_OBSERVATION_MS = 15_000;
@@ -73,6 +80,24 @@ async function readQuickPickEntries(picker: InputBox): Promise<Array<{ descripti
     );
 }
 
+/**
+ * The interpreter `.vscode/deepnote.json` records for `projectId`, or undefined while the file is
+ * missing, mid-write, or has no entry. Same shape as `test-fixtures/ide-sidecar/deepnote.slim.json`
+ * in deepnote/deepnote, which is what the CLI and MCP server parse.
+ */
+function readRecordedInterpreter(sidecarPath: string, projectId: string): string | undefined {
+    try {
+        const parsed = JSON.parse(fs.readFileSync(sidecarPath, 'utf8')) as {
+            mappings?: Record<string, { pythonInterpreter?: unknown }>;
+        };
+        const recorded = parsed.mappings?.[projectId]?.pythonInterpreter;
+
+        return typeof recorded === 'string' && recorded.length > 0 ? recorded : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 /** True when `deepnote_toolkit` imports in the given interpreter. */
 function isToolkitInstalled(python: string): boolean {
     try {
@@ -88,12 +113,14 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
     this.timeout(SUITE_TIMEOUT);
 
     let cleanupTempDir: (() => void) | undefined;
+    let tempDir: string;
     let venvDir: string;
     let interpreter: string;
 
     before(async function () {
-        const { cleanup, tempDir } = copyFixtureToTempDir(NOTEBOOK_FILE_NAME);
-        cleanupTempDir = cleanup;
+        const fixture = copyFixtureToTempDir(NOTEBOOK_FILE_NAME);
+        cleanupTempDir = fixture.cleanup;
+        tempDir = fixture.tempDir;
 
         venvDir = path.join(tempDir, '.venv');
         execFileSync('python3', ['-m', 'venv', venvDir], { stdio: 'inherit' });
@@ -202,6 +229,30 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
         // The cell printed sys.prefix: the kernel must be the venv this test created, which is what
         // separates "active interpreter" from the old Deepnote-managed environment.
         expect(renderedOutput).to.contain(venvDir);
+
+        // The sidecar is the contract with the Deepnote CLI and MCP server (deepnote/deepnote#518):
+        // they run this project on the interpreter recorded here when none is given explicitly. It
+        // must point into the venv the cell just ran in, so both sides resolve the same Python.
+        const sidecarPath = path.join(tempDir, '.vscode', 'deepnote.json');
+        let recordedInterpreter: string | undefined;
+
+        await driver.wait(
+            () => {
+                recordedInterpreter = readRecordedInterpreter(sidecarPath, PROJECT_ID);
+
+                return recordedInterpreter !== undefined;
+            },
+            SIDECAR_WRITE_TIMEOUT,
+            `${sidecarPath} never recorded an interpreter for project ${PROJECT_ID}`
+        );
+
+        expect(fs.existsSync(recordedInterpreter!), `recorded interpreter ${recordedInterpreter} must exist`).to.equal(
+            true
+        );
+        expect(
+            fs.realpathSync(path.dirname(path.dirname(recordedInterpreter!))),
+            'the recorded interpreter must live in the venv the kernel ran in'
+        ).to.equal(fs.realpathSync(venvDir));
 
         // The kernel picker is the only place the description is rendered, so open it and assert on
         // both halves of the entry: the environment name as the label, its interpreter path as the

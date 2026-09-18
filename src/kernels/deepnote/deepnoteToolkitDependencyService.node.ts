@@ -44,7 +44,7 @@ try:
 except Exception:
     pass
 print(json.dumps(r))
-`
+`;
 
 /**
  * Whether `installed` sorts before `pinned` in PEP 440 order. False when either cannot be read: a

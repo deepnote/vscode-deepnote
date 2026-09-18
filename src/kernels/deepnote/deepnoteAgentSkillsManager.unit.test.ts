@@ -26,7 +26,7 @@ suite('DeepnoteAgentSkillsManager', () => {
     }
 
     function updateSkills(): Promise<void> {
-        return manager.ensureSkillsUpdated('env-1');
+        return manager.ensureSkillsUpdated('interpreter-1');
     }
 
     setup(() => {
@@ -80,17 +80,17 @@ suite('DeepnoteAgentSkillsManager', () => {
     });
 
     suite('session-scoped deduplication', () => {
-        test('should install once per environment however often it is called', async () => {
-            await manager.ensureSkillsUpdated('env-1');
-            await manager.ensureSkillsUpdated('env-1');
-            await manager.ensureSkillsUpdated('env-1');
+        test('should install once per interpreter however often it is called', async () => {
+            await manager.ensureSkillsUpdated('interpreter-1');
+            await manager.ensureSkillsUpdated('interpreter-1');
+            await manager.ensureSkillsUpdated('interpreter-1');
 
             assert.strictEqual(execStub.callCount, 1);
         });
 
-        test('should install once for each distinct environment', async () => {
-            await manager.ensureSkillsUpdated('env-1');
-            await manager.ensureSkillsUpdated('env-2');
+        test('should install once for each distinct interpreter', async () => {
+            await manager.ensureSkillsUpdated('interpreter-1');
+            await manager.ensureSkillsUpdated('interpreter-2');
 
             assert.strictEqual(execStub.callCount, 2);
         });
@@ -161,7 +161,7 @@ suite('DeepnoteAgentSkillsManager', () => {
 
             execStub.rejects(new Error('spawn failure'));
 
-            await manager.ensureSkillsUpdated('env-error');
+            await manager.ensureSkillsUpdated('interpreter-error');
 
             assert.strictEqual(warnStub.callCount, 1);
         });

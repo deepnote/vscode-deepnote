@@ -31,27 +31,24 @@ function getAgentName(): string {
     return 'github copilot';
 }
 
-/**
- * Manages background installation of Deepnote agent skill files.
- *
- */
+/** Manages background installation of Deepnote agent skill files. */
 @injectable()
 export class DeepnoteAgentSkillsManager {
-    private readonly processedEnvironments = new Set<string>();
+    private readonly processedInterpreters = new Set<string>();
 
     constructor(@inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory) {}
 
     /**
      * Fire-and-forget: ensures the agent skill files are up-to-date for the
-     * given environment. Safe to call repeatedly -- only the first call per
-     * environment per session actually does work.
+     * given interpreter. Safe to call repeatedly -- only the first call per
+     * interpreter per session actually does work.
      */
-    public ensureSkillsUpdated(environmentId: string): Promise<void> {
-        if (this.processedEnvironments.has(environmentId)) {
+    public ensureSkillsUpdated(interpreterId: string): Promise<void> {
+        if (this.processedInterpreters.has(interpreterId)) {
             return Promise.resolve();
         }
 
-        this.processedEnvironments.add(environmentId);
+        this.processedInterpreters.add(interpreterId);
 
         return this.updateSkillsInBackground().catch((err) =>
             logger.warn('Failed to install Deepnote agent skills', err)

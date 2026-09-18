@@ -73,8 +73,7 @@ export class IntegrationManager implements IIntegrationManager {
             })
         );
 
-        // Links an integration another project in the workspace already configured into the active project.
-        // Takes the same argument shapes as ManageIntegrations so the panel and menus can pass a notebook URI.
+        // Accepts the same argument shapes as ManageIntegrations so the panel and menus can pass a notebook URI.
         this.extensionContext.subscriptions.push(
             commands.registerCommand(Commands.AddExistingIntegration, (...args: unknown[]) => {
                 let notebookUri: string | undefined;
@@ -89,11 +88,9 @@ export class IntegrationManager implements IIntegrationManager {
     }
 
     /**
-     * Offers the SecretStorage integrations other projects in the workspace declare, and links the chosen one into
-     * the active project's roster. Public so tests can drive it without `commands.executeCommand`.
-     *
-     * Credentials are not copied: `IntegrationStorage` is keyed by integration id alone, so the roster entry is all
-     * that scopes an integration to a project (see `collectReusableIntegrations`).
+     * Offers the integrations other projects in the workspace declare and links the chosen one into this project's
+     * roster; no credentials are copied (see `collectReusableIntegrations`). Public so tests can drive it without
+     * `commands.executeCommand`.
      */
     public async addExistingIntegration(notebookUri?: string): Promise<CommandOutcome> {
         const activeNotebook = this.resolveDeepnoteNotebook(notebookUri);
@@ -207,18 +204,13 @@ export class IntegrationManager implements IIntegrationManager {
         return uri ? String(uri) : undefined;
     }
 
-    /**
-     * The project's roster exactly as the notebook manager caches it. Entries are never filtered here: this array
-     * is what `attachExistingIntegration` persists, so narrowing it (e.g. dropping `pandas-dataframe`) would
-     * rewrite the project's integrations rather than add to them. Callers derive their own exclusion set from it.
-     */
+    /** Unfiltered on purpose: `attachExistingIntegration` writes this array back, so anything dropped here is lost. */
     private getCachedRoster(projectId: string, notebookId: string): RawProjectIntegration[] {
         const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
 
         return [...(project?.project.integrations ?? [])];
     }
 
-    /** Re-applies integration env in the project's running kernels and re-renders the panel with the new roster. */
     private async refreshAfterRosterChange(projectId: string, activeNotebook: NotebookDocument): Promise<void> {
         const projectNotebooks = workspace.notebookDocuments.filter(
             (notebook) => notebook.notebookType === 'deepnote' && notebook.metadata?.deepnoteProjectId === projectId

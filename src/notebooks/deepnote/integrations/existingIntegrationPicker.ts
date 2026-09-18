@@ -13,7 +13,7 @@ import { isSnapshotFile } from '../snapshots/snapshotFiles';
 import { PersistIntegrationsResult, persistProjectIntegrations } from './projectIntegrationsWriter';
 import { IIntegrationStorage } from './types';
 
-/** Human-readable type labels for the picker; mirrors `integrationTypeLabels` in the webview bundle. */
+/** Mirrors `integrationTypeLabels` in the webview bundle. */
 const INTEGRATION_TYPE_LABELS: Record<ConfigurableDatabaseIntegrationType, string> = {
     alloydb: localize.Integrations.alloyDBTypeLabel,
     athena: localize.Integrations.athenaTypeLabel,
@@ -39,24 +39,21 @@ export function integrationTypeLabel(type: ConfigurableDatabaseIntegrationType):
     return INTEGRATION_TYPE_LABELS[type] ?? type;
 }
 
-/** A roster entry exactly as the `.deepnote` file records it; `type` is not narrowed to the types this build knows. */
+/** A roster entry as recorded on disk: unlike `ProjectIntegration`, `type` is not narrowed to the known types. */
 export type RawProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']>[number];
 
-/**
- * A SecretStorage integration declared by at least one *other* project in the workspace, so it can be linked into
- * the current project without re-entering credentials.
- */
+/** An integration another project in the workspace has credentials stored for, so linking it needs no re-entry. */
 export interface ReusableIntegration {
     id: string;
     /** Name from the stored config — the same source the panel writes to the roster on save. */
     name: string;
-    /** Display names of the other projects whose roster declares this integration; deduped and sorted. */
+    /** The other projects declaring this integration; deduped and sorted. */
     projectNames: string[];
     type: ConfigurableDatabaseIntegrationType;
 }
 
 export interface CollectReusableIntegrationsParams {
-    /** Integration ids already on the current project's roster; never offered again. */
+    /** Ids already on the current project's roster. */
     excludeIntegrationIds: ReadonlySet<string>;
     integrationStorage: IIntegrationStorage;
     /** The project being extended; its own `.deepnote` files are skipped. */
@@ -65,9 +62,8 @@ export interface CollectReusableIntegrationsParams {
 
 export interface CollectReusableIntegrationsResult {
     /**
-     * Ids skipped because a project's roster declares the integration with a type that differs from the stored
-     * configuration. Linking such an entry would put a roster type on this project that the credentials cannot
-     * back, so the caller warns instead.
+     * Ids skipped because some project's roster type disagrees with the stored config: linking one would put a type
+     * on this project that the credentials cannot back.
      */
     conflictingIds: string[];
     integrations: ReusableIntegration[];
@@ -75,10 +71,7 @@ export interface CollectReusableIntegrationsResult {
 
 export interface AttachExistingIntegrationParams {
     activeFileUri: Uri;
-    /**
-     * The current project's roster exactly as cached by the notebook manager. Every entry passes through to the
-     * write verbatim (including `pandas-dataframe` and any type this build does not know), so nothing is pruned.
-     */
+    /** The project's full roster: every entry is written back verbatim, so a filtered array drops entries. */
     currentIntegrations: readonly RawProjectIntegration[];
     integration: ReusableIntegration;
     notebookManager: IDeepnoteNotebookManager;
@@ -86,18 +79,13 @@ export interface AttachExistingIntegrationParams {
 }
 
 /**
- * Scans every `.deepnote` file in the open workspace folders and collects the SecretStorage integrations other
- * projects declare.
+ * Scans every `.deepnote` file in the open workspace folders for integrations other projects declare.
  *
- * Storage design: `IntegrationStorage` keys configs by integration id alone (there is no per-project namespace),
- * and both the env-var provider and the detector resolve credentials from the project roster
- * (`project.integrations[].id`). The roster entry is therefore the only thing that "attaches" an integration to a
- * project, and reusing one is a pure link: no config is copied. Federated (`google-oauth`) integrations are
- * included for the same reason — `FederatedAuthTokenStorage` is also keyed by integration id, and the per-cell
- * code generator resolves the config through the roster of the notebook being run.
+ * Reuse is a link, not a copy: `IntegrationStorage` and `FederatedAuthTokenStorage` both key configs by integration
+ * id alone, so the roster entry is the only thing that scopes an integration to a project.
  *
- * Integrations configured only in `.deepnote.env.yaml` (no stored config) are not offered: that file already
- * applies to every project under it, and the panel cannot write that layer.
+ * Integrations configured only in `.deepnote.env.yaml` are not offered: that file already applies to every project
+ * under it, and the panel cannot write that layer.
  */
 export async function collectReusableIntegrations(
     params: CollectReusableIntegrationsParams
@@ -128,7 +116,7 @@ export async function collectReusableIntegrations(
 
             visited.add(key);
 
-            // Per-file try/catch: one unreadable file must not hide every other project's integrations.
+            // One unreadable file must not hide every other project's integrations.
             try {
                 const projectData = await readDeepnoteProjectFile(fileUri);
 
@@ -146,7 +134,7 @@ export async function collectReusableIntegrations(
                     const storedConfig = await integrationStorage.getIntegrationConfig(entry.id);
 
                     if (!storedConfig) {
-                        // File-only or never-configured: there are no credentials in SecretStorage to reuse.
+                        // File-only or never configured — no stored credentials to reuse.
                         continue;
                     }
 
@@ -195,16 +183,15 @@ export async function collectReusableIntegrations(
 }
 
 /**
- * Links `integration` into the project's roster and persists it through the same writer the panel uses, so the
- * cache, the active file and every sibling `.deepnote` file of the project are updated together. Idempotent for an
- * id already on the roster (the entry is replaced, not duplicated).
+ * Links `integration` into the project's roster through the same writer the panel uses, so the cache, the active
+ * file and every sibling `.deepnote` file are updated together. Re-linking an id already there replaces its entry.
  */
 export function attachExistingIntegration(params: AttachExistingIntegrationParams): Promise<PersistIntegrationsResult> {
     const { activeFileUri, currentIntegrations, integration, notebookManager, projectId } = params;
 
     const linked: ProjectIntegration = { id: integration.id, name: integration.name, type: integration.type };
-    // Cast rather than narrow: validating the existing entries would silently drop any type this build does not
-    // know about (`pandas-dataframe` included), which is pruning by another name.
+    // Cast rather than validate: filtering out types this build does not know (`pandas-dataframe`) would delete
+    // them from the file.
     const integrations = [
         ...currentIntegrations.filter((entry) => entry.id !== integration.id),
         linked

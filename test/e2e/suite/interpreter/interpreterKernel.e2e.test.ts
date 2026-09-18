@@ -13,6 +13,10 @@
  * every execution rather than only on a machine that happens to be missing the package. The cell
  * prints `sys.prefix`, so the output proves the kernel ran inside that venv.
  *
+ * A second test then covers the agent skills that ride on the same server start, which is the only
+ * place they can be checked: the bundle and its skill files have to survive packaging, the extension
+ * has to resolve them inside a real installed VSIX, and the CLI has to run on the editor's own Node.
+ *
  * Screenshots are captured at each step into `test/e2e/screenshots/interpreterKernel/` so the flow
  * can be confirmed visually — in particular that the consent prompt is actually shown.
  *
@@ -57,6 +61,12 @@ const SIDECAR_WRITE_TIMEOUT = 15_000;
 /** How long the notebook is watched to prove that merely opening it installs nothing. */
 const NO_INSTALL_OBSERVATION_MS = 15_000;
 
+/** install-skills is fire-and-forget off the server start and takes well under a second to write. */
+const SKILLS_INSTALL_TIMEOUT = 30_000;
+
+/** VS Code maps to the CLI's "GitHub Copilot" agent, whose project skill directory is `.agents/skills`. */
+const INSTALLED_SKILL_PATH = ['.agents', 'skills', 'deepnote', 'SKILL.md'];
+
 /** Path to the interpreter inside a venv, for the platform the test is running on. */
 function venvPython(venvDir: string): string {
     return process.platform === 'win32'
@@ -96,6 +106,21 @@ function readRecordedInterpreter(sidecarPath: string, projectId: string): string
     } catch {
         return undefined;
     }
+}
+
+/**
+ * The extension as ExTester installed it from the VSIX — not the repo's own `dist/`, so what this
+ * reads is what `.vscodeignore` actually shipped.
+ */
+function installedExtensionDir(): string {
+    const extensionsRoot = path.resolve(process.cwd(), '.test-extensions');
+    const installed = fs
+        .readdirSync(extensionsRoot)
+        .find((entry) => entry.toLowerCase().startsWith('deepnote.vscode-deepnote-'));
+
+    expect(installed, `no installed Deepnote extension under ${extensionsRoot}`).to.not.equal(undefined);
+
+    return path.join(extensionsRoot, installed!);
 }
 
 /** True when `deepnote_toolkit` imports in the given interpreter. */
@@ -292,5 +317,34 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
         expect(venvEntry?.label, 'the kernel entry must be named after the environment').to.not.equal('');
 
         await picker?.cancel();
+    });
+
+    // Runs after the test above, which is what starts the server the skills install rides on. Every
+    // assertion here is one a unit test cannot make: the manager's own tests stub the spawn away, so
+    // nothing else checks that the bundle is in the VSIX, that BUNDLED_CLI_PATH resolves against a
+    // real install, or that the editor's Electron binary runs it as Node.
+    it('ships the bundled CLI in the VSIX and installs the skill into the workspace', async function () {
+        const driver = VSBrowser.instance.driver;
+        const extensionDir = installedExtensionDir();
+        const shippedSkill = path.join(extensionDir, 'dist', 'skills', 'deepnote', 'SKILL.md');
+        const bundledCli = path.join(extensionDir, 'dist', 'deepnoteCli.cjs');
+
+        expect(fs.existsSync(bundledCli), `${bundledCli} is missing from the packaged extension`).to.equal(true);
+        expect(fs.existsSync(shippedSkill), `${shippedSkill} is missing from the packaged extension`).to.equal(true);
+
+        // Nothing but a successful spawn of that bundle writes this file, so waiting on it covers the
+        // path resolution and ELECTRON_RUN_AS_NODE at once.
+        const installedSkill = path.join(tempDir, ...INSTALLED_SKILL_PATH);
+
+        await driver.wait(
+            () => fs.existsSync(installedSkill),
+            SKILLS_INSTALL_TIMEOUT,
+            `${installedSkill} was never written, so the bundled CLI never ran`
+        );
+
+        expect(
+            fs.readFileSync(installedSkill, 'utf8'),
+            'the installed skill must be the copy that shipped in the VSIX'
+        ).to.equal(fs.readFileSync(shippedSkill, 'utf8'));
     });
 });

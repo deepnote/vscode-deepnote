@@ -31,7 +31,6 @@ function getAgentName(): string {
     return 'github copilot';
 }
 
-/** Manages background installation of Deepnote agent skill files. */
 @injectable()
 export class DeepnoteAgentSkillsManager {
     private readonly processedFolders = new Set<string>();

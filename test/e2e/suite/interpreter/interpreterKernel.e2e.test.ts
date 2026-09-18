@@ -13,9 +13,8 @@
  * every execution rather than only on a machine that happens to be missing the package. The cell
  * prints `sys.prefix`, so the output proves the kernel ran inside that venv.
  *
- * A second test then covers the agent skills that ride on the same server start, which is the only
- * place they can be checked: the bundle and its skill files have to survive packaging, the extension
- * has to resolve them inside a real installed VSIX, and the CLI has to run on the editor's own Node.
+ * A second test covers the agent skills that ride on the same server start. Packaging, path
+ * resolution against a real install, and running the bundle as Node cannot be reached from a unit test.
  *
  * Screenshots are captured at each step into `test/e2e/screenshots/interpreterKernel/` so the flow
  * can be confirmed visually — in particular that the consent prompt is actually shown.
@@ -108,10 +107,7 @@ function readRecordedInterpreter(sidecarPath: string, projectId: string): string
     }
 }
 
-/**
- * The extension as ExTester installed it from the VSIX — not the repo's own `dist/`, so what this
- * reads is what `.vscodeignore` actually shipped.
- */
+/** The extension as ExTester installed it, so what this reads is what `.vscodeignore` shipped. */
 function installedExtensionDir(): string {
     const extensionsRoot = path.resolve(process.cwd(), '.test-extensions');
     const installed = fs
@@ -319,10 +315,7 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
         await picker?.cancel();
     });
 
-    // Runs after the test above, which is what starts the server the skills install rides on. Every
-    // assertion here is one a unit test cannot make: the manager's own tests stub the spawn away, so
-    // nothing else checks that the bundle is in the VSIX, that BUNDLED_CLI_PATH resolves against a
-    // real install, or that the editor's Electron binary runs it as Node.
+    // Depends on the test above: that is what starts the server the skills install rides on.
     it('ships the bundled CLI in the VSIX and installs the skill into the workspace', async function () {
         const driver = VSBrowser.instance.driver;
         const extensionDir = installedExtensionDir();
@@ -332,8 +325,6 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
         expect(fs.existsSync(bundledCli), `${bundledCli} is missing from the packaged extension`).to.equal(true);
         expect(fs.existsSync(shippedSkill), `${shippedSkill} is missing from the packaged extension`).to.equal(true);
 
-        // Nothing but a successful spawn of that bundle writes this file, so waiting on it covers the
-        // path resolution and ELECTRON_RUN_AS_NODE at once.
         const installedSkill = path.join(tempDir, ...INSTALLED_SKILL_PATH);
 
         await driver.wait(

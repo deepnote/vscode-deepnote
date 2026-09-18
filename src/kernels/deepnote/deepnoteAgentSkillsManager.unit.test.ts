@@ -25,10 +25,6 @@ suite('DeepnoteAgentSkillsManager', () => {
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(workspaceFolders as never);
     }
 
-    function updateSkills(): Promise<void> {
-        return manager.ensureSkillsUpdated('interpreter-1');
-    }
-
     setup(() => {
         configureVSCodeMocks('Cursor', [workspaceFolder]);
 
@@ -49,7 +45,7 @@ suite('DeepnoteAgentSkillsManager', () => {
 
     suite('updateSkillsInBackground', () => {
         test('runs the bundled CLI on the editor Node, and nothing through pip', async () => {
-            await updateSkills();
+            await manager.ensureSkillsUpdated();
 
             assert.strictEqual(execStub.callCount, 1, 'one spawn: no pip install precedes install-skills any more');
 
@@ -62,7 +58,7 @@ suite('DeepnoteAgentSkillsManager', () => {
         });
 
         test('installs into the workspace folder', async () => {
-            await updateSkills();
+            await manager.ensureSkillsUpdated();
 
             const [, , options] = execStub.firstCall.args;
 
@@ -70,7 +66,7 @@ suite('DeepnoteAgentSkillsManager', () => {
         });
 
         test('never spawns a Python, and never pip', async () => {
-            await updateSkills();
+            await manager.ensureSkillsUpdated();
 
             for (const call of execStub.getCalls()) {
                 assert.strictEqual(call.args[0], process.execPath);
@@ -80,17 +76,19 @@ suite('DeepnoteAgentSkillsManager', () => {
     });
 
     suite('session-scoped deduplication', () => {
-        test('should install once per interpreter however often it is called', async () => {
-            await manager.ensureSkillsUpdated('interpreter-1');
-            await manager.ensureSkillsUpdated('interpreter-1');
-            await manager.ensureSkillsUpdated('interpreter-1');
+        test('should install once per workspace folder however often it is called', async () => {
+            await manager.ensureSkillsUpdated();
+            await manager.ensureSkillsUpdated();
+            await manager.ensureSkillsUpdated();
 
             assert.strictEqual(execStub.callCount, 1);
         });
 
-        test('should install once for each distinct interpreter', async () => {
-            await manager.ensureSkillsUpdated('interpreter-1');
-            await manager.ensureSkillsUpdated('interpreter-2');
+        test('should install again once the workspace folder changes', async () => {
+            await manager.ensureSkillsUpdated();
+
+            configureVSCodeMocks('Cursor', [{ uri: Uri.file('/workspace/other-project') }]);
+            await manager.ensureSkillsUpdated();
 
             assert.strictEqual(execStub.callCount, 2);
         });
@@ -100,7 +98,7 @@ suite('DeepnoteAgentSkillsManager', () => {
         async function assertAgent(appName: string, expected: string): Promise<void> {
             configureVSCodeMocks(appName, [workspaceFolder]);
 
-            await updateSkills();
+            await manager.ensureSkillsUpdated();
 
             assert.deepStrictEqual(execStub.lastCall.args[1], [
                 BUNDLED_CLI_PATH,
@@ -135,7 +133,7 @@ suite('DeepnoteAgentSkillsManager', () => {
         test('should skip when no workspace folder is open', async () => {
             configureVSCodeMocks('Cursor', undefined);
 
-            await updateSkills();
+            await manager.ensureSkillsUpdated();
 
             assert.strictEqual(execStub.callCount, 0);
         });
@@ -143,7 +141,7 @@ suite('DeepnoteAgentSkillsManager', () => {
         test('should skip when workspace folders array is empty', async () => {
             configureVSCodeMocks('Cursor', []);
 
-            await updateSkills();
+            await manager.ensureSkillsUpdated();
 
             assert.strictEqual(execStub.callCount, 0);
         });
@@ -151,7 +149,7 @@ suite('DeepnoteAgentSkillsManager', () => {
         test('should skip when the bundled CLI is missing', async () => {
             pathExistsStub.resolves(false);
 
-            await updateSkills();
+            await manager.ensureSkillsUpdated();
 
             assert.strictEqual(execStub.callCount, 0);
         });
@@ -161,7 +159,7 @@ suite('DeepnoteAgentSkillsManager', () => {
 
             execStub.rejects(new Error('spawn failure'));
 
-            await manager.ensureSkillsUpdated('interpreter-error');
+            await manager.ensureSkillsUpdated();
 
             assert.strictEqual(warnStub.callCount, 1);
         });

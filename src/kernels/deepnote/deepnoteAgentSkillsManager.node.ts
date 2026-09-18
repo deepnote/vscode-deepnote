@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import { env, workspace } from 'vscode';
+import { Uri, env, workspace } from 'vscode';
 
 import { pathExists } from '../../platform/common/platform/fileUtils.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
@@ -34,29 +34,15 @@ function getAgentName(): string {
 /** Manages background installation of Deepnote agent skill files. */
 @injectable()
 export class DeepnoteAgentSkillsManager {
-    private readonly processedInterpreters = new Set<string>();
+    private readonly processedFolders = new Set<string>();
 
     constructor(@inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory) {}
 
     /**
-     * Fire-and-forget: ensures the agent skill files are up-to-date for the
-     * given interpreter. Safe to call repeatedly -- only the first call per
-     * interpreter per session actually does work.
+     * Fire-and-forget: ensures the agent skill files are up-to-date in the workspace folder they are
+     * installed into. Safe to call repeatedly -- only the first call per folder per session does work.
      */
-    public async ensureSkillsUpdated(interpreterId: string): Promise<void> {
-        if (this.processedInterpreters.has(interpreterId)) {
-            return;
-        }
-
-        this.processedInterpreters.add(interpreterId);
-
-        await this.updateSkillsInBackground().catch((err) =>
-            logger.warn('Failed to install Deepnote agent skills', err)
-        );
-    }
-
-    private async updateSkillsInBackground(): Promise<void> {
-        const agentName = getAgentName();
+    public async ensureSkillsUpdated(): Promise<void> {
         const workspaceRoot = workspace.workspaceFolders?.[0]?.uri;
 
         if (!workspaceRoot) {
@@ -64,6 +50,22 @@ export class DeepnoteAgentSkillsManager {
 
             return;
         }
+
+        const folderKey = workspaceRoot.toString();
+
+        if (this.processedFolders.has(folderKey)) {
+            return;
+        }
+
+        this.processedFolders.add(folderKey);
+
+        await this.updateSkillsInBackground(workspaceRoot).catch((err) =>
+            logger.warn('Failed to install Deepnote agent skills', err)
+        );
+    }
+
+    private async updateSkillsInBackground(workspaceRoot: Uri): Promise<void> {
+        const agentName = getAgentName();
 
         if (!(await pathExists(BUNDLED_CLI_PATH))) {
             logger.warn(`Deepnote CLI bundle is missing at ${BUNDLED_CLI_PATH}, skipping agent skills installation`);

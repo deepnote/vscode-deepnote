@@ -746,7 +746,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 }
                 break;
             case 'addExisting':
-                // The command owns the QuickPick and the roster write, and re-shows this panel with the new roster.
+                // The command owns the picker and the roster write, and re-shows this panel when it is done.
                 try {
                     await commands.executeCommand(Commands.AddExistingIntegration, {
                         notebookUri: this.activeFileUri?.toString()

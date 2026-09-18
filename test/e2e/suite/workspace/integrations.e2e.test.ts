@@ -24,8 +24,7 @@ const WEBVIEW_READ_TIMEOUT = 15_000;
 // Empty-state text asserted to prove the panel actually opened (else the negative `not.contain`
 // below passes trivially against a blank/failed `''` read).
 const NO_INTEGRATIONS_TEXT = 'No integrations found in this project.';
-// The "Add Existing Integration" entry point (reuse an integration another project configured) must render in
-// the panel regardless of whether this project has integrations of its own.
+// The reuse entry point must render even when this project has no integrations of its own.
 const ADD_EXISTING_INTEGRATION_TEXT = 'Add Existing Integration';
 // Prior editors finish closing before reopening the target notebook.
 const EDITORS_CLOSE_DELAY = 500;

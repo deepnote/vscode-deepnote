@@ -4,7 +4,7 @@ import { ConfigurableDatabaseIntegrationType } from './types';
 import { integrationTypeLabels, integrationTypeIcons } from './integrationUtils';
 
 export interface IIntegrationTypeSelectorProps {
-    /** Opens the extension-side picker of integrations other projects in the workspace already configured. */
+    /** Opens the extension-host picker of integrations other projects already configured. */
     onAddExisting: () => void;
     onSelectType: (type: ConfigurableDatabaseIntegrationType) => void;
 }

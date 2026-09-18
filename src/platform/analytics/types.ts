@@ -37,6 +37,8 @@ export type CommandOutcome = 'completed' | 'cancelled' | 'failed';
 /** Caller-supplied properties per event; `undefined` means none beyond the common properties the service attaches. */
 export interface TelemetryEventProperties {
     add_block: { blockType: string; isEphemeral: boolean };
+    /** "Existing" means configured in another project of this workspace. */
+    add_existing_integration: { integrationType: string; outcome: CommandOutcome };
     authenticate_integration: { integrationType: string; outcome: CommandOutcome };
     configure_integration: { integrationType: string };
     copy_notebook_details: undefined;
@@ -58,8 +60,6 @@ export interface TelemetryEventProperties {
      * No `outcome`: nothing here is a command the user waits on — there is no progress UI and no cancel, so
      * `'cancelled'` is unreachable and a partial pass has no defensible single value. The counts carry it.
      */
-    /** A SecretStorage integration from another project in the workspace was linked into this project's roster. */
-    add_existing_integration: { integrationType: string; outcome: CommandOutcome };
     refresh_integration_env: {
         /** Notebooks the refresh ran over, including ones skipped for having no started kernel. */
         attemptedCount: number;

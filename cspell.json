@@ -81,6 +81,7 @@
         "pylsp",
         "PYTHONHOME",
         "pyyaml",
+        "renovatebot",
         "Reselecting",
         "rootpass",
         "scikit",

@@ -60,6 +60,7 @@ import { PythonEnvironmentQuickPickItemProvider } from '../../platform/interpret
 import { BaseProviderBasedQuickPick } from '../../platform/common/providerBasedQuickPick';
 import { InputFlowAction } from '../../platform/common/utils/multiStepInput';
 import { logger } from '../../platform/logging';
+import * as path from '../../platform/vscode-path/path';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { IControllerRegistration, IVSCodeNotebookController } from '../controllers/types';
 import { IDeepnoteNotebookManager } from '../types';
@@ -706,16 +707,31 @@ export class DeepnoteKernelAutoSelector implements IDeepnoteKernelAutoSelector, 
      * @throws Error if no suitable kernel spec is found
      */
     public selectKernelSpec(kernelSpecs: IJupyterKernelSpec[]): IJupyterKernelSpec {
-        const kernelSpec =
-            kernelSpecs.find((s) => s.language === 'python') ||
-            kernelSpecs.find((s) => s.name === 'python3') ||
-            kernelSpecs[0];
-
-        if (!kernelSpec) {
+        if (kernelSpecs.length === 0) {
             throw new Error('No kernel specs available on Deepnote server');
         }
 
-        return kernelSpec;
+        // Older extension versions wrote a spec into the venv naming the interpreter by the absolute path
+        // it was first reached through. Once that path is gone (venv moved, restored elsewhere, or the
+        // link to it deleted), every start fails with a bare ENOENT that never mentions the spec.
+        const runnable = kernelSpecs.filter((spec) => {
+            const runs = !path.isAbsolute(spec.executable) || fs.existsSync(spec.executable);
+
+            if (!runs) {
+                logger.warn(`Ignoring kernel spec ${spec.name}: it launches ${spec.executable}, which does not exist`);
+            }
+
+            return runs;
+        });
+        const candidates = runnable.length > 0 ? runnable : kernelSpecs;
+
+        // ipykernel's own `python3` spec launches plain `python`, which Jupyter replaces with the
+        // interpreter the server runs on, keeping the notebook on the one the user selected.
+        return (
+            candidates.find((spec) => spec.name === 'python3') ||
+            candidates.find((spec) => spec.language === 'python') ||
+            candidates[0]
+        );
     }
 
     /**

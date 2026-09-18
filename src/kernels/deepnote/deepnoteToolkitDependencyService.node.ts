@@ -30,21 +30,21 @@ export type ToolkitState = 'ok' | 'missing' | 'needsUpdate';
  * Reads distribution metadata rather than importing `deepnote_toolkit`, which costs seconds and floods
  * the log. The toolkit server refuses to start without `jupyter_server`.
  */
-const TOOLKIT_PROBE = [
-    'import json',
-    'r = {"version": None, "server": False}',
-    'try:',
-    '    from importlib.metadata import version',
-    '    r["version"] = version("deepnote-toolkit")',
-    'except Exception:',
-    '    pass',
-    'try:',
-    '    import jupyter_server',
-    '    r["server"] = True',
-    'except Exception:',
-    '    pass',
-    'print(json.dumps(r))'
-].join('\n');
+const TOOLKIT_PROBE = `\
+import json
+r = {"version": None, "server": False}
+try:
+    from importlib.metadata import version
+    r["version"] = version("deepnote-toolkit")
+except Exception:
+    pass
+try:
+    import jupyter_server
+    r["server"] = True
+except Exception:
+    pass
+print(json.dumps(r))
+`
 
 /**
  * Whether `installed` sorts before `pinned` in PEP 440 order. False when either cannot be read: a

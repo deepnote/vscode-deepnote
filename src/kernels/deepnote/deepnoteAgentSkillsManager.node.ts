@@ -34,8 +34,6 @@ function getAgentName(): string {
 /**
  * Manages background installation of Deepnote agent skill files.
  *
- * The CLI runs on the editor's Node, not pip-installed into the user's interpreter: that would add a
- * 100 MB wheel nobody asked for, and PEP 668 externally-managed Pythons reject it outright.
  */
 @injectable()
 export class DeepnoteAgentSkillsManager {
@@ -48,19 +46,19 @@ export class DeepnoteAgentSkillsManager {
      * given environment. Safe to call repeatedly -- only the first call per
      * environment per session actually does work.
      */
-    public ensureSkillsUpdated(environmentId: string, interpreter: PythonEnvironment): void {
+    public ensureSkillsUpdated(environmentId: string, venvInterpreter: PythonEnvironment): void {
         if (this.processedEnvironments.has(environmentId)) {
             return;
         }
 
         this.processedEnvironments.add(environmentId);
 
-        this.updateSkillsInBackground(interpreter).catch((err) =>
+        this.updateSkillsInBackground(venvInterpreter).catch((err) =>
             logger.warn('Failed to install Deepnote agent skills', err)
         );
     }
 
-    private async updateSkillsInBackground(interpreter: PythonEnvironment): Promise<void> {
+    private async updateSkillsInBackground(venvInterpreter: PythonEnvironment): Promise<void> {
         const agentName = getAgentName();
         const workspaceRoot = workspace.workspaceFolders?.[0]?.uri;
 
@@ -77,21 +75,21 @@ export class DeepnoteAgentSkillsManager {
         // `process.execPath` is the editor's Electron binary; ELECTRON_RUN_AS_NODE makes it plain Node.
         // DEEPNOTE_PYTHON is how the CLI is told which interpreter a project runs on (it also reads
         // the `.vscode/deepnote.json` sidecar); set it on every CLI spawn so the two never disagree.
-        const result = await processService.exec(
+        const installResult = await processService.exec(
             process.execPath,
             [BUNDLED_CLI_PATH, 'install-skills', '--agent', agentName],
             {
                 cwd: workspaceRoot.fsPath,
-                env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', DEEPNOTE_PYTHON: interpreter.uri.fsPath },
+                env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', DEEPNOTE_PYTHON: venvInterpreter.uri.fsPath },
                 throwOnStdErr: false
             }
         );
 
-        if (result.stdout) {
-            logger.info('install-skills output:', result.stdout);
+        if (installResult.stdout) {
+            logger.info('install-skills output:', installResult.stdout);
         }
-        if (result.stderr) {
-            logger.warn('install-skills stderr:', result.stderr);
+        if (installResult.stderr) {
+            logger.warn('install-skills stderr:', installResult.stderr);
         }
     }
 }

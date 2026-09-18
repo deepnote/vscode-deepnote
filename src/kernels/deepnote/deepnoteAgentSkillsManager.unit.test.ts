@@ -3,21 +3,18 @@ import * as sinon from 'sinon';
 import { reset, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
+import { fileUtilsNodeUtils } from '../../platform/common/platform/fileUtils.node';
 import { IProcessService, IProcessServiceFactory } from '../../platform/common/process/types.node';
-import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
+import { logger } from '../../platform/logging';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { BUNDLED_CLI_PATH, DeepnoteAgentSkillsManager } from './deepnoteAgentSkillsManager.node';
 
 suite('DeepnoteAgentSkillsManager', () => {
     let manager: DeepnoteAgentSkillsManager;
     let execStub: sinon.SinonStub;
+    let pathExistsStub: sinon.SinonStub;
 
     const workspaceFolder = { uri: Uri.file('/workspace/my-project') };
-
-    const testInterpreter: PythonEnvironment = {
-        id: 'test-python-id',
-        uri: Uri.file('/home/user/.venvs/test-venv/bin/python')
-    } as PythonEnvironment;
 
     function configureVSCodeMocks(appName: string, workspaceFolders?: unknown[]) {
         resetVSCodeMocks();
@@ -28,15 +25,14 @@ suite('DeepnoteAgentSkillsManager', () => {
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(workspaceFolders as never);
     }
 
-    function updateSkills(interpreter: PythonEnvironment): Promise<void> {
-        return (
-            manager as unknown as { updateSkillsInBackground(i: PythonEnvironment): Promise<void> }
-        ).updateSkillsInBackground(interpreter);
+    function updateSkills(): Promise<void> {
+        return manager.ensureSkillsUpdated('env-1');
     }
 
     setup(() => {
         configureVSCodeMocks('Cursor', [workspaceFolder]);
 
+        pathExistsStub = sinon.stub(fileUtilsNodeUtils, 'pathExists').resolves(true);
         execStub = sinon.stub().resolves({ stdout: '', stderr: '' });
 
         const stubProcessService = { exec: execStub } as unknown as IProcessService;
@@ -47,9 +43,13 @@ suite('DeepnoteAgentSkillsManager', () => {
         manager = new DeepnoteAgentSkillsManager(stubFactory);
     });
 
+    teardown(() => {
+        sinon.restore();
+    });
+
     suite('updateSkillsInBackground', () => {
         test('runs the bundled CLI on the editor Node, and nothing through pip', async () => {
-            await updateSkills(testInterpreter);
+            await updateSkills();
 
             assert.strictEqual(execStub.callCount, 1, 'one spawn: no pip install precedes install-skills any more');
 
@@ -61,82 +61,73 @@ suite('DeepnoteAgentSkillsManager', () => {
             assert.match(BUNDLED_CLI_PATH, /dist[\\/]deepnoteCli\.cjs$/);
         });
 
-        test('installs into the workspace folder, and tells the CLI which interpreter the project runs on', async () => {
-            await updateSkills(testInterpreter);
+        test('installs into the workspace folder', async () => {
+            await updateSkills();
 
             const [, , options] = execStub.firstCall.args;
 
             assert.strictEqual(options.cwd, workspaceFolder.uri.fsPath);
-            assert.strictEqual(options.env.DEEPNOTE_PYTHON, testInterpreter.uri.fsPath);
         });
 
-        test('never touches the interpreter itself', async () => {
-            await updateSkills(testInterpreter);
+        test('never spawns a Python, and never pip', async () => {
+            await updateSkills();
 
             for (const call of execStub.getCalls()) {
-                assert.notStrictEqual(call.args[0], testInterpreter.uri.fsPath, 'no python -m pip ...');
+                assert.strictEqual(call.args[0], process.execPath);
                 assert.notInclude(call.args[1], 'pip');
             }
         });
     });
 
     suite('session-scoped deduplication', () => {
-        test('should mark environment as processed after first call', () => {
-            manager.ensureSkillsUpdated('env-1', testInterpreter);
+        test('should install once per environment however often it is called', async () => {
+            await manager.ensureSkillsUpdated('env-1');
+            await manager.ensureSkillsUpdated('env-1');
+            await manager.ensureSkillsUpdated('env-1');
 
-            const processed = (manager as unknown as { processedEnvironments: Set<string> }).processedEnvironments;
-
-            assert.isTrue(processed.has('env-1'));
+            assert.strictEqual(execStub.callCount, 1);
         });
 
-        test('should track different environments separately', () => {
-            manager.ensureSkillsUpdated('env-1', testInterpreter);
-            manager.ensureSkillsUpdated('env-2', testInterpreter);
+        test('should install once for each distinct environment', async () => {
+            await manager.ensureSkillsUpdated('env-1');
+            await manager.ensureSkillsUpdated('env-2');
 
-            const processed = (manager as unknown as { processedEnvironments: Set<string> }).processedEnvironments;
-
-            assert.isTrue(processed.has('env-1'));
-            assert.isTrue(processed.has('env-2'));
-            assert.strictEqual(processed.size, 2);
-        });
-
-        test('should not add duplicate entries for the same environment', () => {
-            manager.ensureSkillsUpdated('env-1', testInterpreter);
-            manager.ensureSkillsUpdated('env-1', testInterpreter);
-            manager.ensureSkillsUpdated('env-1', testInterpreter);
-
-            const processed = (manager as unknown as { processedEnvironments: Set<string> }).processedEnvironments;
-
-            assert.strictEqual(processed.size, 1);
+            assert.strictEqual(execStub.callCount, 2);
         });
     });
 
     suite('editor detection', () => {
-        async function agentFor(appName: string): Promise<string> {
+        async function assertAgent(appName: string, expected: string): Promise<void> {
             configureVSCodeMocks(appName, [workspaceFolder]);
-            await updateSkills(testInterpreter);
 
-            return execStub.lastCall.args[1][3];
+            await updateSkills();
+
+            assert.deepStrictEqual(execStub.lastCall.args[1], [
+                BUNDLED_CLI_PATH,
+                'install-skills',
+                '--agent',
+                expected
+            ]);
         }
 
         test('should detect Cursor', async () => {
-            assert.strictEqual(await agentFor('Cursor'), 'cursor');
+            await assertAgent('Cursor', 'cursor');
         });
 
         test('should detect Windsurf', async () => {
-            assert.strictEqual(await agentFor('Windsurf'), 'windsurf');
+            await assertAgent('Windsurf', 'windsurf');
         });
 
         test('should detect Antigravity', async () => {
-            assert.strictEqual(await agentFor('Antigravity'), 'antigravity');
+            await assertAgent('Antigravity', 'antigravity');
         });
 
         test('should default to github copilot for VS Code', async () => {
-            assert.strictEqual(await agentFor('Visual Studio Code'), 'github copilot');
+            await assertAgent('Visual Studio Code', 'github copilot');
         });
 
         test('should default to github copilot for unknown editors', async () => {
-            assert.strictEqual(await agentFor('SomeUnknownEditor'), 'github copilot');
+            await assertAgent('SomeUnknownEditor', 'github copilot');
         });
     });
 
@@ -144,7 +135,7 @@ suite('DeepnoteAgentSkillsManager', () => {
         test('should skip when no workspace folder is open', async () => {
             configureVSCodeMocks('Cursor', undefined);
 
-            await updateSkills(testInterpreter);
+            await updateSkills();
 
             assert.strictEqual(execStub.callCount, 0);
         });
@@ -152,20 +143,27 @@ suite('DeepnoteAgentSkillsManager', () => {
         test('should skip when workspace folders array is empty', async () => {
             configureVSCodeMocks('Cursor', []);
 
-            await updateSkills(testInterpreter);
+            await updateSkills();
 
             assert.strictEqual(execStub.callCount, 0);
         });
 
-        test('should swallow errors in ensureSkillsUpdated', () => {
+        test('should skip when the bundled CLI is missing', async () => {
+            pathExistsStub.resolves(false);
+
+            await updateSkills();
+
+            assert.strictEqual(execStub.callCount, 0);
+        });
+
+        test('should swallow install failures instead of rejecting', async () => {
+            const warnStub = sinon.stub(logger, 'warn');
+
             execStub.rejects(new Error('spawn failure'));
 
-            // ensureSkillsUpdated is fire-and-forget -- it must not throw
-            manager.ensureSkillsUpdated('env-error', testInterpreter);
+            await manager.ensureSkillsUpdated('env-error');
 
-            const processed = (manager as unknown as { processedEnvironments: Set<string> }).processedEnvironments;
-
-            assert.isTrue(processed.has('env-error'));
+            assert.strictEqual(warnStub.callCount, 1);
         });
     });
 });

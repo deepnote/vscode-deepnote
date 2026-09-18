@@ -1,10 +1,10 @@
 import { inject, injectable } from 'inversify';
 import { env, workspace } from 'vscode';
 
+import { pathExists } from '../../platform/common/platform/fileUtils.node';
 import { IProcessServiceFactory } from '../../platform/common/process/types.node';
 import { EXTENSION_ROOT_DIR } from '../../platform/constants.node';
 import { logger } from '../../platform/logging';
-import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
 
 /** Produced at build time by `buildDeepnoteCli` in `build/esbuild/build.ts`. */
@@ -46,19 +46,19 @@ export class DeepnoteAgentSkillsManager {
      * given environment. Safe to call repeatedly -- only the first call per
      * environment per session actually does work.
      */
-    public ensureSkillsUpdated(environmentId: string, venvInterpreter: PythonEnvironment): void {
+    public ensureSkillsUpdated(environmentId: string): Promise<void> {
         if (this.processedEnvironments.has(environmentId)) {
-            return;
+            return Promise.resolve();
         }
 
         this.processedEnvironments.add(environmentId);
 
-        this.updateSkillsInBackground(venvInterpreter).catch((err) =>
+        return this.updateSkillsInBackground().catch((err) =>
             logger.warn('Failed to install Deepnote agent skills', err)
         );
     }
 
-    private async updateSkillsInBackground(venvInterpreter: PythonEnvironment): Promise<void> {
+    private async updateSkillsInBackground(): Promise<void> {
         const agentName = getAgentName();
         const workspaceRoot = workspace.workspaceFolders?.[0]?.uri;
 
@@ -68,19 +68,23 @@ export class DeepnoteAgentSkillsManager {
             return;
         }
 
+        if (!(await pathExists(BUNDLED_CLI_PATH))) {
+            logger.warn(`Deepnote CLI bundle is missing at ${BUNDLED_CLI_PATH}, skipping agent skills installation`);
+
+            return;
+        }
+
         const processService = await this.processServiceFactory.create(undefined);
 
         logger.info(`Running deepnote install-skills --agent "${agentName}" in ${workspaceRoot.fsPath}`);
 
         // `process.execPath` is the editor's Electron binary; ELECTRON_RUN_AS_NODE makes it plain Node.
-        // DEEPNOTE_PYTHON is how the CLI is told which interpreter a project runs on (it also reads
-        // the `.vscode/deepnote.json` sidecar); set it on every CLI spawn so the two never disagree.
         const installResult = await processService.exec(
             process.execPath,
             [BUNDLED_CLI_PATH, 'install-skills', '--agent', agentName],
             {
                 cwd: workspaceRoot.fsPath,
-                env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', DEEPNOTE_PYTHON: venvInterpreter.uri.fsPath },
+                env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
                 throwOnStdErr: false
             }
         );

@@ -1,3 +1,4 @@
+import { lt, valid } from '@renovatebot/pep440';
 import { inject, injectable } from 'inversify';
 import { CancellationToken, CancellationTokenSource, window } from 'vscode';
 
@@ -45,74 +46,13 @@ const TOOLKIT_PROBE = [
     'print(json.dumps(r))'
 ].join('\n');
 
-const PRE_RELEASE_RANK: Record<string, number> = { a: 0, alpha: 0, b: 1, beta: 1, c: 2, rc: 2, pre: 2, preview: 2 };
-
-const FINAL_RANK = 3;
-
-/** PEP 440 sorts a bare `X.devN`, with no pre- or post-release segment, before every pre-release of `X`. */
-const DEV_ONLY_RANK = -1;
-
-/** PEP 440 including its alternate spellings, e.g. `2.5.1-1` for `2.5.1.post1`. Epochs (`1!2.0`) do not match. */
-const VERSION_PATTERN =
-    /^\s*v?(\d+(?:\.\d+)*)(?:[-._]?(a|alpha|b|beta|c|rc|pre|preview)[-._]?(\d*))?(?:[-._]?(?:post|rev|r)[-._]?(\d*)|-(\d+))?(?:[-._]?dev[-._]?(\d*))?(?:\+.*)?\s*$/i;
-
 /**
- * Sort key in PEP 440 order: `2.5.1.dev0 < 2.5.1a1 < 2.5.1rc1 < 2.5.1 < 2.5.1.post1`. The local segment
- * (`+…`) is ignored, which never changes whether a version sorts before a public release.
+ * Whether `installed` sorts before `pinned` in PEP 440 order. False when either cannot be read: a
+ * wrong "older" holds the kernel back behind an update prompt, and `lt` throws on a version it
+ * cannot parse.
  */
-function versionKey(version: string): number[] | undefined {
-    const match = VERSION_PATTERN.exec(version);
-
-    if (!match) {
-        return undefined;
-    }
-
-    const [, release, preKind, preNumber, explicitPost, implicitPost, devNumber] = match;
-    const postNumber = explicitPost ?? implicitPost;
-    const hasPre = preKind !== undefined;
-    const hasPost = postNumber !== undefined;
-    const hasDev = devNumber !== undefined;
-    const preRank = hasPre ? PRE_RELEASE_RANK[preKind.toLowerCase()] : hasDev && !hasPost ? DEV_ONLY_RANK : FINAL_RANK;
-
-    return [
-        ...release.split('.').map(Number),
-        // Marks where the variable-length release ends, so isOlderRelease can zero-pad it.
-        Number.NaN,
-        preRank,
-        hasPre ? Number(preNumber || '0') : 0,
-        hasPost ? Number(postNumber || '0') : -1,
-        hasDev ? Number(devNumber || '0') : Number.POSITIVE_INFINITY
-    ];
-}
-
-/**
- * Whether `installed` sorts before `pinned` in PEP 440 order. False when either cannot be parsed,
- * since a wrong "older" holds the kernel back behind an update prompt.
- */
-export function isOlderRelease(installed: string, pinned: string): boolean {
-    const a = versionKey(installed);
-    const b = versionKey(pinned);
-
-    if (!a || !b) {
-        return false;
-    }
-
-    const releaseLength = Math.max(a.findIndex(Number.isNaN), b.findIndex(Number.isNaN));
-    const pad = (key: number[]) => {
-        const marker = key.findIndex(Number.isNaN);
-
-        return [...key.slice(0, marker), ...new Array(releaseLength - marker).fill(0), ...key.slice(marker + 1)];
-    };
-    const left = pad(a);
-    const right = pad(b);
-
-    for (let i = 0; i < left.length; i++) {
-        if (left[i] !== right[i]) {
-            return left[i] < right[i];
-        }
-    }
-
-    return false;
+function isOlderRelease(installed: string, pinned: string): boolean {
+    return valid(installed) !== null && valid(pinned) !== null && lt(installed, pinned);
 }
 
 /**

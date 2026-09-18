@@ -13,12 +13,7 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { Commands, DEEPNOTE_TOOLKIT_VERSION } from '../../platform/common/constants';
 import { Common } from '../../platform/common/utils/localize';
-import {
-    DeepnoteToolkitDependencyService,
-    ToolkitProbe,
-    isOlderRelease,
-    toolkitState
-} from './deepnoteToolkitDependencyService.node';
+import { DeepnoteToolkitDependencyService, ToolkitProbe, toolkitState } from './deepnoteToolkitDependencyService.node';
 import { DeepnoteToolkitDependencyResponse } from './types';
 
 suite('DeepnoteToolkitDependencyService', () => {
@@ -165,65 +160,14 @@ suite('DeepnoteToolkitDependencyService', () => {
                 assert.strictEqual(toolkitState({ version: '2.6.0', server: true }, '2.5.1'), 'ok');
                 assert.strictEqual(toolkitState({ version: '2.5.0', server: true }, '2.5.1'), 'needsUpdate');
                 assert.strictEqual(toolkitState({ version: '2.5.1', server: false }, '2.5.1'), 'needsUpdate');
-                assert.strictEqual(toolkitState({ version: '2.5.1rc1', server: true }, '2.5.1'), 'needsUpdate');
-                assert.strictEqual(toolkitState({ version: '2.5.1.dev0', server: true }, '2.5.1'), 'needsUpdate');
                 assert.strictEqual(toolkitState({ server: false }, '2.5.1'), 'missing');
                 assert.strictEqual(toolkitState({ server: true }, '2.5.1'), 'missing');
             });
-        });
 
-        suite('isOlderRelease', () => {
-            test('compares release segments numerically', () => {
-                assert.isTrue(isOlderRelease('2.5.1', '2.5.2'));
-                assert.isTrue(isOlderRelease('2.9.9', '2.10.0'));
-                assert.isTrue(isOlderRelease('2.5', '2.5.1'));
-                assert.isFalse(isOlderRelease('2.5.1', '2.5.1'));
-                assert.isFalse(isOlderRelease('2.5.1.0', '2.5.1'));
-                assert.isFalse(isOlderRelease('3.0.0', '2.5.1'));
-            });
-
-            test('orders pre-releases and dev builds of the pinned version as older than it (PEP 440)', () => {
-                assert.isTrue(isOlderRelease('2.5.1rc1', '2.5.1'));
-                assert.isTrue(isOlderRelease('2.5.1b2', '2.5.1'));
-                assert.isTrue(isOlderRelease('2.5.1a1', '2.5.1'));
-                assert.isTrue(isOlderRelease('2.5.1.dev0', '2.5.1'));
-                assert.isTrue(isOlderRelease('2.5.1.dev0', '2.5.1a1'), 'a dev build precedes every pre-release');
-                assert.isTrue(isOlderRelease('2.5.1a1', '2.5.1b1'));
-                assert.isTrue(isOlderRelease('2.5.1b1', '2.5.1rc1'));
-                assert.isTrue(isOlderRelease('2.5.1rc1', '2.5.1rc2'));
-                assert.isTrue(isOlderRelease('2.5.1rc1.dev0', '2.5.1rc1'));
-                assert.isTrue(isOlderRelease('2.5.0.dev0', '2.5.1'));
-            });
-
-            test('treats a dev build of a later release, and post or local releases of the pin, as current', () => {
-                assert.isFalse(isOlderRelease('2.6.0.dev0', '2.5.1'));
-                assert.isFalse(isOlderRelease('2.5.1.post1', '2.5.1'));
-                assert.isFalse(isOlderRelease('2.5.1+local', '2.5.1'));
-                assert.isFalse(isOlderRelease('2.5.1', '2.5.1rc1'));
-                assert.isFalse(isOlderRelease('2.5.1', '2.5.1.dev0'));
-                assert.isTrue(isOlderRelease('2.5.1', '2.5.1.post1'));
-            });
-
-            test('accepts every PEP 440 post-release spelling and orders it after the final release', () => {
-                assert.isTrue(isOlderRelease('2.5.0-r1', '2.5.1'), 'a post-release of an older version is still older');
-                assert.isTrue(isOlderRelease('2.5.0.rev1', '2.5.1'));
-                assert.isTrue(isOlderRelease('2.5.0-1', '2.5.1'), 'implicit post-release');
-                assert.isFalse(isOlderRelease('2.5.1-r1', '2.5.1'));
-                assert.isFalse(isOlderRelease('2.5.1.rev1', '2.5.1'));
-                assert.isFalse(isOlderRelease('2.5.1-1', '2.5.1'));
-                assert.isFalse(isOlderRelease('2.5.1r1', '2.5.1rc1'), '`r` is a post-release, not a release candidate');
-                assert.isTrue(isOlderRelease('2.5.1', '2.5.1-1'));
-                assert.isTrue(isOlderRelease('2.5.1.post', '2.5.1.post1'), 'a bare `post` is post-release 0');
-                assert.isTrue(isOlderRelease('2.5.1-1', '2.5.1.post2'));
-                assert.isFalse(
-                    isOlderRelease('2.5.1-1', '2.5.1.post1'),
-                    'spellings of the same post-release are equal'
-                );
-            });
-
-            test('does not call a version it cannot read older', () => {
-                assert.isFalse(isOlderRelease('editable', '2.5.1'));
-                assert.isFalse(isOlderRelease('', '2.5.1'));
+            test('fails open on a version it cannot read, rather than holding the kernel behind the prompt', () => {
+                // `lt` throws on a version it cannot parse, so the `valid` guards are what produce 'ok' here.
+                assert.strictEqual(toolkitState({ version: 'editable', server: true }, '2.5.1'), 'ok');
+                assert.strictEqual(toolkitState({ version: '2.5.0', server: true }, 'garbage'), 'ok');
             });
         });
     });

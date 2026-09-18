@@ -28,7 +28,6 @@ suite('DeepnoteAgentSkillsManager', () => {
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(workspaceFolders as never);
     }
 
-    /** Runs the (private) install for `interpreter` to completion. */
     function updateSkills(interpreter: PythonEnvironment): Promise<void> {
         return (
             manager as unknown as { updateSkillsInBackground(i: PythonEnvironment): Promise<void> }

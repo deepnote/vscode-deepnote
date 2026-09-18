@@ -7,11 +7,7 @@ import { logger } from '../../platform/logging';
 import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import * as path from '../../platform/vscode-path/path';
 
-/**
- * The Deepnote CLI, bundled into the extension at build time (`buildDeepnoteCli` in
- * `build/esbuild/build.ts`) together with the skill files it installs. Nothing is fetched or
- * pip-installed at run time, so the CLI version is the one pinned in `package.json`.
- */
+/** Produced at build time by `buildDeepnoteCli` in `build/esbuild/build.ts`. */
 export const BUNDLED_CLI_PATH = path.join(EXTENSION_ROOT_DIR, 'dist', 'deepnoteCli.cjs');
 
 /**
@@ -38,11 +34,8 @@ function getAgentName(): string {
 /**
  * Manages background installation of Deepnote agent skill files.
  *
- * Once a kernel starts on an interpreter, this service runs the bundled CLI's `install-skills` for
- * the editor's agent, once per interpreter per session, without blocking the server start. The CLI
- * runs on the editor's own Node (`process.execPath` as Node), never on the user's Python: the
- * previous `pip install --upgrade deepnote-cli` into the selected interpreter installed a 100 MB
- * wheel nobody consented to, and failed silently on externally managed Pythons (PEP 668).
+ * The CLI runs on the editor's Node, not pip-installed into the user's interpreter: that would add a
+ * 100 MB wheel nobody asked for, and PEP 668 externally-managed Pythons reject it outright.
  */
 @injectable()
 export class DeepnoteAgentSkillsManager {

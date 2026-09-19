@@ -92,6 +92,24 @@ suite('DeepnoteAgentSkillsManager', () => {
 
             assert.strictEqual(execStub.callCount, 2);
         });
+
+        test('should run one install when two callers arrive together', async () => {
+            await Promise.all([manager.ensureSkillsUpdated(), manager.ensureSkillsUpdated()]);
+
+            assert.strictEqual(execStub.callCount, 1);
+        });
+
+        test('should retry after a failed install rather than remember the folder', async () => {
+            sinon.stub(logger, 'warn');
+            execStub.rejects(new Error('spawn failure'));
+
+            await manager.ensureSkillsUpdated();
+
+            execStub.resolves({ stdout: '', stderr: '' });
+            await manager.ensureSkillsUpdated();
+
+            assert.strictEqual(execStub.callCount, 2);
+        });
     });
 
     suite('editor detection', () => {

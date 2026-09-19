@@ -33,34 +33,40 @@ function getAgentName(): string {
 
 @injectable()
 export class DeepnoteAgentSkillsManager {
-    private readonly processedFolders = new Set<string>();
+    private readonly installsByFolder = new Map<string, Promise<void>>();
 
     constructor(@inject(IProcessServiceFactory) private readonly processServiceFactory: IProcessServiceFactory) {}
 
     /**
      * Fire-and-forget: ensures the agent skill files are up-to-date in the workspace folder they are
-     * installed into. Safe to call repeatedly -- only the first call per folder per session does work.
+     * installed into. Safe to call repeatedly -- concurrent calls share one install, and a folder is
+     * remembered only once its install succeeded, so a failure is retried on the next call.
      */
-    public async ensureSkillsUpdated(): Promise<void> {
+    public ensureSkillsUpdated(): Promise<void> {
         const workspaceRoot = workspace.workspaceFolders?.[0]?.uri;
 
         if (!workspaceRoot) {
             logger.info('No workspace folder open, skipping agent skills installation');
 
-            return;
+            return Promise.resolve();
         }
 
         const folderKey = workspaceRoot.toString();
+        const inFlight = this.installsByFolder.get(folderKey);
 
-        if (this.processedFolders.has(folderKey)) {
-            return;
+        if (inFlight) {
+            return inFlight;
         }
 
-        this.processedFolders.add(folderKey);
+        // Stored before the first await, so two notebooks starting together share the one install.
+        const install = this.updateSkillsInBackground(workspaceRoot).catch((err) => {
+            this.installsByFolder.delete(folderKey);
+            logger.warn('Failed to install Deepnote agent skills', err);
+        });
 
-        await this.updateSkillsInBackground(workspaceRoot).catch((err) =>
-            logger.warn('Failed to install Deepnote agent skills', err)
-        );
+        this.installsByFolder.set(folderKey, install);
+
+        return install;
     }
 
     private async updateSkillsInBackground(workspaceRoot: Uri): Promise<void> {

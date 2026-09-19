@@ -517,6 +517,25 @@ suite('IntegrationWebviewProvider', () => {
         );
     });
 
+    test('handleMessage: "addExisting" → executeCommand(AddExistingIntegration, { notebookUri }) for the active file', async () => {
+        const executeCommandStub = sinon.stub().resolves(undefined);
+        when(mockedVSCodeNamespaces.commands.executeCommand(anyString(), anything())).thenCall((command, arg) =>
+            executeCommandStub(command, arg)
+        );
+
+        const provider = buildProvider();
+        await show(provider, new Map());
+
+        await fakePanel.onDidReceiveMessage({ type: 'addExisting' });
+
+        assert.isTrue(
+            executeCommandStub.calledOnceWithExactly(Commands.AddExistingIntegration, {
+                notebookUri: ACTIVE_FILE_URI.toString()
+            }),
+            "expected the command to receive the panel's active notebook so the picker targets the same project"
+        );
+    });
+
     suite('handleMessage: "authenticate" telemetry outcome', () => {
         async function authenticate(commandResult: Promise<unknown>): Promise<void> {
             when(mockedVSCodeNamespaces.commands.executeCommand(anyString(), anything(), anything())).thenReturn(

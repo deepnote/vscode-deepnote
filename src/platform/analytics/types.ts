@@ -10,6 +10,7 @@ export type TelemetryEventName =
     | 'delete_integration'
     | 'delete_notebook'
     | 'duplicate_notebook'
+    | 'add_existing_integration'
     | 'execute_cell'
     | 'execute_notebook'
     | 'export_notebook'
@@ -33,6 +34,8 @@ export type CommandOutcome = 'completed' | 'cancelled' | 'failed';
 /** Caller-supplied properties per event; `undefined` means none beyond the common properties the service attaches. */
 export interface TelemetryEventProperties {
     add_block: { blockType: string; isEphemeral: boolean };
+    /** "Existing" means configured in another project of this workspace. */
+    add_existing_integration: { integrationType: string; outcome: CommandOutcome };
     authenticate_integration: { integrationType: string; outcome: CommandOutcome };
     configure_integration: { integrationType: string };
     copy_notebook_details: undefined;

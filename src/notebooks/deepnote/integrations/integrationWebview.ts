@@ -171,6 +171,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsConfirmDeleteDetails: localize.Integrations.confirmDeleteDetails,
             integrationsConfigureTitle: localize.Integrations.configureTitle,
             integrationsAddNewIntegration: localize.Integrations.addNewIntegration,
+            integrationsAddExistingIntegration: localize.Integrations.addExistingIntegration,
             integrationsDatabase: localize.Integrations.database,
             integrationsDataWarehousesLakes: localize.Integrations.dataWarehousesLakes,
             integrationsDatabases: localize.Integrations.databases,
@@ -742,6 +743,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             case 'signOut':
                 if (message.integrationId) {
                     await this.signOutIntegration(message.integrationId);
+                }
+                break;
+            case 'addExisting':
+                // The command owns the picker and the roster write, and re-shows this panel when it is done.
+                try {
+                    await commands.executeCommand(Commands.AddExistingIntegration, {
+                        notebookUri: this.activeFileUri?.toString()
+                    });
+                } catch (error) {
+                    logger.error('IntegrationWebviewProvider: AddExistingIntegration command failed', error);
                 }
                 break;
             case 'authenticate':

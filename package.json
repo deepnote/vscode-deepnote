@@ -1223,6 +1223,30 @@
             ],
             "commandPalette": [
                 {
+                    "command": "deepnote.renameProject",
+                    "when": "false"
+                },
+                {
+                    "command": "deepnote.renameNotebook",
+                    "when": "false"
+                },
+                {
+                    "command": "deepnote.addNotebookToProject",
+                    "when": "false"
+                },
+                {
+                    "command": "deepnote.duplicateNotebook",
+                    "when": "false"
+                },
+                {
+                    "command": "deepnote.exportNotebook",
+                    "when": "false"
+                },
+                {
+                    "command": "deepnote.deleteNotebook",
+                    "when": "false"
+                },
+                {
                     "command": "deepnote.replayPylanceLog",
                     "title": "%deepnote.commandPalette.deepnote.replayPylanceLog.title%",
                     "when": "deepnote.development && isWorkspaceTrusted"

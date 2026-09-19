@@ -289,6 +289,9 @@ suite('DataScienceInstaller install', async () => {
         installationChannelManager
             .setup((c) => c.getInstallationChannels(TypeMoq.It.isValue(testEnvironment)))
             .returns(() => Promise.resolve([condaInstaller.object]));
+        serviceContainer
+            .setup((c) => c.getAll(TypeMoq.It.isValue(IModuleInstaller)))
+            .returns(() => [condaInstaller.object]);
 
         const installer = new PipMissingDataScienceInstaller(serviceContainer.object, outputChannel.object);
         const result = await installer.install(Product.deepnoteToolkit, testEnvironment, tokenSource);
@@ -376,6 +379,9 @@ suite('DataScienceInstaller install', async () => {
         installationChannelManager
             .setup((c) => c.getInstallationChannels(TypeMoq.It.isValue(testEnvironment)))
             .returns(() => Promise.resolve([uvInstaller.object]));
+        serviceContainer
+            .setup((c) => c.getAll(TypeMoq.It.isValue(IModuleInstaller)))
+            .returns(() => [uvInstaller.object]);
 
         const installer = new PipMissingDataScienceInstaller(serviceContainer.object, outputChannel.object);
         const result = await installer.install(Product.deepnoteToolkit, testEnvironment, tokenSource);
@@ -417,6 +423,9 @@ suite('DataScienceInstaller install', async () => {
         installationChannelManager
             .setup((c) => c.getInstallationChannels(TypeMoq.It.isValue(testEnvironment)))
             .returns(() => Promise.resolve([poetryInstaller.object]));
+        serviceContainer
+            .setup((c) => c.getAll(TypeMoq.It.isValue(IModuleInstaller)))
+            .returns(() => [poetryInstaller.object]);
 
         const result = await dataScienceInstaller.install(Product.deepnoteToolkit, testEnvironment, tokenSource);
         expect(result).to.equal(InstallerResponse.Installed, 'Should be Installed via poetry');
@@ -432,5 +441,84 @@ suite('DataScienceInstaller install', async () => {
                 ),
             TypeMoq.Times.once()
         );
+    });
+
+    function installModuleMock(type: ModuleInstallerType, testEnvironment: PythonEnvironment) {
+        const mock = TypeMoq.Mock.ofType<IModuleInstaller>();
+        mock.setup((c) => c.type).returns(() => type);
+        mock.setup((c) =>
+            c.installModule(
+                TypeMoq.It.isValue(Product.deepnoteToolkit),
+                TypeMoq.It.isValue(testEnvironment),
+                TypeMoq.It.isAny(),
+                TypeMoq.It.isAny(),
+                TypeMoq.It.isAny()
+            )
+        ).returns(() => Promise.resolve());
+        mock.setup((p) => (p as any).then).returns(() => undefined);
+        return mock;
+    }
+
+    function verifyInstallModule(mock: TypeMoq.IMock<IModuleInstaller>, times: TypeMoq.Times) {
+        mock.verify(
+            (c) =>
+                c.installModule(
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny(),
+                    TypeMoq.It.isAny()
+                ),
+            times
+        );
+    }
+
+    test('Will prefer uv for deepnoteToolkit when the uv binary is available, even though pip is the resolved channel', async () => {
+        const testEnvironment: PythonEnvironment = {
+            id: interpreterPath.fsPath,
+            uri: interpreterPath
+        };
+        const pipInstaller = installModuleMock(ModuleInstallerType.Pip, testEnvironment);
+        const uvInstaller = installModuleMock(ModuleInstallerType.UV, testEnvironment);
+        uvInstaller
+            .setup((c) => c.isSupported(TypeMoq.It.isValue(testEnvironment)))
+            .returns(() => Promise.resolve(true));
+        installationChannelManager
+            .setup((c) => c.getInstallationChannels(TypeMoq.It.isValue(testEnvironment)))
+            .returns(() => Promise.resolve([pipInstaller.object]));
+        serviceContainer
+            .setup((c) => c.getAll(TypeMoq.It.isValue(IModuleInstaller)))
+            .returns(() => [pipInstaller.object, uvInstaller.object]);
+
+        const result = await dataScienceInstaller.install(Product.deepnoteToolkit, testEnvironment, tokenSource);
+
+        expect(result).to.equal(InstallerResponse.Installed, 'Should be Installed via uv');
+        verifyInstallModule(uvInstaller, TypeMoq.Times.once());
+        verifyInstallModule(pipInstaller, TypeMoq.Times.never());
+        installationChannelManager.verify((c) => c.showNoInstallersMessage(TypeMoq.It.isAny()), TypeMoq.Times.never());
+    });
+
+    test('Will fall back to the resolved channel for deepnoteToolkit when uv is registered but its binary is missing', async () => {
+        const testEnvironment: PythonEnvironment = {
+            id: interpreterPath.fsPath,
+            uri: interpreterPath
+        };
+        const pipInstaller = installModuleMock(ModuleInstallerType.Pip, testEnvironment);
+        const uvInstaller = installModuleMock(ModuleInstallerType.UV, testEnvironment);
+        uvInstaller
+            .setup((c) => c.isSupported(TypeMoq.It.isValue(testEnvironment)))
+            .returns(() => Promise.resolve(false));
+        installationChannelManager
+            .setup((c) => c.getInstallationChannels(TypeMoq.It.isValue(testEnvironment)))
+            .returns(() => Promise.resolve([pipInstaller.object]));
+        serviceContainer
+            .setup((c) => c.getAll(TypeMoq.It.isValue(IModuleInstaller)))
+            .returns(() => [pipInstaller.object, uvInstaller.object]);
+
+        const result = await dataScienceInstaller.install(Product.deepnoteToolkit, testEnvironment, tokenSource);
+
+        expect(result).to.equal(InstallerResponse.Installed, 'Should be Installed via pip');
+        verifyInstallModule(pipInstaller, TypeMoq.Times.once());
+        verifyInstallModule(uvInstaller, TypeMoq.Times.never());
     });
 });

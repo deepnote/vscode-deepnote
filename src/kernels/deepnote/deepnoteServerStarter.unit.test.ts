@@ -66,7 +66,7 @@ suite('DeepnoteServerStarter', () => {
         when(mockUserpodApiEndpoints.ready).thenReturn(Promise.resolve());
         when(mockUserpodApiEndpoints.baseUrl).thenReturn(undefined);
 
-        when(mockAgentSkillsManager.ensureSkillsUpdated(anything(), anything())).thenReturn();
+        when(mockAgentSkillsManager.ensureSkillsUpdated()).thenReturn(Promise.resolve());
 
         // startServer derives the env path via getCachedEnvironment, which needs the Python API.
         const mockedApi = mock<PythonExtension>();

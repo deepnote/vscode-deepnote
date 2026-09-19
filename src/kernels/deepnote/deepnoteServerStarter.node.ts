@@ -195,8 +195,9 @@ export class DeepnoteServerStarter implements IDeepnoteServerStarter, IExtension
 
         Cancellation.throwIfCanceled(token);
 
-        // Check if deepnote-toolkit is installed, and install if needed
-        this.agentSkillsManager.ensureSkillsUpdated(interpreterId, interpreter);
+        this.agentSkillsManager.ensureSkillsUpdated().catch((error) => {
+            logger.error('Error ensuring agents skills updated', error);
+        });
 
         Cancellation.throwIfCanceled(token);
 

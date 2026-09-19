@@ -531,7 +531,8 @@ async function buildAll() {
             copyZeroMQOld(),
             copyNodeGypBuild(),
             buildVSCodeJsonRPC(),
-            buildSqlLanguageServer()
+            buildSqlLanguageServer(),
+            buildDeepnoteCli()
         );
     }
 
@@ -647,6 +648,39 @@ async function copyIPyWidgets8() {
     );
     const target = path.join(extensionFolder, 'dist', 'renderers', 'ipywidgets8', 'ipywidgets.js');
     await copyBundleIfExists(source, target, '@vscode/jupyter-ipywidgets8 bundle');
+}
+
+async function buildDeepnoteCli() {
+    const cliPackage = path.join(extensionFolder, 'node_modules', '@deepnote', 'cli');
+    const outfile = path.join(extensionFolder, 'dist', 'deepnoteCli.cjs');
+    const stubShiki: Plugin = {
+        name: 'stub-shikijs-cli',
+        setup(build) {
+            build.onResolve({ filter: /^@shikijs\/cli$/ }, () => ({
+                path: path.join(__dirname, 'stubs', 'shikijs-cli.js')
+            }));
+        }
+    };
+
+    await esbuild.build({
+        entryPoints: [path.join(cliPackage, 'dist', 'bin.js')],
+        bundle: true,
+        platform: 'node',
+        target: 'node20',
+        outfile,
+        format: 'cjs',
+        minify: true,
+        sourcemap: false,
+        plugins: [stubShiki],
+        logLevel: 'warning'
+    });
+
+    // The CLI resolves `skills/deepnote` relative to its own `__dirname`, so the skill files have to
+    // sit next to the bundle.
+    const skillsSource = path.join(cliPackage, 'dist', 'skills');
+    const skillsTarget = path.join(extensionFolder, 'dist', 'skills');
+    await fs.remove(skillsTarget);
+    await fs.copy(skillsSource, skillsTarget);
 }
 
 async function buildSqlLanguageServer() {

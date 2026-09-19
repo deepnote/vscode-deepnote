@@ -112,11 +112,14 @@ function installedExtensionDir(): string {
     const extensionsRoot = path.resolve(process.cwd(), '.test-extensions');
     const installed = fs
         .readdirSync(extensionsRoot)
-        .find((entry) => entry.toLowerCase().startsWith('deepnote.vscode-deepnote-'));
+        .filter((entry) => entry.toLowerCase().startsWith('deepnote.vscode-deepnote-'));
 
-    expect(installed, `no installed Deepnote extension under ${extensionsRoot}`).to.not.equal(undefined);
+    expect(
+        installed,
+        `expected exactly one installed Deepnote extension under ${extensionsRoot}, found ${installed.join(', ') || 'none'}`
+    ).to.have.lengthOf(1);
 
-    return path.join(extensionsRoot, installed!);
+    return path.join(extensionsRoot, installed[0]);
 }
 
 /** True when `deepnote_toolkit` imports in the given interpreter. */

@@ -521,4 +521,30 @@ suite('DataScienceInstaller install', async () => {
         verifyInstallModule(pipInstaller, TypeMoq.Times.once());
         verifyInstallModule(uvInstaller, TypeMoq.Times.never());
     });
+
+    for (const native of [ModuleInstallerType.Poetry, ModuleInstallerType.Pipenv] as const) {
+        test(`Will keep ${native} for deepnoteToolkit ahead of uv, so the project manifest records the install`, async () => {
+            const testEnvironment: PythonEnvironment = {
+                id: interpreterPath.fsPath,
+                uri: interpreterPath
+            };
+            const nativeInstaller = installModuleMock(native, testEnvironment);
+            const uvInstaller = installModuleMock(ModuleInstallerType.UV, testEnvironment);
+            uvInstaller
+                .setup((c) => c.isSupported(TypeMoq.It.isValue(testEnvironment)))
+                .returns(() => Promise.resolve(true));
+            installationChannelManager
+                .setup((c) => c.getInstallationChannels(TypeMoq.It.isValue(testEnvironment)))
+                .returns(() => Promise.resolve([nativeInstaller.object]));
+            serviceContainer
+                .setup((c) => c.getAll(TypeMoq.It.isValue(IModuleInstaller)))
+                .returns(() => [nativeInstaller.object, uvInstaller.object]);
+
+            const result = await dataScienceInstaller.install(Product.deepnoteToolkit, testEnvironment, tokenSource);
+
+            expect(result).to.equal(InstallerResponse.Installed, `Should be Installed via ${native}`);
+            verifyInstallModule(nativeInstaller, TypeMoq.Times.once());
+            verifyInstallModule(uvInstaller, TypeMoq.Times.never());
+        });
+    }
 });

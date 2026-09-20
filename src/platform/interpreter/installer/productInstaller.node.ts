@@ -100,17 +100,26 @@ export class DataScienceInstaller {
 
         if (product === Product.deepnoteToolkit) {
             const allInstallers = this.serviceContainer.getAll<IModuleInstaller>(IModuleInstaller);
+            const supported = await channels.getInstallationChannels(interpreter);
+            // poetry and pipenv record what they install in the project's manifest and lockfile, so
+            // installing behind their back leaves the toolkit in an environment their own
+            // `install --sync` would strip. They keep precedence over the faster uv.
+            const native = supported.find(
+                (i) => i.type === ModuleInstallerType.Poetry || i.type === ModuleInstallerType.Pipenv
+            );
             // deepnote-toolkit[server] resolves to ~200 wheels (~950 MB). The channel manager only
             // offers uv when nothing else applies, but uv installs that set in a fraction of pip's
-            // time, so take it whenever the `uv` binary is available for this interpreter.
+            // time, so take it for every other environment whenever the `uv` binary is available.
             const uvInstaller = allInstallers.find((i) => i.type === ModuleInstallerType.UV);
-            if (uvInstaller && (await uvInstaller.isSupported(interpreter))) {
+
+            if (native) {
+                installer = native;
+            } else if (uvInstaller && (await uvInstaller.isSupported(interpreter))) {
                 installer = uvInstaller;
             } else {
                 // deepnote-toolkit is PyPI-only and conda's `pkg[extra]` brackets mean build constraints,
                 // not extras, so conda can never install it. pip is the last resort for a conda/poetry/
                 // pipenv env whose own tool is unreachable — PipInstaller excludes itself from those types.
-                const supported = await channels.getInstallationChannels(interpreter);
                 installer = supported.find((i) => i.type !== ModuleInstallerType.Conda);
                 if (!installer && (await this.isInstalled(Product.pip, interpreter))) {
                     installer = allInstallers.find((i) => i.type === ModuleInstallerType.Pip);

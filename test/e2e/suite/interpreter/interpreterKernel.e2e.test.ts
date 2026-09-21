@@ -23,9 +23,8 @@
  *   - The Python extension (`ms-python.python`) must be installed in the test instance.
  *   - `python3` must be on PATH and able to create a venv (CI installs `python3.12-venv`).
  *   - Network access: the toolkit is installed from PyPI, which is slow.
- *   - Optional: `E2E_EXPECT_TOOLKIT_INSTALLER=pip|uv` asserts which tool the extension installed
- *     with. CI runs this suite twice, once per installer, so both the pip channel and the preferred
- *     uv path are exercised. `uv` must be on PATH for the extension to pick it.
+ *   - Optional: `E2E_EXPECT_TOOLKIT_INSTALLER=pip|uv` asserts which tool installed the toolkit; CI
+ *     runs the suite once per installer, and `uv` has to be on PATH for the extension to pick it.
  */
 
 import { expect } from 'chai';
@@ -69,10 +68,6 @@ const SKILLS_INSTALL_TIMEOUT = 30_000;
 /** VS Code maps to the CLI's "GitHub Copilot" agent, whose project skill directory is `.agents/skills`. */
 const INSTALLED_SKILL_PATH = ['.agents', 'skills', 'deepnote', 'SKILL.md'];
 
-/**
- * Which tool CI expects the toolkit to have been installed with, read back from the `INSTALLER` file
- * pip and uv each write into the distribution's dist-info. Unset locally: any installer passes.
- */
 const EXPECTED_TOOLKIT_INSTALLER = process.env.E2E_EXPECT_TOOLKIT_INSTALLER;
 
 /** Path to the interpreter inside a venv, for the platform the test is running on. */
@@ -159,7 +154,6 @@ function readInstallerMarker(python: string, distribution: string): string | und
     }
 }
 
-/** True when the named distribution is installed in the given interpreter. */
 function isDistributionInstalled(python: string, distribution: string): boolean {
     try {
         execFileSync(
@@ -272,9 +266,7 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
             'deepnote-toolkit was never installed into the active interpreter'
         );
 
-        // toolkitSpec.json pins the deepnote-python-lsp-server fork directly instead of upstream
-        // python-lsp-server: both ship the `pylsp` module, so the upstream package must not be there
-        // to overwrite the fork's files.
+        // Both distributions ship the `pylsp` module, so upstream must not land over the fork's files.
         expect(
             isDistributionInstalled(interpreter, 'deepnote-python-lsp-server'),
             'the pylsp fork the toolkit depends on must be installed'
@@ -284,8 +276,6 @@ describe('Deepnote E2E — consent, then install into the active interpreter', f
             'upstream python-lsp-server must not be installed alongside the fork'
         ).to.equal(false);
 
-        // The extension prefers uv for this install whenever the binary is on PATH and otherwise falls
-        // back to pip; CI sets the expectation per shard so a regression in that choice fails here.
         if (EXPECTED_TOOLKIT_INSTALLER !== undefined) {
             expect(
                 readInstallerMarker(interpreter, 'deepnote-toolkit'),

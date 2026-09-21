@@ -25,9 +25,8 @@ jobs:
       fail-fast: false
       matrix:
         group: [agent, execution, files, interpreter, workspace]
-        # Which tool the extension installs deepnote-toolkit with. Runners have no uv, so every shard
-        # exercises the pip channel; the interpreter suite runs a second time with uv on PATH, which
-        # the extension prefers for the toolkit install (productInstaller.node.ts).
+        # Runners have no uv preinstalled, so the pip shards exercise the pip channel; the interpreter
+        # suite runs again with uv on PATH, which the extension prefers for the toolkit install.
         installer: [pip]
         include:
           - group: interpreter
@@ -55,7 +54,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install uv # the extension picks it for the toolkit install whenever it is on PATH
+      - name: Install uv
         if: matrix.installer == 'uv'
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
@@ -119,7 +118,6 @@ jobs:
         run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:e2e:ci
         env:
           E2E_GROUP: ${{ matrix.group }}
-          # interpreterKernel.e2e.test.ts reads back which tool installed the toolkit.
           E2E_EXPECT_TOOLKIT_INSTALLER: ${{ matrix.installer }}
 
       # Written even when the tests fail, so a shard that ran is never mistaken for one that was

@@ -36,12 +36,9 @@ export function translateProductToModule(product: Product): string {
     }
 }
 
-// deepnote_toolkit's import name differs from its pip distribution name. The [server] extra pins
-// the deepnote-python-lsp-server fork of pylsp; the spec repeats that pin as a direct requirement
-// with the fork's own [all] extras so the editor's `python -m pylsp` gets its linting plugins.
-// Installing upstream python-lsp-server alongside the fork would write the same `pylsp` module twice,
-// and uv only honours a pre-release pin like 1.13.1rc2 when it appears on a direct requirement.
-// Keep the spec's pin identical to the toolkit's when bumping `version`.
+// deepnote_toolkit's import name differs from its pip distribution name. The [server] extra pins the
+// pylsp fork without its own [all] extras, so the spec repeats that pin with [all] to get the linting
+// plugins; it has to stay in step with the toolkit's own pin.
 export function translateModuleToPackages(moduleName: string): string[] {
     switch (moduleName) {
         case translateProductToModule(Product.deepnoteToolkit):

@@ -46,7 +46,6 @@ class PipMissingDataScienceInstaller extends WritableSitePackagesInstaller {
     }
 }
 
-/** A per-machine python, or a root-owned conda prefix: uv cannot write there, pip's `--user` can. */
 class ReadOnlySitePackagesInstaller extends AlwaysInstalledDataScienceInstaller {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, class-methods-use-this
     protected override async canUvWriteToSitePackages(_interpreter: PythonEnvironment): Promise<boolean> {
@@ -590,16 +589,11 @@ suite('DataScienceInstaller install', async () => {
         });
     }
 
-    /**
-     * The probe itself, rather than the selection branch above it. The subclasses stub it out, so
-     * without these a flipped `throwOnStdErr` would silently report every environment as writable.
-     */
     suite('canUvWriteToSitePackages', () => {
         const testEnvironment: PythonEnvironment = {
             id: interpreterPath.fsPath,
             uri: interpreterPath
         };
-        /** The base class: every subclass in this file stubs the probe out. */
         let probingInstaller: DataScienceInstaller;
 
         setup(() => {

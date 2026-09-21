@@ -29,7 +29,6 @@ import { dispose } from '../../common/utils/lifecycle';
 
 export type ExecutionInstallArgs = {
     args: string[];
-    /** Applied over the activated environment, so an installer can reach settings it has no flag for. */
     env?: NodeJS.ProcessEnv;
     exe?: string;
     cwd?: string;

@@ -46,7 +46,6 @@ suite('UvInstaller', () => {
         processServiceFactory = mock<IProcessServiceFactory>();
         processService = mock<IProcessService>();
 
-        // The host's own proxy vars would otherwise decide whether the setting is applied.
         savedProxyEnvironment = Object.fromEntries(PROXY_ENVIRONMENT_VARIABLES.map((n) => [n, process.env[n]]));
         PROXY_ENVIRONMENT_VARIABLES.forEach((name) => delete process.env[name]);
 

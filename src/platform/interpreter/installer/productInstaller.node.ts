@@ -1,8 +1,32 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import { Environment } from '@vscode/python-extension';
 import { inject, injectable, named } from 'inversify';
 import { CancellationTokenSource, Event, EventEmitter, Memento, Uri } from 'vscode';
+import { sendTelemetryEvent, Telemetry } from '../../../telemetry';
+import { STANDARD_OUTPUT_CHANNEL } from '../../common/constants';
+import { getDisplayPath } from '../../common/platform/fs-paths';
+import { IProcessServiceFactory } from '../../common/process/types.node';
+import {
+    GLOBAL_MEMENTO,
+    IConfigurationService,
+    IMemento,
+    InterpreterUri,
+    IOutputChannel,
+    IPersistentStateFactory
+} from '../../common/types';
+import { raceTimeout } from '../../common/utils/async';
+import { noop } from '../../common/utils/misc';
+import { WrappedError } from '../../errors/types';
+import { IServiceContainer } from '../../ioc/types';
+import { debugDecorator, logger, logValue } from '../../logging';
+import { PythonEnvironment } from '../../pythonEnvironments/info';
+import { getInterpreterHash } from '../../pythonEnvironments/info/interpreter';
+import { InterpreterPackages } from '../interpreterPackages.node';
+import { IInterpreterPackages } from '../types';
+import { IPythonExecutionFactory } from '../types.node';
+import { trackPackageInstalledIntoInterpreter } from './productInstaller';
 import { ProductNames } from './productNames';
 import {
     IInstallationChannelManager,
@@ -11,37 +35,12 @@ import {
     InstallerResponse,
     IProductPathService,
     IProductService,
-    ModuleInstallFlags,
     ModuleInstallerType,
+    ModuleInstallFlags,
     Product,
     ProductType
 } from './types';
-import { logValue, debugDecorator } from '../../logging';
-import { PythonEnvironment } from '../../pythonEnvironments/info';
-import { logger } from '../../logging';
-import { getDisplayPath } from '../../common/platform/fs-paths';
-import { IProcessServiceFactory } from '../../common/process/types.node';
-import {
-    IConfigurationService,
-    IPersistentStateFactory,
-    GLOBAL_MEMENTO,
-    IMemento,
-    IOutputChannel,
-    InterpreterUri
-} from '../../common/types';
-import { noop } from '../../common/utils/misc';
-import { IServiceContainer } from '../../ioc/types';
-import { sendTelemetryEvent, Telemetry } from '../../../telemetry';
-import { InterpreterPackages } from '../interpreterPackages.node';
-import { getInterpreterHash } from '../../pythonEnvironments/info/interpreter';
-import { STANDARD_OUTPUT_CHANNEL } from '../../common/constants';
-import { raceTimeout } from '../../common/utils/async';
-import { trackPackageInstalledIntoInterpreter } from './productInstaller';
 import { translateProductToModule } from './utils';
-import { IInterpreterPackages } from '../types';
-import { IPythonExecutionFactory } from '../types.node';
-import { Environment } from '@vscode/python-extension';
-import { WrappedError } from '../../errors/types';
 
 export async function isModulePresentInEnvironment(memento: Memento, product: Product, interpreter: PythonEnvironment) {
     const key = `${await getInterpreterHash(interpreter)}#${ProductNames.get(product)}`;
@@ -69,12 +68,7 @@ export async function isModulePresentInEnvironment(memento: Memento, product: Pr
     }
 }
 
-/**
- * Writes into the directory uv installs to, rather than asking `os.access`, which consults only the
- * read-only attribute on Windows and so misses an ACL denial — the usual way a per-machine install
- * becomes unwritable. Deliberately unguarded: the traceback is the signal, so the reason reaches the
- * log with its real errno instead of being flattened into a word.
- */
+/** Verify that interpreter site-packages are writable */
 const SITE_PACKAGES_WRITABLE_PROBE = `\
 import sysconfig, tempfile
 with tempfile.NamedTemporaryFile(dir=sysconfig.get_path("purelib")):
@@ -114,15 +108,13 @@ export class DataScienceInstaller {
         if (product === Product.deepnoteToolkit) {
             const allInstallers = this.serviceContainer.getAll<IModuleInstaller>(IModuleInstaller);
             const supported = await channels.getInstallationChannels(interpreter);
-            // poetry and pipenv record what they install in the project's manifest and lockfile, so
-            // installing behind their back leaves the toolkit in an environment their own
-            // `install --sync` would strip. They keep precedence over the faster uv.
+            // poetry and pipenv record installs in the project's manifest and lockfile; installing
+            // behind their back leaves the toolkit where their own `install --sync` would strip it.
             const native = supported.find(
                 (i) => i.type === ModuleInstallerType.Poetry || i.type === ModuleInstallerType.Pipenv
             );
-            // deepnote-toolkit[server] resolves to ~200 wheels (~950 MB). The channel manager only
-            // offers uv when nothing else applies, but uv installs that set in a fraction of pip's
-            // time, so take it whenever the `uv` binary is available and it can write to the target.
+            // The channel manager only offers uv as a last resort, but deepnote-toolkit[server]
+            // resolves to ~200 wheels and uv installs them far faster than pip.
             const uvInstaller = allInstallers.find((i) => i.type === ModuleInstallerType.UV);
 
             if (native) {
@@ -199,15 +191,8 @@ export class DataScienceInstaller {
     }
 
     /**
-     * uv installs into the interpreter's own site-packages and rejects `--user` outright, so it
-     * cannot serve an interpreter whose site-packages the user cannot write — a per-machine system
-     * python, or a conda prefix owned by root in a container. pip can, through `--user`, and keeps
-     * those environments. Probed rather than inferred from the environment type, which answers a
-     * different question: a root-owned conda prefix is still typed `Conda`.
-     *
-     * `throwOnStdErr` turns the probe's traceback into a rejection, so a probe that cannot run at
-     * all is treated the same as one that reported no access — both leave the environment on pip,
-     * which is where it was before uv was preferred.
+     * uv installs into the interpreter's own site-packages and rejects `--user`, so an interpreter it
+     * cannot write to — a per-machine system python, a root-owned conda prefix — has to stay on pip.
      */
     protected async canUvWriteToSitePackages(interpreter: PythonEnvironment): Promise<boolean> {
         try {

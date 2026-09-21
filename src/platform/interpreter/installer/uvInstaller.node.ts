@@ -13,12 +13,7 @@ import { Environment } from '@vscode/python-extension';
 import { getInterpreterInfo } from '../helpers';
 import { translateModuleToPackages } from './utils';
 
-/**
- * uv has no `--proxy` flag, so VS Code's `http.proxy` can only reach it through the environment, and
- * VS Code never exports that setting into the extension host's own environment. A proxy the user
- * already set in the environment wins — uv reads those directly, and overriding it would silently
- * change a working configuration.
- */
+/** uv has no `--proxy` flag, so VS Code's `http.proxy` can only reach it through the environment. */
 function proxyEnvironment(): NodeJS.ProcessEnv | undefined {
     const proxy = workspace.getConfiguration('http').get('proxy', '');
     const configuredInEnvironment = [

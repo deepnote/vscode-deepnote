@@ -4,7 +4,7 @@ import { RelativePattern, Uri, workspace } from 'vscode';
 import { flushNotebookDocumentIfDirty } from '../../../platform/deepnote/deepnoteDocumentFlush';
 import { readDeepnoteProjectFile } from '../../../platform/deepnote/deepnoteProjectFileReader';
 import { logger } from '../../../platform/logging';
-import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { IDeepnoteNotebookManager, RawProjectIntegration } from '../../types';
 import { isSnapshotFile } from '../snapshots/snapshotFiles';
 
 export interface PersistIntegrationsResult {
@@ -15,14 +15,14 @@ export interface PersistIntegrationsResult {
 export interface PersistProjectIntegrationsParams {
     notebookManager: IDeepnoteNotebookManager;
     projectId: string;
-    integrations: ProjectIntegration[];
+    integrations: RawProjectIntegration[];
     activeFileUri: Uri;
 }
 
 interface WriteIntegrationsToFileParams {
     fileUri: Uri;
     projectId: string;
-    integrations: ProjectIntegration[];
+    integrations: RawProjectIntegration[];
 }
 
 type IntegrationWriteOutcome = 'failed' | 'skipped' | 'written';

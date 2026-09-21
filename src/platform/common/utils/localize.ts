@@ -5,6 +5,8 @@ import { l10n } from 'vscode';
 import { PythonEnvironment } from '../../pythonEnvironments/info';
 import { fromNow } from './date';
 import { getPythonEnvDisplayName } from '../../interpreter/helpers';
+import { integrationTypeLabelKey, type IntegrationTypeLabelKey } from '../../notebooks/deepnote/integrationTypeLabels';
+import type { ConfigurableDatabaseIntegrationType } from '../../notebooks/deepnote/integrationTypes';
 
 function getInterpreterDisplayName(interpreter: PythonEnvironment) {
     return getPythonEnvDisplayName(interpreter);
@@ -862,6 +864,10 @@ export namespace Integrations {
     export const save = l10n.t('Save');
     export const addNewIntegration = l10n.t('Add New Integration');
     export const addExistingIntegration = l10n.t('Add Existing Integration');
+    export const addExistingIntegrationScanning = l10n.t('Looking for integrations in other projects...');
+    export const addExistingIntegrationSnapshotUnsupported = l10n.t(
+        'Integrations cannot be added to a snapshot file. Open the project notebook and try again.'
+    );
     export const addExistingIntegrationPlaceholder = l10n.t(
         'Select an integration configured in another project of this workspace'
     );
@@ -888,26 +894,32 @@ export namespace Integrations {
     export const defaultName = (type: string) => l10n.t('My {0} integration', type);
     export const unsupportedIntegrationType = (type: string) => l10n.t('Unsupported integration type: {0}', type);
 
-    // Integration type labels
-    export const postgresTypeLabel = l10n.t('PostgreSQL');
-    export const bigQueryTypeLabel = l10n.t('Google BigQuery');
-    export const snowflakeTypeLabel = l10n.t('Snowflake');
-    export const alloyDBTypeLabel = l10n.t('Google AlloyDB');
-    export const athenaTypeLabel = l10n.t('Amazon Athena');
-    export const clickHouseTypeLabel = l10n.t('ClickHouse');
-    export const cloudSqlTypeLabel = l10n.t('Google Cloud SQL');
-    export const databricksTypeLabel = l10n.t('Databricks');
-    export const dremioTypeLabel = l10n.t('Dremio');
-    export const mariaDBTypeLabel = l10n.t('MariaDB');
-    export const materializeTypeLabel = l10n.t('Materialize');
-    export const mindsDBTypeLabel = l10n.t('MindsDB');
-    export const mongoDBTypeLabel = l10n.t('MongoDB');
-    export const mySQLTypeLabel = l10n.t('MySQL');
-    export const duckDBTypeLabel = l10n.t('DuckDB');
-    export const redshiftTypeLabel = l10n.t('Amazon Redshift');
-    export const spannerTypeLabel = l10n.t('Google Spanner');
-    export const sqlServerTypeLabel = l10n.t('Microsoft SQL Server');
-    export const trinoTypeLabel = l10n.t('Trino');
+    /**
+     * The one place integration type labels are written down. Keyed by bundle key so `integrationWebview` can
+     * spread it into the bundle whole; `l10n.t` extracts literal arguments only, so these stay literal.
+     */
+    export const typeLabels = {
+        'integrationType.alloydb': l10n.t('Google AlloyDB'),
+        'integrationType.athena': l10n.t('Amazon Athena'),
+        'integrationType.big-query': l10n.t('Google BigQuery'),
+        'integrationType.clickhouse': l10n.t('ClickHouse'),
+        'integrationType.cloud-sql': l10n.t('Google Cloud SQL'),
+        'integrationType.databricks': l10n.t('Databricks'),
+        'integrationType.dremio': l10n.t('Dremio'),
+        'integrationType.mariadb': l10n.t('MariaDB'),
+        'integrationType.materialize': l10n.t('Materialize'),
+        'integrationType.mindsdb': l10n.t('MindsDB'),
+        'integrationType.mongodb': l10n.t('MongoDB'),
+        'integrationType.mysql': l10n.t('MySQL'),
+        'integrationType.pgsql': l10n.t('PostgreSQL'),
+        'integrationType.redshift': l10n.t('Amazon Redshift'),
+        'integrationType.snowflake': l10n.t('Snowflake'),
+        'integrationType.spanner': l10n.t('Google Spanner'),
+        'integrationType.sql-server': l10n.t('Microsoft SQL Server'),
+        'integrationType.trino': l10n.t('Trino')
+    } satisfies Record<IntegrationTypeLabelKey, string>;
+
+    export const typeLabel = (type: ConfigurableDatabaseIntegrationType) => typeLabels[integrationTypeLabelKey(type)];
 
     // PostgreSQL form strings
     export const postgresNameLabel = l10n.t('Name (optional)');

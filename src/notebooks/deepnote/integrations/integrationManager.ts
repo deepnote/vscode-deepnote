@@ -1,5 +1,5 @@
 import { inject, injectable, optional } from 'inversify';
-import { commands, l10n, NotebookDocument, QuickPickItem, window, workspace } from 'vscode';
+import { commands, l10n, NotebookDocument, ProgressLocation, QuickPickItem, window, workspace } from 'vscode';
 
 import { CommandOutcome, ITelemetryService } from '../../../platform/analytics/types';
 import { IExtensionContext } from '../../../platform/common/types';
@@ -13,15 +13,14 @@ import {
     IIntegrationStorage,
     IIntegrationWebviewProvider
 } from './types';
-import { IDeepnoteNotebookManager } from '../../types';
+import { IDeepnoteNotebookManager, RawProjectIntegration } from '../../types';
 import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/database-integrations';
 import {
     attachExistingIntegration,
     collectReusableIntegrations,
-    integrationTypeLabel,
-    RawProjectIntegration,
     ReusableIntegration
 } from './existingIntegrationPicker';
+import { isSnapshotFile } from '../snapshots/snapshotFiles';
 
 interface ReusableIntegrationQuickPickItem extends QuickPickItem {
     integration: ReusableIntegration;
@@ -88,8 +87,8 @@ export class IntegrationManager implements IIntegrationManager {
     }
 
     /**
-     * Offers the integrations other projects in the workspace declare and links the chosen one into this project's
-     * roster; no credentials are copied (see `collectReusableIntegrations`). Public so tests can drive it without
+     * Offers the integrations other projects in the workspace declare and links the chosen one into this project;
+     * no credentials are copied (see `collectReusableIntegrations`). Public so tests can drive it without
      * `commands.executeCommand`.
      */
     public async addExistingIntegration(notebookUri?: string): Promise<CommandOutcome> {
@@ -97,6 +96,14 @@ export class IntegrationManager implements IIntegrationManager {
 
         if (!activeNotebook) {
             void window.showErrorMessage(l10n.t('No active Deepnote notebook'));
+
+            return 'failed';
+        }
+
+        // `*.snapshot.deepnote` matches the notebook selector, so this command can run against a focused snapshot.
+        // The writer skips snapshots, which would report a failure only after the cache had already been updated.
+        if (isSnapshotFile(activeNotebook.uri)) {
+            void window.showErrorMessage(localize.Integrations.addExistingIntegrationSnapshotUnsupported);
 
             return 'failed';
         }
@@ -110,12 +117,32 @@ export class IntegrationManager implements IIntegrationManager {
             return 'failed';
         }
 
-        const currentIntegrations = this.getCachedRoster(projectId, notebookId);
-        const { conflictingIds, integrations } = await collectReusableIntegrations({
-            excludeIntegrationIds: new Set(currentIntegrations.map((entry) => entry.id)),
-            integrationStorage: this.integrationStorage,
-            projectId
-        });
+        const currentIntegrations = this.getCachedProjectIntegrations(projectId, notebookId);
+
+        if (!currentIntegrations) {
+            void window.showErrorMessage(localize.Integrations.addExistingIntegrationFailed);
+
+            return 'failed';
+        }
+
+        const { cancelled, conflictingIds, integrations } = await window.withProgress(
+            {
+                cancellable: true,
+                location: ProgressLocation.Notification,
+                title: localize.Integrations.addExistingIntegrationScanning
+            },
+            (_progress, token) =>
+                collectReusableIntegrations({
+                    excludeIntegrationIds: new Set(currentIntegrations.map((entry) => entry.id)),
+                    integrationStorage: this.integrationStorage,
+                    projectId,
+                    token
+                })
+        );
+
+        if (cancelled) {
+            return 'cancelled';
+        }
 
         if (conflictingIds.length > 0) {
             void window.showWarningMessage(
@@ -130,7 +157,7 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         const items: ReusableIntegrationQuickPickItem[] = integrations.map((integration) => ({
-            description: integrationTypeLabel(integration.type),
+            description: localize.Integrations.typeLabel(integration.type),
             detail: localize.Integrations.addExistingIntegrationUsedIn(integration.projectNames.join(', ')),
             integration,
             label: integration.name
@@ -147,12 +174,23 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         const { integration } = picked;
+        // The file watcher replaces the cached project on any external write — including one that changes only
+        // the integrations, which it reloads past without a UI event — so the pre-pick array can be stale, and
+        // the writer stamps whatever it is given onto every `.deepnote` file of the project.
+        const integrationsAtWrite = this.getCachedProjectIntegrations(projectId, notebookId);
+
+        if (!integrationsAtWrite) {
+            void window.showErrorMessage(localize.Integrations.addExistingIntegrationFailed);
+
+            return 'failed';
+        }
+
         let outcome: CommandOutcome = 'failed';
 
         try {
             const { activePersisted, siblingsFailed } = await attachExistingIntegration({
                 activeFileUri: activeNotebook.uri,
-                currentIntegrations,
+                currentIntegrations: integrationsAtWrite,
                 integration,
                 notebookManager: this.notebookManager,
                 projectId
@@ -175,7 +213,7 @@ export class IntegrationManager implements IIntegrationManager {
 
                 // Storage did not change, so the storage-change listeners that normally refresh kernels and the
                 // panel after a save stay silent; do both explicitly for this project.
-                await this.refreshAfterRosterChange(projectId, activeNotebook);
+                await this.refreshAfterProjectIntegrationsChange(projectId, activeNotebook);
             } else {
                 void window.showErrorMessage(localize.Integrations.addExistingIntegrationFailed);
             }
@@ -204,14 +242,20 @@ export class IntegrationManager implements IIntegrationManager {
         return uri ? String(uri) : undefined;
     }
 
-    /** Unfiltered on purpose: `attachExistingIntegration` writes this array back, so anything dropped here is lost. */
-    private getCachedRoster(projectId: string, notebookId: string): RawProjectIntegration[] {
+    /**
+     * Unfiltered on purpose: `attachExistingIntegration` writes this array back, so anything dropped here is lost.
+     * `undefined` means the project is not cached, which must not be written back as an empty list.
+     */
+    private getCachedProjectIntegrations(projectId: string, notebookId: string): RawProjectIntegration[] | undefined {
         const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
 
-        return [...(project?.project.integrations ?? [])];
+        return project ? [...(project.project.integrations ?? [])] : undefined;
     }
 
-    private async refreshAfterRosterChange(projectId: string, activeNotebook: NotebookDocument): Promise<void> {
+    private async refreshAfterProjectIntegrationsChange(
+        projectId: string,
+        activeNotebook: NotebookDocument
+    ): Promise<void> {
         const projectNotebooks = workspace.notebookDocuments.filter(
             (notebook) => notebook.notebookType === 'deepnote' && notebook.metadata?.deepnoteProjectId === projectId
         );

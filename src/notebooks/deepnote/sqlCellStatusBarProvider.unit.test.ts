@@ -287,7 +287,7 @@ suite('SqlCellStatusBarProvider', () => {
             notebookMetadata: { deepnoteProjectId: 'project-1' }
         });
 
-        // The merge only resolves roster and file ids; a bare merged-first rewrite would regress this to (configure).
+        // The merge only resolves project and file ids; a bare merged-first rewrite would regress this to (configure).
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
             name: 'Stored Only',
@@ -703,7 +703,7 @@ suite('SqlCellStatusBarProvider', () => {
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
         });
 
-        test('switchSqlIntegration offers `.deepnote.env.yaml` integrations the project roster omits', async () => {
+        test('switchSqlIntegration offers `.deepnote.env.yaml` integrations the project omits', async () => {
             let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
             when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
                 (_name, handler) => {

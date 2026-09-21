@@ -1,7 +1,7 @@
 import { injectable } from 'inversify';
 import type { DeepnoteFile } from '@deepnote/blocks';
 
-import { IDeepnoteNotebookManager, ProjectIntegration } from '../types';
+import { IDeepnoteNotebookManager, RawProjectIntegration } from '../types';
 
 /**
  * Centralized manager for tracking Deepnote notebook selections and project state.
@@ -40,7 +40,7 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
      * Updates the integrations list across every cached notebook entry under the project (cache-only).
      * @returns `true` if at least one cached entry was updated, `false` otherwise.
      */
-    updateProjectIntegrations(projectId: string, integrations: ProjectIntegration[]): boolean {
+    updateProjectIntegrations(projectId: string, integrations: RawProjectIntegration[]): boolean {
         const notebookEntries = this.originalProjects.get(projectId);
 
         if (!notebookEntries || notebookEntries.size === 0) {

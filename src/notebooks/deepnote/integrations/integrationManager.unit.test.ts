@@ -2,13 +2,13 @@ import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } fro
 import { assert } from 'chai';
 import sinon from 'sinon';
 import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
-import { NotebookDocument, QuickPickItem, Uri, workspace } from 'vscode';
+import { CancellationToken, CancellationTokenSource, NotebookDocument, QuickPickItem, Uri, workspace } from 'vscode';
 
 import { ITelemetryService } from '../../../platform/analytics/types';
 import { IExtensionContext } from '../../../platform/common/types';
 import { ConfigurableDatabaseIntegrationConfig } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
-import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { IDeepnoteNotebookManager, ProjectIntegration, RawProjectIntegration } from '../../types';
 import {
     createDeepnoteFile,
     createDeepnoteProject,
@@ -16,7 +16,6 @@ import {
     createWorkspaceFolder
 } from '../deepnoteTestHelpers';
 import { buildPostgresIntegration } from './federatedAuth/federatedAuthTestHelpers';
-import { RawProjectIntegration } from './existingIntegrationPicker';
 import { IntegrationManager } from './integrationManager';
 import {
     IIntegrationDetector,
@@ -30,8 +29,13 @@ const CURRENT_NOTEBOOK_ID = 'notebook-current';
 const OTHER_PROJECT_ID = 'project-other';
 const CURRENT_URI = Uri.file('/ws/current.deepnote');
 const OTHER_URI = Uri.file('/ws/other.deepnote');
+/** A second file of the CURRENT project, so the sibling-write branch has something to fail on. */
+const SIBLING_URI = Uri.file('/ws/sibling.deepnote');
+const SNAPSHOT_URI = Uri.file('/ws/snapshots/current_project-current_latest.snapshot.deepnote');
 
 const SHARED_CONFIG = buildPostgresIntegration({ id: 'pg-shared', name: 'Shared Postgres' });
+
+type RefreshFn = IIntegrationEnvLiveRefresher['refresh'];
 
 function projectFile(projectId: string, notebookId: string, integrations: RawProjectIntegration[]): DeepnoteFile {
     return createDeepnoteFile({
@@ -47,18 +51,23 @@ function projectFile(projectId: string, notebookId: string, integrations: RawPro
 suite('IntegrationManager.addExistingIntegration', () => {
     let currentNotebook: NotebookDocument;
     let otherNotebook: NotebookDocument;
-    let currentProject: DeepnoteFile;
+    let currentProject: DeepnoteFile | undefined;
     let writes: Map<string, DeepnoteFile>;
     let cacheUpdates: ProjectIntegration[][];
-    let refreshSpy: sinon.SinonSpy;
+    // Typed off the interface so a signature change fails the compile, not just the `firstCall.args` assertion.
+    let refreshSpy: sinon.SinonSpy<Parameters<RefreshFn>, ReturnType<RefreshFn>>;
     let quickPickItems: QuickPickItem[] | undefined;
+    let scanProgress: CancellationTokenSource;
+    let writeFailures: Set<string>;
 
     let detector: IIntegrationDetector;
     let webviewProvider: IIntegrationWebviewProvider;
     let notebookManager: IDeepnoteNotebookManager;
     let telemetry: ITelemetryService;
+    let cacheUpdateError: Error | undefined;
     let storedConfigs: ConfigurableDatabaseIntegrationConfig[];
     let onDiskOther: DeepnoteFile | undefined;
+    let onDiskSibling: DeepnoteFile | undefined;
 
     setup(() => {
         resetVSCodeMocks();
@@ -75,26 +84,52 @@ suite('IntegrationManager.addExistingIntegration', () => {
         onDiskOther = projectFile(OTHER_PROJECT_ID, 'notebook-other', [
             { id: SHARED_CONFIG.id, name: SHARED_CONFIG.name, type: SHARED_CONFIG.type }
         ]);
+        onDiskSibling = undefined;
+        cacheUpdateError = undefined;
         storedConfigs = [SHARED_CONFIG];
         writes = new Map();
         cacheUpdates = [];
         quickPickItems = undefined;
+        scanProgress = new CancellationTokenSource();
+        writeFailures = new Set();
 
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([createWorkspaceFolder(Uri.file('/ws'))]);
         when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([currentNotebook, otherNotebook]);
-        when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenCall(() =>
-            Promise.resolve(onDiskOther ? [CURRENT_URI, OTHER_URI] : [CURRENT_URI])
+        const discovered = () =>
+            Promise.resolve([
+                CURRENT_URI,
+                ...(onDiskOther ? [OTHER_URI] : []),
+                ...(onDiskSibling ? [SIBLING_URI] : [])
+            ]);
+
+        // The writer enumerates without a token; the scan passes one.
+        when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenCall(discovered);
+        when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything(), anything())).thenCall(
+            discovered
+        );
+
+        when(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).thenCall(
+            (_options: unknown, task: (progress: unknown, token: CancellationToken) => unknown) =>
+                task({ report: () => undefined }, scanProgress.token)
         );
 
         const mockFs = mock<typeof workspace.fs>();
         when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
-            const file = uri.fsPath === CURRENT_URI.fsPath ? currentProject : onDiskOther;
+            const file = new Map([
+                [CURRENT_URI.fsPath, currentProject],
+                [OTHER_URI.fsPath, onDiskOther],
+                [SIBLING_URI.fsPath, onDiskSibling]
+            ]).get(uri.fsPath);
 
             return file
                 ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
                 : Promise.reject(new Error(`no readFile stub for ${uri.fsPath}`));
         });
         when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri, bytes: Uint8Array) => {
+            if (writeFailures.has(uri.fsPath)) {
+                return Promise.reject(new Error(`write blocked for ${uri.fsPath}`));
+            }
+
             writes.set(uri.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
 
             return Promise.resolve();
@@ -119,6 +154,10 @@ suite('IntegrationManager.addExistingIntegration', () => {
         when(mockManager.getProjectForNotebook(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID)).thenCall(() => currentProject);
         when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(
             (_projectId: string, integrations: ProjectIntegration[]) => {
+                if (cacheUpdateError) {
+                    throw cacheUpdateError;
+                }
+
                 cacheUpdates.push(integrations);
 
                 return true;
@@ -127,7 +166,11 @@ suite('IntegrationManager.addExistingIntegration', () => {
         notebookManager = mockManager;
 
         telemetry = mock<ITelemetryService>();
-        refreshSpy = sinon.spy(async () => undefined);
+        refreshSpy = sinon.spy<RefreshFn>(async () => undefined);
+    });
+
+    teardown(() => {
+        scanProgress.dispose();
     });
 
     function buildManager(): IntegrationManager {
@@ -152,14 +195,16 @@ suite('IntegrationManager.addExistingIntegration', () => {
         );
     }
 
-    test("links the picked integration into the roster, refreshes only this project's kernels and re-shows the panel", async () => {
+    test("links the picked integration, refreshes only this project's kernels and re-shows the panel", async () => {
         const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
 
         assert.strictEqual(outcome, 'completed');
 
-        const expectedRoster: ProjectIntegration[] = [{ id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }];
-        assert.deepStrictEqual(writes.get(CURRENT_URI.fsPath)?.project.integrations, expectedRoster);
-        assert.deepStrictEqual(cacheUpdates, [expectedRoster]);
+        const expectedIntegrations: ProjectIntegration[] = [
+            { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
+        ];
+        assert.deepStrictEqual(writes.get(CURRENT_URI.fsPath)?.project.integrations, expectedIntegrations);
+        assert.deepStrictEqual(cacheUpdates, [expectedIntegrations]);
         assert.isUndefined(writes.get(OTHER_URI.fsPath), 'the other project must not be rewritten');
 
         assert.isTrue(refreshSpy.calledOnce);
@@ -195,7 +240,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
         verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
     });
 
-    test('keeps roster entries the panel cannot manage (pandas-dataframe) when attaching', async () => {
+    test('keeps entries the panel cannot manage (pandas-dataframe) when attaching', async () => {
         currentProject = projectFile(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID, [
             { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' }
         ]);
@@ -204,12 +249,12 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
         assert.strictEqual(outcome, 'completed');
 
-        const expectedRoster = [
+        const expectedIntegrations = [
             { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' },
             { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
         ];
-        assert.deepStrictEqual(writes.get(CURRENT_URI.fsPath)?.project.integrations, expectedRoster);
-        assert.deepStrictEqual(cacheUpdates, [expectedRoster]);
+        assert.deepStrictEqual(writes.get(CURRENT_URI.fsPath)?.project.integrations, expectedIntegrations);
+        assert.deepStrictEqual(cacheUpdates, [expectedIntegrations]);
         assert.strictEqual(quickPickItems?.length, 1, 'the DuckDB entry is neither offered nor a candidate');
     });
 
@@ -254,5 +299,124 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
         assert.strictEqual(outcome, 'failed');
         verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+    });
+    // Every branch below reports trouble to the user; without cover they can each regress into silent success.
+    const earlyFailures: { arrange: () => string; name: string }[] = [
+        {
+            arrange: () => {
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([
+                    createMockNotebook({ uri: CURRENT_URI, metadata: {} })
+                ]);
+
+                return CURRENT_URI.toString();
+            },
+            name: 'the notebook declares no project or notebook id'
+        },
+        {
+            arrange: () => {
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([
+                    createMockNotebook({
+                        uri: SNAPSHOT_URI,
+                        metadata: {
+                            deepnoteProjectId: CURRENT_PROJECT_ID,
+                            deepnoteNotebookId: CURRENT_NOTEBOOK_ID
+                        }
+                    })
+                ]);
+
+                return SNAPSHOT_URI.toString();
+            },
+            name: 'the active file is a snapshot'
+        },
+        {
+            arrange: () => {
+                currentProject = undefined;
+
+                return CURRENT_URI.toString();
+            },
+            name: 'the project is not in the cache'
+        }
+    ];
+
+    for (const { arrange, name } of earlyFailures) {
+        test(`fails without reading or writing any file when ${name}`, async () => {
+            const uri = arrange();
+
+            const outcome = await buildManager().addExistingIntegration(uri);
+
+            assert.strictEqual(outcome, 'failed');
+            assert.strictEqual(writes.size, 0);
+            assert.deepStrictEqual(cacheUpdates, [], 'the cache must not move before the file does');
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+            verify(telemetry.trackEvent(anything())).never();
+        });
+    }
+
+    const lateFailures: { arrange: () => void; name: string }[] = [
+        { arrange: () => writeFailures.add(CURRENT_URI.fsPath), name: 'the active file cannot be written' },
+        { arrange: () => (cacheUpdateError = new Error('cache rejected the update')), name: 'the writer throws' }
+    ];
+
+    for (const { arrange, name } of lateFailures) {
+        test(`reports failure and records the outcome in telemetry when ${name}`, async () => {
+            arrange();
+
+            const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
+
+            assert.strictEqual(outcome, 'failed');
+            assert.isTrue(refreshSpy.notCalled, 'nothing reached disk for the kernels to pick up');
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(
+                telemetry.trackEvent(
+                    deepEqual({
+                        eventName: 'add_existing_integration',
+                        properties: { integrationType: 'pgsql', outcome: 'failed' }
+                    })
+                )
+            ).once();
+        });
+    }
+
+    test('completes with a warning when a sibling file of the same project cannot be updated', async () => {
+        onDiskSibling = projectFile(CURRENT_PROJECT_ID, 'notebook-sibling', []);
+        writeFailures.add(SIBLING_URI.fsPath);
+
+        const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
+
+        assert.strictEqual(outcome, 'completed');
+        assert.isDefined(writes.get(CURRENT_URI.fsPath), 'the active file is still persisted');
+        assert.isUndefined(writes.get(SIBLING_URI.fsPath));
+        verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
+    });
+
+    test('writes the integrations as they stand after the pick, not the snapshot taken before it', async () => {
+        when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items: QuickPickItem[]) => {
+            // What the file watcher does to the cache when another writer touches the file mid-pick.
+            currentProject = projectFile(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID, [
+                { id: 'added-meanwhile', name: 'Added meanwhile', type: 'mysql' }
+            ]);
+
+            return Promise.resolve(items[0]);
+        });
+
+        const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
+
+        assert.strictEqual(outcome, 'completed');
+        assert.deepStrictEqual(writes.get(CURRENT_URI.fsPath)?.project.integrations, [
+            { id: 'added-meanwhile', name: 'Added meanwhile', type: 'mysql' },
+            { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
+        ]);
+    });
+
+    test('returns cancelled and writes nothing when the scan is cancelled', async () => {
+        scanProgress.cancel();
+
+        const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
+
+        assert.strictEqual(outcome, 'cancelled');
+        assert.strictEqual(writes.size, 0);
+        verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        verify(telemetry.trackEvent(anything())).never();
     });
 });

@@ -1,51 +1,20 @@
-import type { DeepnoteFile } from '@deepnote/blocks';
-import { RelativePattern, Uri, workspace } from 'vscode';
+import { CancellationToken, RelativePattern, Uri, workspace } from 'vscode';
 
-import * as localize from '../../../platform/common/utils/localize';
 import { readDeepnoteProjectFile } from '../../../platform/deepnote/deepnoteProjectFileReader';
 import { logger } from '../../../platform/logging';
 import {
     ConfigurableDatabaseIntegrationType,
     isConfigurableDatabaseIntegrationType
 } from '../../../platform/notebooks/deepnote/integrationTypes';
-import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { IDeepnoteNotebookManager, ProjectIntegration, RawProjectIntegration } from '../../types';
 import { isSnapshotFile } from '../snapshots/snapshotFiles';
 import { PersistIntegrationsResult, persistProjectIntegrations } from './projectIntegrationsWriter';
 import { IIntegrationStorage } from './types';
 
-/** Mirrors `integrationTypeLabels` in the webview bundle. */
-const INTEGRATION_TYPE_LABELS: Record<ConfigurableDatabaseIntegrationType, string> = {
-    alloydb: localize.Integrations.alloyDBTypeLabel,
-    athena: localize.Integrations.athenaTypeLabel,
-    'big-query': localize.Integrations.bigQueryTypeLabel,
-    clickhouse: localize.Integrations.clickHouseTypeLabel,
-    'cloud-sql': localize.Integrations.cloudSqlTypeLabel,
-    databricks: localize.Integrations.databricksTypeLabel,
-    dremio: localize.Integrations.dremioTypeLabel,
-    mariadb: localize.Integrations.mariaDBTypeLabel,
-    materialize: localize.Integrations.materializeTypeLabel,
-    mindsdb: localize.Integrations.mindsDBTypeLabel,
-    mongodb: localize.Integrations.mongoDBTypeLabel,
-    mysql: localize.Integrations.mySQLTypeLabel,
-    pgsql: localize.Integrations.postgresTypeLabel,
-    redshift: localize.Integrations.redshiftTypeLabel,
-    snowflake: localize.Integrations.snowflakeTypeLabel,
-    spanner: localize.Integrations.spannerTypeLabel,
-    'sql-server': localize.Integrations.sqlServerTypeLabel,
-    trino: localize.Integrations.trinoTypeLabel
-};
-
-export function integrationTypeLabel(type: ConfigurableDatabaseIntegrationType): string {
-    return INTEGRATION_TYPE_LABELS[type] ?? type;
-}
-
-/** A roster entry as recorded on disk: unlike `ProjectIntegration`, `type` is not narrowed to the known types. */
-export type RawProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']>[number];
-
 /** An integration another project in the workspace has credentials stored for, so linking it needs no re-entry. */
 export interface ReusableIntegration {
     id: string;
-    /** Name from the stored config — the same source the panel writes to the roster on save. */
+    /** Name from the stored config — the same source the panel writes to the project integrations on save. */
     name: string;
     /** The other projects declaring this integration; deduped and sorted. */
     projectNames: string[];
@@ -53,17 +22,21 @@ export interface ReusableIntegration {
 }
 
 export interface CollectReusableIntegrationsParams {
-    /** Ids already on the current project's roster. */
+    /** Ids the current project already declares. */
     excludeIntegrationIds: ReadonlySet<string>;
     integrationStorage: IIntegrationStorage;
     /** The project being extended; its own `.deepnote` files are skipped. */
     projectId: string;
+    /** Stops the scan; the partial result is only fit to be discarded. */
+    token?: CancellationToken;
 }
 
 export interface CollectReusableIntegrationsResult {
+    /** The scan stopped early, so the other two fields are partial and must not be written anywhere. */
+    cancelled: boolean;
     /**
-     * Ids skipped because some project's roster type disagrees with the stored config: linking one would put a type
-     * on this project that the credentials cannot back.
+     * Ids skipped because some project declares a type the stored config disagrees with: linking one would put a
+     * type on this project that the credentials cannot back.
      */
     conflictingIds: string[];
     integrations: ReusableIntegration[];
@@ -71,7 +44,7 @@ export interface CollectReusableIntegrationsResult {
 
 export interface AttachExistingIntegrationParams {
     activeFileUri: Uri;
-    /** The project's full roster: every entry is written back verbatim, so a filtered array drops entries. */
+    /** The project's full integration list: every entry is written back verbatim, so a filtered array drops entries. */
     currentIntegrations: readonly RawProjectIntegration[];
     integration: ReusableIntegration;
     notebookManager: IDeepnoteNotebookManager;
@@ -82,7 +55,7 @@ export interface AttachExistingIntegrationParams {
  * Scans every `.deepnote` file in the open workspace folders for integrations other projects declare.
  *
  * Reuse is a link, not a copy: `IntegrationStorage` and `FederatedAuthTokenStorage` both key configs by integration
- * id alone, so the roster entry is the only thing that scopes an integration to a project.
+ * id alone, so the project's own entry is the only thing that scopes an integration to a project.
  *
  * Integrations configured only in `.deepnote.env.yaml` are not offered: that file already applies to every project
  * under it, and the panel cannot write that layer.
@@ -90,17 +63,26 @@ export interface AttachExistingIntegrationParams {
 export async function collectReusableIntegrations(
     params: CollectReusableIntegrationsParams
 ): Promise<CollectReusableIntegrationsResult> {
-    const { excludeIntegrationIds, integrationStorage, projectId } = params;
+    const { excludeIntegrationIds, integrationStorage, projectId, token } = params;
 
     const candidates = new Map<string, ReusableIntegration & { projectNameSet: Set<string> }>();
     const conflictingIds = new Set<string>();
     const visited = new Set<string>();
 
     for (const workspaceFolder of workspace.workspaceFolders || []) {
+        if (token?.isCancellationRequested) {
+            return { cancelled: true, conflictingIds: [], integrations: [] };
+        }
+
         let files: Uri[];
 
         try {
-            files = await workspace.findFiles(new RelativePattern(workspaceFolder, '**/*.deepnote'));
+            files = await workspace.findFiles(
+                new RelativePattern(workspaceFolder, '**/*.deepnote'),
+                undefined,
+                undefined,
+                token
+            );
         } catch (error) {
             logger.error('collectReusableIntegrations: failed to enumerate .deepnote files', error);
 
@@ -108,6 +90,10 @@ export async function collectReusableIntegrations(
         }
 
         for (const fileUri of files) {
+            if (token?.isCancellationRequested) {
+                return { cancelled: true, conflictingIds: [], integrations: [] };
+            }
+
             const key = fileUri.toString();
 
             if (visited.has(key) || isSnapshotFile(fileUri)) {
@@ -179,23 +165,18 @@ export async function collectReusableIntegrations(
         }))
         .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
-    return { conflictingIds: Array.from(conflictingIds).sort(), integrations };
+    return { cancelled: false, conflictingIds: Array.from(conflictingIds).sort(), integrations };
 }
 
 /**
- * Links `integration` into the project's roster through the same writer the panel uses, so the cache, the active
+ * Links `integration` into the project's integrations through the same writer the panel uses, so the cache, the active
  * file and every sibling `.deepnote` file are updated together. Re-linking an id already there replaces its entry.
  */
 export function attachExistingIntegration(params: AttachExistingIntegrationParams): Promise<PersistIntegrationsResult> {
     const { activeFileUri, currentIntegrations, integration, notebookManager, projectId } = params;
 
     const linked: ProjectIntegration = { id: integration.id, name: integration.name, type: integration.type };
-    // Cast rather than validate: filtering out types this build does not know (`pandas-dataframe`) would delete
-    // them from the file.
-    const integrations = [
-        ...currentIntegrations.filter((entry) => entry.id !== integration.id),
-        linked
-    ] as ProjectIntegration[];
+    const integrations = [...currentIntegrations.filter((entry) => entry.id !== integration.id), linked];
 
     return persistProjectIntegrations({ activeFileUri, integrations, notebookManager, projectId });
 }

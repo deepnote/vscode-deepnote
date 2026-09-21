@@ -26,11 +26,11 @@ export class IntegrationDetector implements IIntegrationDetector {
 
     /**
      * Detect all integrations for the notebook's project. Three inputs, three roles:
-     * - `project.integrations` is the roster (ids, names and types only — never credentials), so it decides
+     * - `project.integrations` holds ids, names and types only — never credentials — so it decides
      *   the order and the names the panel shows.
      * - SecretStorage supplies the editable config for each one; integrations configured only in
      *   `.deepnote.env.yaml` stay `null` here, since those configs are never persisted through it.
-     * - `.deepnote.env.yaml` entries missing from the roster are appended, matching what actually applies at
+     * - `.deepnote.env.yaml` entries the project omits are appended, matching what actually applies at
      *   execution time. Without this a file-only integration works but is invisible, and a federated one is
      *   unusable outright — its Authenticate action exists only as a row in this panel.
      */
@@ -76,9 +76,9 @@ export class IntegrationDetector implements IIntegrationDetector {
     }
 
     /**
-     * Adds `.deepnote.env.yaml` integrations the roster omits. `config` stays `null` because the panel edits
+     * Adds `.deepnote.env.yaml` integrations the project omits. `config` stays `null` because the panel edits
      * SecretStorage only and the file layer cannot be written back; the name and type are carried so the row
-     * renders. A failed lookup leaves the roster-only result rather than blocking the panel.
+     * renders. A failed lookup leaves the project's own integrations rather than blocking the panel.
      */
     private async appendFileOnlyIntegrations(
         notebookUri: Uri,
@@ -89,13 +89,16 @@ export class IntegrationDetector implements IIntegrationDetector {
         try {
             mergedIntegrationConfigs = await this.sqlIntegrationEnvVars.getMergedIntegrationConfigs(notebookUri);
         } catch (error) {
-            logger.error('IntegrationDetector: failed to read file integrations; listing the roster only', error);
+            logger.error(
+                "IntegrationDetector: failed to read file integrations; listing the project's own only",
+                error
+            );
 
             return;
         }
 
         for (const config of mergedIntegrationConfigs) {
-            // Anything merged but absent here came from the file alone — the merge resolves roster ids first.
+            // Anything merged but absent here came from the file alone — the merge resolves the project's ids first.
             if (integrations.has(config.id) || !isConfigurableDatabaseIntegrationType(config.type)) {
                 continue;
             }

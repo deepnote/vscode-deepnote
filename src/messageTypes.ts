@@ -10,6 +10,7 @@ import {
 import { KernelSocketOptions } from './kernels/types';
 import { IJupyterVariable, IJupyterVariablesRequest, IJupyterVariablesResponse } from './kernels/variables/types';
 import { WidgetScriptSource } from './notebooks/controllers/ipywidgets/types';
+import type { IntegrationTypeLabelKey } from './platform/notebooks/deepnote/integrationTypeLabels';
 
 export type NotifyIPyWidgetWidgetVersionNotSupportedAction = {
     moduleName: 'qgrid';
@@ -120,7 +121,7 @@ export enum SharedMessages {
     LocInit = 'loc_init'
 }
 
-export type LocalizedMessages = {
+export type LocalizedMessages = { [K in IntegrationTypeLabelKey]: string } & {
     collapseSingle: string;
     expandSingle: string;
     openExportFileYes: string;
@@ -190,26 +191,6 @@ export type LocalizedMessages = {
     integrationsDatabase: string;
     integrationsDataWarehousesLakes: string;
     integrationsDatabases: string;
-    // Integration type labels
-    integrationsPostgresTypeLabel: string;
-    integrationsBigQueryTypeLabel: string;
-    integrationsSnowflakeTypeLabel: string;
-    integrationsAlloyDBTypeLabel: string;
-    integrationsAthenaTypeLabel: string;
-    integrationsClickHouseTypeLabel: string;
-    integrationsCloudSqlTypeLabel: string;
-    integrationsDatabricksTypeLabel: string;
-    integrationsDremioTypeLabel: string;
-    integrationsMariaDBTypeLabel: string;
-    integrationsMaterializeTypeLabel: string;
-    integrationsMindsDBTypeLabel: string;
-    integrationsMongoDBTypeLabel: string;
-    integrationsMySQLTypeLabel: string;
-    integrationsDuckDBTypeLabel: string;
-    integrationsRedshiftTypeLabel: string;
-    integrationsSpannerTypeLabel: string;
-    integrationsSQLServerTypeLabel: string;
-    integrationsTrinoTypeLabel: string;
     // PostgreSQL form strings
     integrationsPostgresNameLabel: string;
     integrationsPostgresNamePlaceholder: string;

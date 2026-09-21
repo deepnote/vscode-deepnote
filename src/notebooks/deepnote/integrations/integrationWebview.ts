@@ -175,25 +175,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsDatabase: localize.Integrations.database,
             integrationsDataWarehousesLakes: localize.Integrations.dataWarehousesLakes,
             integrationsDatabases: localize.Integrations.databases,
-            integrationsPostgresTypeLabel: localize.Integrations.postgresTypeLabel,
-            integrationsBigQueryTypeLabel: localize.Integrations.bigQueryTypeLabel,
-            integrationsSnowflakeTypeLabel: localize.Integrations.snowflakeTypeLabel,
-            integrationsAlloyDBTypeLabel: localize.Integrations.alloyDBTypeLabel,
-            integrationsAthenaTypeLabel: localize.Integrations.athenaTypeLabel,
-            integrationsClickHouseTypeLabel: localize.Integrations.clickHouseTypeLabel,
-            integrationsCloudSqlTypeLabel: localize.Integrations.cloudSqlTypeLabel,
-            integrationsDatabricksTypeLabel: localize.Integrations.databricksTypeLabel,
-            integrationsDremioTypeLabel: localize.Integrations.dremioTypeLabel,
-            integrationsMariaDBTypeLabel: localize.Integrations.mariaDBTypeLabel,
-            integrationsMaterializeTypeLabel: localize.Integrations.materializeTypeLabel,
-            integrationsMindsDBTypeLabel: localize.Integrations.mindsDBTypeLabel,
-            integrationsMongoDBTypeLabel: localize.Integrations.mongoDBTypeLabel,
-            integrationsMySQLTypeLabel: localize.Integrations.mySQLTypeLabel,
-            integrationsDuckDBTypeLabel: localize.Integrations.duckDBTypeLabel,
-            integrationsRedshiftTypeLabel: localize.Integrations.redshiftTypeLabel,
-            integrationsSpannerTypeLabel: localize.Integrations.spannerTypeLabel,
-            integrationsSQLServerTypeLabel: localize.Integrations.sqlServerTypeLabel,
-            integrationsTrinoTypeLabel: localize.Integrations.trinoTypeLabel,
+            ...localize.Integrations.typeLabels,
             integrationsCancel: localize.Integrations.cancel,
             integrationsSave: localize.Integrations.save,
             integrationsRequiredField: localize.Integrations.requiredField,
@@ -746,7 +728,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 }
                 break;
             case 'addExisting':
-                // The command owns the picker and the roster write, and re-shows this panel when it is done.
+                // The command owns the picker and the integrations write, and re-shows this panel when it is done.
                 try {
                     await commands.executeCommand(Commands.AddExistingIntegration, {
                         notebookUri: this.activeFileUri?.toString()

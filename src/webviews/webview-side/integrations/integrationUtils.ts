@@ -1,3 +1,4 @@
+import { integrationTypeLabelKey } from '../../../platform/notebooks/deepnote/integrationTypeLabels';
 import { getLocString } from '../react-common/locReactSide';
 import { ConfigurableDatabaseIntegrationType } from './types';
 
@@ -23,27 +24,13 @@ const mindsdbLogo: string = require('./icons/mindsdb.svg');
 const trinoLogo: string = require('./icons/trino.svg');
 /* eslint-enable @typescript-eslint/no-require-imports */
 
-// Localized labels for integration types (duplicated from sqlCellStatusBarProvider.ts due to import restrictions)
-export const integrationTypeLabels: Record<ConfigurableDatabaseIntegrationType, string> = {
-    alloydb: 'Google AlloyDB',
-    athena: 'Amazon Athena',
-    'big-query': 'Google BigQuery',
-    clickhouse: 'ClickHouse',
-    'cloud-sql': 'Google Cloud SQL',
-    databricks: 'Databricks',
-    dremio: 'Dremio',
-    mariadb: 'MariaDB',
-    materialize: 'Materialize',
-    mindsdb: 'MindsDB',
-    mongodb: 'MongoDB',
-    mysql: 'MySQL',
-    pgsql: 'PostgreSQL',
-    redshift: 'Amazon Redshift',
-    snowflake: 'Snowflake',
-    spanner: 'Google Spanner',
-    'sql-server': 'Microsoft SQL Server',
-    trino: 'Trino'
-};
+/**
+ * The panel is bundled separately and cannot reach `localize.ts`, so labels resolve against the string bundle.
+ * The host sends that bundle before the first `update`, so the raw type is a fallback that should never render.
+ */
+export function integrationTypeLabel(type: ConfigurableDatabaseIntegrationType): string {
+    return getLocString(integrationTypeLabelKey(type), type);
+}
 
 // Icon mapping for integration types
 export const integrationTypeIcons: Record<ConfigurableDatabaseIntegrationType, string> = {
@@ -73,6 +60,6 @@ export const integrationTypeIcons: Record<ConfigurableDatabaseIntegrationType, s
  * @returns The default name in the format "My {type} integration"
  */
 export function getDefaultIntegrationName(type: ConfigurableDatabaseIntegrationType): string {
-    const typeLabel = integrationTypeLabels[type] || type;
+    const typeLabel = integrationTypeLabel(type);
     return getLocString('integrationsDefaultName', 'My {0} integration').replace('{0}', typeLabel);
 }

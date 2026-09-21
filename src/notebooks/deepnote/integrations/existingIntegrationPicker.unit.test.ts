@@ -1,17 +1,15 @@
 import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { Uri, workspace } from 'vscode';
+import { CancellationToken, CancellationTokenSource, Uri, workspace } from 'vscode';
 
 import { ConfigurableDatabaseIntegrationConfig } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
-import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { IDeepnoteNotebookManager, ProjectIntegration, RawProjectIntegration } from '../../types';
 import { createDeepnoteFile, createDeepnoteProject, createWorkspaceFolder } from '../deepnoteTestHelpers';
 import {
     attachExistingIntegration,
     collectReusableIntegrations,
-    integrationTypeLabel,
-    RawProjectIntegration,
     ReusableIntegration
 } from './existingIntegrationPicker';
 import { buildGoogleOauthIntegration, buildPostgresIntegration } from './federatedAuth/federatedAuthTestHelpers';
@@ -31,14 +29,19 @@ function projectFile(project: OnDiskProject): DeepnoteFile {
         project: createDeepnoteProject({
             id: project.projectId,
             name: project.projectName ?? project.projectId,
-            // The roster type is a plain string on disk; the cast keeps the fixture free to declare unknown types.
-            integrations: project.integrations as ProjectIntegration[] | undefined
+            integrations: project.integrations
         })
     });
 }
 
 /** Stubs `workspace.findFiles` + `workspace.fs` over the given files; `unreadable` URIs reject on read. */
-function stubWorkspace(opts: { projects: OnDiskProject[]; unreadable?: Uri[]; hasWorkspaceFolder?: boolean }): {
+function stubWorkspace(opts: {
+    projects: OnDiskProject[];
+    unreadable?: Uri[];
+    hasWorkspaceFolder?: boolean;
+    onRead?: (uri: Uri) => void;
+}): {
+    reads: string[];
     writes: Map<string, DeepnoteFile>;
 } {
     when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(
@@ -46,15 +49,24 @@ function stubWorkspace(opts: { projects: OnDiskProject[]; unreadable?: Uri[]; ha
     );
 
     const discovered = [...opts.projects.map((project) => project.uri), ...(opts.unreadable ?? [])];
+    when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything(), anything())).thenReturn(
+        Promise.resolve(discovered)
+    );
+    // `persistProjectIntegrations` enumerates without a token; the scan passes one.
     when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve(discovered));
     when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
 
     const byPath = new Map(opts.projects.map((project) => [project.uri.fsPath, projectFile(project)] as const));
+    const reads: string[] = [];
     const writes = new Map<string, DeepnoteFile>();
     const mockFs = mock<typeof workspace.fs>();
 
     when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
+        reads.push(uri.fsPath);
+
         const file = byPath.get(uri.fsPath);
+
+        opts.onRead?.(uri);
 
         return file
             ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
@@ -67,7 +79,7 @@ function stubWorkspace(opts: { projects: OnDiskProject[]; unreadable?: Uri[]; ha
     });
     when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
 
-    return { writes };
+    return { reads, writes };
 }
 
 function stubStorage(configs: ConfigurableDatabaseIntegrationConfig[]): IIntegrationStorage {
@@ -90,12 +102,14 @@ suite('existingIntegrationPicker', () => {
 
         async function collect(
             excludeIntegrationIds: string[] = [],
-            configs: ConfigurableDatabaseIntegrationConfig[] = [pgConfig, bqConfig]
+            configs: ConfigurableDatabaseIntegrationConfig[] = [pgConfig, bqConfig],
+            token?: CancellationToken
         ) {
             return collectReusableIntegrations({
                 excludeIntegrationIds: new Set(excludeIntegrationIds),
                 integrationStorage: stubStorage(configs),
-                projectId: CURRENT_PROJECT_ID
+                projectId: CURRENT_PROJECT_ID,
+                token
             });
         }
 
@@ -133,16 +147,16 @@ suite('existingIntegrationPicker', () => {
                 { id: 'pg-shared', name: 'Shared Postgres', projectNames: ['Alpha', 'Beta'], type: 'pgsql' },
                 { id: 'bq-oauth', name: 'Team BigQuery', projectNames: ['Beta'], type: 'big-query' }
             ];
-            assert.deepStrictEqual(result, { conflictingIds: [], integrations: expected });
+            assert.deepStrictEqual(result, { cancelled: false, conflictingIds: [], integrations: expected });
         });
 
-        test('takes the name from the stored config, not from whichever roster was read first', async () => {
+        test('takes the name from the stored config, not from whichever project was read first', async () => {
             stubWorkspace({
                 projects: [
                     {
                         uri: Uri.file('/ws/a.deepnote'),
                         projectId: 'project-a',
-                        integrations: [{ id: 'pg-shared', name: 'Stale roster name', type: 'pgsql' }]
+                        integrations: [{ id: 'pg-shared', name: 'Stale project name', type: 'pgsql' }]
                     }
                 ]
             });
@@ -152,7 +166,7 @@ suite('existingIntegrationPicker', () => {
             assert.strictEqual(integrations[0].name, 'Shared Postgres');
         });
 
-        test('excludes ids already on the current project roster and the current project files themselves', async () => {
+        test('excludes ids the current project already declares and the current project files themselves', async () => {
             stubWorkspace({
                 projects: [
                     {
@@ -180,7 +194,7 @@ suite('existingIntegrationPicker', () => {
             );
         });
 
-        test('skips roster entries with no stored config (file-only or never configured) and unsupported types', async () => {
+        test('skips entries with no stored config (file-only or never configured) and unsupported types', async () => {
             stubWorkspace({
                 projects: [
                     {
@@ -203,7 +217,7 @@ suite('existingIntegrationPicker', () => {
             );
         });
 
-        test('reports an id whose roster type disagrees with the stored config as conflicting and drops it everywhere', async () => {
+        test('reports an id whose declared type disagrees with the stored config as conflicting and drops it everywhere', async () => {
             stubWorkspace({
                 projects: [
                     {
@@ -222,7 +236,7 @@ suite('existingIntegrationPicker', () => {
 
             const result = await collect();
 
-            assert.deepStrictEqual(result, { conflictingIds: ['pg-shared'], integrations: [] });
+            assert.deepStrictEqual(result, { cancelled: false, conflictingIds: ['pg-shared'], integrations: [] });
         });
 
         test('ignores snapshot files and keeps going past an unreadable file', async () => {
@@ -250,12 +264,41 @@ suite('existingIntegrationPicker', () => {
             );
         });
 
+        test('stops at the next file and reports cancellation when the token trips mid-scan', async () => {
+            const cts = new CancellationTokenSource();
+
+            try {
+                const { reads } = stubWorkspace({
+                    projects: [
+                        {
+                            uri: Uri.file('/ws/a.deepnote'),
+                            projectId: 'project-a',
+                            integrations: [{ id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }]
+                        },
+                        {
+                            uri: Uri.file('/ws/b.deepnote'),
+                            projectId: 'project-b',
+                            integrations: [{ id: 'bq-oauth', name: 'Team BigQuery', type: 'big-query' }]
+                        }
+                    ],
+                    onRead: () => cts.cancel()
+                });
+
+                const result = await collect([], [pgConfig, bqConfig], cts.token);
+
+                assert.deepStrictEqual(result, { cancelled: true, conflictingIds: [], integrations: [] });
+                assert.deepStrictEqual(reads, [Uri.file('/ws/a.deepnote').fsPath], 'the scan must not read on');
+            } finally {
+                cts.dispose();
+            }
+        });
+
         test('returns nothing without an open workspace folder', async () => {
             stubWorkspace({ projects: [], hasWorkspaceFolder: false });
 
             const result = await collect();
 
-            assert.deepStrictEqual(result, { conflictingIds: [], integrations: [] });
+            assert.deepStrictEqual(result, { cancelled: false, conflictingIds: [], integrations: [] });
         });
     });
 
@@ -284,7 +327,7 @@ suite('existingIntegrationPicker', () => {
             notebookManager = instance(mockManager);
         });
 
-        test('appends the linked entry to the roster in the cache and on disk, keeping existing entries', async () => {
+        test('appends the linked entry to the project integrations in the cache and on disk, keeping existing entries', async () => {
             const { writes } = stubWorkspace({
                 projects: [
                     {
@@ -306,16 +349,18 @@ suite('existingIntegrationPicker', () => {
                 projectId: CURRENT_PROJECT_ID
             });
 
-            const expectedRoster: ProjectIntegration[] = [
+            const expectedIntegrations: ProjectIntegration[] = [
                 { id: 'bq-own', name: 'Own BigQuery', type: 'big-query' },
                 { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
             ];
             assert.deepStrictEqual(result, { activePersisted: true, siblingsFailed: 0 });
-            assert.deepStrictEqual(cacheUpdates, [{ projectId: CURRENT_PROJECT_ID, integrations: expectedRoster }]);
-            assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, expectedRoster);
+            assert.deepStrictEqual(cacheUpdates, [
+                { projectId: CURRENT_PROJECT_ID, integrations: expectedIntegrations }
+            ]);
+            assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, expectedIntegrations);
         });
 
-        test('passes roster entries of types it cannot manage (e.g. pandas-dataframe) through verbatim', async () => {
+        test('passes entries of types it cannot manage (e.g. pandas-dataframe) through verbatim', async () => {
             const { writes } = stubWorkspace({
                 projects: [{ uri: activeUri, projectId: CURRENT_PROJECT_ID }]
             });
@@ -332,15 +377,17 @@ suite('existingIntegrationPicker', () => {
                 projectId: CURRENT_PROJECT_ID
             });
 
-            const expectedRoster = [
+            const expectedIntegrations = [
                 ...currentIntegrations,
                 { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
             ];
-            assert.deepStrictEqual(cacheUpdates, [{ projectId: CURRENT_PROJECT_ID, integrations: expectedRoster }]);
-            assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, expectedRoster);
+            assert.deepStrictEqual(cacheUpdates, [
+                { projectId: CURRENT_PROJECT_ID, integrations: expectedIntegrations }
+            ]);
+            assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, expectedIntegrations);
         });
 
-        test('replaces rather than duplicates an entry whose id is already on the roster', async () => {
+        test('replaces rather than duplicates an entry whose id the project already declares', async () => {
             const { writes } = stubWorkspace({
                 projects: [{ uri: activeUri, projectId: CURRENT_PROJECT_ID }]
             });
@@ -357,10 +404,5 @@ suite('existingIntegrationPicker', () => {
                 { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
             ]);
         });
-    });
-
-    test('integrationTypeLabel maps every configurable type to a display label', () => {
-        assert.strictEqual(integrationTypeLabel('pgsql'), 'PostgreSQL');
-        assert.strictEqual(integrationTypeLabel('big-query'), 'Google BigQuery');
     });
 });

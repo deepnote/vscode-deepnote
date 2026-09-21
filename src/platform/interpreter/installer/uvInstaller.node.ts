@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 import { inject, injectable } from 'inversify';
+import { workspace } from 'vscode';
+
 import { IServiceContainer } from '../../ioc/types';
 import { ExecutionInstallArgs, ModuleInstaller } from './moduleInstaller.node';
 import { IProcessServiceFactory } from '../../common/process/types.node';
@@ -10,6 +12,26 @@ import { PythonEnvironment } from '../../pythonEnvironments/info';
 import { Environment } from '@vscode/python-extension';
 import { getInterpreterInfo } from '../helpers';
 import { translateModuleToPackages } from './utils';
+
+/**
+ * uv has no `--proxy` flag, so VS Code's `http.proxy` can only reach it through the environment, and
+ * VS Code never exports that setting into the extension host's own environment. A proxy the user
+ * already set in the environment wins — uv reads those directly, and overriding it would silently
+ * change a working configuration.
+ */
+function proxyEnvironment(): NodeJS.ProcessEnv | undefined {
+    const proxy = workspace.getConfiguration('http').get('proxy', '');
+    const configuredInEnvironment = [
+        'HTTPS_PROXY',
+        'https_proxy',
+        'HTTP_PROXY',
+        'http_proxy',
+        'ALL_PROXY',
+        'all_proxy'
+    ].some((name) => process.env[name]);
+
+    return proxy && !configuredInEnvironment ? { HTTPS_PROXY: proxy, HTTP_PROXY: proxy } : undefined;
+}
 
 /**
  * Installer that uses the UV to manage packages.
@@ -67,9 +89,11 @@ export class UvInstaller extends ModuleInstaller {
             args.push('--upgrade');
         }
         args.push('--python', env.executable.uri?.fsPath || env.path, ...translateModuleToPackages(moduleName));
+
         return {
             exe: 'uv',
-            args
+            args,
+            env: proxyEnvironment()
         };
     }
 

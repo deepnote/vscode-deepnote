@@ -19,6 +19,7 @@ import {
 import { logValue, debugDecorator } from '../../logging';
 import { PythonEnvironment } from '../../pythonEnvironments/info';
 import { logger } from '../../logging';
+import { getDisplayPath } from '../../common/platform/fs-paths';
 import { IProcessServiceFactory } from '../../common/process/types.node';
 import {
     IConfigurationService,
@@ -69,6 +70,18 @@ export async function isModulePresentInEnvironment(memento: Memento, product: Pr
 }
 
 /**
+ * Writes into the directory uv installs to, rather than asking `os.access`, which consults only the
+ * read-only attribute on Windows and so misses an ACL denial — the usual way a per-machine install
+ * becomes unwritable. Deliberately unguarded: the traceback is the signal, so the reason reaches the
+ * log with its real errno instead of being flattened into a word.
+ */
+const SITE_PACKAGES_WRITABLE_PROBE = `\
+import sysconfig, tempfile
+with tempfile.NamedTemporaryFile(dir=sysconfig.get_path("purelib")):
+    pass
+`;
+
+/**
  * Installer for this extension. Finds the installer for a module and then runs it.
  */
 export class DataScienceInstaller {
@@ -109,12 +122,17 @@ export class DataScienceInstaller {
             );
             // deepnote-toolkit[server] resolves to ~200 wheels (~950 MB). The channel manager only
             // offers uv when nothing else applies, but uv installs that set in a fraction of pip's
-            // time, so take it for every other environment whenever the `uv` binary is available.
+            // time, so take it whenever the `uv` binary is available and it can write to the target.
             const uvInstaller = allInstallers.find((i) => i.type === ModuleInstallerType.UV);
 
             if (native) {
                 installer = native;
-            } else if (uvInstaller && (await uvInstaller.isSupported(interpreter))) {
+            } else if (
+                uvInstaller &&
+                // isSupported memoises one `uv --version`; the probe spawns python, so ask it second.
+                (await uvInstaller.isSupported(interpreter)) &&
+                (await this.canUvWriteToSitePackages(interpreter))
+            ) {
                 installer = uvInstaller;
             } else {
                 // deepnote-toolkit is PyPI-only and conda's `pkg[extra]` brackets mean build constraints,
@@ -177,6 +195,32 @@ export class DataScienceInstaller {
                 .exec(executableName, ['--version'], { mergeStdOutErr: true })
                 .then(() => true)
                 .catch(() => false);
+        }
+    }
+
+    /**
+     * uv installs into the interpreter's own site-packages and rejects `--user` outright, so it
+     * cannot serve an interpreter whose site-packages the user cannot write — a per-machine system
+     * python, or a conda prefix owned by root in a container. pip can, through `--user`, and keeps
+     * those environments. Probed rather than inferred from the environment type, which answers a
+     * different question: a root-owned conda prefix is still typed `Conda`.
+     *
+     * `throwOnStdErr` turns the probe's traceback into a rejection, so a probe that cannot run at
+     * all is treated the same as one that reported no access — both leave the environment on pip,
+     * which is where it was before uv was preferred.
+     */
+    protected async canUvWriteToSitePackages(interpreter: PythonEnvironment): Promise<boolean> {
+        try {
+            const python = await this.serviceContainer
+                .get<IPythonExecutionFactory>(IPythonExecutionFactory)
+                .create({ resource: undefined, interpreter });
+            await python.exec(['-c', SITE_PACKAGES_WRITABLE_PROBE], { throwOnStdErr: true });
+
+            return true;
+        } catch (ex) {
+            logger.warn(`Cannot write to site-packages of ${getDisplayPath(interpreter.uri)}, leaving uv out`, ex);
+
+            return false;
         }
     }
 

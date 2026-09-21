@@ -18,11 +18,20 @@ import {
     ModuleInstallerType
 } from '../../../platform/interpreter/installer/types';
 import { sleep } from '../../../test/core';
+import { IPythonExecutionFactory, IPythonExecutionService } from '../../../platform/interpreter/types.node';
 import { Environment } from '@vscode/python-extension';
 import { anything, when } from 'ts-mockito';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 
-class AlwaysInstalledDataScienceInstaller extends DataScienceInstaller {
+/** Stands in for the `python -c` site-packages probe, which needs a real interpreter. */
+class WritableSitePackagesInstaller extends DataScienceInstaller {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, class-methods-use-this
+    protected override async canUvWriteToSitePackages(_interpreter: PythonEnvironment): Promise<boolean> {
+        return true;
+    }
+}
+
+class AlwaysInstalledDataScienceInstaller extends WritableSitePackagesInstaller {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, class-methods-use-this
     public override async isInstalled(_product: Product, _resource?: InterpreterUri | Environment): Promise<boolean> {
         return true;
@@ -30,10 +39,18 @@ class AlwaysInstalledDataScienceInstaller extends DataScienceInstaller {
 }
 
 /** Everything is installed except pip itself — a uv-created venv or a bare system python. */
-class PipMissingDataScienceInstaller extends DataScienceInstaller {
+class PipMissingDataScienceInstaller extends WritableSitePackagesInstaller {
     // eslint-disable-next-line class-methods-use-this
     public override async isInstalled(product: Product, _resource?: InterpreterUri | Environment): Promise<boolean> {
         return product !== Product.pip;
+    }
+}
+
+/** A per-machine python, or a root-owned conda prefix: uv cannot write there, pip's `--user` can. */
+class ReadOnlySitePackagesInstaller extends AlwaysInstalledDataScienceInstaller {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, class-methods-use-this
+    protected override async canUvWriteToSitePackages(_interpreter: PythonEnvironment): Promise<boolean> {
+        return false;
     }
 }
 
@@ -522,6 +539,31 @@ suite('DataScienceInstaller install', async () => {
         verifyInstallModule(uvInstaller, TypeMoq.Times.never());
     });
 
+    test('Will leave deepnoteToolkit on pip when site-packages is not writable, since uv has no --user', async () => {
+        const testEnvironment: PythonEnvironment = {
+            id: interpreterPath.fsPath,
+            uri: interpreterPath
+        };
+        const pipInstaller = installModuleMock(ModuleInstallerType.Pip, testEnvironment);
+        const uvInstaller = installModuleMock(ModuleInstallerType.UV, testEnvironment);
+        uvInstaller
+            .setup((c) => c.isSupported(TypeMoq.It.isValue(testEnvironment)))
+            .returns(() => Promise.resolve(true));
+        installationChannelManager
+            .setup((c) => c.getInstallationChannels(TypeMoq.It.isValue(testEnvironment)))
+            .returns(() => Promise.resolve([pipInstaller.object]));
+        serviceContainer
+            .setup((c) => c.getAll(TypeMoq.It.isValue(IModuleInstaller)))
+            .returns(() => [pipInstaller.object, uvInstaller.object]);
+
+        const installer = new ReadOnlySitePackagesInstaller(serviceContainer.object, outputChannel.object);
+        const result = await installer.install(Product.deepnoteToolkit, testEnvironment, tokenSource);
+
+        expect(result).to.equal(InstallerResponse.Installed, 'Should be Installed via pip');
+        verifyInstallModule(pipInstaller, TypeMoq.Times.once());
+        verifyInstallModule(uvInstaller, TypeMoq.Times.never());
+    });
+
     for (const native of [ModuleInstallerType.Poetry, ModuleInstallerType.Pipenv] as const) {
         test(`Will keep ${native} for deepnoteToolkit ahead of uv, so the project manifest records the install`, async () => {
             const testEnvironment: PythonEnvironment = {
@@ -547,4 +589,63 @@ suite('DataScienceInstaller install', async () => {
             verifyInstallModule(uvInstaller, TypeMoq.Times.never());
         });
     }
+
+    /**
+     * The probe itself, rather than the selection branch above it. The subclasses stub it out, so
+     * without these a flipped `throwOnStdErr` would silently report every environment as writable.
+     */
+    suite('canUvWriteToSitePackages', () => {
+        const testEnvironment: PythonEnvironment = {
+            id: interpreterPath.fsPath,
+            uri: interpreterPath
+        };
+        /** The base class: every subclass in this file stubs the probe out. */
+        let probingInstaller: DataScienceInstaller;
+
+        setup(() => {
+            probingInstaller = new DataScienceInstaller(serviceContainer.object, outputChannel.object);
+        });
+
+        function stubInterpreter(exec: () => Promise<{ stdout: string }>) {
+            const python = TypeMoq.Mock.ofType<IPythonExecutionService>();
+            python.setup((p) => p.exec(TypeMoq.It.isAny(), TypeMoq.It.isAny())).returns(exec);
+            python.setup((p) => (p as any).then).returns(() => undefined);
+
+            const factory = TypeMoq.Mock.ofType<IPythonExecutionFactory>();
+            factory.setup((f) => f.create(TypeMoq.It.isAny())).returns(() => Promise.resolve(python.object));
+            factory.setup((f) => (f as any).then).returns(() => undefined);
+            serviceContainer
+                .setup((c) => c.get(TypeMoq.It.isValue(IPythonExecutionFactory)))
+                .returns(() => factory.object);
+
+            return python;
+        }
+
+        test('Runs the probe with throwOnStdErr, so an unguarded traceback is what reports no access', async () => {
+            const python = stubInterpreter(() => Promise.resolve({ stdout: '' }));
+
+            await (probingInstaller as any).canUvWriteToSitePackages(testEnvironment);
+
+            python.verify(
+                (p) => p.exec(TypeMoq.It.isAny(), TypeMoq.It.isObjectWith({ throwOnStdErr: true })),
+                TypeMoq.Times.once()
+            );
+        });
+
+        test('Reports writable when the probe completes', async () => {
+            stubInterpreter(() => Promise.resolve({ stdout: '' }));
+
+            const writable = await (probingInstaller as any).canUvWriteToSitePackages(testEnvironment);
+
+            expect(writable).to.equal(true);
+        });
+
+        test('Reports not writable when the probe raises', async () => {
+            stubInterpreter(() => Promise.reject(new Error('PermissionError: [Errno 13] Permission denied')));
+
+            const writable = await (probingInstaller as any).canUvWriteToSitePackages(testEnvironment);
+
+            expect(writable).to.equal(false);
+        });
+    });
 });

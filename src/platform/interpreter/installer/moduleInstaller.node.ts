@@ -29,6 +29,8 @@ import { dispose } from '../../common/utils/lifecycle';
 
 export type ExecutionInstallArgs = {
     args: string[];
+    /** Applied over the activated environment, so an installer can reach settings it has no flag for. */
+    env?: NodeJS.ProcessEnv;
     exe?: string;
     cwd?: string;
     useShellExec?: boolean;
@@ -113,6 +115,7 @@ export abstract class ModuleInstaller implements IModuleInstaller {
                 const env = { ...process.env };
                 environmentService.mergeVariables(envVars || {}, env);
                 environmentService.mergePaths(envVars || {}, env);
+                Object.assign(env, args.env);
                 const proc = await procFactory.create(undefined);
                 if (cancelTokenSource.token.isCancellationRequested) {
                     return;

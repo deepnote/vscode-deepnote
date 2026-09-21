@@ -1,10 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+/* eslint-disable local-rules/dont-use-process */
+
 import { assert } from 'chai';
 import { anything, instance, mock, when } from 'ts-mockito';
 import * as sinon from 'sinon';
 import esmock from 'esmock';
+import type { WorkspaceConfiguration } from 'vscode';
 import { IServiceContainer } from '../../ioc/types';
 import { IProcessServiceFactory, IProcessService } from '../../common/process/types.node';
 import { ModuleInstallerType, ModuleInstallFlags, Product } from './types';
@@ -15,6 +18,16 @@ import { Uri } from 'vscode';
 import type { UvInstaller } from './uvInstaller.node';
 import { translateProductToModule } from './utils';
 import { DEEPNOTE_TOOLKIT_PACKAGES, DEEPNOTE_TOOLKIT_VERSION } from '../../common/constants';
+import { mockedVSCodeNamespaces } from '../../../test/vscode-mock';
+
+const PROXY_ENVIRONMENT_VARIABLES = [
+    'HTTPS_PROXY',
+    'https_proxy',
+    'HTTP_PROXY',
+    'http_proxy',
+    'ALL_PROXY',
+    'all_proxy'
+];
 
 suite('UvInstaller', () => {
     let UvInstallerClass: typeof import('./uvInstaller.node').UvInstaller;
@@ -25,11 +38,21 @@ suite('UvInstaller', () => {
     let processServiceFactory: IProcessServiceFactory;
     let processService: IProcessService;
     let getInterpreterInfoStub: sinon.SinonStub;
+    let workspaceConfig: WorkspaceConfiguration;
+    let savedProxyEnvironment: Record<string, string | undefined>;
 
     setup(async () => {
         serviceContainer = mock<IServiceContainer>();
         processServiceFactory = mock<IProcessServiceFactory>();
         processService = mock<IProcessService>();
+
+        // The host's own proxy vars would otherwise decide whether the setting is applied.
+        savedProxyEnvironment = Object.fromEntries(PROXY_ENVIRONMENT_VARIABLES.map((n) => [n, process.env[n]]));
+        PROXY_ENVIRONMENT_VARIABLES.forEach((name) => delete process.env[name]);
+
+        workspaceConfig = mock<WorkspaceConfiguration>();
+        when(mockedVSCodeNamespaces.workspace.getConfiguration('http')).thenReturn(instance(workspaceConfig));
+        when(workspaceConfig.get('proxy', '')).thenReturn('');
 
         // Create stub for getInterpreterInfo helper
         getInterpreterInfoStub = sinon.stub();
@@ -68,6 +91,13 @@ suite('UvInstaller', () => {
 
     teardown(() => {
         sinon.restore();
+        Object.entries(savedProxyEnvironment).forEach(([name, value]) => {
+            if (value === undefined) {
+                delete process.env[name];
+            } else {
+                process.env[name] = value;
+            }
+        });
     });
 
     suite('Basic Properties', () => {
@@ -196,6 +226,39 @@ suite('UvInstaller', () => {
                 'numpy'
             ]);
         });
+
+        test('Should carry the configured http.proxy into the environment, since uv has no --proxy flag', async () => {
+            getInterpreterInfoStub.resolves(mockInterpreterInfo);
+            when(workspaceConfig.get('proxy', '')).thenReturn('http://proxy.internal:3128');
+
+            const result = await testableInstaller.testGetExecutionArgs('numpy', mockPythonEnvironment);
+
+            assert.deepEqual(result.env, {
+                HTTPS_PROXY: 'http://proxy.internal:3128',
+                HTTP_PROXY: 'http://proxy.internal:3128'
+            });
+            assert.notInclude(result.args, '--proxy', 'uv rejects a --proxy flag');
+        });
+
+        test('Should set no proxy environment when http.proxy is unset', async () => {
+            getInterpreterInfoStub.resolves(mockInterpreterInfo);
+
+            const result = await testableInstaller.testGetExecutionArgs('numpy', mockPythonEnvironment);
+
+            assert.isUndefined(result.env);
+        });
+
+        for (const name of PROXY_ENVIRONMENT_VARIABLES) {
+            test(`Should leave an existing ${name} alone rather than layer the setting over it`, async () => {
+                getInterpreterInfoStub.resolves(mockInterpreterInfo);
+                when(workspaceConfig.get('proxy', '')).thenReturn('http://from-settings:3128');
+                process.env[name] = 'http://from-environment:8080';
+
+                const result = await testableInstaller.testGetExecutionArgs('numpy', mockPythonEnvironment);
+
+                assert.isUndefined(result.env);
+            });
+        }
 
         test('Should throw error when interpreter info is not available', async () => {
             getInterpreterInfoStub.resolves(undefined);

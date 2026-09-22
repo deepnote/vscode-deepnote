@@ -2,11 +2,11 @@
 // Licensed under the MIT License.
 
 import { l10n } from 'vscode';
-import { PythonEnvironment } from '../../pythonEnvironments/info';
-import { fromNow } from './date';
 import { getPythonEnvDisplayName } from '../../interpreter/helpers';
 import { integrationTypeLabelKey, type IntegrationTypeLabelKey } from '../../notebooks/deepnote/integrationTypeLabels';
 import type { ConfigurableDatabaseIntegrationType } from '../../notebooks/deepnote/integrationTypes';
+import { PythonEnvironment } from '../../pythonEnvironments/info';
+import { fromNow } from './date';
 
 function getInterpreterDisplayName(interpreter: PythonEnvironment) {
     return getPythonEnvDisplayName(interpreter);
@@ -898,8 +898,8 @@ export namespace Integrations {
     export const unsupportedIntegrationType = (type: string) => l10n.t('Unsupported integration type: {0}', type);
 
     /**
-     * The one place integration type labels are written down. Keyed by bundle key so `integrationWebview` can
-     * spread it into the bundle whole; `l10n.t` extracts literal arguments only, so these stay literal.
+     * The one place integration type labels are written down.
+     * `l10n.t` extracts literal arguments only, so these stay literal.
      */
     export const typeLabels = {
         'integrationType.alloydb': l10n.t('Google AlloyDB'),

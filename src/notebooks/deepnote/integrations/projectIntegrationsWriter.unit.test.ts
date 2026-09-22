@@ -46,6 +46,7 @@ function stubWorkspace(opts: {
     dirtyDocuments?: Array<{ uri: Uri; onSave: (onDisk: Map<string, DeepnoteFile>) => void }>;
     hasWorkspaceFolder?: boolean;
     failWriteFor?: Set<string>;
+    onWrite?: (uri: Uri) => void;
 }): { writes: Map<string, DeepnoteFile> } {
     when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(
         opts.hasWorkspaceFolder === false ? undefined : [createWorkspaceFolder(Uri.file('/ws'))]
@@ -85,6 +86,7 @@ function stubWorkspace(opts: {
             return Promise.reject(new Error(`write failed for ${uri.fsPath}`));
         }
 
+        opts.onWrite?.(uri);
         writes.set(uri.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
 
         return Promise.resolve();
@@ -331,6 +333,38 @@ suite('addProjectIntegration', () => {
 
         assert.strictEqual(result.activePersisted, false);
         assert.deepStrictEqual(cacheUpdates, [], 'nothing reaches the cache that did not reach the disk');
+    });
+
+    test('moves the cache before sweeping siblings, so a save mid-sweep cannot revert the add', async () => {
+        const activeUri = Uri.file('/ws/active.deepnote');
+        const siblingUri = Uri.file('/ws/sibling.deepnote');
+        // Saving a notebook rebuilds its file from the cached project, so anything written while the cache still
+        // holds the old roster gets undone. Ordering is the only thing keeping that window shut.
+        const order: string[] = [];
+        const { writes } = stubWorkspace({
+            onDisk: [
+                { uri: activeUri, file: projectFile('nb-active') },
+                { uri: siblingUri, file: projectFile('nb-sibling') }
+            ],
+            discovered: [activeUri, siblingUri],
+            onWrite: (uri) => order.push(uri.fsPath === siblingUri.fsPath ? 'sibling-write' : 'active-write')
+        });
+        const mockManager = mock<IDeepnoteNotebookManager>();
+        when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(() => {
+            order.push('cache');
+
+            return true;
+        });
+
+        await addProjectIntegration({
+            activeFileUri: activeUri,
+            integration: ADDED,
+            notebookManager: instance(mockManager),
+            projectId: PROJECT_ID
+        });
+
+        assert.deepStrictEqual(order, ['active-write', 'cache', 'sibling-write']);
+        assert.deepStrictEqual(writes.get(siblingUri.fsPath)!.project.integrations, [ADDED]);
     });
 
     test('moves the cache to what the active file actually gained', async () => {

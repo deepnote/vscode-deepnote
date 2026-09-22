@@ -26,7 +26,7 @@ export interface AddProjectIntegrationParams {
     projectId: string;
 }
 
-interface WriteProjectFilesParams {
+interface WriteSiblingFilesParams {
     activeFileUri: Uri;
     projectId: string;
     resolve: ResolveIntegrations;
@@ -51,14 +51,14 @@ export async function persistProjectIntegrations(
 ): Promise<PersistIntegrationsResult> {
     const { notebookManager, projectId, integrations, activeFileUri } = params;
 
+    const resolve: ResolveIntegrations = () => integrations;
+
     // Refresh the cache first so live env/kernel behavior stays correct even if a disk write fails.
     notebookManager.updateProjectIntegrations(projectId, integrations);
 
-    const { active, siblingsFailed } = await writeProjectFiles({
-        activeFileUri,
-        projectId,
-        resolve: () => integrations
-    });
+    // findFiles only covers open folders, so write the active file explicitly (no open folder / out-of-workspace).
+    const active = await writeIntegrationsToFile({ fileUri: activeFileUri, projectId, resolve });
+    const siblingsFailed = await writeSiblingFiles({ activeFileUri, projectId, resolve });
 
     return { activePersisted: active.status === 'written', siblingsFailed };
 }
@@ -70,29 +70,27 @@ export async function persistProjectIntegrations(
  */
 export async function addProjectIntegration(params: AddProjectIntegrationParams): Promise<PersistIntegrationsResult> {
     const { activeFileUri, integration, notebookManager, projectId } = params;
+    const resolve: ResolveIntegrations = (existing) => [
+        ...existing.filter((entry) => entry.id !== integration.id),
+        integration
+    ];
 
-    const { active, siblingsFailed } = await writeProjectFiles({
-        activeFileUri,
-        projectId,
-        resolve: (existing) => [...existing.filter((entry) => entry.id !== integration.id), integration]
-    });
+    const active = await writeIntegrationsToFile({ fileUri: activeFileUri, projectId, resolve });
 
-    if (active.status !== 'written') {
-        return { activePersisted: false, siblingsFailed };
+    // Before the sibling sweep, not after: saving a notebook rebuilds its whole file from the cached project, so a
+    // cache still on the old roster would write the link straight back out mid-sweep.
+    if (active.status === 'written') {
+        notebookManager.updateProjectIntegrations(projectId, active.integrations);
     }
 
-    notebookManager.updateProjectIntegrations(projectId, active.integrations);
+    const siblingsFailed = await writeSiblingFiles({ activeFileUri, projectId, resolve });
 
-    return { activePersisted: true, siblingsFailed };
+    return { activePersisted: active.status === 'written', siblingsFailed };
 }
 
-async function writeProjectFiles(
-    params: WriteProjectFilesParams
-): Promise<{ active: IntegrationWriteOutcome; siblingsFailed: number }> {
+/** Writes every discovered `.deepnote` of the project except `activeFileUri`; returns how many failed. */
+async function writeSiblingFiles(params: WriteSiblingFilesParams): Promise<number> {
     const { activeFileUri, projectId, resolve } = params;
-
-    // findFiles only covers open folders, so write the active file explicitly (no open folder / out-of-workspace).
-    const active = await writeIntegrationsToFile({ fileUri: activeFileUri, projectId, resolve });
 
     const visited = new Set<string>([activeFileUri.toString()]);
     let siblingsFailed = 0;
@@ -103,7 +101,7 @@ async function writeProjectFiles(
         try {
             files = await workspace.findFiles(new RelativePattern(workspaceFolder, '**/*.deepnote'));
         } catch (error) {
-            logger.error('persistProjectIntegrations: failed to enumerate .deepnote files', error);
+            logger.error('projectIntegrationsWriter: failed to enumerate .deepnote files', error);
 
             continue;
         }
@@ -121,10 +119,10 @@ async function writeProjectFiles(
         }
     }
 
-    return { active, siblingsFailed };
+    return siblingsFailed;
 }
 
-/** Returns `'skipped'` (snapshot / other project), `'failed'`, or `'written'` for one `.deepnote` file. */
+/** Writes one `.deepnote` file: `skipped` for a snapshot or another project, `written` carries what it now holds. */
 async function writeIntegrationsToFile(params: WriteIntegrationsToFileParams): Promise<IntegrationWriteOutcome> {
     const { fileUri, projectId, resolve } = params;
 
@@ -141,7 +139,7 @@ async function writeIntegrationsToFile(params: WriteIntegrationsToFileParams): P
 
         // Flush an open dirty file and re-read, so live cell edits aren't clobbered by the watcher reload.
         if (!(await flushNotebookDocumentIfDirty(fileUri))) {
-            logger.warn(`persistProjectIntegrations: ${fileUri.path} — unsaved edits could not be saved`);
+            logger.warn(`projectIntegrationsWriter: ${fileUri.path} — unsaved edits could not be saved`);
 
             return { status: 'failed' };
         }
@@ -168,7 +166,7 @@ async function writeIntegrationsToFile(params: WriteIntegrationsToFileParams): P
 
         return { integrations, status: 'written' };
     } catch (error) {
-        logger.error(`persistProjectIntegrations: failed to update ${fileUri.path}`, error);
+        logger.error(`projectIntegrationsWriter: failed to update ${fileUri.path}`, error);
 
         return { status: 'failed' };
     }

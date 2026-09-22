@@ -392,7 +392,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
             const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
 
             assert.strictEqual(outcome, 'failed');
-            assert.isTrue(refreshSpy.notCalled, 'nothing reached disk for the kernels to pick up');
+            assert.isTrue(refreshSpy.notCalled, 'the refresh reserved for a successful link never runs');
             verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
             verify(
                 telemetry.trackEvent(

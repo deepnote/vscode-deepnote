@@ -309,28 +309,27 @@ describe('Deepnote — adding an integration another project already configured'
         }
     });
 
-    it('offers nothing while the other project has only declared an integration, never configured it', function () {
+    // Deliberately one test: every expectation reads state the `before` hook already captured, so
+    // splitting them buys separate mocha records and nothing else.
+    it('offers only what the other project configured, and links it without its credentials', function () {
+        // offers nothing while the other project has only declared an integration, never configured it
         expect(noneAvailableToastShown, '"nothing to reuse" notification').to.equal(true);
-    });
 
-    it('offers the integration the other project configured, and names that project', function () {
+        // offers the integration the other project configured, and names that project
         expect(pickedLabel, 'quick pick label').to.equal(INTEGRATION_NAME);
         expect(pickedDescription, 'quick pick description').to.equal(INTEGRATION_TYPE_LABEL);
         expect(pickedRowText, 'quick pick row').to.contain(`Used in: ${SOURCE_PROJECT_NAME}`);
-    });
 
-    it('confirms the link with a toast', function () {
+        // confirms the link with a toast
         expect(successToastShown, 'integration-added toast').to.equal(true);
-    });
 
-    it('writes the link into this project on disk, keeping the integration it already had', function () {
+        // writes the link into this project on disk, keeping the integration it already had
         expect(targetIntegrations, 'integrations declared by the target project').to.deep.equal([
             TARGET_OWN_INTEGRATION,
             { id: sharedIntegrationId, name: INTEGRATION_NAME, type: 'pgsql' }
         ]);
-    });
 
-    it('links the integration without copying its credentials into the file', function () {
+        // links the integration without copying its credentials into the file
         expect(targetFileContents, 'target project file').to.not.contain(INTEGRATION_HOST);
         expect(targetFileContents, 'target project file').to.not.contain(INTEGRATION_PASSWORD);
     });

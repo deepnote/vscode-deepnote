@@ -2,7 +2,15 @@ import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } fro
 import { assert } from 'chai';
 import sinon from 'sinon';
 import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
-import { CancellationToken, CancellationTokenSource, NotebookDocument, QuickPickItem, Uri, workspace } from 'vscode';
+import {
+    CancellationToken,
+    CancellationTokenSource,
+    NotebookDocument,
+    NotebookEditor,
+    QuickPickItem,
+    Uri,
+    workspace
+} from 'vscode';
 
 import { ITelemetryService } from '../../../platform/analytics/types';
 import { IExtensionContext } from '../../../platform/common/types';
@@ -300,6 +308,23 @@ suite('IntegrationManager.addExistingIntegration', () => {
         assert.strictEqual(outcome, 'failed');
         verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
     });
+
+    test('fails without writing when the panel names a notebook that is no longer open', async () => {
+        // The panel stayed open for the other project after its notebook closed; only this project's editor is left.
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([currentNotebook]);
+        when(mockedVSCodeNamespaces.window.visibleNotebookEditors).thenReturn([
+            { notebook: currentNotebook } as NotebookEditor
+        ]);
+
+        const outcome = await buildManager().addExistingIntegration(OTHER_URI.toString());
+
+        assert.strictEqual(outcome, 'failed');
+        assert.strictEqual(writes.size, 0, "the visible project must not be written on the stale panel's behalf");
+        assert.deepStrictEqual(cacheUpdates, []);
+        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+        verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+        verify(telemetry.trackEvent(anything())).never();
+    });
     // Every branch below reports trouble to the user; without cover they can each regress into silent success.
     const earlyFailures: { arrange: () => string; name: string }[] = [
         {
@@ -377,6 +402,19 @@ suite('IntegrationManager.addExistingIntegration', () => {
             ).once();
         });
     }
+
+    test('restores the cached integrations when the active file cannot be written', async () => {
+        writeFailures.add(CURRENT_URI.fsPath);
+
+        const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
+
+        assert.strictEqual(outcome, 'failed');
+        assert.deepStrictEqual(
+            cacheUpdates,
+            [[{ id: SHARED_CONFIG.id, name: SHARED_CONFIG.name, type: SHARED_CONFIG.type }], []],
+            'the cache ends on the roster it started from, so the retry still offers the integration'
+        );
+    });
 
     test('completes with a warning when a sibling file of the same project cannot be updated', async () => {
         onDiskSibling = projectFile(CURRENT_PROJECT_ID, 'notebook-sibling', []);

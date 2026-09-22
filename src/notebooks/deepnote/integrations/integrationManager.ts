@@ -100,6 +100,13 @@ export class IntegrationManager implements IIntegrationManager {
             return 'failed';
         }
 
+        // The panel keeps sending the URI it was opened for, so a closed notebook must not fall back to another project.
+        if (notebookUri && activeNotebook.uri.toString() !== notebookUri) {
+            void window.showErrorMessage(localize.Integrations.addExistingIntegrationNotebookClosed);
+
+            return 'failed';
+        }
+
         // `*.snapshot.deepnote` matches the notebook selector, so this command can run against a focused snapshot.
         // The writer skips snapshots, which would report a failure only after the cache had already been updated.
         if (isSnapshotFile(activeNotebook.uri)) {
@@ -215,6 +222,8 @@ export class IntegrationManager implements IIntegrationManager {
                 // panel after a save stay silent; do both explicitly for this project.
                 await this.refreshAfterProjectIntegrationsChange(projectId, activeNotebook);
             } else {
+                // The writer moves the cache before the disk write, so an unpersisted link must not stay in it.
+                this.notebookManager.updateProjectIntegrations(projectId, integrationsAtWrite);
                 void window.showErrorMessage(localize.Integrations.addExistingIntegrationFailed);
             }
         } catch (error) {

@@ -39,6 +39,7 @@ function stubWorkspace(opts: {
     projects: OnDiskProject[];
     unreadable?: Uri[];
     hasWorkspaceFolder?: boolean;
+    onFindFiles?: () => void;
     onRead?: (uri: Uri) => void;
 }): {
     reads: string[];
@@ -49,8 +50,13 @@ function stubWorkspace(opts: {
     );
 
     const discovered = [...opts.projects.map((project) => project.uri), ...(opts.unreadable ?? [])];
-    when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything(), anything())).thenReturn(
-        Promise.resolve(discovered)
+    when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything(), anything())).thenCall(
+        (_include: unknown, _exclude: unknown, _maxResults: unknown, token?: CancellationToken) => {
+            opts.onFindFiles?.();
+
+            // Mirrors the real API, which resolves to no results when its token trips instead of rejecting.
+            return Promise.resolve(token?.isCancellationRequested ? [] : discovered);
+        }
     );
     // `persistProjectIntegrations` enumerates without a token; the scan passes one.
     when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve(discovered));
@@ -288,6 +294,53 @@ suite('existingIntegrationPicker', () => {
 
                 assert.deepStrictEqual(result, { cancelled: true, conflictingIds: [], integrations: [] });
                 assert.deepStrictEqual(reads, [Uri.file('/ws/a.deepnote').fsPath], 'the scan must not read on');
+            } finally {
+                cts.dispose();
+            }
+        });
+
+        test('reports cancellation when the token trips while the last file is read', async () => {
+            const cts = new CancellationTokenSource();
+
+            try {
+                stubWorkspace({
+                    projects: [
+                        {
+                            uri: Uri.file('/ws/a.deepnote'),
+                            projectId: 'project-a',
+                            integrations: [{ id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }]
+                        }
+                    ],
+                    onRead: () => cts.cancel()
+                });
+
+                const result = await collect([], [pgConfig, bqConfig], cts.token);
+
+                assert.deepStrictEqual(result, { cancelled: true, conflictingIds: [], integrations: [] });
+            } finally {
+                cts.dispose();
+            }
+        });
+
+        test('reports cancellation when the token trips during file discovery', async () => {
+            const cts = new CancellationTokenSource();
+
+            try {
+                const { reads } = stubWorkspace({
+                    projects: [
+                        {
+                            uri: Uri.file('/ws/a.deepnote'),
+                            projectId: 'project-a',
+                            integrations: [{ id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }]
+                        }
+                    ],
+                    onFindFiles: () => cts.cancel()
+                });
+
+                const result = await collect([], [pgConfig, bqConfig], cts.token);
+
+                assert.deepStrictEqual(result, { cancelled: true, conflictingIds: [], integrations: [] });
+                assert.deepStrictEqual(reads, [], 'discovery never finished, so no file was visited');
             } finally {
                 cts.dispose();
             }

@@ -153,6 +153,11 @@ export async function collectReusableIntegrations(
         }
     }
 
+    // `workspace.findFiles` resolves empty when its token trips and the per-file awaits are not token-aware.
+    if (token?.isCancellationRequested) {
+        return { cancelled: true, conflictingIds: [], integrations: [] };
+    }
+
     // A conflict in any project disqualifies the id everywhere: the stored config is the single shared truth.
     for (const id of conflictingIds) {
         candidates.delete(id);

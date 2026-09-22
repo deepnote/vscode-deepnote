@@ -868,6 +868,9 @@ export namespace Integrations {
     export const addExistingIntegrationSnapshotUnsupported = l10n.t(
         'Integrations cannot be added to a snapshot file. Open the project notebook and try again.'
     );
+    export const addExistingIntegrationNotebookClosed = l10n.t(
+        'The notebook this integrations panel was opened for is no longer open. Open it again and retry.'
+    );
     export const addExistingIntegrationPlaceholder = l10n.t(
         'Select an integration configured in another project of this workspace'
     );

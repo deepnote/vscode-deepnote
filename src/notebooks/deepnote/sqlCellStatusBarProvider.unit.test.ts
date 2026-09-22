@@ -1292,6 +1292,35 @@ suite('SqlCellStatusBarProvider', () => {
             ).once();
         });
 
+        test('refuses to switch the integration of a snapshot notebook', async () => {
+            // `*.snapshot.deepnote` matches the notebook selector, so the command is reachable there; switching
+            // would edit the record and rewrite the real project files behind it. Everything else is arranged so
+            // the switch would go through, leaving the snapshot check as the only thing that can stop it.
+            const newIntegrationId = 'new-integration';
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: 'old-integration' },
+                notebookMetadata: { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' },
+                notebookUri: Uri.file('/ws/report_project-1_nb_main.snapshot.deepnote')
+            });
+
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
+                project: { integrations: [{ id: newIntegrationId, name: 'New Integration', type: 'pgsql' }] }
+            } as any);
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)
+            );
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            await switchIntegrationHandler(cell);
+
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            verify(commandTelemetry.trackEvent(anything())).never();
+        });
+
         test('does not update if user cancels quick pick', async () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' };
             const cell = createMockCell({

@@ -29,6 +29,7 @@ import {
     toTelemetryIntegrationType
 } from '../../platform/notebooks/deepnote/integrationTypes';
 import { addProjectIntegration } from './integrations/projectIntegrationsWriter';
+import { isSnapshotFile } from './snapshots/snapshotFiles';
 import { IDeepnoteNotebookManager, RawProjectIntegration } from '../types';
 import { logger } from '../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
@@ -491,6 +492,14 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
     }
 
     private async switchIntegration(cell: NotebookCell): Promise<void> {
+        // A snapshot matches the notebook selector, but it records a past run: switching would edit that record
+        // and, through `addToProjectIntegrations`, rewrite the real project files behind it.
+        if (isSnapshotFile(cell.notebook.uri)) {
+            void window.showErrorMessage(Integrations.switchIntegrationSnapshotUnsupported);
+
+            return;
+        }
+
         const currentIntegrationId = this.getIntegrationId(cell);
 
         // Get the project ID from the notebook metadata

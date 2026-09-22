@@ -1,5 +1,6 @@
 import { CancellationToken, RelativePattern, Uri, workspace } from 'vscode';
 
+import { Cancellation } from '../../../platform/common/cancellation';
 import { readDeepnoteProjectFile } from '../../../platform/deepnote/deepnoteProjectFileReader';
 import { logger } from '../../../platform/logging';
 import {
@@ -27,13 +28,11 @@ export interface CollectReusableIntegrationsParams {
     integrationStorage: IIntegrationStorage;
     /** The project being extended; its own `.deepnote` files are skipped. */
     projectId: string;
-    /** Stops the scan; the partial result is only fit to be discarded. */
+    /** Aborts the scan with a `CancellationError` rather than handing back a partial result. */
     token?: CancellationToken;
 }
 
 export interface CollectReusableIntegrationsResult {
-    /** The scan stopped early, so the other two fields are partial and must not be written anywhere. */
-    cancelled: boolean;
     /**
      * Ids skipped because some project declares a type the stored config disagrees with: linking one would put a
      * type on this project that the credentials cannot back.
@@ -59,6 +58,8 @@ export interface AttachExistingIntegrationParams {
  *
  * Integrations configured only in `.deepnote.env.yaml` are not offered: that file already applies to every project
  * under it, and the panel cannot write that layer.
+ *
+ * @throws `CancellationError` when `token` trips, so a half-finished scan can never be mistaken for a complete one.
  */
 export async function collectReusableIntegrations(
     params: CollectReusableIntegrationsParams
@@ -70,9 +71,7 @@ export async function collectReusableIntegrations(
     const visited = new Set<string>();
 
     for (const workspaceFolder of workspace.workspaceFolders || []) {
-        if (token?.isCancellationRequested) {
-            return { cancelled: true, conflictingIds: [], integrations: [] };
-        }
+        Cancellation.throwIfCanceled(token);
 
         let files: Uri[];
 
@@ -90,9 +89,7 @@ export async function collectReusableIntegrations(
         }
 
         for (const fileUri of files) {
-            if (token?.isCancellationRequested) {
-                return { cancelled: true, conflictingIds: [], integrations: [] };
-            }
+            Cancellation.throwIfCanceled(token);
 
             const key = fileUri.toString();
 
@@ -154,9 +151,7 @@ export async function collectReusableIntegrations(
     }
 
     // `workspace.findFiles` resolves empty when its token trips and the per-file awaits are not token-aware.
-    if (token?.isCancellationRequested) {
-        return { cancelled: true, conflictingIds: [], integrations: [] };
-    }
+    Cancellation.throwIfCanceled(token);
 
     // A conflict in any project disqualifies the id everywhere: the stored config is the single shared truth.
     for (const id of conflictingIds) {
@@ -170,7 +165,7 @@ export async function collectReusableIntegrations(
         }))
         .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
-    return { cancelled: false, conflictingIds: Array.from(conflictingIds).sort(), integrations };
+    return { conflictingIds: Array.from(conflictingIds).sort(), integrations };
 }
 
 /**

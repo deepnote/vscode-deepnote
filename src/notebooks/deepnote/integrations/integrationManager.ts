@@ -2,6 +2,7 @@ import { inject, injectable, optional } from 'inversify';
 import { commands, l10n, NotebookDocument, ProgressLocation, QuickPickItem, window, workspace } from 'vscode';
 
 import { CommandOutcome, ITelemetryService } from '../../../platform/analytics/types';
+import { isCancellationError } from '../../../platform/common/cancellation';
 import { IExtensionContext } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
 import * as localize from '../../../platform/common/utils/localize';
@@ -18,6 +19,7 @@ import { DatabaseIntegrationType, databaseIntegrationTypes } from '@deepnote/dat
 import {
     attachExistingIntegration,
     collectReusableIntegrations,
+    CollectReusableIntegrationsResult,
     ReusableIntegration
 } from './existingIntegrationPicker';
 import { isSnapshotFile } from '../snapshots/snapshotFiles';
@@ -132,24 +134,32 @@ export class IntegrationManager implements IIntegrationManager {
             return 'failed';
         }
 
-        const { cancelled, conflictingIds, integrations } = await window.withProgress(
-            {
-                cancellable: true,
-                location: ProgressLocation.Notification,
-                title: localize.Integrations.addExistingIntegrationScanning
-            },
-            (_progress, token) =>
-                collectReusableIntegrations({
-                    excludeIntegrationIds: new Set(currentIntegrations.map((entry) => entry.id)),
-                    integrationStorage: this.integrationStorage,
-                    projectId,
-                    token
-                })
-        );
+        let scan: CollectReusableIntegrationsResult;
 
-        if (cancelled) {
-            return 'cancelled';
+        try {
+            scan = await window.withProgress(
+                {
+                    cancellable: true,
+                    location: ProgressLocation.Notification,
+                    title: localize.Integrations.addExistingIntegrationScanning
+                },
+                (_progress, token) =>
+                    collectReusableIntegrations({
+                        excludeIntegrationIds: new Set(currentIntegrations.map((entry) => entry.id)),
+                        integrationStorage: this.integrationStorage,
+                        projectId,
+                        token
+                    })
+            );
+        } catch (error) {
+            if (isCancellationError(error as Error)) {
+                return 'cancelled';
+            }
+
+            throw error;
         }
+
+        const { conflictingIds, integrations } = scan;
 
         if (conflictingIds.length > 0) {
             void window.showWarningMessage(

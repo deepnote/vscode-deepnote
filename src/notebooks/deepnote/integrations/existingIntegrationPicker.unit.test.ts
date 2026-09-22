@@ -1,7 +1,8 @@
 import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
-import { assert } from 'chai';
+import { assert, use } from 'chai';
+import chaiAsPromised from 'chai-as-promised';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { CancellationToken, CancellationTokenSource, Uri, workspace } from 'vscode';
+import { CancellationError, CancellationToken, CancellationTokenSource, Uri, workspace } from 'vscode';
 
 import { ConfigurableDatabaseIntegrationConfig } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
@@ -14,6 +15,8 @@ import {
 } from './existingIntegrationPicker';
 import { buildGoogleOauthIntegration, buildPostgresIntegration } from './federatedAuth/federatedAuthTestHelpers';
 import { IIntegrationStorage } from './types';
+
+use(chaiAsPromised);
 
 const CURRENT_PROJECT_ID = 'project-current';
 
@@ -153,7 +156,7 @@ suite('existingIntegrationPicker', () => {
                 { id: 'pg-shared', name: 'Shared Postgres', projectNames: ['Alpha', 'Beta'], type: 'pgsql' },
                 { id: 'bq-oauth', name: 'Team BigQuery', projectNames: ['Beta'], type: 'big-query' }
             ];
-            assert.deepStrictEqual(result, { cancelled: false, conflictingIds: [], integrations: expected });
+            assert.deepStrictEqual(result, { conflictingIds: [], integrations: expected });
         });
 
         test('takes the name from the stored config, not from whichever project was read first', async () => {
@@ -242,7 +245,7 @@ suite('existingIntegrationPicker', () => {
 
             const result = await collect();
 
-            assert.deepStrictEqual(result, { cancelled: false, conflictingIds: ['pg-shared'], integrations: [] });
+            assert.deepStrictEqual(result, { conflictingIds: ['pg-shared'], integrations: [] });
         });
 
         test('ignores snapshot files and keeps going past an unreadable file', async () => {
@@ -290,9 +293,8 @@ suite('existingIntegrationPicker', () => {
                     onRead: () => cts.cancel()
                 });
 
-                const result = await collect([], [pgConfig, bqConfig], cts.token);
+                await assert.isRejected(collect([], [pgConfig, bqConfig], cts.token), CancellationError);
 
-                assert.deepStrictEqual(result, { cancelled: true, conflictingIds: [], integrations: [] });
                 assert.deepStrictEqual(reads, [Uri.file('/ws/a.deepnote').fsPath], 'the scan must not read on');
             } finally {
                 cts.dispose();
@@ -314,9 +316,7 @@ suite('existingIntegrationPicker', () => {
                     onRead: () => cts.cancel()
                 });
 
-                const result = await collect([], [pgConfig, bqConfig], cts.token);
-
-                assert.deepStrictEqual(result, { cancelled: true, conflictingIds: [], integrations: [] });
+                await assert.isRejected(collect([], [pgConfig, bqConfig], cts.token), CancellationError);
             } finally {
                 cts.dispose();
             }
@@ -337,9 +337,8 @@ suite('existingIntegrationPicker', () => {
                     onFindFiles: () => cts.cancel()
                 });
 
-                const result = await collect([], [pgConfig, bqConfig], cts.token);
+                await assert.isRejected(collect([], [pgConfig, bqConfig], cts.token), CancellationError);
 
-                assert.deepStrictEqual(result, { cancelled: true, conflictingIds: [], integrations: [] });
                 assert.deepStrictEqual(reads, [], 'discovery never finished, so no file was visited');
             } finally {
                 cts.dispose();
@@ -351,7 +350,7 @@ suite('existingIntegrationPicker', () => {
 
             const result = await collect();
 
-            assert.deepStrictEqual(result, { cancelled: false, conflictingIds: [], integrations: [] });
+            assert.deepStrictEqual(result, { conflictingIds: [], integrations: [] });
         });
     });
 

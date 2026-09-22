@@ -191,23 +191,12 @@ export class IntegrationManager implements IIntegrationManager {
         }
 
         const { integration } = picked;
-        // The file watcher replaces the cached project on any external write — including one that changes only
-        // the integrations, which it reloads past without a UI event — so the pre-pick array can be stale, and
-        // the writer stamps whatever it is given onto every `.deepnote` file of the project.
-        const integrationsAtWrite = this.getCachedProjectIntegrations(projectId, notebookId);
-
-        if (!integrationsAtWrite) {
-            void window.showErrorMessage(localize.Integrations.addExistingIntegrationFailed);
-
-            return 'failed';
-        }
 
         let outcome: CommandOutcome = 'failed';
 
         try {
             const { activePersisted, siblingsFailed } = await attachExistingIntegration({
                 activeFileUri: activeNotebook.uri,
-                currentIntegrations: integrationsAtWrite,
                 integration,
                 notebookManager: this.notebookManager,
                 projectId
@@ -232,8 +221,6 @@ export class IntegrationManager implements IIntegrationManager {
                 // panel after a save stay silent; do both explicitly for this project.
                 await this.refreshAfterProjectIntegrationsChange(projectId, activeNotebook);
             } else {
-                // The writer moves the cache before the disk write, so an unpersisted link must not stay in it.
-                this.notebookManager.updateProjectIntegrations(projectId, integrationsAtWrite);
                 void window.showErrorMessage(localize.Integrations.addExistingIntegrationFailed);
             }
         } catch (error) {
@@ -261,10 +248,7 @@ export class IntegrationManager implements IIntegrationManager {
         return uri ? String(uri) : undefined;
     }
 
-    /**
-     * Unfiltered on purpose: `attachExistingIntegration` writes this array back, so anything dropped here is lost.
-     * `undefined` means the project is not cached, which must not be written back as an empty list.
-     */
+    /** The integrations the project declares, or `undefined` when it is not cached at all. */
     private getCachedProjectIntegrations(projectId: string, notebookId: string): RawProjectIntegration[] | undefined {
         const project = this.notebookManager.getProjectForNotebook(projectId, notebookId);
 

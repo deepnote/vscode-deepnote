@@ -76,6 +76,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
     let storedConfigs: ConfigurableDatabaseIntegrationConfig[];
     let onDiskOther: DeepnoteFile | undefined;
     let onDiskSibling: DeepnoteFile | undefined;
+    let onDiskCurrent: DeepnoteFile | undefined;
 
     setup(() => {
         resetVSCodeMocks();
@@ -93,6 +94,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
             { id: SHARED_CONFIG.id, name: SHARED_CONFIG.name, type: SHARED_CONFIG.type }
         ]);
         onDiskSibling = undefined;
+        onDiskCurrent = undefined;
         cacheUpdateError = undefined;
         storedConfigs = [SHARED_CONFIG];
         writes = new Map();
@@ -124,7 +126,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
         const mockFs = mock<typeof workspace.fs>();
         when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
             const file = new Map([
-                [CURRENT_URI.fsPath, currentProject],
+                [CURRENT_URI.fsPath, onDiskCurrent ?? currentProject],
                 [OTHER_URI.fsPath, onDiskOther],
                 [SIBLING_URI.fsPath, onDiskSibling]
             ]).get(uri.fsPath);
@@ -403,7 +405,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
         });
     }
 
-    test('restores the cached integrations when the active file cannot be written', async () => {
+    test('leaves the cache alone when the active file cannot be written', async () => {
         writeFailures.add(CURRENT_URI.fsPath);
 
         const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
@@ -411,8 +413,8 @@ suite('IntegrationManager.addExistingIntegration', () => {
         assert.strictEqual(outcome, 'failed');
         assert.deepStrictEqual(
             cacheUpdates,
-            [[{ id: SHARED_CONFIG.id, name: SHARED_CONFIG.name, type: SHARED_CONFIG.type }], []],
-            'the cache ends on the roster it started from, so the retry still offers the integration'
+            [],
+            'an unpersisted link never enters the cache, so the retry still offers the integration'
         );
     });
 
@@ -430,8 +432,27 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
     test('writes the integrations as they stand after the pick, not the snapshot taken before it', async () => {
         when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items: QuickPickItem[]) => {
-            // What the file watcher does to the cache when another writer touches the file mid-pick.
+            // Another writer touching the project file mid-pick; the writer merges into what it finds there.
             currentProject = projectFile(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID, [
+                { id: 'added-meanwhile', name: 'Added meanwhile', type: 'mysql' }
+            ]);
+
+            return Promise.resolve(items[0]);
+        });
+
+        const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
+
+        assert.strictEqual(outcome, 'completed');
+        assert.deepStrictEqual(writes.get(CURRENT_URI.fsPath)?.project.integrations, [
+            { id: 'added-meanwhile', name: 'Added meanwhile', type: 'mysql' },
+            { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
+        ]);
+    });
+
+    test('keeps an entry the file gained while the picker was open, though the cache never saw it', async () => {
+        when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items: QuickPickItem[]) => {
+            // Only disk moves: the cached project stays on the roster the command read before the scan.
+            onDiskCurrent = projectFile(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID, [
                 { id: 'added-meanwhile', name: 'Added meanwhile', type: 'mysql' }
             ]);
 

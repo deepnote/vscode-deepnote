@@ -389,13 +389,8 @@ suite('existingIntegrationPicker', () => {
                     }
                 ]
             });
-            const currentIntegrations: ProjectIntegration[] = [
-                { id: 'bq-own', name: 'Own BigQuery', type: 'big-query' }
-            ];
-
             const result = await attachExistingIntegration({
                 activeFileUri: activeUri,
-                currentIntegrations,
                 integration: shared,
                 notebookManager,
                 projectId: CURRENT_PROJECT_ID
@@ -413,17 +408,16 @@ suite('existingIntegrationPicker', () => {
         });
 
         test('passes entries of types it cannot manage (e.g. pandas-dataframe) through verbatim', async () => {
-            const { writes } = stubWorkspace({
-                projects: [{ uri: activeUri, projectId: CURRENT_PROJECT_ID }]
-            });
             const currentIntegrations: RawProjectIntegration[] = [
                 { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' },
                 { id: 'future', name: 'Unknown to this build', type: 'some-future-type' }
             ];
+            const { writes } = stubWorkspace({
+                projects: [{ uri: activeUri, projectId: CURRENT_PROJECT_ID, integrations: currentIntegrations }]
+            });
 
             await attachExistingIntegration({
                 activeFileUri: activeUri,
-                currentIntegrations,
                 integration: shared,
                 notebookManager,
                 projectId: CURRENT_PROJECT_ID
@@ -441,12 +435,17 @@ suite('existingIntegrationPicker', () => {
 
         test('replaces rather than duplicates an entry whose id the project already declares', async () => {
             const { writes } = stubWorkspace({
-                projects: [{ uri: activeUri, projectId: CURRENT_PROJECT_ID }]
+                projects: [
+                    {
+                        uri: activeUri,
+                        projectId: CURRENT_PROJECT_ID,
+                        integrations: [{ id: 'pg-shared', name: 'Old name', type: 'pgsql' }]
+                    }
+                ]
             });
 
             await attachExistingIntegration({
                 activeFileUri: activeUri,
-                currentIntegrations: [{ id: 'pg-shared', name: 'Old name', type: 'pgsql' }],
                 integration: shared,
                 notebookManager,
                 projectId: CURRENT_PROJECT_ID

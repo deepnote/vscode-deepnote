@@ -1,6 +1,7 @@
+import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
-import { CancellationToken, CancellationTokenSource, EventEmitter, NotebookCell } from 'vscode';
+import { CancellationToken, CancellationTokenSource, EventEmitter, NotebookCell, Uri, workspace } from 'vscode';
 
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
@@ -11,8 +12,31 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock
 import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../types';
-import { createMockCell } from './deepnoteTestHelpers';
+import { createDeepnoteFile, createDeepnoteProject, createMockCell } from './deepnoteTestHelpers';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+
+/** Puts a readable project file behind `uri`; the returned map captures what the integrations writer persists. */
+function stubProjectFileOnDisk(uri: Uri, projectId: string): Map<string, DeepnoteFile> {
+    const onDisk = createDeepnoteFile({ project: createDeepnoteProject({ id: projectId, name: projectId }) });
+    const writes = new Map<string, DeepnoteFile>();
+    const mockFs = mock<typeof workspace.fs>();
+
+    when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(undefined);
+    when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
+    when(mockFs.readFile(anything())).thenCall((target: Uri) =>
+        target.fsPath === uri.fsPath
+            ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(onDisk)))
+            : Promise.reject(new Error(`no readFile stub for ${target.fsPath}`))
+    );
+    when(mockFs.writeFile(anything(), anything())).thenCall((target: Uri, bytes: Uint8Array) => {
+        writes.set(target.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
+
+        return Promise.resolve();
+    });
+    when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+    return writes;
+}
 
 /**
  * A merged-config source that yields nothing, so integrations resolve from SecretStorage alone.
@@ -1224,6 +1248,7 @@ suite('SqlCellStatusBarProvider', () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' };
             const cell = createMockCell({ languageId: 'sql', metadata: {}, notebookMetadata });
             const fileOnlyId = 'file-only-bq';
+            const writes = stubProjectFileOnDisk(cell.notebook.uri, 'project-1');
 
             const envVars = mock<ISqlIntegrationEnvVarsProvider>();
             when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
@@ -1248,9 +1273,15 @@ suite('SqlCellStatusBarProvider', () => {
 
             await switchIntegrationHandler(cell);
 
+            const expected = [{ id: fileOnlyId, name: 'BigQuery from file', type: 'big-query' }];
             const [projectId, integrations] = capture(commandNotebookManager.updateProjectIntegrations).last();
             assert.strictEqual(projectId, 'project-1');
-            assert.deepStrictEqual(integrations, [{ id: fileOnlyId, name: 'BigQuery from file', type: 'big-query' }]);
+            assert.deepStrictEqual(integrations, expected);
+            assert.deepStrictEqual(
+                writes.get(cell.notebook.uri.fsPath)?.project.integrations,
+                expected,
+                'the entry reaches the file, not just the cache'
+            );
             verify(
                 fileTelemetry.trackEvent(
                     deepEqual({

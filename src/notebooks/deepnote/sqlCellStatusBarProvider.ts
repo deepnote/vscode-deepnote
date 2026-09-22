@@ -28,7 +28,7 @@ import {
     isConfigurableDatabaseIntegrationType,
     toTelemetryIntegrationType
 } from '../../platform/notebooks/deepnote/integrationTypes';
-import { persistProjectIntegrations } from './integrations/projectIntegrationsWriter';
+import { addProjectIntegration } from './integrations/projectIntegrationsWriter';
 import { IDeepnoteNotebookManager, RawProjectIntegration } from '../types';
 import { logger } from '../../platform/logging';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
@@ -432,15 +432,10 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         this._onDidChangeCellStatusBarItems.fire();
     }
 
-    /**
-     * Appends a picked integration to the project's integrations so the `.deepnote` file records what it uses.
-     * Additive only: existing entries pass through verbatim, never filtered, because a project's integrations
-     * are shared with sibling notebooks whose blocks this cannot see — dropping one would be data loss.
-     */
+    /** Appends a picked integration to the project's integrations so the `.deepnote` file records what it uses. */
     private async addToProjectIntegrations(
         cell: NotebookCell,
         projectId: string,
-        projectIntegrations: RawProjectIntegration[],
         selected: RawProjectIntegration
     ): Promise<void> {
         // No usable `type` means no valid entry; leave it out rather than guessing one.
@@ -449,11 +444,11 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
         }
 
         try {
-            await persistProjectIntegrations({
+            await addProjectIntegration({
+                activeFileUri: cell.notebook.uri,
+                integration: selected,
                 notebookManager: this.notebookManager,
-                projectId,
-                integrations: [...projectIntegrations, selected],
-                activeFileUri: cell.notebook.uri
+                projectId
             });
         } catch (error) {
             // The cell metadata edit already succeeded, so the selection stands either way.
@@ -638,7 +633,7 @@ export class SqlCellStatusBarProvider implements NotebookCellStatusBarItemProvid
             selectedIntegration !== undefined &&
             !projectIntegrations.some((integration) => integration.id === selectedId);
         if (selectedIntegration && fromEnvFile) {
-            await this.addToProjectIntegrations(cell, projectId, projectIntegrations, selectedIntegration);
+            await this.addToProjectIntegrations(cell, projectId, selectedIntegration);
         }
 
         // Trigger status bar update

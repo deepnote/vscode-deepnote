@@ -12,17 +12,22 @@ import {
     createDeepnoteProject,
     createWorkspaceFolder
 } from '../deepnoteTestHelpers';
-import { persistProjectIntegrations } from './projectIntegrationsWriter';
+import { addProjectIntegration, persistProjectIntegrations } from './projectIntegrationsWriter';
 
 const PROJECT_ID = 'project-1';
 
 const NEW_INTEGRATIONS: ProjectIntegration[] = [{ id: 'int-new', name: 'New BigQuery', type: 'big-query' }];
 
-function projectFile(notebookId: string, projectId: string = PROJECT_ID): DeepnoteFile {
+function projectFile(
+    notebookId: string,
+    projectId: string = PROJECT_ID,
+    integrations: ProjectIntegration[] = []
+): DeepnoteFile {
     return createDeepnoteFile({
         metadata: { createdAt: '2020-01-01T00:00:00Z', modifiedAt: '2021-01-01T00:00:00Z' },
         project: createDeepnoteProject({
             id: projectId,
+            integrations,
             name: 'Proj',
             notebooks: [
                 createDeepnoteNotebook({
@@ -235,5 +240,114 @@ suite('persistProjectIntegrations', () => {
         assert.deepStrictEqual(result, { activePersisted: true, siblingsFailed: 0 });
         assert.deepStrictEqual(writes.get(activeUri.fsPath)!.project.integrations, NEW_INTEGRATIONS);
         assert.isFalse(writes.has(siblingUri.fsPath), 'integrations must NOT be written into the swapped project');
+    });
+});
+
+suite('addProjectIntegration', () => {
+    const ADDED: ProjectIntegration = { id: 'int-added', name: 'Added Postgres', type: 'pgsql' };
+
+    let cacheUpdates: ProjectIntegration[][];
+    let managerInstance: IDeepnoteNotebookManager;
+
+    setup(() => {
+        resetVSCodeMocks();
+
+        cacheUpdates = [];
+        const mockManager = mock<IDeepnoteNotebookManager>();
+        when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(
+            (_projectId: string, integrations: ProjectIntegration[]) => {
+                cacheUpdates.push(integrations);
+
+                return true;
+            }
+        );
+        managerInstance = instance(mockManager);
+    });
+
+    test('merges into each file rather than stamping one roster over them all', async () => {
+        const activeUri = Uri.file('/ws/active.deepnote');
+        const siblingUri = Uri.file('/ws/sibling.deepnote');
+        const ownEntry: ProjectIntegration = { id: 'int-own', name: 'Own BigQuery', type: 'big-query' };
+        const { writes } = stubWorkspace({
+            onDisk: [
+                { uri: activeUri, file: projectFile('nb-active') },
+                { uri: siblingUri, file: projectFile('nb-sibling', PROJECT_ID, [ownEntry]) }
+            ],
+            discovered: [activeUri, siblingUri]
+        });
+
+        const result = await addProjectIntegration({
+            activeFileUri: activeUri,
+            integration: ADDED,
+            notebookManager: managerInstance,
+            projectId: PROJECT_ID
+        });
+
+        assert.deepStrictEqual(result, { activePersisted: true, siblingsFailed: 0 });
+        assert.deepStrictEqual(writes.get(activeUri.fsPath)!.project.integrations, [ADDED]);
+        assert.deepStrictEqual(
+            writes.get(siblingUri.fsPath)!.project.integrations,
+            [ownEntry, ADDED],
+            "the sibling's own entry survives an add driven from another file"
+        );
+    });
+
+    test('replaces an id the file already declares instead of duplicating it', async () => {
+        const activeUri = Uri.file('/ws/active.deepnote');
+        const { writes } = stubWorkspace({
+            onDisk: [
+                {
+                    uri: activeUri,
+                    file: projectFile('nb-active', PROJECT_ID, [{ ...ADDED, name: 'Stale name' }])
+                }
+            ],
+            discovered: [activeUri]
+        });
+
+        await addProjectIntegration({
+            activeFileUri: activeUri,
+            integration: ADDED,
+            notebookManager: managerInstance,
+            projectId: PROJECT_ID
+        });
+
+        assert.deepStrictEqual(writes.get(activeUri.fsPath)!.project.integrations, [ADDED]);
+    });
+
+    test('leaves the cache untouched when the active file cannot be written', async () => {
+        const activeUri = Uri.file('/ws/active.deepnote');
+        stubWorkspace({
+            onDisk: [{ uri: activeUri, file: projectFile('nb-active') }],
+            discovered: [activeUri],
+            failWriteFor: new Set([activeUri.fsPath])
+        });
+
+        const result = await addProjectIntegration({
+            activeFileUri: activeUri,
+            integration: ADDED,
+            notebookManager: managerInstance,
+            projectId: PROJECT_ID
+        });
+
+        assert.strictEqual(result.activePersisted, false);
+        assert.deepStrictEqual(cacheUpdates, [], 'nothing reaches the cache that did not reach the disk');
+    });
+
+    test('moves the cache to what the active file actually gained', async () => {
+        const activeUri = Uri.file('/ws/active.deepnote');
+        const ownEntry: ProjectIntegration = { id: 'int-own', name: 'Own BigQuery', type: 'big-query' };
+        stubWorkspace({
+            onDisk: [{ uri: activeUri, file: projectFile('nb-active', PROJECT_ID, [ownEntry]) }],
+            discovered: [activeUri]
+        });
+
+        await addProjectIntegration({
+            activeFileUri: activeUri,
+            integration: ADDED,
+            notebookManager: managerInstance,
+            projectId: PROJECT_ID
+        });
+
+        assert.deepStrictEqual(cacheUpdates, [[ownEntry, ADDED]]);
     });
 });

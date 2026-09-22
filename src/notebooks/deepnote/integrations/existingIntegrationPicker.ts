@@ -7,9 +7,9 @@ import {
     ConfigurableDatabaseIntegrationType,
     isConfigurableDatabaseIntegrationType
 } from '../../../platform/notebooks/deepnote/integrationTypes';
-import { IDeepnoteNotebookManager, ProjectIntegration, RawProjectIntegration } from '../../types';
+import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
 import { isSnapshotFile } from '../snapshots/snapshotFiles';
-import { PersistIntegrationsResult, persistProjectIntegrations } from './projectIntegrationsWriter';
+import { addProjectIntegration, PersistIntegrationsResult } from './projectIntegrationsWriter';
 import { IIntegrationStorage } from './types';
 
 /** An integration another project in the workspace has credentials stored for, so linking it needs no re-entry. */
@@ -43,8 +43,6 @@ export interface CollectReusableIntegrationsResult {
 
 export interface AttachExistingIntegrationParams {
     activeFileUri: Uri;
-    /** The project's full integration list: every entry is written back verbatim, so a filtered array drops entries. */
-    currentIntegrations: readonly RawProjectIntegration[];
     integration: ReusableIntegration;
     notebookManager: IDeepnoteNotebookManager;
     projectId: string;
@@ -173,10 +171,9 @@ export async function collectReusableIntegrations(
  * file and every sibling `.deepnote` file are updated together. Re-linking an id already there replaces its entry.
  */
 export function attachExistingIntegration(params: AttachExistingIntegrationParams): Promise<PersistIntegrationsResult> {
-    const { activeFileUri, currentIntegrations, integration, notebookManager, projectId } = params;
+    const { activeFileUri, integration, notebookManager, projectId } = params;
 
     const linked: ProjectIntegration = { id: integration.id, name: integration.name, type: integration.type };
-    const integrations = [...currentIntegrations.filter((entry) => entry.id !== integration.id), linked];
 
-    return persistProjectIntegrations({ activeFileUri, integrations, notebookManager, projectId });
+    return addProjectIntegration({ activeFileUri, integration: linked, notebookManager, projectId });
 }

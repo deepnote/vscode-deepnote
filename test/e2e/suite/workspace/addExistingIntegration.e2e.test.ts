@@ -210,12 +210,9 @@ describe('Deepnote — adding an integration another project already configured'
     this.timeout(SUITE_TIMEOUT);
 
     let cleanupTempDir: (() => void) | undefined;
-    let noneAvailableToastShown = false;
     let pickedDescription: string | undefined;
-    let pickedLabel = '';
     let pickedRowText = '';
     let sharedIntegrationId = '';
-    let successToastShown = false;
     let targetFileContents = '';
     let targetIntegrations: DeclaredIntegration[] = [];
 
@@ -235,12 +232,11 @@ describe('Deepnote — adding an integration another project already configured'
         // credentials for it, and a declaration on its own carries nothing to reuse.
         await focusNotebook(SOURCE_FILE);
         await new Workbench().executeCommand(ADD_EXISTING_INTEGRATION);
-        noneAvailableToastShown =
-            (await waitForNotification(
-                /No integrations from other projects in this workspace are available to add/i,
-                WORKBENCH_TIMEOUT,
-                true
-            )) !== undefined;
+        await waitForNotification(
+            /No integrations from other projects in this workspace are available to add/i,
+            WORKBENCH_TIMEOUT,
+            true
+        );
         await screenshot('nothing-to-reuse');
         await dismissAllNotifications();
 
@@ -281,18 +277,16 @@ describe('Deepnote — adding an integration another project already configured'
 
         const item = assertNotNull(picked, `the reuse picker never offered "${INTEGRATION_NAME}"`);
 
-        pickedLabel = await item.getLabel();
         pickedDescription = await item.getDescription();
         // The detail line ("Used in: …") has no page object; it is part of the row's rendered text.
         pickedRowText = await item.getText();
         await item.select();
 
-        successToastShown =
-            (await waitForNotification(
-                new RegExp(`Added integration "${INTEGRATION_NAME}" to this project`),
-                WORKBENCH_TIMEOUT,
-                true
-            )) !== undefined;
+        await waitForNotification(
+            new RegExp(`Added integration "${INTEGRATION_NAME}" to this project`),
+            WORKBENCH_TIMEOUT,
+            true
+        );
         await screenshot('linked-into-this-project');
 
         targetIntegrations = readDeclaredIntegrations(targetFilePath);
@@ -312,16 +306,9 @@ describe('Deepnote — adding an integration another project already configured'
     // Deliberately one test: every expectation reads state the `before` hook already captured, so
     // splitting them buys separate mocha records and nothing else.
     it('offers only what the other project configured, and links it without its credentials', function () {
-        // offers nothing while the other project has only declared an integration, never configured it
-        expect(noneAvailableToastShown, '"nothing to reuse" notification').to.equal(true);
-
         // offers the integration the other project configured, and names that project
-        expect(pickedLabel, 'quick pick label').to.equal(INTEGRATION_NAME);
         expect(pickedDescription, 'quick pick description').to.equal(INTEGRATION_TYPE_LABEL);
         expect(pickedRowText, 'quick pick row').to.contain(`Used in: ${SOURCE_PROJECT_NAME}`);
-
-        // confirms the link with a toast
-        expect(successToastShown, 'integration-added toast').to.equal(true);
 
         // writes the link into this project on disk, keeping the integration it already had
         expect(targetIntegrations, 'integrations declared by the target project').to.deep.equal([

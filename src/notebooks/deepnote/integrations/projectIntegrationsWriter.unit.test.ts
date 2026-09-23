@@ -316,11 +316,15 @@ suite('addProjectIntegration', () => {
         assert.deepStrictEqual(writes.get(activeUri.fsPath)!.project.integrations, [ADDED]);
     });
 
-    test('leaves the cache untouched when the active file cannot be written', async () => {
+    test('writes nothing and leaves the cache untouched when the active file cannot be written', async () => {
         const activeUri = Uri.file('/ws/active.deepnote');
-        stubWorkspace({
-            onDisk: [{ uri: activeUri, file: projectFile('nb-active') }],
-            discovered: [activeUri],
+        const siblingUri = Uri.file('/ws/sibling.deepnote');
+        const { writes } = stubWorkspace({
+            onDisk: [
+                { uri: activeUri, file: projectFile('nb-active') },
+                { uri: siblingUri, file: projectFile('nb-sibling') }
+            ],
+            discovered: [activeUri, siblingUri],
             failWriteFor: new Set([activeUri.fsPath])
         });
 
@@ -331,8 +335,31 @@ suite('addProjectIntegration', () => {
             projectId: PROJECT_ID
         });
 
-        assert.strictEqual(result.activePersisted, false);
+        assert.deepStrictEqual(result, { activePersisted: false, siblingsFailed: 0 });
+        assert.strictEqual(writes.size, 0, 'the add reaches no file once the one the user acted in refused it');
         assert.deepStrictEqual(cacheUpdates, [], 'nothing reaches the cache that did not reach the disk');
+    });
+
+    test('sweeps no sibling when the active file is skipped rather than written', async () => {
+        // A snapshot records a past run, so its own write is skipped; sweeping from one stamps the integration
+        // across the project's real files on behalf of a file that never took it.
+        const snapshotUri = Uri.file('/ws/snapshots/proj_project-1_latest.snapshot.deepnote');
+        const siblingUri = Uri.file('/ws/sibling.deepnote');
+        const { writes } = stubWorkspace({
+            onDisk: [{ uri: siblingUri, file: projectFile('nb-sibling') }],
+            discovered: [siblingUri]
+        });
+
+        const result = await addProjectIntegration({
+            activeFileUri: snapshotUri,
+            integration: ADDED,
+            notebookManager: managerInstance,
+            projectId: PROJECT_ID
+        });
+
+        assert.deepStrictEqual(result, { activePersisted: false, siblingsFailed: 0 });
+        assert.strictEqual(writes.size, 0, 'the project files stay as they are');
+        assert.deepStrictEqual(cacheUpdates, []);
     });
 
     test('moves the cache before sweeping siblings, so a save mid-sweep cannot revert the add', async () => {

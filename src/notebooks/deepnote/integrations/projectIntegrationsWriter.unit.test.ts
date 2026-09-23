@@ -4,7 +4,7 @@ import { anything, instance, mock, when } from 'ts-mockito';
 import { Uri, workspace, type NotebookDocument } from 'vscode';
 
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
-import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { IDeepnoteNotebookManager, ProjectIntegration, RawProjectIntegration } from '../../types';
 import {
     createDeepnoteBlock,
     createDeepnoteFile,
@@ -17,6 +17,9 @@ import { addProjectIntegration, persistProjectIntegrations } from './projectInte
 const PROJECT_ID = 'project-1';
 
 const NEW_INTEGRATIONS: ProjectIntegration[] = [{ id: 'int-new', name: 'New BigQuery', type: 'big-query' }];
+
+// `thenCall` checks no signature, so doubles take their parameter types from here; annotating them by hand undoes it.
+type UpdateProjectIntegrationsFn = IDeepnoteNotebookManager['updateProjectIntegrations'];
 
 function projectFile(
     notebookId: string,
@@ -248,21 +251,20 @@ suite('persistProjectIntegrations', () => {
 suite('addProjectIntegration', () => {
     const ADDED: ProjectIntegration = { id: 'int-added', name: 'Added Postgres', type: 'pgsql' };
 
-    let cacheUpdates: ProjectIntegration[][];
+    let cacheUpdates: RawProjectIntegration[][];
     let managerInstance: IDeepnoteNotebookManager;
 
     setup(() => {
         resetVSCodeMocks();
 
         cacheUpdates = [];
-        const mockManager = mock<IDeepnoteNotebookManager>();
-        when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(
-            (_projectId: string, integrations: ProjectIntegration[]) => {
-                cacheUpdates.push(integrations);
+        const recordCacheUpdate: UpdateProjectIntegrationsFn = (_projectId, integrations) => {
+            cacheUpdates.push(integrations);
 
-                return true;
-            }
-        );
+            return true;
+        };
+        const mockManager = mock<IDeepnoteNotebookManager>();
+        when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(recordCacheUpdate);
         managerInstance = instance(mockManager);
     });
 

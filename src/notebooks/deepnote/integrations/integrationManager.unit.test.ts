@@ -49,6 +49,8 @@ const SHARED_CONFIG = buildPostgresIntegration({ id: 'pg-shared', name: 'Shared 
 const REFRESH_START_TIMEOUT_MS = 1_000;
 
 type RefreshFn = IIntegrationEnvLiveRefresher['refresh'];
+// `thenCall` checks no signature, so doubles take their parameter types from here; annotating them by hand undoes it.
+type UpdateProjectIntegrationsFn = IDeepnoteNotebookManager['updateProjectIntegrations'];
 
 function projectFile(projectId: string, notebookId: string, integrations: RawProjectIntegration[]): DeepnoteFile {
     return createDeepnoteFile({
@@ -66,7 +68,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
     let otherNotebook: NotebookDocument;
     let currentProject: DeepnoteFile | undefined;
     let writes: Map<string, DeepnoteFile>;
-    let cacheUpdates: ProjectIntegration[][];
+    let cacheUpdates: RawProjectIntegration[][];
     // Typed off the interface so a signature change fails the compile, not just the `firstCall.args` assertion.
     let refreshSpy: sinon.SinonSpy<Parameters<RefreshFn>, ReturnType<RefreshFn>>;
     let quickPickItems: QuickPickItem[] | undefined;
@@ -167,17 +169,16 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
         const mockManager = mock<IDeepnoteNotebookManager>();
         when(mockManager.getProjectForNotebook(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID)).thenCall(() => currentProject);
-        when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(
-            (_projectId: string, integrations: ProjectIntegration[]) => {
-                if (cacheUpdateError) {
-                    throw cacheUpdateError;
-                }
-
-                cacheUpdates.push(integrations);
-
-                return true;
+        const recordCacheUpdate: UpdateProjectIntegrationsFn = (_projectId, integrations) => {
+            if (cacheUpdateError) {
+                throw cacheUpdateError;
             }
-        );
+
+            cacheUpdates.push(integrations);
+
+            return true;
+        };
+        when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(recordCacheUpdate);
         notebookManager = mockManager;
 
         telemetry = mock<ITelemetryService>();

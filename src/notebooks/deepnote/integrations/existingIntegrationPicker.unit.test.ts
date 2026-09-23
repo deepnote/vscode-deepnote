@@ -21,6 +21,9 @@ use(chaiAsPromised);
 
 const CURRENT_PROJECT_ID = 'project-current';
 
+// `thenCall` checks no signature, so doubles take their parameter types from here; annotating them by hand undoes it.
+type UpdateProjectIntegrationsFn = IDeepnoteNotebookManager['updateProjectIntegrations'];
+
 interface OnDiskProject {
     uri: Uri;
     projectId: string;
@@ -365,18 +368,17 @@ suite('existingIntegrationPicker', () => {
         };
 
         let notebookManager: IDeepnoteNotebookManager;
-        let cacheUpdates: Array<{ projectId: string; integrations: ProjectIntegration[] }>;
+        let cacheUpdates: Array<{ projectId: string; integrations: RawProjectIntegration[] }>;
 
         setup(() => {
             cacheUpdates = [];
-            const mockManager = mock<IDeepnoteNotebookManager>();
-            when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(
-                (projectId: string, integrations: ProjectIntegration[]) => {
-                    cacheUpdates.push({ projectId, integrations });
+            const recordCacheUpdate: UpdateProjectIntegrationsFn = (projectId, integrations) => {
+                cacheUpdates.push({ projectId, integrations });
 
-                    return true;
-                }
-            );
+                return true;
+            };
+            const mockManager = mock<IDeepnoteNotebookManager>();
+            when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(recordCacheUpdate);
             notebookManager = instance(mockManager);
         });
 

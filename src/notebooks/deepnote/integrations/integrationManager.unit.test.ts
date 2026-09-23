@@ -275,6 +275,8 @@ suite('IntegrationManager.addExistingIntegration', () => {
     });
 
     test('returns cancelled and writes nothing when the picker is dismissed', async () => {
+        // Catches: drop-off in the picker never reaching analytics, being sent under another outcome, or being sent
+        // along with a stray second event.
         when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenResolve(undefined);
 
         const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
@@ -282,7 +284,15 @@ suite('IntegrationManager.addExistingIntegration', () => {
         assert.strictEqual(outcome, 'cancelled');
         assert.strictEqual(writes.size, 0);
         assert.isTrue(refreshSpy.notCalled);
-        verify(telemetry.trackEvent(anything())).never();
+        verify(telemetry.trackEvent(anything())).once();
+        verify(
+            telemetry.trackEvent(
+                deepEqual({
+                    eventName: 'add_existing_integration',
+                    properties: { integrationType: 'unknown', outcome: 'cancelled' }
+                })
+            )
+        ).once();
     });
 
     // Every branch below reports trouble to the user; without cover they can each regress into silent success,
@@ -422,6 +432,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
     });
 
     test('returns cancelled and writes nothing when the scan is cancelled', async () => {
+        // Catches: a cancelled scan counted as neither drop-off nor failure, or reported as 'failed'.
         scanProgress.cancel();
 
         const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
@@ -429,6 +440,14 @@ suite('IntegrationManager.addExistingIntegration', () => {
         assert.strictEqual(outcome, 'cancelled');
         assert.strictEqual(writes.size, 0);
         verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
-        verify(telemetry.trackEvent(anything())).never();
+        verify(telemetry.trackEvent(anything())).once();
+        verify(
+            telemetry.trackEvent(
+                deepEqual({
+                    eventName: 'add_existing_integration',
+                    properties: { integrationType: 'unknown', outcome: 'cancelled' }
+                })
+            )
+        ).once();
     });
 });

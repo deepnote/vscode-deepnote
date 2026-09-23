@@ -153,6 +153,8 @@ export class IntegrationManager implements IIntegrationManager {
             );
         } catch (error) {
             if (error instanceof Error && isCancellationError(error)) {
+                this.trackAddExistingIntegration('cancelled');
+
                 return 'cancelled';
             }
 
@@ -187,6 +189,8 @@ export class IntegrationManager implements IIntegrationManager {
         });
 
         if (!picked) {
+            this.trackAddExistingIntegration('cancelled');
+
             return 'cancelled';
         }
 
@@ -228,10 +232,7 @@ export class IntegrationManager implements IIntegrationManager {
             void window.showErrorMessage(localize.Integrations.addExistingIntegrationFailed);
         }
 
-        this.analytics.trackEvent({
-            eventName: 'add_existing_integration',
-            properties: { integrationType: integration.type, outcome }
-        });
+        this.trackAddExistingIntegration(outcome, integration.type);
 
         return outcome;
     }
@@ -375,5 +376,12 @@ export class IntegrationManager implements IIntegrationManager {
             selectedIntegrationId,
             activeNotebook.metadata?.deepnoteProjectName
         );
+    }
+
+    private trackAddExistingIntegration(outcome: CommandOutcome, integrationType?: string): void {
+        this.analytics.trackEvent({
+            eventName: 'add_existing_integration',
+            properties: { integrationType: integrationType ?? 'unknown', outcome }
+        });
     }
 }

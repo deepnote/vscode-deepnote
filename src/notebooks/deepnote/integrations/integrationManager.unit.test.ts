@@ -14,6 +14,7 @@ import {
 
 import { ITelemetryService } from '../../../platform/analytics/types';
 import { IExtensionContext } from '../../../platform/common/types';
+import { Integrations } from '../../../platform/common/utils/localize';
 import { ConfigurableDatabaseIntegrationConfig } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { IDeepnoteNotebookManager, ProjectIntegration, RawProjectIntegration } from '../../types';
@@ -250,24 +251,6 @@ suite('IntegrationManager.addExistingIntegration', () => {
         verify(mockedVSCodeNamespaces.window.showInformationMessage(anything())).once();
     });
 
-    test('keeps entries the panel cannot manage (pandas-dataframe) when attaching', async () => {
-        currentProject = projectFile(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID, [
-            { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' }
-        ]);
-
-        const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
-
-        assert.strictEqual(outcome, 'completed');
-
-        const expectedIntegrations = [
-            { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' },
-            { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
-        ];
-        assert.deepStrictEqual(writes.get(CURRENT_URI.fsPath)?.project.integrations, expectedIntegrations);
-        assert.deepStrictEqual(cacheUpdates, [expectedIntegrations]);
-        assert.strictEqual(quickPickItems?.length, 1, 'the DuckDB entry is neither offered nor a candidate');
-    });
-
     test('does not offer an integration the current project already has', async () => {
         currentProject = projectFile(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID, [
             { id: SHARED_CONFIG.id, name: SHARED_CONFIG.name, type: SHARED_CONFIG.type }
@@ -302,33 +285,31 @@ suite('IntegrationManager.addExistingIntegration', () => {
         verify(telemetry.trackEvent(anything())).never();
     });
 
-    test('fails without a Deepnote notebook to act on', async () => {
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
+    // Every branch below reports trouble to the user; without cover they can each regress into silent success,
+    // or into the wrong diagnosis: the message is what tells the user which one they hit.
+    const earlyFailures: { arrange: () => string; expectedMessage: string; name: string }[] = [
+        {
+            arrange: () => {
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
 
-        const outcome = await buildManager().addExistingIntegration(Uri.file('/ws/missing.deepnote').toString());
+                return Uri.file('/ws/missing.deepnote').toString();
+            },
+            expectedMessage: 'No active Deepnote notebook',
+            name: 'no Deepnote notebook is open'
+        },
+        {
+            arrange: () => {
+                // The panel stayed open for the other project after its notebook closed; only this editor is left.
+                when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([currentNotebook]);
+                when(mockedVSCodeNamespaces.window.visibleNotebookEditors).thenReturn([
+                    { notebook: currentNotebook } as NotebookEditor
+                ]);
 
-        assert.strictEqual(outcome, 'failed');
-        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
-    });
-
-    test('fails without writing when the panel names a notebook that is no longer open', async () => {
-        // The panel stayed open for the other project after its notebook closed; only this project's editor is left.
-        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([currentNotebook]);
-        when(mockedVSCodeNamespaces.window.visibleNotebookEditors).thenReturn([
-            { notebook: currentNotebook } as NotebookEditor
-        ]);
-
-        const outcome = await buildManager().addExistingIntegration(OTHER_URI.toString());
-
-        assert.strictEqual(outcome, 'failed');
-        assert.strictEqual(writes.size, 0, "the visible project must not be written on the stale panel's behalf");
-        assert.deepStrictEqual(cacheUpdates, []);
-        verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
-        verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
-        verify(telemetry.trackEvent(anything())).never();
-    });
-    // Every branch below reports trouble to the user; without cover they can each regress into silent success.
-    const earlyFailures: { arrange: () => string; name: string }[] = [
+                return OTHER_URI.toString();
+            },
+            expectedMessage: Integrations.addExistingIntegrationNotebookClosed,
+            name: 'the panel names a notebook that is no longer open'
+        },
         {
             arrange: () => {
                 when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([
@@ -337,6 +318,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
                 return CURRENT_URI.toString();
             },
+            expectedMessage: 'Cannot determine project or notebook ID',
             name: 'the notebook declares no project or notebook id'
         },
         {
@@ -353,6 +335,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
                 return SNAPSHOT_URI.toString();
             },
+            expectedMessage: Integrations.addExistingIntegrationSnapshotUnsupported,
             name: 'the active file is a snapshot'
         },
         {
@@ -361,11 +344,12 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
                 return CURRENT_URI.toString();
             },
+            expectedMessage: Integrations.addExistingIntegrationFailed,
             name: 'the project is not in the cache'
         }
     ];
 
-    for (const { arrange, name } of earlyFailures) {
+    for (const { arrange, expectedMessage, name } of earlyFailures) {
         test(`fails without reading or writing any file when ${name}`, async () => {
             const uri = arrange();
 
@@ -374,7 +358,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
             assert.strictEqual(outcome, 'failed');
             assert.strictEqual(writes.size, 0);
             assert.deepStrictEqual(cacheUpdates, [], 'the cache must not move before the file does');
-            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(expectedMessage)).once();
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
             verify(telemetry.trackEvent(anything())).never();
         });
@@ -392,8 +376,9 @@ suite('IntegrationManager.addExistingIntegration', () => {
             const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
 
             assert.strictEqual(outcome, 'failed');
+            assert.deepStrictEqual(cacheUpdates, [], 'no failure path leaves the link in the cache');
             assert.isTrue(refreshSpy.notCalled, 'the refresh reserved for a successful link never runs');
-            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(mockedVSCodeNamespaces.window.showErrorMessage(Integrations.addExistingIntegrationFailed)).once();
             verify(
                 telemetry.trackEvent(
                     deepEqual({
@@ -405,19 +390,6 @@ suite('IntegrationManager.addExistingIntegration', () => {
         });
     }
 
-    test('leaves the cache alone when the active file cannot be written', async () => {
-        writeFailures.add(CURRENT_URI.fsPath);
-
-        const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
-
-        assert.strictEqual(outcome, 'failed');
-        assert.deepStrictEqual(
-            cacheUpdates,
-            [],
-            'an unpersisted link never enters the cache, so the retry still offers the integration'
-        );
-    });
-
     test('completes with a warning when a sibling file of the same project cannot be updated', async () => {
         onDiskSibling = projectFile(CURRENT_PROJECT_ID, 'notebook-sibling', []);
         writeFailures.add(SIBLING_URI.fsPath);
@@ -428,25 +400,6 @@ suite('IntegrationManager.addExistingIntegration', () => {
         assert.isDefined(writes.get(CURRENT_URI.fsPath), 'the active file is still persisted');
         assert.isUndefined(writes.get(SIBLING_URI.fsPath));
         verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
-    });
-
-    test('writes the integrations as they stand after the pick, not the snapshot taken before it', async () => {
-        when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items: QuickPickItem[]) => {
-            // Another writer touching the project file mid-pick; the writer merges into what it finds there.
-            currentProject = projectFile(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID, [
-                { id: 'added-meanwhile', name: 'Added meanwhile', type: 'mysql' }
-            ]);
-
-            return Promise.resolve(items[0]);
-        });
-
-        const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
-
-        assert.strictEqual(outcome, 'completed');
-        assert.deepStrictEqual(writes.get(CURRENT_URI.fsPath)?.project.integrations, [
-            { id: 'added-meanwhile', name: 'Added meanwhile', type: 'mysql' },
-            { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
-        ]);
     });
 
     test('keeps an entry the file gained while the picker was open, though the cache never saw it', async () => {

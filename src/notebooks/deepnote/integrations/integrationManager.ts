@@ -152,7 +152,7 @@ export class IntegrationManager implements IIntegrationManager {
                     })
             );
         } catch (error) {
-            if (isCancellationError(error as Error)) {
+            if (error instanceof Error && isCancellationError(error)) {
                 return 'cancelled';
             }
 

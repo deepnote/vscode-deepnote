@@ -1322,7 +1322,7 @@ project:
                             output_type: 'execute_result',
                             data: { 'text/plain': 'Fallback Output' },
                             execution_count: 2
-                        } as DeepnoteOutput
+                        }
                     ]
                 ]
             ]);
@@ -1385,13 +1385,8 @@ project:
             });
 
             // The vscode mock's NotebookEdit.updateCellMetadata drops its metadata argument, so the
-            // WorkspaceEdit cannot reveal which block id was written. Stub the static to capture it.
-            const metadataWrites: Array<{ index: number; metadata: Record<string, unknown> }> = [];
-            sinon.stub(NotebookEdit, 'updateCellMetadata').callsFake((index: number, metadata) => {
-                metadataWrites.push({ index, metadata: metadata as Record<string, unknown> });
-
-                return {} as NotebookEdit;
-            });
+            // WorkspaceEdit cannot reveal which block id was written. Spy on the static to capture it.
+            const updateCellMetadataSpy = sinon.spy(NotebookEdit, 'updateCellMetadata');
 
             const offsetWatcher = new DeepnoteFileChangeWatcher(
                 offsetDisposables,
@@ -1462,17 +1457,19 @@ project:
             );
 
             await waitFor(() => offsetApplyEditCount > 0);
-            await waitFor(() => metadataWrites.length > 0);
+            await waitFor(() => updateCellMetadataSpy.called);
 
-            const writeForLastCell = metadataWrites.find((w) => w.index === 2);
-            assert.isDefined(writeForLastCell, 'the metadata-less cell at live index 2 should receive a block id');
+            const metadataForLastCell: Record<string, unknown> | undefined = updateCellMetadataSpy.args.find(
+                ([index]) => index === 2
+            )?.[1];
+            assert.isDefined(metadataForLastCell, 'the metadata-less cell at live index 2 should receive a block id');
             assert.strictEqual(
-                writeForLastCell!.metadata.__deepnoteBlockId,
+                metadataForLastCell?.__deepnoteBlockId,
                 'block-2',
                 'live index 2 is the second *persisted* cell, so it must resolve to block-2'
             );
             assert.notStrictEqual(
-                writeForLastCell!.metadata.__deepnoteBlockId,
+                metadataForLastCell?.__deepnoteBlockId,
                 'block-1',
                 'block-1 already belongs to live index 0 — two cells must never claim one block'
             );

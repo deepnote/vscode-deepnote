@@ -159,6 +159,22 @@ Extract magic numbers (retry counts, delays, timeouts) as named constants near t
 - Verify state after async setup - methods can return early without throwing, so check that the expected state was actually created.
 - Validate cached state before early returns - before returning "already configured," confirm the cached state is still valid (e.g. interpreter paths match, controllers aren't stale).
 
+## Documentation
+
+Before opening a pull request, check whether the change makes any documentation stale, and update it in the same pull request:
+
+- `specs/` - the reference docs for agents and contributors (serializer architecture, kernel management, integrations, LSP). Update the spec that describes the behavior you changed.
+- `README.md` - features and setup as users see them on the marketplace listing.
+- `CONTRIBUTING.md` - development, testing, and release workflow.
+- `package.json` (`contributes`) and `package.nls.json` - command titles, settings descriptions, and other user-visible strings.
+- User-facing documentation for the extension is not in this repository: it lives at `docs/vscode-extension.md` in the public [`deepnote`](https://github.com/deepnote/deepnote) repository and is published at <https://deepnote.com/docs/vscode-extension>. A change to the installation flow, commands, or supported workflows needs a matching pull request there.
+
+Update only the documentation your change actually affects.
+
+## Pull Requests
+
+Keep each pull request as simple and clean as possible: one purpose per pull request, the smallest diff that achieves it, and no drive-by refactors, formatting churn, or unrelated changes to inherited upstream code.
+
 ## Common Tasks
 
 ### Adding Tests

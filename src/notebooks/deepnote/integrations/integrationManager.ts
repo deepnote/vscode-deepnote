@@ -260,6 +260,14 @@ export class IntegrationManager implements IIntegrationManager {
         projectId: string,
         activeNotebook: NotebookDocument
     ): Promise<void> {
+        // Panel first: a busy kernel holds the refresh behind its running cell, and a panel still on the old list
+        // writes that list back over the project on its next save.
+        try {
+            await this.showIntegrationsUI(undefined, activeNotebook.uri.toString());
+        } catch (error) {
+            logger.error('IntegrationManager: failed to refresh the integrations panel', error);
+        }
+
         const projectNotebooks = workspace.notebookDocuments.filter(
             (notebook) => notebook.notebookType === 'deepnote' && notebook.metadata?.deepnoteProjectId === projectId
         );
@@ -268,12 +276,6 @@ export class IntegrationManager implements IIntegrationManager {
             await this.liveRefresher?.refresh(projectNotebooks, 'integration_config');
         } catch (error) {
             logger.error('IntegrationManager: failed to refresh integration env after adding an integration', error);
-        }
-
-        try {
-            await this.showIntegrationsUI(undefined, activeNotebook.uri.toString());
-        } catch (error) {
-            logger.error('IntegrationManager: failed to refresh the integrations panel', error);
         }
     }
 

@@ -14,8 +14,10 @@ import {
 
 import { ITelemetryService } from '../../../platform/analytics/types';
 import { IExtensionContext } from '../../../platform/common/types';
+import { createDeferred } from '../../../platform/common/utils/async';
 import { Integrations } from '../../../platform/common/utils/localize';
 import { ConfigurableDatabaseIntegrationConfig } from '../../../platform/notebooks/deepnote/integrationTypes';
+import { waitForCondition } from '../../../test/common';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { IDeepnoteNotebookManager, ProjectIntegration, RawProjectIntegration } from '../../types';
 import {
@@ -43,6 +45,8 @@ const SIBLING_URI = Uri.file('/ws/sibling.deepnote');
 const SNAPSHOT_URI = Uri.file('/ws/snapshots/current_project-current_latest.snapshot.deepnote');
 
 const SHARED_CONFIG = buildPostgresIntegration({ id: 'pg-shared', name: 'Shared Postgres' });
+/** Below mocha's 2s test timeout, so a refresh that never starts fails with its own message. */
+const REFRESH_START_TIMEOUT_MS = 1_000;
 
 type RefreshFn = IIntegrationEnvLiveRefresher['refresh'];
 
@@ -236,6 +240,37 @@ suite('IntegrationManager.addExistingIntegration', () => {
         assert.strictEqual(quickPickItems?.[0].label, 'Shared Postgres');
         assert.strictEqual(quickPickItems?.[0].description, 'PostgreSQL');
         assert.strictEqual(quickPickItems?.[0].detail, `Used in: ${OTHER_PROJECT_ID}`);
+    });
+
+    test('re-shows the panel before the kernel env refresh settles', async () => {
+        // Catches: a busy kernel leaving the panel on the pre-link list, whose next save deletes the link.
+        const refreshGate = createDeferred<void>();
+
+        refreshSpy = sinon.spy<RefreshFn>(() => refreshGate.promise);
+
+        const command = buildManager().addExistingIntegration(CURRENT_URI.toString());
+
+        try {
+            await waitForCondition(() => refreshSpy.calledOnce, REFRESH_START_TIMEOUT_MS, 'the refresh never started');
+
+            verify(webviewProvider.show(CURRENT_PROJECT_ID, anything(), anything(), anything(), anything())).once();
+        } finally {
+            refreshGate.resolve();
+        }
+
+        assert.strictEqual(await command, 'completed');
+    });
+
+    test('still refreshes the kernels when re-showing the panel fails', async () => {
+        // Catches: the kernel env refresh depending on the panel re-show succeeding.
+        when(webviewProvider.show(anything(), anything(), anything(), anything(), anything())).thenReject(
+            new Error('panel could not be shown')
+        );
+
+        const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
+
+        assert.strictEqual(outcome, 'completed');
+        assert.deepStrictEqual(refreshSpy.args, [[[currentNotebook], 'integration_config']]);
     });
 
     test('shows an information message and writes nothing when no other project has a reusable integration', async () => {

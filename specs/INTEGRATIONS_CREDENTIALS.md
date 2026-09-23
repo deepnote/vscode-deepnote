@@ -444,8 +444,9 @@ webview, implemented in `existingIntegrationPicker.ts`):
 3. On selection, appends `{ id, name, type }` to the active project's roster via `persistProjectIntegrations`.
    Nothing is copied in SecretStorage: configs (and federated refresh tokens) are keyed by integration id alone, and
    the roster entry is what scopes an integration to a project, so the linked project resolves the same credentials.
-4. Re-runs the integration env refresh in the project's running kernels and re-shows the panel, since no storage
-   change event fires for a roster-only edit.
+4. Re-shows the panel, then re-runs the integration env refresh in the project's running kernels, since no storage
+   change event fires for a roster-only edit. The panel goes first: a busy kernel answers the refresh only after its
+   running cell, and until the panel is re-shown it would save its pre-link list back over the project.
 
 #### 4. **Integration Webview** (`integrationWebview.ts`)
 

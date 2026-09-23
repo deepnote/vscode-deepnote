@@ -26,7 +26,7 @@ const trinoLogo: string = require('./icons/trino.svg');
 
 /**
  * The panel is bundled separately and cannot reach `localize.ts`, so labels resolve against the string bundle.
- * The host sends that bundle before the first `update`, so the raw type is a fallback that should never render.
+ * `IntegrationPanel` renders the type cards only after that bundle arrives; the raw type covers an unknown key.
  */
 export function integrationTypeLabel(type: ConfigurableDatabaseIntegrationType): string {
     return getLocString(integrationTypeLabelKey(type), type);

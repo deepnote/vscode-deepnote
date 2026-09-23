@@ -33,6 +33,7 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
     const [message, setMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [confirmReset, setConfirmReset] = React.useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null);
+    const [locStringsLoaded, setLocStringsLoaded] = React.useState(false);
 
     const messageTimerRef = React.useRef<NodeJS.Timeout | null>(null);
     const confirmResetTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -63,7 +64,9 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
 
             switch (msg.type) {
                 case 'loc_init':
+                    // Store first: this state change re-renders synchronously, and the cards read the bundle.
                     storeLocStrings(msg.locStrings);
+                    setLocStringsLoaded(true);
                     break;
 
                 case 'update':
@@ -243,7 +246,9 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
                 onSignOut={handleSignOut}
             />
 
-            <IntegrationTypeSelector onAddExisting={handleAddExisting} onSelectType={handleSelectIntegrationType} />
+            {locStringsLoaded && (
+                <IntegrationTypeSelector onAddExisting={handleAddExisting} onSelectType={handleSelectIntegrationType} />
+            )}
 
             {selectedIntegrationId && selectedIntegrationType && (
                 <ConfigurationForm

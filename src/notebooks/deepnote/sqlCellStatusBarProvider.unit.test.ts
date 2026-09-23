@@ -238,7 +238,12 @@ suite('SqlCellStatusBarProvider', () => {
         } as never);
         const envVars = mock<ISqlIntegrationEnvVarsProvider>();
         when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
-            { id: integrationId, name: 'Production', type: 'pgsql', metadata: {} } as never
+            {
+                id: integrationId,
+                name: 'Production',
+                type: 'pgsql',
+                metadata: { host: 'localhost', database: 'db', user: 'u', password: 'p' }
+            }
         ]);
         provider = new SqlCellStatusBarProvider(
             disposables,
@@ -264,7 +269,12 @@ suite('SqlCellStatusBarProvider', () => {
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
         const envVars = mock<ISqlIntegrationEnvVarsProvider>();
         when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
-            { id: integrationId, name: 'From File', type: 'pgsql', metadata: {} } as never
+            {
+                id: integrationId,
+                name: 'From File',
+                type: 'pgsql',
+                metadata: { host: 'localhost', database: 'db', user: 'u', password: 'p' }
+            }
         ]);
         provider = new SqlCellStatusBarProvider(
             disposables,
@@ -714,7 +724,12 @@ suite('SqlCellStatusBarProvider', () => {
 
             const envVars = mock<ISqlIntegrationEnvVarsProvider>();
             when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
-                { id: 'file-only-bq', name: 'BigQuery from file', type: 'big-query', metadata: {} } as any
+                {
+                    id: 'file-only-bq',
+                    name: 'BigQuery from file',
+                    type: 'big-query',
+                    metadata: { authMethod: 'service-account', service_account: '{"type":"service_account"}' }
+                }
             ]);
             const fileAwareProvider = new SqlCellStatusBarProvider(
                 [],
@@ -1231,7 +1246,12 @@ suite('SqlCellStatusBarProvider', () => {
 
             const envVars = mock<ISqlIntegrationEnvVarsProvider>();
             when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
-                { id: fileOnlyId, name: 'BigQuery from file', type: 'big-query', metadata: {} } as any
+                {
+                    id: fileOnlyId,
+                    name: 'BigQuery from file',
+                    type: 'big-query',
+                    metadata: { authMethod: 'service-account', service_account: '{"type":"service_account"}' }
+                }
             ]);
             const fileTelemetry = mock<ITelemetryService>();
             new SqlCellStatusBarProvider(

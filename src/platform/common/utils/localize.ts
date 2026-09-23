@@ -891,6 +891,11 @@ export namespace Integrations {
         'Failed to add the integration to the notebook file. Please try again.'
     );
     export const addExistingIntegrationUsedIn = (projectNames: string) => l10n.t('Used in: {0}', projectNames);
+    export const integrationUnlinked = (projectNames: string) =>
+        l10n.t(
+            'Removed from this project. Its credentials were kept because other projects still use them: {0}',
+            projectNames
+        );
     export const database = l10n.t('Database');
     export const dataWarehousesLakes = l10n.t('Data Warehouses & Lakes');
     export const databases = l10n.t('Databases');

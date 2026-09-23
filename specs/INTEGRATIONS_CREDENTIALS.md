@@ -448,6 +448,10 @@ webview, implemented in `existingIntegrationPicker.ts`):
    change event fires for a roster-only edit. The panel goes first: a busy kernel answers the refresh only after its
    running cell, and until the panel is re-shown it would save its pre-link list back over the project.
 
+The panel's Delete only takes a linked integration off the active project's roster, and keeps its credentials, while
+another project in the open workspace folders still declares the id. No storage change event fires then either, so
+the panel refreshes the project's running kernels itself.
+
 #### 4. **Integration Webview** (`integrationWebview.ts`)
 
 Provides the webview-based UI for managing integration credentials.

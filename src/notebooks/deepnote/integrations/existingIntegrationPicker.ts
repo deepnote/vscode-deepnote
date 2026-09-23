@@ -1,4 +1,5 @@
-import { CancellationToken, RelativePattern, Uri, workspace } from 'vscode';
+import type { DeepnoteFile } from '@deepnote/blocks';
+import { CancellationToken, RelativePattern, Uri, workspace, WorkspaceFolder } from 'vscode';
 
 import { Cancellation } from '../../../platform/common/cancellation';
 import { readDeepnoteProjectFile } from '../../../platform/deepnote/deepnoteProjectFileReader';
@@ -48,6 +49,14 @@ export interface AttachExistingIntegrationParams {
     projectId: string;
 }
 
+export interface FindOtherProjectsDeclaringParams {
+    integrationId: string;
+    /** The project asking; its own `.deepnote` files are skipped. */
+    projectId: string;
+}
+
+type OtherProjectFileVisitor = (project: DeepnoteFile['project'], fileUri: Uri) => Promise<void> | void;
+
 /**
  * Scans every `.deepnote` file in the open workspace folders for integrations other projects declare.
  *
@@ -66,90 +75,46 @@ export async function collectReusableIntegrations(
 
     const candidates = new Map<string, ReusableIntegration & { projectNameSet: Set<string> }>();
     const conflictingIds = new Set<string>();
-    const visited = new Set<string>();
 
-    for (const workspaceFolder of workspace.workspaceFolders || []) {
-        Cancellation.throwIfCanceled(token);
+    await forEachOtherProjectFile(projectId, token, async (project, fileUri) => {
+        const projectName = project.name || project.id;
 
-        let files: Uri[];
-
-        try {
-            files = await workspace.findFiles(
-                new RelativePattern(workspaceFolder, '**/*.deepnote'),
-                undefined,
-                undefined,
-                token
-            );
-        } catch (error) {
-            logger.error('collectReusableIntegrations: failed to enumerate .deepnote files', error);
-
-            continue;
-        }
-
-        for (const fileUri of files) {
-            Cancellation.throwIfCanceled(token);
-
-            const key = fileUri.toString();
-
-            if (visited.has(key) || isSnapshotFile(fileUri)) {
+        for (const entry of project.integrations ?? []) {
+            if (excludeIntegrationIds.has(entry.id) || !isConfigurableDatabaseIntegrationType(entry.type)) {
                 continue;
             }
 
-            visited.add(key);
+            const storedConfig = await integrationStorage.getIntegrationConfig(entry.id);
 
-            // One unreadable file must not hide every other project's integrations.
-            try {
-                const projectData = await readDeepnoteProjectFile(fileUri);
+            if (!storedConfig) {
+                // File-only or never configured — no stored credentials to reuse.
+                continue;
+            }
 
-                if (!projectData?.project || projectData.project.id === projectId) {
-                    continue;
-                }
+            if (storedConfig.type !== entry.type) {
+                logger.warn(
+                    `collectReusableIntegrations: ${entry.id} is declared as ${entry.type} in ${fileUri.path} but stored as ${storedConfig.type}; skipping`
+                );
+                conflictingIds.add(entry.id);
 
-                const projectName = projectData.project.name || projectData.project.id;
+                continue;
+            }
 
-                for (const entry of projectData.project.integrations ?? []) {
-                    if (excludeIntegrationIds.has(entry.id) || !isConfigurableDatabaseIntegrationType(entry.type)) {
-                        continue;
-                    }
+            const existing = candidates.get(entry.id);
 
-                    const storedConfig = await integrationStorage.getIntegrationConfig(entry.id);
-
-                    if (!storedConfig) {
-                        // File-only or never configured — no stored credentials to reuse.
-                        continue;
-                    }
-
-                    if (storedConfig.type !== entry.type) {
-                        logger.warn(
-                            `collectReusableIntegrations: ${entry.id} is declared as ${entry.type} in ${fileUri.path} but stored as ${storedConfig.type}; skipping`
-                        );
-                        conflictingIds.add(entry.id);
-
-                        continue;
-                    }
-
-                    const existing = candidates.get(entry.id);
-
-                    if (existing) {
-                        existing.projectNameSet.add(projectName);
-                    } else {
-                        candidates.set(entry.id, {
-                            id: entry.id,
-                            name: storedConfig.name || entry.name || entry.id,
-                            projectNameSet: new Set([projectName]),
-                            projectNames: [],
-                            type: storedConfig.type
-                        });
-                    }
-                }
-            } catch (error) {
-                logger.error(`collectReusableIntegrations: failed to read ${fileUri.path}`, error);
+            if (existing) {
+                existing.projectNameSet.add(projectName);
+            } else {
+                candidates.set(entry.id, {
+                    id: entry.id,
+                    name: storedConfig.name || entry.name || entry.id,
+                    projectNameSet: new Set([projectName]),
+                    projectNames: [],
+                    type: storedConfig.type
+                });
             }
         }
-    }
-
-    // `workspace.findFiles` resolves empty when its token trips and the per-file awaits are not token-aware.
-    Cancellation.throwIfCanceled(token);
+    });
 
     // A conflict in any project disqualifies the id everywhere: the stored config is the single shared truth.
     for (const id of conflictingIds) {
@@ -176,4 +141,90 @@ export function attachExistingIntegration(params: AttachExistingIntegrationParam
     const linked: ProjectIntegration = { id: integration.id, name: integration.name, type: integration.type };
 
     return addProjectIntegration({ activeFileUri, integration: linked, notebookManager, projectId });
+}
+
+/**
+ * Names of the other projects in the open workspace folders whose `.deepnote` files declare `integrationId`, deduped
+ * and sorted; empty when none does. Only open folders are scanned, while SecretStorage is shared machine-wide.
+ */
+export async function findOtherProjectsDeclaring(params: FindOtherProjectsDeclaringParams): Promise<string[]> {
+    const { integrationId, projectId } = params;
+    const projectNames = new Set<string>();
+
+    await forEachOtherProjectFile(projectId, undefined, (project) => {
+        if (project.integrations?.some((entry) => entry.id === integrationId)) {
+            projectNames.add(project.name || project.id);
+        }
+    });
+
+    return Array.from(projectNames).sort((a, b) => a.localeCompare(b));
+}
+
+/** A folder that cannot be enumerated contributes no files instead of ending the walk. */
+async function findDeepnoteFiles(
+    workspaceFolder: WorkspaceFolder,
+    token: CancellationToken | undefined
+): Promise<Uri[]> {
+    try {
+        return await workspace.findFiles(
+            new RelativePattern(workspaceFolder, '**/*.deepnote'),
+            undefined,
+            undefined,
+            token
+        );
+    } catch (error) {
+        logger.error('existingIntegrationPicker: failed to enumerate .deepnote files', error);
+
+        return [];
+    }
+}
+
+/**
+ * Visits each `.deepnote` file in the open workspace folders that belongs to a project other than `projectId`, once;
+ * snapshots are skipped.
+ *
+ * @throws `CancellationError` when `token` trips, including once the last file has been visited.
+ */
+async function forEachOtherProjectFile(
+    projectId: string,
+    token: CancellationToken | undefined,
+    visit: OtherProjectFileVisitor
+): Promise<void> {
+    const visited = new Set<string>();
+
+    for (const workspaceFolder of workspace.workspaceFolders || []) {
+        Cancellation.throwIfCanceled(token);
+
+        for (const fileUri of await findDeepnoteFiles(workspaceFolder, token)) {
+            Cancellation.throwIfCanceled(token);
+
+            const key = fileUri.toString();
+
+            if (visited.has(key) || isSnapshotFile(fileUri)) {
+                continue;
+            }
+
+            visited.add(key);
+            await visitOtherProjectFile(fileUri, projectId, visit);
+        }
+    }
+
+    // `workspace.findFiles` resolves empty when its token trips and the per-file awaits are not token-aware.
+    Cancellation.throwIfCanceled(token);
+}
+
+/** `visit` runs inside the per-file catch: a visitor that throws costs only this file, like a failed read. */
+async function visitOtherProjectFile(fileUri: Uri, projectId: string, visit: OtherProjectFileVisitor): Promise<void> {
+    // One unreadable file must not hide every other project's integrations.
+    try {
+        const projectData = await readDeepnoteProjectFile(fileUri);
+
+        if (!projectData?.project || projectData.project.id === projectId) {
+            return;
+        }
+
+        await visit(projectData.project, fileUri);
+    } catch (error) {
+        logger.error(`existingIntegrationPicker: failed to read ${fileUri.path}`, error);
+    }
 }

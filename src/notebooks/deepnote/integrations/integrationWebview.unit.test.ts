@@ -1,15 +1,28 @@
+import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import sinon from 'sinon';
-import { EventEmitter, Uri } from 'vscode';
+import { EventEmitter, Uri, workspace } from 'vscode';
 import { anyString, anything, deepEqual, instance, mock, reset, resetCalls, verify, when } from 'ts-mockito';
 
 import { ITelemetryService } from '../../../platform/analytics/types';
 import { IExtensionContext, IDisposable, Resource } from '../../../platform/common/types';
 import { Commands } from '../../../platform/common/constants';
+import { Integrations } from '../../../platform/common/utils/localize';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
-import { IDeepnoteNotebookManager } from '../../types';
+import { IDeepnoteNotebookManager, RawProjectIntegration } from '../../types';
+import {
+    createDeepnoteFile,
+    createDeepnoteProject,
+    createMockNotebook,
+    createWorkspaceFolder
+} from '../deepnoteTestHelpers';
 import { IntegrationWebviewProvider } from './integrationWebview';
-import { FederatedAuthTokenEntry, IFederatedAuthTokenStorage, IIntegrationStorage } from './types';
+import {
+    FederatedAuthTokenEntry,
+    IFederatedAuthTokenStorage,
+    IIntegrationEnvLiveRefresher,
+    IIntegrationStorage
+} from './types';
 import { DatabaseIntegrationConfig } from '@deepnote/database-integrations';
 import { computeMetadataFingerprint } from './federatedAuth/federatedAuthTokenStorage.node';
 import {
@@ -36,6 +49,8 @@ interface FakeWebviewPanel {
     triggerDispose: () => void;
     setPostMessageImpl: (impl: (message: CapturedMessage) => Promise<boolean>) => void;
 }
+
+type RefreshFn = IIntegrationEnvLiveRefresher['refresh'];
 
 function createFakeWebviewPanel(): FakeWebviewPanel {
     const posted: CapturedMessage[] = [];
@@ -186,6 +201,7 @@ suite('IntegrationWebviewProvider', () => {
 
     function buildProvider(
         opts: {
+            liveRefresher?: IIntegrationEnvLiveRefresher;
             sqlIntegrationEnvVars?: ISqlIntegrationEnvVarsProvider;
             tokenStorage?: IFederatedAuthTokenStorage;
         } = {}
@@ -197,7 +213,8 @@ suite('IntegrationWebviewProvider', () => {
             instance(mockTelemetryService),
             extensionSubscriptions,
             opts.sqlIntegrationEnvVars ?? sqlIntegrationEnvVars,
-            opts.tokenStorage
+            opts.tokenStorage,
+            opts.liveRefresher
         );
     }
 
@@ -701,6 +718,125 @@ suite('IntegrationWebviewProvider', () => {
                 fakePanel.posted.some((message) => message.type === 'success'),
                 'a partial failure must not be reported as success'
             );
+        });
+    });
+
+    suite('deleteConfiguration', () => {
+        const ALPHA_URI = Uri.file('/ws/alpha.deepnote');
+        const SHARED_CONFIG = buildPostgresIntegration({ id: 'pg-shared', name: 'Shared Postgres' });
+        const SHARED_ENTRY: RawProjectIntegration = {
+            id: SHARED_CONFIG.id,
+            name: SHARED_CONFIG.name,
+            type: SHARED_CONFIG.type
+        };
+
+        let refreshSpy: sinon.SinonSpy<Parameters<RefreshFn>, ReturnType<RefreshFn>>;
+        let writes: Map<string, DeepnoteFile>;
+
+        setup(() => {
+            refreshSpy = sinon.spy<RefreshFn>(async () => undefined);
+            writes = new Map();
+            when(integrationStorage.delete(anyString())).thenResolve();
+            preStoreToken(SHARED_CONFIG.id);
+        });
+
+        function projectFile(projectId: string, name: string, integrations: RawProjectIntegration[]): DeepnoteFile {
+            return createDeepnoteFile({ project: createDeepnoteProject({ id: projectId, name, integrations }) });
+        }
+
+        /** This project's active file declares `pg-shared`; `/ws/alpha.deepnote` holds project-alpha ("Alpha"). */
+        function stubProjectFiles(alphaIntegrations: RawProjectIntegration[]): void {
+            const onDisk = new Map([
+                [ACTIVE_FILE_URI.fsPath, projectFile(PROJECT_ID, 'Active', [SHARED_ENTRY])],
+                [ALPHA_URI.fsPath, projectFile('project-alpha', 'Alpha', alphaIntegrations)]
+            ]);
+            const discovered = [ACTIVE_FILE_URI, ALPHA_URI];
+
+            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([
+                createWorkspaceFolder(Uri.file('/ws'))
+            ]);
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything(), anything())).thenReturn(
+                Promise.resolve(discovered)
+            );
+            // `persistProjectIntegrations` enumerates without a token; the scan passes one.
+            when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve(discovered));
+
+            const mockFs = mock<typeof workspace.fs>();
+
+            when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
+                const file = onDisk.get(uri.fsPath);
+
+                return file
+                    ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
+                    : Promise.reject(new Error(`no readFile stub for ${uri.fsPath}`));
+            });
+            when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri, bytes: Uint8Array) => {
+                writes.set(uri.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
+
+                return Promise.resolve();
+            });
+            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+        }
+
+        async function deleteSharedIntegration(): Promise<void> {
+            const provider = buildProvider({ liveRefresher: { refresh: refreshSpy }, tokenStorage });
+
+            await show(provider, singleIntegrationMap(SHARED_CONFIG.id, SHARED_CONFIG));
+
+            await fakePanel.onDidReceiveMessage({ type: 'delete', integrationId: SHARED_CONFIG.id });
+        }
+
+        function successMessages(): CapturedMessage[] {
+            return fakePanel.posted.filter((message) => message.type === 'success');
+        }
+
+        test('takes an integration another project declares off this project and keeps its credentials', async () => {
+            // Catches: deleting a linked integration wipes the credentials another project still uses.
+            stubProjectFiles([SHARED_ENTRY]);
+
+            await deleteSharedIntegration();
+
+            verify(integrationStorage.delete(anything())).never();
+            sinon.assert.notCalled(tokenDeleteSpy);
+            assert.deepStrictEqual(writes.get(ACTIVE_FILE_URI.fsPath)?.project.integrations, []);
+            assert.isFalse(writes.has(ALPHA_URI.fsPath), "Alpha's file must not be rewritten");
+            assert.deepStrictEqual(successMessages(), [
+                { message: Integrations.integrationUnlinked('Alpha'), type: 'success' }
+            ]);
+        });
+
+        test("refreshes only this project's kernels after taking a shared integration off it", async () => {
+            // Catches: an unlink fires no storage event, so this project's running kernels keep the removed
+            // integration's env.
+            stubProjectFiles([SHARED_ENTRY]);
+            const activeNotebook = createMockNotebook({
+                uri: ACTIVE_FILE_URI,
+                metadata: { deepnoteProjectId: PROJECT_ID }
+            });
+            const alphaNotebook = createMockNotebook({
+                uri: ALPHA_URI,
+                metadata: { deepnoteProjectId: 'project-alpha' }
+            });
+
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([activeNotebook, alphaNotebook]);
+
+            await deleteSharedIntegration();
+
+            sinon.assert.calledOnceWithExactly(refreshSpy, [activeNotebook], 'integration_config');
+        });
+
+        test('deletes the credentials of an integration no other project declares', async () => {
+            // Catches: an over-broad guard never deletes credentials, so they leak.
+            stubProjectFiles([{ id: 'pg-other', name: 'Other Postgres', type: 'pgsql' }]);
+
+            await deleteSharedIntegration();
+
+            verify(integrationStorage.delete(SHARED_CONFIG.id)).once();
+            sinon.assert.calledOnceWithExactly(tokenDeleteSpy, SHARED_CONFIG.id);
+            assert.deepStrictEqual(successMessages(), [
+                { message: 'Integration deleted successfully', type: 'success' }
+            ]);
+            sinon.assert.notCalled(refreshSpy);
         });
     });
 

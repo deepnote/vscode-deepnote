@@ -11,6 +11,7 @@ import { createDeepnoteFile, createDeepnoteProject, createWorkspaceFolder } from
 import {
     attachExistingIntegration,
     collectReusableIntegrations,
+    findOtherProjectsDeclaring,
     ReusableIntegration
 } from './existingIntegrationPicker';
 import { buildGoogleOauthIntegration, buildPostgresIntegration } from './federatedAuth/federatedAuthTestHelpers';
@@ -454,6 +455,63 @@ suite('existingIntegrationPicker', () => {
             assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, [
                 { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
             ]);
+        });
+    });
+
+    suite('findOtherProjectsDeclaring', () => {
+        test('names every other project declaring the id once, ignoring its own files, snapshots and unreadable files', async () => {
+            // Catches: the current project or a snapshot counted as "another project", which blocks every delete, or
+            // a project listed twice.
+            const shared = { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' };
+
+            stubWorkspace({
+                projects: [
+                    {
+                        uri: Uri.file('/ws/beta.deepnote'),
+                        projectId: 'project-beta',
+                        projectName: 'Beta',
+                        integrations: [shared]
+                    },
+                    {
+                        uri: Uri.file('/ws/alpha.deepnote'),
+                        projectId: 'project-alpha',
+                        projectName: 'Alpha',
+                        integrations: [shared]
+                    },
+                    {
+                        uri: Uri.file('/ws/alpha-2.deepnote'),
+                        projectId: 'project-alpha',
+                        projectName: 'Alpha',
+                        integrations: [shared]
+                    },
+                    {
+                        uri: Uri.file('/ws/current.deepnote'),
+                        projectId: CURRENT_PROJECT_ID,
+                        projectName: 'Current',
+                        integrations: [shared]
+                    },
+                    {
+                        uri: Uri.file('/ws/snapshots/gamma_project-gamma_latest.snapshot.deepnote'),
+                        projectId: 'project-gamma',
+                        projectName: 'Gamma',
+                        integrations: [shared]
+                    },
+                    {
+                        uri: Uri.file('/ws/delta.deepnote'),
+                        projectId: 'project-delta',
+                        projectName: 'Delta',
+                        integrations: [{ id: 'pg-other', name: 'Other Postgres', type: 'pgsql' }]
+                    }
+                ],
+                unreadable: [Uri.file('/ws/broken.deepnote')]
+            });
+
+            const projectNames = await findOtherProjectsDeclaring({
+                integrationId: 'pg-shared',
+                projectId: CURRENT_PROJECT_ID
+            });
+
+            assert.deepStrictEqual(projectNames, ['Alpha', 'Beta']);
         });
     });
 });

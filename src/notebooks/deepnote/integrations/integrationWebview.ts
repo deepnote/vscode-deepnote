@@ -1,5 +1,5 @@
 import { inject, injectable, optional } from 'inversify';
-import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
+import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window, workspace } from 'vscode';
 
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
@@ -11,8 +11,14 @@ import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
 import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { findOtherProjectsDeclaring } from './existingIntegrationPicker';
 import { persistProjectIntegrations } from './projectIntegrationsWriter';
-import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
+import {
+    IFederatedAuthTokenStorage,
+    IIntegrationEnvLiveRefresher,
+    IIntegrationStorage,
+    IIntegrationWebviewProvider
+} from './types';
 import {
     ConfigurableDatabaseIntegrationConfig,
     FederatedAuthTokenStatus,
@@ -49,7 +55,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         @inject(ISqlIntegrationEnvVarsProvider) private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider,
         @inject(IFederatedAuthTokenStorage)
         @optional()
-        private readonly tokenStorage?: IFederatedAuthTokenStorage
+        private readonly tokenStorage?: IFederatedAuthTokenStorage,
+        // Node-only service: the web extension has no kernels to refresh.
+        @inject(IIntegrationEnvLiveRefresher)
+        @optional()
+        private readonly liveRefresher?: IIntegrationEnvLiveRefresher
     ) {
         // Refresh on token-storage change so the auth pill flips without panel reload. Pushed into the extension-lifetime registry to survive panel close/reopen.
         if (this.tokenStorage) {
@@ -925,7 +935,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Delete the integration completely (removes credentials and integration entry)
+     * Removes the integration from the project, and its credentials too unless another workspace project still
+     * declares the id: credentials are keyed by id alone, so projects that linked one integration share them.
      */
     private async deleteConfiguration(integrationId: string): Promise<boolean> {
         if (await this.refuseEditIfFileConfigured(integrationId)) {
@@ -933,10 +944,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
 
         try {
-            // Token first: a failure here has to abort before the config is committed, otherwise the token is
-            // stranded with no integration left in the panel to retry from.
-            await this.tokenStorage?.delete(integrationId);
-            await this.integrationStorage.delete(integrationId);
+            const otherProjectNames = this.projectId
+                ? await findOtherProjectsDeclaring({ integrationId, projectId: this.projectId })
+                : [];
+
+            if (otherProjectNames.length === 0) {
+                // Token first: a failure here has to abort before the config is committed, otherwise the token is
+                // stranded with no integration left in the panel to retry from.
+                await this.tokenStorage?.delete(integrationId);
+                await this.integrationStorage.delete(integrationId);
+            }
 
             // Remove from local state
             this.integrations.delete(integrationId);
@@ -947,12 +964,20 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
             if (persisted) {
                 await this.currentPanel?.webview.postMessage({
-                    message: l10n.t('Integration deleted successfully'),
+                    message:
+                        otherProjectNames.length > 0
+                            ? localize.Integrations.integrationUnlinked(otherProjectNames.join(', '))
+                            : l10n.t('Integration deleted successfully'),
                     type: 'success'
                 });
             }
 
-            // The credential delete above is the tracked operation; a skipped project-YAML sync is not a failure.
+            if (otherProjectNames.length > 0) {
+                await this.refreshProjectKernels();
+            }
+
+            // Deleting the credentials, or taking a shared integration off this project, is the tracked operation;
+            // a skipped project-YAML sync is not a failure.
             return true;
         } catch (error) {
             logger.error('Failed to delete integration', error);
@@ -965,6 +990,23 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             });
 
             return false;
+        }
+    }
+
+    /**
+     * Re-applies integration env in this project's running kernels. Only needed when no credential changed: a
+     * SecretStorage change already triggers `IntegrationEnvRefreshHandler`.
+     */
+    private async refreshProjectKernels(): Promise<void> {
+        const projectNotebooks = workspace.notebookDocuments.filter(
+            (notebook) =>
+                notebook.notebookType === 'deepnote' && notebook.metadata?.deepnoteProjectId === this.projectId
+        );
+
+        try {
+            await this.liveRefresher?.refresh(projectNotebooks, 'integration_config');
+        } catch (error) {
+            logger.error('IntegrationWebviewProvider: failed to refresh integration env after unlinking', error);
         }
     }
 

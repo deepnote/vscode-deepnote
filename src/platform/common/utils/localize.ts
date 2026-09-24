@@ -865,8 +865,8 @@ export namespace Integrations {
     export const addNewIntegration = l10n.t('Add New Integration');
     export const addExistingIntegration = l10n.t('Add Existing Integration');
     export const addExistingIntegrationScanning = l10n.t('Looking for integrations in other projects...');
-    export const addExistingIntegrationSnapshotUnsupported = l10n.t(
-        'Integrations cannot be added to a snapshot file. Open the project notebook and try again.'
+    export const snapshotIntegrationsUnsupported = l10n.t(
+        'Integrations cannot be managed from a snapshot file. Open the project notebook and try again.'
     );
     export const switchIntegrationSnapshotUnsupported = l10n.t(
         'The integration of a snapshot cannot be changed. Open the project notebook and try again.'

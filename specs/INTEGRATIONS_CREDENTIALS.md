@@ -433,6 +433,10 @@ Orchestrates the integration management UI and commands.
 3. Manager opens webview with integration list
 4. Optionally pre-selects a specific integration for configuration
 
+Both commands act only on the notebook a menu or the panel names, when one is given, and refuse it once it is closed
+rather than acting on whichever editor has focus. They also refuse a snapshot (`*.snapshot.deepnote`): it matches the
+notebook selector, but it records a past run, and the integrations writer never edits one.
+
 **Add Existing Integration** (`deepnote.addExistingIntegration`, also the "Add Existing Integration" button in the
 webview, implemented in `existingIntegrationPicker.ts`):
 

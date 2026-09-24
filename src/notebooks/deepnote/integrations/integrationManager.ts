@@ -100,14 +100,6 @@ export class IntegrationManager implements IIntegrationManager {
             return 'failed';
         }
 
-        // `*.snapshot.deepnote` matches the notebook selector, so this command can run against a focused snapshot.
-        // The writer skips snapshots, which would report a failure only after the cache had already been updated.
-        if (isSnapshotFile(activeNotebook.uri)) {
-            void window.showErrorMessage(localize.Integrations.addExistingIntegrationSnapshotUnsupported);
-
-            return 'failed';
-        }
-
         const projectId = activeNotebook.metadata?.deepnoteProjectId;
         const notebookId = activeNotebook.metadata?.deepnoteNotebookId;
 
@@ -272,6 +264,8 @@ export class IntegrationManager implements IIntegrationManager {
     /**
      * The Deepnote notebook to act on, or `undefined` after telling the user why there is none. A URI from a menu or
      * the panel names the only notebook to act on: once it is closed, the focused editor may belong to another project.
+     * A snapshot is refused: `*.snapshot.deepnote` matches the notebook selector, but it records a past run, so the
+     * writer never edits one, while credentials are saved and deleted all the same.
      */
     private resolveDeepnoteNotebook(notebookUri: string | undefined): NotebookDocument | undefined {
         const notebook = notebookUri
@@ -284,6 +278,14 @@ export class IntegrationManager implements IIntegrationManager {
             void window.showErrorMessage(
                 notebookUri ? localize.Integrations.commandNotebookClosed : l10n.t('No active Deepnote notebook')
             );
+
+            return undefined;
+        }
+
+        if (isSnapshotFile(notebook.uri)) {
+            void window.showErrorMessage(localize.Integrations.snapshotIntegrationsUnsupported);
+
+            return undefined;
         }
 
         return notebook;

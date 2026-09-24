@@ -385,7 +385,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
                 return SNAPSHOT_URI.toString();
             },
-            expectedMessage: Integrations.addExistingIntegrationSnapshotUnsupported,
+            expectedMessage: Integrations.snapshotIntegrationsUnsupported,
             name: 'the active file is a snapshot'
         },
         {
@@ -560,6 +560,21 @@ suite('IntegrationManager: the Manage Integrations command', () => {
 
         verify(webviewProvider.show(anything(), anything(), anything(), anything(), anything())).never();
         verify(mockedVSCodeNamespaces.window.showErrorMessage(Integrations.commandNotebookClosed)).once();
+    });
+
+    test('refuses a focused snapshot instead of opening the panel for it', async () => {
+        // Catches: a panel on a snapshot saving and deleting credentials while every project-file edit is skipped.
+        const snapshot = createMockNotebook({
+            uri: SNAPSHOT_URI,
+            metadata: { deepnoteProjectId: CURRENT_PROJECT_ID, deepnoteNotebookId: CURRENT_NOTEBOOK_ID }
+        });
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([snapshot]);
+        focus(snapshot);
+
+        await manageIntegrations?.();
+
+        verify(webviewProvider.show(anything(), anything(), anything(), anything(), anything())).never();
+        verify(mockedVSCodeNamespaces.window.showErrorMessage(Integrations.snapshotIntegrationsUnsupported)).once();
     });
 
     test('opens the panel for the focused notebook when no URI is given', async () => {

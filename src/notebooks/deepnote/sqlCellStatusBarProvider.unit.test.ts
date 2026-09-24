@@ -14,6 +14,7 @@ import { Commands } from '../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../types';
 import { createDeepnoteFile, createDeepnoteProject, createMockCell } from './deepnoteTestHelpers';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+import { Integrations } from '../../platform/common/utils/localize';
 
 /** Puts a readable project file behind `uri`; the returned map captures what the integrations writer persists. */
 function stubProjectFileOnDisk(uri: Uri, projectId: string): Map<string, DeepnoteFile> {
@@ -1315,7 +1316,9 @@ suite('SqlCellStatusBarProvider', () => {
 
             await switchIntegrationHandler(cell);
 
-            verify(mockedVSCodeNamespaces.window.showErrorMessage(anything())).once();
+            verify(
+                mockedVSCodeNamespaces.window.showErrorMessage(Integrations.switchIntegrationSnapshotUnsupported)
+            ).once();
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
             verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
             verify(commandTelemetry.trackEvent(anything())).never();

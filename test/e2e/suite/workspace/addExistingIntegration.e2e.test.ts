@@ -215,9 +215,16 @@ async function awaitDeclaredIntegrationId(filePath: string, name: string): Promi
     const driver = VSBrowser.instance.driver;
     const deadline = Date.now() + FILE_WRITE_TIMEOUT;
     let declared: DeclaredIntegration[] = [];
+    let lastReadError: unknown;
 
     while (Date.now() < deadline) {
-        declared = readDeclaredIntegrations(filePath);
+        // The extension rewrites the file in place, so a poll can land mid-write and parse a torn file: not yet.
+        try {
+            declared = readDeclaredIntegrations(filePath);
+            lastReadError = undefined;
+        } catch (error) {
+            lastReadError = error;
+        }
 
         const match = declared.find((entry) => entry.name === name);
 
@@ -230,7 +237,8 @@ async function awaitDeclaredIntegrationId(filePath: string, name: string): Promi
 
     throw new Error(
         `${filePath} never declared an integration named "${name}" within ${FILE_WRITE_TIMEOUT}ms; ` +
-            `last saw ${JSON.stringify(declared)}`
+            `last saw ${JSON.stringify(declared)}` +
+            (lastReadError ? `, and the last read failed: ${lastReadError}` : '')
     );
 }
 

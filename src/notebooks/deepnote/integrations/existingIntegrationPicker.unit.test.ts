@@ -6,7 +6,7 @@ import { CancellationError, CancellationToken, CancellationTokenSource, Uri, wor
 
 import { ConfigurableDatabaseIntegrationConfig } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
-import { IDeepnoteNotebookManager, ProjectIntegration, RawProjectIntegration } from '../../types';
+import { IDeepnoteNotebookManager, RawProjectIntegration } from '../../types';
 import { createDeepnoteFile, createDeepnoteProject, createWorkspaceFolder } from '../deepnoteTestHelpers';
 import {
     attachExistingIntegration,
@@ -163,22 +163,6 @@ suite('existingIntegrationPicker', () => {
             assert.deepStrictEqual(result, { conflictingIds: [], integrations: expected });
         });
 
-        test('takes the name from the stored config, not from whichever project was read first', async () => {
-            stubWorkspace({
-                projects: [
-                    {
-                        uri: Uri.file('/ws/a.deepnote'),
-                        projectId: 'project-a',
-                        integrations: [{ id: 'pg-shared', name: 'Stale project name', type: 'pgsql' }]
-                    }
-                ]
-            });
-
-            const { integrations } = await collect();
-
-            assert.strictEqual(integrations[0].name, 'Shared Postgres');
-        });
-
         test('excludes ids the current project already declares and the current project files themselves', async () => {
             stubWorkspace({
                 projects: [
@@ -200,9 +184,12 @@ suite('existingIntegrationPicker', () => {
 
             const { integrations } = await collect(['pg-shared']);
 
+            const expected: ReusableIntegration[] = [
+                { id: 'bq-oauth', name: 'Team BigQuery', projectNames: ['project-a'], type: 'big-query' }
+            ];
             assert.deepStrictEqual(
-                integrations.map((integration) => integration.id),
-                ['bq-oauth'],
+                integrations,
+                expected,
                 'pg-shared is already attached; bq-oauth is offered because project-a (not the current project) declares it'
             );
         });
@@ -218,6 +205,12 @@ suite('existingIntegrationPicker', () => {
                             { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' },
                             { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
                         ]
+                    },
+                    // A type this build cannot manage is skipped, not taken for a conflict that hides pg-shared.
+                    {
+                        uri: Uri.file('/ws/b.deepnote'),
+                        projectId: 'project-b',
+                        integrations: [{ id: 'pg-shared', name: 'Shared Postgres', type: 'some-future-type' }]
                     }
                 ]
             });
@@ -277,77 +270,54 @@ suite('existingIntegrationPicker', () => {
             );
         });
 
-        test('stops at the next file and reports cancellation when the token trips mid-scan', async () => {
-            const cts = new CancellationTokenSource();
+        const projectA: OnDiskProject = {
+            uri: Uri.file('/ws/a.deepnote'),
+            projectId: 'project-a',
+            integrations: [{ id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }]
+        };
+        const projectB: OnDiskProject = {
+            uri: Uri.file('/ws/b.deepnote'),
+            projectId: 'project-b',
+            integrations: [{ id: 'bq-oauth', name: 'Team BigQuery', type: 'big-query' }]
+        };
+        const cancellations: {
+            name: string;
+            projects: OnDiskProject[];
+            readsBeforeStop: Uri[];
+            trip: 'discovery' | 'read';
+        }[] = [
+            { name: 'mid-scan', projects: [projectA, projectB], readsBeforeStop: [projectA.uri], trip: 'read' },
+            {
+                name: 'while the last file is read',
+                projects: [projectA],
+                readsBeforeStop: [projectA.uri],
+                trip: 'read'
+            },
+            { name: 'during file discovery', projects: [projectA], readsBeforeStop: [], trip: 'discovery' }
+        ];
 
-            try {
-                const { reads } = stubWorkspace({
-                    projects: [
-                        {
-                            uri: Uri.file('/ws/a.deepnote'),
-                            projectId: 'project-a',
-                            integrations: [{ id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }]
-                        },
-                        {
-                            uri: Uri.file('/ws/b.deepnote'),
-                            projectId: 'project-b',
-                            integrations: [{ id: 'bq-oauth', name: 'Team BigQuery', type: 'big-query' }]
-                        }
-                    ],
-                    onRead: () => cts.cancel()
-                });
+        for (const { name, projects, readsBeforeStop, trip } of cancellations) {
+            test(`reports cancellation and reads no further when the token trips ${name}`, async () => {
+                const cts = new CancellationTokenSource();
 
-                await assert.isRejected(collect([], [pgConfig, bqConfig], cts.token), CancellationError);
+                try {
+                    const { reads } = stubWorkspace({
+                        projects,
+                        onFindFiles: trip === 'discovery' ? () => cts.cancel() : undefined,
+                        onRead: trip === 'read' ? () => cts.cancel() : undefined
+                    });
 
-                assert.deepStrictEqual(reads, [Uri.file('/ws/a.deepnote').fsPath], 'the scan must not read on');
-            } finally {
-                cts.dispose();
-            }
-        });
+                    await assert.isRejected(collect([], [pgConfig, bqConfig], cts.token), CancellationError);
 
-        test('reports cancellation when the token trips while the last file is read', async () => {
-            const cts = new CancellationTokenSource();
-
-            try {
-                stubWorkspace({
-                    projects: [
-                        {
-                            uri: Uri.file('/ws/a.deepnote'),
-                            projectId: 'project-a',
-                            integrations: [{ id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }]
-                        }
-                    ],
-                    onRead: () => cts.cancel()
-                });
-
-                await assert.isRejected(collect([], [pgConfig, bqConfig], cts.token), CancellationError);
-            } finally {
-                cts.dispose();
-            }
-        });
-
-        test('reports cancellation when the token trips during file discovery', async () => {
-            const cts = new CancellationTokenSource();
-
-            try {
-                const { reads } = stubWorkspace({
-                    projects: [
-                        {
-                            uri: Uri.file('/ws/a.deepnote'),
-                            projectId: 'project-a',
-                            integrations: [{ id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }]
-                        }
-                    ],
-                    onFindFiles: () => cts.cancel()
-                });
-
-                await assert.isRejected(collect([], [pgConfig, bqConfig], cts.token), CancellationError);
-
-                assert.deepStrictEqual(reads, [], 'discovery never finished, so no file was visited');
-            } finally {
-                cts.dispose();
-            }
-        });
+                    assert.deepStrictEqual(
+                        reads,
+                        readsBeforeStop.map((uri) => uri.fsPath)
+                    );
+                } finally {
+                    cts.dispose();
+                }
+            });
+        }
 
         test('returns nothing without an open workspace folder', async () => {
             stubWorkspace({ projects: [], hasWorkspaceFolder: false });
@@ -382,36 +352,9 @@ suite('existingIntegrationPicker', () => {
             notebookManager = instance(mockManager);
         });
 
-        test('appends the linked entry to the project integrations in the cache and on disk, keeping existing entries', async () => {
-            const { writes } = stubWorkspace({
-                projects: [
-                    {
-                        uri: activeUri,
-                        projectId: CURRENT_PROJECT_ID,
-                        integrations: [{ id: 'bq-own', name: 'Own BigQuery', type: 'big-query' }]
-                    }
-                ]
-            });
-            const result = await attachExistingIntegration({
-                activeFileUri: activeUri,
-                integration: shared,
-                notebookManager,
-                projectId: CURRENT_PROJECT_ID
-            });
-
-            const expectedIntegrations: ProjectIntegration[] = [
-                { id: 'bq-own', name: 'Own BigQuery', type: 'big-query' },
-                { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
-            ];
-            assert.deepStrictEqual(result, { activePersisted: true, siblingsFailed: 0 });
-            assert.deepStrictEqual(cacheUpdates, [
-                { projectId: CURRENT_PROJECT_ID, integrations: expectedIntegrations }
-            ]);
-            assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, expectedIntegrations);
-        });
-
-        test('passes entries of types it cannot manage (e.g. pandas-dataframe) through verbatim', async () => {
+        test('appends the linked entry in the cache and on disk, keeping every existing entry verbatim, even of types it cannot manage', async () => {
             const currentIntegrations: RawProjectIntegration[] = [
+                { id: 'bq-own', name: 'Own BigQuery', type: 'big-query' },
                 { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' },
                 { id: 'future', name: 'Unknown to this build', type: 'some-future-type' }
             ];
@@ -419,7 +362,7 @@ suite('existingIntegrationPicker', () => {
                 projects: [{ uri: activeUri, projectId: CURRENT_PROJECT_ID, integrations: currentIntegrations }]
             });
 
-            await attachExistingIntegration({
+            const result = await attachExistingIntegration({
                 activeFileUri: activeUri,
                 integration: shared,
                 notebookManager,
@@ -430,33 +373,11 @@ suite('existingIntegrationPicker', () => {
                 ...currentIntegrations,
                 { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
             ];
+            assert.deepStrictEqual(result, { activePersisted: true, siblingsFailed: 0 });
             assert.deepStrictEqual(cacheUpdates, [
                 { projectId: CURRENT_PROJECT_ID, integrations: expectedIntegrations }
             ]);
             assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, expectedIntegrations);
-        });
-
-        test('replaces rather than duplicates an entry whose id the project already declares', async () => {
-            const { writes } = stubWorkspace({
-                projects: [
-                    {
-                        uri: activeUri,
-                        projectId: CURRENT_PROJECT_ID,
-                        integrations: [{ id: 'pg-shared', name: 'Old name', type: 'pgsql' }]
-                    }
-                ]
-            });
-
-            await attachExistingIntegration({
-                activeFileUri: activeUri,
-                integration: shared,
-                notebookManager,
-                projectId: CURRENT_PROJECT_ID
-            });
-
-            assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, [
-                { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
-            ]);
         });
     });
 

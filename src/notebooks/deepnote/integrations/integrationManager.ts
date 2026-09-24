@@ -260,8 +260,7 @@ export class IntegrationManager implements IIntegrationManager {
         projectId: string,
         activeNotebook: NotebookDocument
     ): Promise<void> {
-        // Panel first: a busy kernel holds the refresh behind its running cell, and a panel still on the old list
-        // writes that list back over the project on its next save.
+        // Panel first: a busy kernel holds the refresh behind its running cell.
         try {
             await this.showIntegrationsUI(undefined, activeNotebook.uri.toString());
         } catch (error) {

@@ -241,6 +241,46 @@ suite('IntegrationWebviewProvider', () => {
         });
     }
 
+    function projectFile(projectId: string, name: string, integrations: RawProjectIntegration[]): DeepnoteFile {
+        return createDeepnoteFile({ project: createDeepnoteProject({ id: projectId, name, integrations }) });
+    }
+
+    /** Serves `files` through `workspace.fs` and `/ws` file discovery; returns what the panel writes, by path. */
+    function stubProjectFiles(files: Array<{ file: DeepnoteFile; uri: Uri }>): Map<string, DeepnoteFile> {
+        const onDisk = new Map(files.map(({ file, uri }) => [uri.fsPath, file] as const));
+        const discovered = files.map(({ uri }) => uri);
+        const writes = new Map<string, DeepnoteFile>();
+
+        when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([createWorkspaceFolder(Uri.file('/ws'))]);
+        when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything(), anything())).thenReturn(
+            Promise.resolve(discovered)
+        );
+        // The writer enumerates without a token; the scan passes one.
+        when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve(discovered));
+
+        const mockFs = mock<typeof workspace.fs>();
+
+        when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
+            const file = onDisk.get(uri.fsPath);
+
+            return file
+                ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
+                : Promise.reject(new Error(`no readFile stub for ${uri.fsPath}`));
+        });
+        when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri, bytes: Uint8Array) => {
+            writes.set(uri.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
+
+            return Promise.resolve();
+        });
+        when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+
+        return writes;
+    }
+
+    function successMessages(): CapturedMessage[] {
+        return fakePanel.posted.filter((message) => message.type === 'success');
+    }
+
     suite('updateWebview tokenStatus', () => {
         // Eligibility now comes entirely from the candidate set; `config` no longer gates the status.
         test('candidate but no tokenStorage → unsupported', async () => {
@@ -735,47 +775,16 @@ suite('IntegrationWebviewProvider', () => {
 
         setup(() => {
             refreshSpy = sinon.spy<RefreshFn>(async () => undefined);
-            writes = new Map();
             when(integrationStorage.delete(anyString())).thenResolve();
             preStoreToken(SHARED_CONFIG.id);
         });
 
-        function projectFile(projectId: string, name: string, integrations: RawProjectIntegration[]): DeepnoteFile {
-            return createDeepnoteFile({ project: createDeepnoteProject({ id: projectId, name, integrations }) });
-        }
-
         /** This project's active file declares `pg-shared`; `/ws/alpha.deepnote` holds project-alpha ("Alpha"). */
-        function stubProjectFiles(alphaIntegrations: RawProjectIntegration[]): void {
-            const onDisk = new Map([
-                [ACTIVE_FILE_URI.fsPath, projectFile(PROJECT_ID, 'Active', [SHARED_ENTRY])],
-                [ALPHA_URI.fsPath, projectFile('project-alpha', 'Alpha', alphaIntegrations)]
+        function stubActiveAndAlphaFiles(alphaIntegrations: RawProjectIntegration[]): void {
+            writes = stubProjectFiles([
+                { file: projectFile(PROJECT_ID, 'Active', [SHARED_ENTRY]), uri: ACTIVE_FILE_URI },
+                { file: projectFile('project-alpha', 'Alpha', alphaIntegrations), uri: ALPHA_URI }
             ]);
-            const discovered = [ACTIVE_FILE_URI, ALPHA_URI];
-
-            when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([
-                createWorkspaceFolder(Uri.file('/ws'))
-            ]);
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything(), anything())).thenReturn(
-                Promise.resolve(discovered)
-            );
-            // `persistProjectIntegrations` enumerates without a token; the scan passes one.
-            when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve(discovered));
-
-            const mockFs = mock<typeof workspace.fs>();
-
-            when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
-                const file = onDisk.get(uri.fsPath);
-
-                return file
-                    ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
-                    : Promise.reject(new Error(`no readFile stub for ${uri.fsPath}`));
-            });
-            when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri, bytes: Uint8Array) => {
-                writes.set(uri.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
-
-                return Promise.resolve();
-            });
-            when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
         }
 
         async function deleteSharedIntegration(): Promise<void> {
@@ -786,13 +795,9 @@ suite('IntegrationWebviewProvider', () => {
             await fakePanel.onDidReceiveMessage({ type: 'delete', integrationId: SHARED_CONFIG.id });
         }
 
-        function successMessages(): CapturedMessage[] {
-            return fakePanel.posted.filter((message) => message.type === 'success');
-        }
-
         test('takes an integration another project declares off this project and keeps its credentials', async () => {
             // Catches: deleting a linked integration wipes the credentials another project still uses.
-            stubProjectFiles([SHARED_ENTRY]);
+            stubActiveAndAlphaFiles([SHARED_ENTRY]);
 
             await deleteSharedIntegration();
 
@@ -808,7 +813,7 @@ suite('IntegrationWebviewProvider', () => {
         test("refreshes only this project's kernels after taking a shared integration off it", async () => {
             // Catches: an unlink fires no storage event, so this project's running kernels keep the removed
             // integration's env.
-            stubProjectFiles([SHARED_ENTRY]);
+            stubActiveAndAlphaFiles([SHARED_ENTRY]);
             const activeNotebook = createMockNotebook({
                 uri: ACTIVE_FILE_URI,
                 metadata: { deepnoteProjectId: PROJECT_ID }
@@ -827,7 +832,7 @@ suite('IntegrationWebviewProvider', () => {
 
         test('deletes the credentials of an integration no other project declares', async () => {
             // Catches: an over-broad guard never deletes credentials, so they leak.
-            stubProjectFiles([{ id: 'pg-other', name: 'Other Postgres', type: 'pgsql' }]);
+            stubActiveAndAlphaFiles([{ id: 'pg-other', name: 'Other Postgres', type: 'pgsql' }]);
 
             await deleteSharedIntegration();
 
@@ -837,6 +842,94 @@ suite('IntegrationWebviewProvider', () => {
                 { message: 'Integration deleted successfully', type: 'success' }
             ]);
             sinon.assert.notCalled(refreshSpy);
+        });
+    });
+
+    suite('project file edits', () => {
+        const PG_CONFIG = buildPostgresIntegration({ id: 'pg-1', name: 'Team Postgres' });
+        const PG_ENTRY: RawProjectIntegration = { id: PG_CONFIG.id, name: PG_CONFIG.name, type: PG_CONFIG.type };
+        // The panel lists none of these: one was linked after it opened, and it cannot configure the other types.
+        const UNLISTED: RawProjectIntegration[] = [
+            { id: 'pg-linked', name: 'Linked Postgres', type: 'pgsql' },
+            { id: 'duckdb', name: 'DuckDB', type: 'pandas-dataframe' },
+            { id: 'future', name: 'Unknown to this build', type: 'some-future-type' }
+        ];
+
+        let refreshSpy: sinon.SinonSpy<Parameters<RefreshFn>, ReturnType<RefreshFn>>;
+        let writes: Map<string, DeepnoteFile>;
+
+        setup(() => {
+            refreshSpy = sinon.spy<RefreshFn>(async () => undefined);
+            when(integrationStorage.save(anything())).thenResolve();
+            when(integrationStorage.delete(anyString())).thenResolve();
+            writes = stubProjectFiles([
+                { file: projectFile(PROJECT_ID, 'Active', [PG_ENTRY, ...UNLISTED]), uri: ACTIVE_FILE_URI }
+            ]);
+        });
+
+        async function showPanelListingOnly(config: ConfigurableDatabaseIntegrationConfig): Promise<void> {
+            const provider = buildProvider({ liveRefresher: { refresh: refreshSpy }, tokenStorage });
+
+            await show(provider, singleIntegrationMap(config.id, config));
+        }
+
+        test('a save rewrites the saved entry in place and keeps every entry the panel does not list', async () => {
+            // Catches: the panel's own list stamped over the file, deleting what it never listed.
+            await showPanelListingOnly(PG_CONFIG);
+            const renamed = { ...PG_CONFIG, name: 'Renamed Postgres' };
+
+            await fakePanel.onDidReceiveMessage({ type: 'save', integrationId: renamed.id, config: renamed });
+
+            assert.deepStrictEqual(writes.get(ACTIVE_FILE_URI.fsPath)?.project.integrations, [
+                { id: 'pg-1', name: 'Renamed Postgres', type: 'pgsql' },
+                ...UNLISTED
+            ]);
+        });
+
+        test('a delete takes only the deleted entry off the file', async () => {
+            await showPanelListingOnly(PG_CONFIG);
+
+            await fakePanel.onDidReceiveMessage({ type: 'delete', integrationId: PG_CONFIG.id });
+
+            assert.deepStrictEqual(writes.get(ACTIVE_FILE_URI.fsPath)?.project.integrations, UNLISTED);
+        });
+
+        test('a reset clears the credentials and leaves the project file alone', async () => {
+            await showPanelListingOnly(PG_CONFIG);
+
+            await fakePanel.onDidReceiveMessage({ type: 'reset', integrationId: PG_CONFIG.id });
+
+            verify(integrationStorage.delete(PG_CONFIG.id)).once();
+            assert.strictEqual(writes.size, 0);
+            assert.deepStrictEqual(successMessages(), [
+                { message: 'Configuration reset successfully', type: 'success' }
+            ]);
+        });
+
+        test("a save refreshes this project's kernels once the file declares the saved integration", async () => {
+            // Catches: the refresh the credential save triggers reading the list before it holds a new integration,
+            // with nothing refreshing the kernels again once it does.
+            const activeNotebook = createMockNotebook({
+                metadata: { deepnoteProjectId: PROJECT_ID },
+                uri: ACTIVE_FILE_URI
+            });
+            const added = buildPostgresIntegration({ id: 'pg-new', name: 'New Postgres' });
+            let declaredAtRefresh: RawProjectIntegration[] | undefined;
+
+            refreshSpy = sinon.spy<RefreshFn>(async () => {
+                declaredAtRefresh = writes.get(ACTIVE_FILE_URI.fsPath)?.project.integrations;
+            });
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([activeNotebook]);
+            await showPanelListingOnly(PG_CONFIG);
+
+            await fakePanel.onDidReceiveMessage({ type: 'save', integrationId: added.id, config: added });
+
+            sinon.assert.calledOnceWithExactly(refreshSpy, [activeNotebook], 'integration_config');
+            assert.deepStrictEqual(declaredAtRefresh, [
+                PG_ENTRY,
+                ...UNLISTED,
+                { id: 'pg-new', name: 'New Postgres', type: 'pgsql' }
+            ]);
         });
     });
 
@@ -1032,49 +1125,24 @@ suite('IntegrationWebviewProvider', () => {
         assert.isEmpty(updateMessages, 'no `update` postMessage should be issued after the panel disposes mid-update');
     });
 
-    suite('project integrations list update (via save message)', () => {
-        async function callUpdateProjectIntegrationsList(provider: IntegrationWebviewProvider): Promise<void> {
-            when(integrationStorage.save(anything())).thenResolve();
+    test('a save that cannot update the notebook file says so instead of reporting success', async () => {
+        const errors: string[] = [];
+        when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((msg: string) => {
+            errors.push(msg);
 
-            const pgConfig = buildPostgresIntegration({ id: 'pg-1' });
-            // `show()` seeds projectId + the integrations map; the `save` message drives the cache update through the real handler.
-            await show(provider, singleIntegrationMap('pg-1', pgConfig));
-
-            await fakePanel.onDidReceiveMessage({ type: 'save', integrationId: 'pg-1', config: pgConfig });
-        }
-
-        test('updates the cached project integrations via notebookManager.updateProjectIntegrations', async () => {
-            const updateProjectIntegrationsSpy = sinon.spy((_projectId: string, _integrations: unknown[]) => true);
-            when(notebookManager.updateProjectIntegrations(anyString(), anything())).thenCall(
-                updateProjectIntegrationsSpy
-            );
-
-            const provider = buildProvider({ tokenStorage });
-            await callUpdateProjectIntegrationsList(provider);
-
-            sinon.assert.calledOnce(updateProjectIntegrationsSpy);
-            sinon.assert.calledWith(updateProjectIntegrationsSpy, PROJECT_ID);
+            return Promise.resolve(undefined);
         });
+        when(integrationStorage.save(anything())).thenResolve();
+        // No file is served, so the active one cannot be read, let alone rewritten.
+        stubProjectFiles([]);
 
-        test('shows a "project not found" error when no cached entry was updated', async () => {
-            const errors: string[] = [];
-            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenCall((msg: string) => {
-                errors.push(msg);
+        const provider = buildProvider({ tokenStorage });
+        const pgConfig = buildPostgresIntegration({ id: 'pg-1' });
+        await show(provider, singleIntegrationMap('pg-1', pgConfig));
 
-                return Promise.resolve(undefined);
-            });
+        await fakePanel.onDidReceiveMessage({ type: 'save', integrationId: 'pg-1', config: pgConfig });
 
-            // updateProjectIntegrations returns false → no cached entry for the project → error.
-            when(notebookManager.updateProjectIntegrations(anyString(), anything())).thenReturn(false);
-
-            const provider = buildProvider({ tokenStorage });
-            await callUpdateProjectIntegrationsList(provider);
-
-            assert.strictEqual(
-                errors.length,
-                1,
-                'project-not-found error should show when no cached entry was updated'
-            );
-        });
+        assert.deepStrictEqual(errors, ['Failed to save integrations to the notebook file. Please try again.']);
+        assert.deepStrictEqual(successMessages(), []);
     });
 });

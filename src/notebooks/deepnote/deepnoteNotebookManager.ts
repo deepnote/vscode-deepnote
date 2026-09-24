@@ -36,27 +36,6 @@ export class DeepnoteNotebookManager implements IDeepnoteNotebookManager {
         notebookEntries.set(notebookId, clonedProject);
     }
 
-    /**
-     * Updates the integrations list across every cached notebook entry under the project (cache-only).
-     * @returns `true` if at least one cached entry was updated, `false` otherwise.
-     */
-    updateProjectIntegrations(projectId: string, integrations: RawProjectIntegration[]): boolean {
-        const notebookEntries = this.originalProjects.get(projectId);
-
-        if (!notebookEntries || notebookEntries.size === 0) {
-            return false;
-        }
-
-        for (const [notebookId, project] of notebookEntries) {
-            const updatedProject = structuredClone(project);
-            updatedProject.project.integrations = structuredClone(integrations);
-
-            notebookEntries.set(notebookId, updatedProject);
-        }
-
-        return true;
-    }
-
     /** Replaces the integrations list of one cached (projectId, notebookId) entry (cache-only). */
     updateProjectIntegrationsForNotebook(
         projectId: string,

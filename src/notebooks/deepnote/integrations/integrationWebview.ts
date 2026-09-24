@@ -10,9 +10,14 @@ import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
-import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { IDeepnoteNotebookManager } from '../../types';
 import { findOtherProjectsDeclaring } from './existingIntegrationPicker';
-import { persistProjectIntegrations } from './projectIntegrationsWriter';
+import {
+    addProjectIntegration,
+    PersistIntegrationsResult,
+    ProjectFilesParams,
+    removeProjectIntegration
+} from './projectIntegrationsWriter';
 import {
     IFederatedAuthTokenStorage,
     IIntegrationEnvLiveRefresher,
@@ -840,7 +845,12 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            const persisted = await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectFiles((target) =>
+                addProjectIntegration({
+                    ...target,
+                    integration: { id: integrationId, name: config.name || integrationId, type: config.type }
+                })
+            );
 
             await this.updateWebview();
 
@@ -849,6 +859,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                     message: l10n.t('Configuration saved successfully'),
                     type: 'success'
                 });
+
+                // The credential save above already refreshed the kernels, possibly before this project declared a
+                // new integration; refresh again now that it does.
+                await this.refreshProjectKernels();
             }
 
             // The credential save above is the tracked operation; a skipped project-YAML sync is not a failure.
@@ -907,18 +921,13 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 this.integrations.set(integrationId, integration);
             }
 
-            const persisted = await this.updateProjectIntegrationsList();
-
             await this.updateWebview();
 
-            if (persisted) {
-                await this.currentPanel?.webview.postMessage({
-                    message: l10n.t('Configuration reset successfully'),
-                    type: 'success'
-                });
-            }
+            await this.currentPanel?.webview.postMessage({
+                message: l10n.t('Configuration reset successfully'),
+                type: 'success'
+            });
 
-            // The credential reset above is the tracked operation; a skipped project-YAML sync is not a failure.
             return true;
         } catch (error) {
             logger.error('Failed to reset integration configuration', error);
@@ -958,7 +967,9 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             // Remove from local state
             this.integrations.delete(integrationId);
 
-            const persisted = await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectFiles((target) =>
+                removeProjectIntegration({ ...target, integrationId })
+            );
 
             await this.updateWebview();
 
@@ -994,8 +1005,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Re-applies integration env in this project's running kernels. Only needed when no credential changed: a
-     * SecretStorage change already triggers `IntegrationEnvRefreshHandler`.
+     * Re-applies integration env in this project's running kernels. A SecretStorage change triggers
+     * `IntegrationEnvRefreshHandler` by itself, but an edit to the project's integrations list fires no event.
      */
     private async refreshProjectKernels(): Promise<void> {
         const projectNotebooks = workspace.notebookDocuments.filter(
@@ -1006,46 +1017,26 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         try {
             await this.liveRefresher?.refresh(projectNotebooks, 'integration_config');
         } catch (error) {
-            logger.error('IntegrationWebviewProvider: failed to refresh integration env after unlinking', error);
+            logger.error('IntegrationWebviewProvider: failed to refresh integration env', error);
         }
     }
 
     /**
-     * Update the project's integrations list based on current integrations
+     * Applies one edit to the project's `.deepnote` files and reports how it went: an error when the active file did
+     * not take it, a warning for the siblings that did not. Returns whether the active file took it.
      */
-    private async updateProjectIntegrationsList(): Promise<boolean> {
+    private async updateProjectFiles(
+        edit: (target: ProjectFilesParams) => Promise<PersistIntegrationsResult>
+    ): Promise<boolean> {
         if (!this.projectId || !this.activeFileUri) {
             logger.warn('IntegrationWebviewProvider: No project ID / active file available, skipping project update');
             return false;
         }
 
-        // Build the integrations list from current integrations
-        const projectIntegrations: ProjectIntegration[] = Array.from(this.integrations.entries())
-            .map(([id, integration]): ProjectIntegration | null => {
-                // Get the integration type from config or integration metadata
-                const type = integration.config?.type || integration.integrationType;
-                if (!type) {
-                    logger.warn(`IntegrationWebviewProvider: No type found for integration ${id}, skipping`);
-                    return null;
-                }
-
-                return {
-                    id,
-                    name: integration.config?.name || integration.integrationName || id,
-                    type
-                };
-            })
-            .filter((integration): integration is ProjectIntegration => integration !== null);
-
-        logger.debug(
-            `IntegrationWebviewProvider: Updating project ${this.projectId} with ${projectIntegrations.length} integrations`
-        );
-
-        const { activePersisted, siblingsFailed } = await persistProjectIntegrations({
+        const { activePersisted, siblingsFailed } = await edit({
+            activeFileUri: this.activeFileUri,
             notebookManager: this.notebookManager,
-            projectId: this.projectId,
-            integrations: projectIntegrations,
-            activeFileUri: this.activeFileUri
+            projectId: this.projectId
         });
 
         if (!activePersisted) {

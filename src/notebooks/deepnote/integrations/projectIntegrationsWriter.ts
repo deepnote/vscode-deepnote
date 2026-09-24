@@ -15,24 +15,22 @@ export interface PersistIntegrationsResult {
     siblingsFailed: number;
 }
 
-export interface PersistProjectIntegrationsParams {
+/** The project whose `.deepnote` files an edit goes to, starting with the one the user acted in. */
+export interface ProjectFilesParams {
+    activeFileUri: Uri;
     notebookManager: IDeepnoteNotebookManager;
     projectId: string;
-    integrations: RawProjectIntegration[];
-    activeFileUri: Uri;
 }
 
-export interface AddProjectIntegrationParams {
-    activeFileUri: Uri;
+export interface AddProjectIntegrationParams extends ProjectFilesParams {
     integration: RawProjectIntegration;
-    notebookManager: IDeepnoteNotebookManager;
-    projectId: string;
 }
 
-interface WriteSiblingFilesParams {
-    activeFileUri: Uri;
-    notebookManager: IDeepnoteNotebookManager;
-    projectId: string;
+export interface RemoveProjectIntegrationParams extends ProjectFilesParams {
+    integrationId: string;
+}
+
+interface WriteSiblingFilesParams extends ProjectFilesParams {
     resolve: ResolveIntegrations;
 }
 
@@ -48,40 +46,40 @@ type ResolveIntegrations = (existing: RawProjectIntegration[]) => RawProjectInte
 
 type IntegrationWriteStatus = 'failed' | 'skipped' | 'written';
 
-/** Writes `integrations` to the active file and every on-disk sibling; `activePersisted` reflects disk truth, not the cache. */
-export async function persistProjectIntegrations(
-    params: PersistProjectIntegrationsParams
+/**
+ * Adds one integration to the project; an id a file already declares is replaced where it stands. Like every edit
+ * here it merges into what each file holds instead of replacing the list, so a caller holding a list across a prompt
+ * cannot delete entries written while it waited, nor ones it never listed.
+ */
+export function addProjectIntegration(params: AddProjectIntegrationParams): Promise<PersistIntegrationsResult> {
+    const { integration, ...target } = params;
+
+    return editProjectFiles(target, (existing) =>
+        existing.some((entry) => entry.id === integration.id)
+            ? existing.map((entry) => (entry.id === integration.id ? integration : entry))
+            : [...existing, integration]
+    );
+}
+
+/** Takes one integration off the project, leaving every other entry each file holds as it is. */
+export function removeProjectIntegration(params: RemoveProjectIntegrationParams): Promise<PersistIntegrationsResult> {
+    const { integrationId, ...target } = params;
+
+    return editProjectFiles(target, (existing) => existing.filter((entry) => entry.id !== integrationId));
+}
+
+/** Applies `resolve` to the active file, then to every sibling; `activePersisted` reflects disk truth, not the cache. */
+async function editProjectFiles(
+    params: ProjectFilesParams,
+    resolve: ResolveIntegrations
 ): Promise<PersistIntegrationsResult> {
-    const { notebookManager, projectId, integrations, activeFileUri } = params;
-
-    const resolve: ResolveIntegrations = () => integrations;
-
-    // Refresh the cache first so live env/kernel behavior stays correct even if a disk write fails.
-    notebookManager.updateProjectIntegrations(projectId, integrations);
+    const { activeFileUri, notebookManager, projectId } = params;
 
     // findFiles only covers open folders, so write the active file explicitly (no open folder / out-of-workspace).
     const status = await writeIntegrationsToFile({ fileUri: activeFileUri, notebookManager, projectId, resolve });
-    const siblingsFailed = await writeSiblingFiles({ activeFileUri, notebookManager, projectId, resolve });
-
-    return { activePersisted: status === 'written', siblingsFailed };
-}
-
-/**
- * Adds one integration to the project, merging into what each file holds instead of replacing the list: a caller
- * holding a snapshot across a prompt cannot delete entries written while it waited. An id already present is
- * replaced. The sibling sweep follows the active file: it does not run until that file is on disk.
- */
-export async function addProjectIntegration(params: AddProjectIntegrationParams): Promise<PersistIntegrationsResult> {
-    const { activeFileUri, integration, notebookManager, projectId } = params;
-    const resolve: ResolveIntegrations = (existing) => [
-        ...existing.filter((entry) => entry.id !== integration.id),
-        integration
-    ];
-
-    const status = await writeIntegrationsToFile({ fileUri: activeFileUri, notebookManager, projectId, resolve });
 
     // The active file is the mandate for the sweep. `skipped` means it is a snapshot or another project's file, and
-    // `failed` means the add landed nowhere — stamping the project's other files on its behalf is data loss either way.
+    // `failed` means the edit landed nowhere — stamping the project's other files on its behalf is data loss either way.
     if (status !== 'written') {
         return { activePersisted: false, siblingsFailed: 0 };
     }

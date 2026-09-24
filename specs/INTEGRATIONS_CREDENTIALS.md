@@ -441,12 +441,13 @@ webview, implemented in `existingIntegrationPicker.ts`):
    as are file-only (`.deepnote.env.yaml`) integrations, which already apply workspace-wide.
 2. Shows a QuickPick (name, type, "Used in: <projects>"). An id whose roster type disagrees with the stored config's
    type is dropped with a warning rather than offered.
-3. On selection, appends `{ id, name, type }` to the active project's roster via `persistProjectIntegrations`.
-   Nothing is copied in SecretStorage: configs (and federated refresh tokens) are keyed by integration id alone, and
-   the roster entry is what scopes an integration to a project, so the linked project resolves the same credentials.
+3. On selection, appends `{ id, name, type }` to the active project's roster via `addProjectIntegration` (see "Project
+   files" below). Nothing is copied in SecretStorage: configs (and federated refresh tokens) are keyed by integration
+   id alone, and the roster entry is what scopes an integration to a project, so the linked project resolves the same
+   credentials.
 4. Re-shows the panel, then re-runs the integration env refresh in the project's running kernels, since no storage
    change event fires for a roster-only edit. The panel goes first: a busy kernel answers the refresh only after its
-   running cell, and until the panel is re-shown it would save its pre-link list back over the project.
+   running cell.
 
 The panel's Delete only takes a linked integration off the active project's roster, and keeps its credentials, while
 another project in the open workspace folders still declares the id. No storage change event fires then either, so
@@ -462,6 +463,17 @@ Provides the webview-based UI for managing integration credentials.
 - Real-time updates as credentials are saved or cleared
 - Configuration forms for each integration type
 - Delete/reset functionality
+
+**Project files:**
+
+Each panel action edits the roster entry it acts on, through `projectIntegrationsWriter.ts`: Save adds the saved
+integration or updates its entry in place (`addProjectIntegration`), Delete removes it (`removeProjectIntegration`),
+and Reset leaves the roster alone. Every edit merges into what each of the project's `.deepnote` files holds rather
+than writing the panel's list, so entries the panel does not list survive it: types it cannot configure, like
+`pandas-dataframe`, and integrations linked after it opened. The active file goes first, and the siblings are only
+swept once it is on disk; each open notebook's cached project then takes the list its own file now holds. A Save
+refreshes the project's running kernels once the roster holds the integration, since the refresh its credential save
+triggers may have read the roster before.
 
 **Connection Status:**
 

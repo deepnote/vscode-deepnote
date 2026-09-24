@@ -42,7 +42,10 @@ Reacts to **file** changes.
 
 ### 3. `IntegrationEnvLiveRefresher` (`integrationEnvLiveRefresher.node.ts`)
 
-Performs the refresh, for both triggers.
+Performs the refresh, for both triggers above and for edits to a project's `integrations` list, which decides the
+stored configs its kernels get. Such an edit writes no storage, so no event fires and the code making it calls the
+refresher for the project's open notebooks itself: `IntegrationManager` after Add Existing Integration, and
+`IntegrationWebviewProvider` after a Save, or after a Delete that only takes a shared integration off the project.
 
 - Skips notebooks with no kernel, or whose kernel has never started
 - Runs a hidden execution in each remaining kernel:
@@ -127,7 +130,7 @@ web counterpart, since the loopback server and the file reads both require Node 
 
 - `IntegrationEnvLiveRefresher.refreshNotebook()` never throws; a per-notebook failure is logged and the other
   notebooks still refresh
-- Both triggers wrap their async entry point and log rather than surfacing an unhandled rejection
+- Every trigger wraps its async entry point and logs rather than surfacing an unhandled rejection
 - A refresh that produces `error` outputs is counted as failed, so the success message only appears when at
   least one kernel actually applied the new environment
 - `UserpodApiEndpoints` keeps a persistent `error` listener (an `error` with no listener would crash the

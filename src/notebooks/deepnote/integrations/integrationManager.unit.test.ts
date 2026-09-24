@@ -244,7 +244,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
     });
 
     test('re-shows the panel before the kernel env refresh settles', async () => {
-        // Catches: a busy kernel leaving the panel on the pre-link list, whose next save deletes the link.
+        // Catches: a busy kernel leaving the panel on the pre-link list until its running cell finishes.
         const refreshGate = createDeferred<void>();
 
         refreshSpy = sinon.spy<RefreshFn>(() => refreshGate.promise);

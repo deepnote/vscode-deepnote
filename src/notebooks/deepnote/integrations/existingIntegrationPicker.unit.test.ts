@@ -70,7 +70,7 @@ function stubWorkspace(opts: {
             return Promise.resolve(token?.isCancellationRequested ? [] : discovered);
         }
     );
-    // `persistProjectIntegrations` enumerates without a token; the scan passes one.
+    // The writer enumerates without a token; the scan passes one.
     when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve(discovered));
     when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
 

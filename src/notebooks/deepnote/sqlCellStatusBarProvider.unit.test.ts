@@ -11,7 +11,7 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock
 import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../types';
-import { createMockCell } from './deepnoteTestHelpers';
+import { createDeepnoteFile, createDeepnoteProject, createMockCell } from './deepnoteTestHelpers';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
 
 /**
@@ -238,7 +238,12 @@ suite('SqlCellStatusBarProvider', () => {
         } as never);
         const envVars = mock<ISqlIntegrationEnvVarsProvider>();
         when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
-            { id: integrationId, name: 'Production', type: 'pgsql', metadata: {} } as never
+            {
+                id: integrationId,
+                name: 'Production',
+                type: 'pgsql',
+                metadata: { host: 'localhost', database: 'db', user: 'u', password: 'p' }
+            }
         ]);
         provider = new SqlCellStatusBarProvider(
             disposables,
@@ -264,7 +269,12 @@ suite('SqlCellStatusBarProvider', () => {
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
         const envVars = mock<ISqlIntegrationEnvVarsProvider>();
         when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
-            { id: integrationId, name: 'From File', type: 'pgsql', metadata: {} } as never
+            {
+                id: integrationId,
+                name: 'From File',
+                type: 'pgsql',
+                metadata: { host: 'localhost', database: 'db', user: 'u', password: 'p' }
+            }
         ]);
         provider = new SqlCellStatusBarProvider(
             disposables,
@@ -309,11 +319,9 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
-        when(notebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-            project: {
-                integrations: []
-            }
-        } as any);
+        when(notebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+            createDeepnoteFile({ project: createDeepnoteProject({ integrations: [] }) })
+        );
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
 
@@ -340,17 +348,19 @@ suite('SqlCellStatusBarProvider', () => {
         });
 
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve(undefined);
-        when(notebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-            project: {
-                integrations: [
-                    {
-                        id: integrationId,
-                        name: 'Production Database',
-                        type: 'pgsql'
-                    }
-                ]
-            }
-        } as any);
+        when(notebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+            createDeepnoteFile({
+                project: createDeepnoteProject({
+                    integrations: [
+                        {
+                            id: integrationId,
+                            name: 'Production Database',
+                            type: 'pgsql'
+                        }
+                    ]
+                })
+            })
+        );
 
         const result = await provider.provideCellStatusBarItems(cell, cancellationToken);
 
@@ -685,9 +695,9 @@ suite('SqlCellStatusBarProvider', () => {
                 },
                 selection: { start: 0 }
             } as any);
-            when(activateNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: { integrations: [] }
-            } as any);
+            when(activateNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({ project: createDeepnoteProject({ integrations: [] }) })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve(undefined)
@@ -714,7 +724,12 @@ suite('SqlCellStatusBarProvider', () => {
 
             const envVars = mock<ISqlIntegrationEnvVarsProvider>();
             when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
-                { id: 'file-only-bq', name: 'BigQuery from file', type: 'big-query', metadata: {} } as any
+                {
+                    id: 'file-only-bq',
+                    name: 'BigQuery from file',
+                    type: 'big-query',
+                    metadata: { authMethod: 'service-account', service_account: '{"type":"service_account"}' }
+                }
             ]);
             const fileAwareProvider = new SqlCellStatusBarProvider(
                 [],
@@ -726,9 +741,9 @@ suite('SqlCellStatusBarProvider', () => {
 
             const notebookMetadata = { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' };
             const cell = createMockCell({ languageId: 'sql', notebookMetadata });
-            when(activateNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: { integrations: [] }
-            } as any);
+            when(activateNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({ project: createDeepnoteProject({ integrations: [] }) })
+            );
 
             let offeredIds: string[] = [];
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
@@ -1147,17 +1162,19 @@ suite('SqlCellStatusBarProvider', () => {
             });
             const newIntegrationId = 'new-integration';
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: [
-                        {
-                            id: newIntegrationId,
-                            name: 'New Integration',
-                            type: 'pgsql'
-                        }
-                    ]
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        integrations: [
+                            {
+                                id: newIntegrationId,
+                                name: 'New Integration',
+                                type: 'pgsql'
+                            }
+                        ]
+                    })
+                })
+            );
 
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
@@ -1190,17 +1207,19 @@ suite('SqlCellStatusBarProvider', () => {
             });
             const newIntegrationId = 'new-integration';
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: [
-                        {
-                            id: newIntegrationId,
-                            name: 'New Integration',
-                            type: 'not-a-real-integration-type'
-                        }
-                    ]
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        integrations: [
+                            {
+                                id: newIntegrationId,
+                                name: 'New Integration',
+                                type: 'not-a-real-integration-type'
+                            }
+                        ]
+                    })
+                })
+            );
 
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
@@ -1227,7 +1246,12 @@ suite('SqlCellStatusBarProvider', () => {
 
             const envVars = mock<ISqlIntegrationEnvVarsProvider>();
             when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
-                { id: fileOnlyId, name: 'BigQuery from file', type: 'big-query', metadata: {} } as any
+                {
+                    id: fileOnlyId,
+                    name: 'BigQuery from file',
+                    type: 'big-query',
+                    metadata: { authMethod: 'service-account', service_account: '{"type":"service_account"}' }
+                }
             ]);
             const fileTelemetry = mock<ITelemetryService>();
             new SqlCellStatusBarProvider(
@@ -1238,9 +1262,9 @@ suite('SqlCellStatusBarProvider', () => {
                 instance(envVars)
             ).activate();
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: { integrations: [] }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({ project: createDeepnoteProject({ integrations: [] }) })
+            );
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve({ id: fileOnlyId, label: 'BigQuery from file' } as any)
             );
@@ -1269,11 +1293,9 @@ suite('SqlCellStatusBarProvider', () => {
                 notebookMetadata
             });
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: []
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({ project: createDeepnoteProject({ integrations: [] }) })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve(undefined)
@@ -1294,11 +1316,9 @@ suite('SqlCellStatusBarProvider', () => {
             });
             const newIntegrationId = 'new-integration';
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: []
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({ project: createDeepnoteProject({ integrations: [] }) })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)
@@ -1319,11 +1339,9 @@ suite('SqlCellStatusBarProvider', () => {
             });
             const newIntegrationId = 'new-integration';
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: []
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({ project: createDeepnoteProject({ integrations: [] }) })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)
@@ -1349,11 +1367,9 @@ suite('SqlCellStatusBarProvider', () => {
                 notebookMetadata
             });
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: []
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({ project: createDeepnoteProject({ integrations: [] }) })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve({ id: '__configure__', label: 'Configure current integration' } as any)
@@ -1375,11 +1391,9 @@ suite('SqlCellStatusBarProvider', () => {
             const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: []
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({ project: createDeepnoteProject({ integrations: [] }) })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
                 quickPickItems = items;
@@ -1398,17 +1412,19 @@ suite('SqlCellStatusBarProvider', () => {
             const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: [
-                        {
-                            id: 'bigquery-integration',
-                            name: 'My Google BigQuery',
-                            type: 'big-query'
-                        }
-                    ]
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        integrations: [
+                            {
+                                id: 'bigquery-integration',
+                                name: 'My Google BigQuery',
+                                type: 'big-query'
+                            }
+                        ]
+                    })
+                })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
                 quickPickItems = items;
@@ -1427,17 +1443,19 @@ suite('SqlCellStatusBarProvider', () => {
             const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: [
-                        {
-                            id: 'unknown-integration',
-                            name: 'Unknown DB',
-                            type: 'unknown_type'
-                        }
-                    ]
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        integrations: [
+                            {
+                                id: 'unknown-integration',
+                                name: 'Unknown DB',
+                                type: 'unknown_type'
+                            }
+                        ]
+                    })
+                })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
                 quickPickItems = items;
@@ -1461,17 +1479,19 @@ suite('SqlCellStatusBarProvider', () => {
             });
             let quickPickItems: any[] = [];
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: [
-                        {
-                            id: currentIntegrationId,
-                            name: 'Current Integration',
-                            type: 'pgsql'
-                        }
-                    ]
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        integrations: [
+                            {
+                                id: currentIntegrationId,
+                                name: 'Current Integration',
+                                type: 'pgsql'
+                            }
+                        ]
+                    })
+                })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
                 quickPickItems = items;
@@ -1511,22 +1531,24 @@ suite('SqlCellStatusBarProvider', () => {
             const cell = createMockCell({ languageId: 'sql', notebookMetadata });
             let quickPickItems: any[] = [];
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: [
-                        {
-                            id: DATAFRAME_SQL_INTEGRATION_ID,
-                            name: 'Should be skipped',
-                            type: 'duckdb'
-                        },
-                        {
-                            id: 'postgres-integration',
-                            name: 'PostgreSQL',
-                            type: 'pgsql'
-                        }
-                    ]
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        integrations: [
+                            {
+                                id: DATAFRAME_SQL_INTEGRATION_ID,
+                                name: 'Should be skipped',
+                                type: 'duckdb'
+                            },
+                            {
+                                id: 'postgres-integration',
+                                name: 'PostgreSQL',
+                                type: 'pgsql'
+                            }
+                        ]
+                    })
+                })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items) => {
                 quickPickItems = items;
@@ -1560,17 +1582,19 @@ suite('SqlCellStatusBarProvider', () => {
                 notebookMetadata
             });
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: [
-                        {
-                            id: currentIntegrationId,
-                            name: 'Current Integration',
-                            type: 'pgsql'
-                        }
-                    ]
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        integrations: [
+                            {
+                                id: currentIntegrationId,
+                                name: 'Current Integration',
+                                type: 'pgsql'
+                            }
+                        ]
+                    })
+                })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve({ id: currentIntegrationId, label: 'Current Integration' } as any)
@@ -1590,11 +1614,9 @@ suite('SqlCellStatusBarProvider', () => {
                 notebookMetadata
             });
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: {
-                    integrations: []
-                }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({ project: createDeepnoteProject({ integrations: [] }) })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             // Return an item without an id property (e.g., a separator)
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(

@@ -14,6 +14,7 @@ import { NotebookCellExecutionState, notebookCellExecutions } from '../../platfo
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { DeepnoteCellExecutionAnalytics } from './deepnoteCellExecutionAnalytics';
+import { createDeepnoteFile, createDeepnoteProject } from './deepnoteTestHelpers';
 import { IDeepnoteNotebookManager } from '../types';
 
 suite('DeepnoteCellExecutionAnalytics', () => {
@@ -65,9 +66,9 @@ suite('DeepnoteCellExecutionAnalytics', () => {
     }
 
     function stubProjectIntegrations(integrations: Array<{ id: string; name: string; type: string }>): void {
-        when(notebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-            project: { integrations }
-        } as never);
+        when(notebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+            createDeepnoteFile({ project: createDeepnoteProject({ integrations }) })
+        );
     }
 
     setup(() => {

@@ -50,7 +50,7 @@ const REFRESH_START_TIMEOUT_MS = 1_000;
 
 type RefreshFn = IIntegrationEnvLiveRefresher['refresh'];
 // `thenCall` checks no signature, so doubles take their parameter types from here; annotating them by hand undoes it.
-type UpdateProjectIntegrationsFn = IDeepnoteNotebookManager['updateProjectIntegrations'];
+type UpdateProjectIntegrationsFn = IDeepnoteNotebookManager['updateProjectIntegrationsForNotebook'];
 
 function projectFile(projectId: string, notebookId: string, integrations: RawProjectIntegration[]): DeepnoteFile {
     return createDeepnoteFile({
@@ -68,7 +68,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
     let otherNotebook: NotebookDocument;
     let currentProject: DeepnoteFile | undefined;
     let writes: Map<string, DeepnoteFile>;
-    let cacheUpdates: RawProjectIntegration[][];
+    let cacheUpdates: Parameters<UpdateProjectIntegrationsFn>[];
     // Typed off the interface so a signature change fails the compile, not just the `firstCall.args` assertion.
     let refreshSpy: sinon.SinonSpy<Parameters<RefreshFn>, ReturnType<RefreshFn>>;
     let quickPickItems: QuickPickItem[] | undefined;
@@ -169,16 +169,16 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
         const mockManager = mock<IDeepnoteNotebookManager>();
         when(mockManager.getProjectForNotebook(CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID)).thenCall(() => currentProject);
-        const recordCacheUpdate: UpdateProjectIntegrationsFn = (_projectId, integrations) => {
+        const recordCacheUpdate: UpdateProjectIntegrationsFn = (projectId, notebookId, integrations) => {
             if (cacheUpdateError) {
                 throw cacheUpdateError;
             }
 
-            cacheUpdates.push(integrations);
-
-            return true;
+            cacheUpdates.push([projectId, notebookId, integrations]);
         };
-        when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(recordCacheUpdate);
+        when(mockManager.updateProjectIntegrationsForNotebook(anything(), anything(), anything())).thenCall(
+            recordCacheUpdate
+        );
         notebookManager = mockManager;
 
         telemetry = mock<ITelemetryService>();
@@ -220,7 +220,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
             { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
         ];
         assert.deepStrictEqual(writes.get(CURRENT_URI.fsPath)?.project.integrations, expectedIntegrations);
-        assert.deepStrictEqual(cacheUpdates, [expectedIntegrations]);
+        assert.deepStrictEqual(cacheUpdates, [[CURRENT_PROJECT_ID, CURRENT_NOTEBOOK_ID, expectedIntegrations]]);
         assert.isUndefined(writes.get(OTHER_URI.fsPath), 'the other project must not be rewritten');
 
         assert.isTrue(refreshSpy.calledOnce);

@@ -7,7 +7,12 @@ import { CancellationError, CancellationToken, CancellationTokenSource, Uri, wor
 import { ConfigurableDatabaseIntegrationConfig } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { IDeepnoteNotebookManager, RawProjectIntegration } from '../../types';
-import { createDeepnoteFile, createDeepnoteProject, createWorkspaceFolder } from '../deepnoteTestHelpers';
+import {
+    createDeepnoteFile,
+    createDeepnoteProject,
+    createMockNotebook,
+    createWorkspaceFolder
+} from '../deepnoteTestHelpers';
 import {
     attachExistingIntegration,
     collectReusableIntegrations,
@@ -22,7 +27,7 @@ use(chaiAsPromised);
 const CURRENT_PROJECT_ID = 'project-current';
 
 // `thenCall` checks no signature, so doubles take their parameter types from here; annotating them by hand undoes it.
-type UpdateProjectIntegrationsFn = IDeepnoteNotebookManager['updateProjectIntegrations'];
+type UpdateProjectIntegrationsFn = IDeepnoteNotebookManager['updateProjectIntegrationsForNotebook'];
 
 interface OnDiskProject {
     uri: Uri;
@@ -338,17 +343,17 @@ suite('existingIntegrationPicker', () => {
         };
 
         let notebookManager: IDeepnoteNotebookManager;
-        let cacheUpdates: Array<{ projectId: string; integrations: RawProjectIntegration[] }>;
+        let cacheUpdates: Parameters<UpdateProjectIntegrationsFn>[];
 
         setup(() => {
             cacheUpdates = [];
-            const recordCacheUpdate: UpdateProjectIntegrationsFn = (projectId, integrations) => {
-                cacheUpdates.push({ projectId, integrations });
-
-                return true;
+            const recordCacheUpdate: UpdateProjectIntegrationsFn = (...update) => {
+                cacheUpdates.push(update);
             };
             const mockManager = mock<IDeepnoteNotebookManager>();
-            when(mockManager.updateProjectIntegrations(anything(), anything())).thenCall(recordCacheUpdate);
+            when(mockManager.updateProjectIntegrationsForNotebook(anything(), anything(), anything())).thenCall(
+                recordCacheUpdate
+            );
             notebookManager = instance(mockManager);
         });
 
@@ -361,6 +366,12 @@ suite('existingIntegrationPicker', () => {
             const { writes } = stubWorkspace({
                 projects: [{ uri: activeUri, projectId: CURRENT_PROJECT_ID, integrations: currentIntegrations }]
             });
+            when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([
+                createMockNotebook({
+                    metadata: { deepnoteNotebookId: 'notebook-current', deepnoteProjectId: CURRENT_PROJECT_ID },
+                    uri: activeUri
+                })
+            ]);
 
             const result = await attachExistingIntegration({
                 activeFileUri: activeUri,
@@ -374,9 +385,7 @@ suite('existingIntegrationPicker', () => {
                 { id: 'pg-shared', name: 'Shared Postgres', type: 'pgsql' }
             ];
             assert.deepStrictEqual(result, { activePersisted: true, siblingsFailed: 0 });
-            assert.deepStrictEqual(cacheUpdates, [
-                { projectId: CURRENT_PROJECT_ID, integrations: expectedIntegrations }
-            ]);
+            assert.deepStrictEqual(cacheUpdates, [[CURRENT_PROJECT_ID, 'notebook-current', expectedIntegrations]]);
             assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, expectedIntegrations);
         });
     });

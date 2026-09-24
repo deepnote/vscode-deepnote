@@ -60,6 +60,16 @@ export interface IDeepnoteNotebookManager {
      * @returns `true` if at least one cached entry was found and updated, `false` otherwise
      */
     updateProjectIntegrations(projectId: string, integrations: RawProjectIntegration[]): boolean;
+
+    /**
+     * Replaces the integrations list of the one cached (projectId, notebookId) entry (cache-only); does nothing
+     * when that entry is not cached. Sibling entries keep their own lists: each mirrors its own file.
+     */
+    updateProjectIntegrationsForNotebook(
+        projectId: string,
+        notebookId: string,
+        integrations: RawProjectIntegration[]
+    ): void;
 }
 
 export const IDeepnoteInitNotebookRunner = Symbol('IDeepnoteInitNotebookRunner');

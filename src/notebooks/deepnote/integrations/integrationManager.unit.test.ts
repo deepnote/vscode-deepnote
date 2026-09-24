@@ -348,10 +348,11 @@ suite('IntegrationManager.addExistingIntegration', () => {
         {
             arrange: () => {
                 // The panel stayed open for the other project after its notebook closed; only this editor is left.
+                const editor = mock<NotebookEditor>();
+
+                when(editor.notebook).thenReturn(currentNotebook);
                 when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([currentNotebook]);
-                when(mockedVSCodeNamespaces.window.visibleNotebookEditors).thenReturn([
-                    { notebook: currentNotebook } as NotebookEditor
-                ]);
+                when(mockedVSCodeNamespaces.window.visibleNotebookEditors).thenReturn([instance(editor)]);
 
                 return OTHER_URI.toString();
             },

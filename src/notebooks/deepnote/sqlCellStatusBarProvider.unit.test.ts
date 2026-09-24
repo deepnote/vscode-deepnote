@@ -1329,9 +1329,13 @@ suite('SqlCellStatusBarProvider', () => {
                 notebookUri: Uri.file('/ws/report_project-1_nb_main.snapshot.deepnote')
             });
 
-            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn({
-                project: { integrations: [{ id: newIntegrationId, name: 'New Integration', type: 'pgsql' }] }
-            } as any);
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        integrations: [{ id: newIntegrationId, name: 'New Integration', type: 'pgsql' }]
+                    })
+                })
+            );
             when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
             when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
                 Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)

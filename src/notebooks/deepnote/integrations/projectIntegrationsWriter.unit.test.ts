@@ -288,9 +288,9 @@ suite('addProjectIntegration', () => {
         });
 
         assert.deepStrictEqual(result, { activePersisted: true, siblingsFailed: 0 });
-        assert.deepStrictEqual(writes.get(activeUri.fsPath)!.project.integrations, [ADDED]);
+        assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, [ADDED]);
         assert.deepStrictEqual(
-            writes.get(siblingUri.fsPath)!.project.integrations,
+            writes.get(siblingUri.fsPath)?.project.integrations,
             [ownEntry, ADDED],
             "the sibling's own entry survives an add driven from another file"
         );
@@ -315,7 +315,7 @@ suite('addProjectIntegration', () => {
             projectId: PROJECT_ID
         });
 
-        assert.deepStrictEqual(writes.get(activeUri.fsPath)!.project.integrations, [ADDED]);
+        assert.deepStrictEqual(writes.get(activeUri.fsPath)?.project.integrations, [ADDED]);
     });
 
     test('writes nothing and leaves the cache untouched when the active file cannot be written', async () => {
@@ -393,7 +393,7 @@ suite('addProjectIntegration', () => {
         });
 
         assert.deepStrictEqual(order, ['active-write', 'cache', 'sibling-write']);
-        assert.deepStrictEqual(writes.get(siblingUri.fsPath)!.project.integrations, [ADDED]);
+        assert.deepStrictEqual(writes.get(siblingUri.fsPath)?.project.integrations, [ADDED]);
     });
 
     test('moves the cache to what the active file actually gained', async () => {

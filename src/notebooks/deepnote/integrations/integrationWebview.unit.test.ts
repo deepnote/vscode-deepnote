@@ -593,6 +593,52 @@ suite('IntegrationWebviewProvider', () => {
         );
     });
 
+    suite('refresh', () => {
+        const PG_CONFIG = buildPostgresIntegration({ id: 'pg-1', name: 'Team Postgres' });
+        const LINKED_CONFIG = buildPostgresIntegration({ id: 'pg-linked', name: 'Linked Postgres' });
+
+        function linkedMap(): Map<string, DetectedIntegration> {
+            return new Map([
+                ...singleIntegrationMap(PG_CONFIG.id, PG_CONFIG),
+                ...singleIntegrationMap(LINKED_CONFIG.id, LINKED_CONFIG)
+            ]);
+        }
+
+        test('opens no panel when none is open', async () => {
+            // Catches: a refresh after a command-palette run opening the panel and taking focus from the notebook.
+            await buildProvider().refresh(PROJECT_ID, linkedMap());
+
+            verify(
+                mockedVSCodeNamespaces.window.createWebviewPanel(anything(), anything(), anything(), anything())
+            ).never();
+        });
+
+        test('re-renders an open panel of the project with the new list, without revealing it', async () => {
+            const provider = buildProvider();
+            await show(provider, singleIntegrationMap(PG_CONFIG.id, PG_CONFIG));
+            const reveal = sinon.spy();
+            fakePanel.panel.reveal = reveal;
+
+            await provider.refresh(PROJECT_ID, linkedMap());
+
+            assert.deepStrictEqual(lastUpdate().integrations?.map((integration) => integration.id), [
+                'pg-1',
+                'pg-linked'
+            ]);
+            sinon.assert.notCalled(reveal);
+        });
+
+        test('leaves a panel that shows another project alone', async () => {
+            const provider = buildProvider();
+            await show(provider, singleIntegrationMap(PG_CONFIG.id, PG_CONFIG));
+            const postedBefore = fakePanel.posted.length;
+
+            await provider.refresh('project-other', linkedMap());
+
+            assert.strictEqual(fakePanel.posted.length, postedBefore);
+        });
+    });
+
     suite('handleMessage: "authenticate" telemetry outcome', () => {
         async function authenticate(commandResult: Promise<unknown>): Promise<void> {
             when(mockedVSCodeNamespaces.commands.executeCommand(anyString(), anything(), anything())).thenReturn(

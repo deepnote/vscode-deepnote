@@ -449,9 +449,10 @@ webview, implemented in `existingIntegrationPicker.ts`):
    files" below). Nothing is copied in SecretStorage: configs (and federated refresh tokens) are keyed by integration
    id alone, and the roster entry is what scopes an integration to a project, so the linked project resolves the same
    credentials.
-4. Re-shows the panel, then re-runs the integration env refresh in the project's running kernels, since no storage
-   change event fires for a roster-only edit. The panel goes first: a busy kernel answers the refresh only after its
-   running cell.
+4. Refreshes the integrations panel when one is open for this project, without revealing it; run from the command
+   palette, the command never opens one. Then re-runs the integration env refresh in the project's running kernels,
+   since no storage change event fires for a roster-only edit. The panel goes first: a busy kernel answers the refresh
+   only after its running cell.
 
 The panel's Delete only takes a linked integration off the active project's roster, and keeps its credentials, while
 another project in the open workspace folders still declares the id. No storage change event fires then either, so the

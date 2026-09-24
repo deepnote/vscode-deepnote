@@ -166,6 +166,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
         detector = mockDetector;
 
         webviewProvider = mock<IIntegrationWebviewProvider>();
+        when(webviewProvider.refresh(anything(), anything())).thenResolve();
         when(webviewProvider.show(anything(), anything(), anything(), anything(), anything())).thenResolve();
 
         const mockManager = mock<IDeepnoteNotebookManager>();
@@ -212,7 +213,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
         );
     }
 
-    test("links the picked integration, refreshes only this project's kernels and re-shows the panel", async () => {
+    test("links the picked integration, refreshes only this project's kernels and refreshes an open panel", async () => {
         const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
 
         assert.strictEqual(outcome, 'completed');
@@ -227,7 +228,9 @@ suite('IntegrationManager.addExistingIntegration', () => {
         assert.isTrue(refreshSpy.calledOnce);
         assert.deepStrictEqual(refreshSpy.firstCall.args, [[currentNotebook], 'integration_config']);
 
-        verify(webviewProvider.show(CURRENT_PROJECT_ID, anything(), anything(), anything(), anything())).once();
+        verify(webviewProvider.refresh(CURRENT_PROJECT_ID, anything())).once();
+        // Catches: the command opening, or re-targeting, the panel when run from the palette.
+        verify(webviewProvider.show(anything(), anything(), anything(), anything(), anything())).never();
 
         verify(
             telemetry.trackEvent(
@@ -244,7 +247,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
         assert.strictEqual(quickPickItems?.[0].detail, `Used in: ${OTHER_PROJECT_ID}`);
     });
 
-    test('re-shows the panel before the kernel env refresh settles', async () => {
+    test('refreshes an open panel before the kernel env refresh settles', async () => {
         // Catches: a busy kernel leaving the panel on the pre-link list until its running cell finishes.
         const refreshGate = createDeferred<void>();
 
@@ -255,7 +258,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
         try {
             await waitForCondition(() => refreshSpy.calledOnce, REFRESH_START_TIMEOUT_MS, 'the refresh never started');
 
-            verify(webviewProvider.show(CURRENT_PROJECT_ID, anything(), anything(), anything(), anything())).once();
+            verify(webviewProvider.refresh(CURRENT_PROJECT_ID, anything())).once();
         } finally {
             refreshGate.resolve();
         }
@@ -263,11 +266,9 @@ suite('IntegrationManager.addExistingIntegration', () => {
         assert.strictEqual(await command, 'completed');
     });
 
-    test('still refreshes the kernels when re-showing the panel fails', async () => {
-        // Catches: the kernel env refresh depending on the panel re-show succeeding.
-        when(webviewProvider.show(anything(), anything(), anything(), anything(), anything())).thenReject(
-            new Error('panel could not be shown')
-        );
+    test('still refreshes the kernels when refreshing the panel fails', async () => {
+        // Catches: the kernel env refresh depending on the panel refresh succeeding.
+        when(webviewProvider.refresh(anything(), anything())).thenReject(new Error('panel could not be refreshed'));
 
         const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
 

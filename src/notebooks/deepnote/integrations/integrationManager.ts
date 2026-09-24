@@ -206,7 +206,7 @@ export class IntegrationManager implements IIntegrationManager {
 
                 // Storage did not change, so the storage-change listeners that normally refresh kernels and the
                 // panel after a save stay silent; do both explicitly for this project.
-                await this.refreshAfterProjectIntegrationsChange(projectId, activeNotebook);
+                await this.refreshAfterProjectIntegrationsChange(projectId, notebookId, activeNotebook);
             } else {
                 void window.showErrorMessage(localize.Integrations.addExistingIntegrationFailed);
             }
@@ -241,11 +241,19 @@ export class IntegrationManager implements IIntegrationManager {
 
     private async refreshAfterProjectIntegrationsChange(
         projectId: string,
+        notebookId: string,
         activeNotebook: NotebookDocument
     ): Promise<void> {
-        // Panel first: a busy kernel holds the refresh behind its running cell.
+        // Panel first: a busy kernel holds the refresh behind its running cell. Only a panel already open for this
+        // project is refreshed: run from the palette, the command must not open one and take focus from the notebook.
         try {
-            await this.showIntegrationsUI(undefined, activeNotebook.uri.toString());
+            const integrations = await this.integrationDetector.detectIntegrations({
+                notebookId,
+                notebookUri: activeNotebook.uri,
+                projectId
+            });
+
+            await this.webviewProvider.refresh(projectId, integrations);
         } catch (error) {
             logger.error('IntegrationManager: failed to refresh the integrations panel', error);
         }

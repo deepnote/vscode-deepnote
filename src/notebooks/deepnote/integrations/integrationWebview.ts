@@ -78,6 +78,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
     }
 
+    public async refresh(projectId: string, integrations: Map<string, DetectedIntegration>): Promise<void> {
+        if (!this.currentPanel || this.projectId !== projectId) {
+            return;
+        }
+
+        this.integrations = integrations;
+
+        await this.updateWebview();
+    }
+
     /**
      * Show the integration management webview
      * @param projectId The Deepnote project ID
@@ -743,7 +753,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 }
                 break;
             case 'addExisting':
-                // The command owns the picker and the integrations write, and re-shows this panel when it is done.
+                // The command owns the picker and the integrations write, and refreshes this panel when it is done.
                 try {
                     await commands.executeCommand(Commands.AddExistingIntegration, {
                         notebookUri: this.activeFileUri?.toString()

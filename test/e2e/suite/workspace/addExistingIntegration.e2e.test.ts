@@ -44,6 +44,7 @@ const INTEGRATION_PASSWORD = 'e2e-reuse-password';
 const MANAGE_INTEGRATIONS = 'Deepnote: Manage Integrations';
 const ADD_EXISTING_INTEGRATION = 'Deepnote: Add Existing Integration';
 const PICKER_PLACEHOLDER = 'Select an integration configured in another project of this workspace';
+const INTEGRATIONS_PANEL_TITLE = 'Deepnote Integrations';
 
 // Prior editors finish closing before the next notebook opens.
 const EDITORS_CLOSE_DELAY = 500;
@@ -60,6 +61,10 @@ const WEBVIEW_POLL_INTERVAL = 1_000;
 // Saving writes SecretStorage and every `.deepnote` file of the project; poll the file for the result.
 const FILE_WRITE_TIMEOUT = 30_000;
 const FILE_POLL_INTERVAL = 500;
+// How long the editors are watched for a panel the palette run must not open. The command used to open it within a
+// few hundred milliseconds of its success message; every passing run spends the whole window.
+const PANEL_STAYS_CLOSED_WINDOW = 3_000;
+const EDITOR_POLL_INTERVAL = 500;
 
 type DeclaredIntegration = { id: string; name?: string; type: string };
 
@@ -182,6 +187,29 @@ async function configurePostgresIntegration(): Promise<void> {
     });
 }
 
+/**
+ * Every editor title seen over `windowMs`. Absence needs a window rather than one read: the panel used to open a beat
+ * after the command's success message. A failed read sees nothing, so callers also require a title they expect.
+ */
+async function watchOpenEditorTitles(windowMs: number): Promise<string[]> {
+    const driver = VSBrowser.instance.driver;
+    const deadline = Date.now() + windowMs;
+    const seen = new Set<string>();
+
+    while (Date.now() < deadline) {
+        const titles = await new EditorView().getOpenEditorTitles().catch((error) => {
+            console.warn('[add-existing] read editor titles:', error);
+
+            return [];
+        });
+
+        titles.forEach((title) => seen.add(title));
+        await driver.sleep(EDITOR_POLL_INTERVAL);
+    }
+
+    return Array.from(seen);
+}
+
 /** Polls `filePath` until its project declares an integration named `name`, and returns that entry's id. */
 async function awaitDeclaredIntegrationId(filePath: string, name: string): Promise<string> {
     const driver = VSBrowser.instance.driver;
@@ -209,7 +237,9 @@ async function awaitDeclaredIntegrationId(filePath: string, name: string): Promi
 describe('Deepnote — adding an integration another project already configured', function () {
     this.timeout(SUITE_TIMEOUT);
 
+    let activeEditorAfterLink: string | undefined;
     let cleanupTempDir: (() => void) | undefined;
+    let editorTitlesAfterLink: string[] = [];
     let pickedDescription: string | undefined;
     let pickedRowText = '';
     let sharedIntegrationId = '';
@@ -289,6 +319,14 @@ describe('Deepnote — adding an integration another project already configured'
         );
         await screenshot('linked-into-this-project');
 
+        // No panel is open (focusing the target closed every editor), so a palette run must leave it that way.
+        editorTitlesAfterLink = await watchOpenEditorTitles(PANEL_STAYS_CLOSED_WINDOW);
+        activeEditorAfterLink = await new EditorView()
+            .getActiveTab()
+            .then((tab) => tab?.getTitle())
+            .catch(() => undefined);
+        await screenshot('panel-stays-closed');
+
         targetIntegrations = readDeclaredIntegrations(targetFilePath);
         targetFileContents = fs.readFileSync(targetFilePath, 'utf8');
     });
@@ -305,7 +343,7 @@ describe('Deepnote — adding an integration another project already configured'
 
     // Deliberately one test: every expectation reads state the `before` hook already captured, so
     // splitting them buys separate mocha records and nothing else.
-    it('offers only what the other project configured, and links it without its credentials', function () {
+    it('offers only what the other project configured, and links it without its credentials or the panel', function () {
         // offers the integration the other project configured, and names that project
         expect(pickedDescription, 'quick pick description').to.equal(INTEGRATION_TYPE_LABEL);
         expect(pickedRowText, 'quick pick row').to.contain(`Used in: ${SOURCE_PROJECT_NAME}`);
@@ -319,5 +357,13 @@ describe('Deepnote — adding an integration another project already configured'
         // links the integration without copying its credentials into the file
         expect(targetFileContents, 'target project file').to.not.contain(INTEGRATION_HOST);
         expect(targetFileContents, 'target project file').to.not.contain(INTEGRATION_PASSWORD);
+
+        // leaves the integrations panel closed and the notebook focused when run from the palette
+        expect(
+            editorTitlesAfterLink.some((title) => title.includes(TARGET_FILE)),
+            `the target notebook among the editors seen after the link: ${JSON.stringify(editorTitlesAfterLink)}`
+        ).to.equal(true);
+        expect(editorTitlesAfterLink, 'editors seen after the link').to.not.include(INTEGRATIONS_PANEL_TITLE);
+        expect(activeEditorAfterLink, 'active editor after the link').to.contain(TARGET_FILE);
     });
 });

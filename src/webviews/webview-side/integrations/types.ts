@@ -57,6 +57,7 @@ export interface AuthenticateMessage {
 
 // Outbound (webview -> extension); dispatched in `integrationWebview.ts:handleMessage`. Keep exhaustive.
 export type WebviewOutboundMessage =
+    | { type: 'started' }
     | { type: 'configure'; integrationId: string }
     | { type: 'save'; integrationId: string; config: ConfigurableDatabaseIntegrationConfig }
     | { type: 'reset'; integrationId: string }

@@ -160,7 +160,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             this.disposables
         );
 
-        await this.sendLocStrings();
         await this.updateWebview();
 
         // If a specific integration was requested, show its configuration form
@@ -701,6 +700,12 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         config?: ConfigurableDatabaseIntegrationConfig;
     }): Promise<void> {
         switch (message.type) {
+            // Posted by the webview once its listener is attached, on every mount: anything sent before that is lost,
+            // including after a reload.
+            case SharedMessages.Started:
+                await this.sendLocStrings();
+                await this.updateWebview();
+                break;
             case 'configure':
                 if (message.integrationId) {
                     await this.showConfigurationForm(message.integrationId);

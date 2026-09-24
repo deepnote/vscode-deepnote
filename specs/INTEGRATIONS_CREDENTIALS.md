@@ -517,6 +517,9 @@ Extension → Webview:
 Webview → Extension:
 
 ```typescript
+// Posted on every mount, once the listener is attached; answered with the loc strings, then the list
+{ type: 'started' }
+
 // Save configuration
 { type: 'save', integrationId: string, config: IntegrationConfig }
 

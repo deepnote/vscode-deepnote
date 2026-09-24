@@ -593,6 +593,21 @@ suite('IntegrationWebviewProvider', () => {
         );
     });
 
+    test('answers a webview that starts up, or reloads, with the loc strings and then the list', async () => {
+        // Catches: loc strings posted only once, at creation, which a reloaded webview, or one whose listener attached
+        // late, never receives, leaving it without the Add New and Add Existing controls.
+        const provider = buildProvider();
+        await show(provider, singleIntegrationMap('pg-1', buildPostgresIntegration({ id: 'pg-1' })));
+        fakePanel.posted.length = 0;
+
+        await fakePanel.onDidReceiveMessage({ type: 'started' });
+
+        assert.deepStrictEqual(
+            fakePanel.posted.map((message) => message.type),
+            ['loc_init', 'update']
+        );
+    });
+
     suite('refresh', () => {
         const PG_CONFIG = buildPostgresIntegration({ id: 'pg-1', name: 'Team Postgres' });
         const LINKED_CONFIG = buildPostgresIntegration({ id: 'pg-linked', name: 'Linked Postgres' });

@@ -100,6 +100,11 @@ export const IntegrationPanel: React.FC<IIntegrationPanelProps> = ({ baseTheme, 
         };
 
         window.addEventListener('message', handleMessage);
+
+        // The extension answers with the loc strings and the list, which it cannot deliver before this listener exists.
+        const started: WebviewOutboundMessage = { type: 'started' };
+        vscodeApi.postMessage(started);
+
         return () => window.removeEventListener('message', handleMessage);
     }, []);
 

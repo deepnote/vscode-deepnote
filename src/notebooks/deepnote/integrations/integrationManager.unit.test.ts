@@ -13,6 +13,7 @@ import {
 } from 'vscode';
 
 import { ITelemetryService } from '../../../platform/analytics/types';
+import { Commands } from '../../../platform/common/constants';
 import { IExtensionContext } from '../../../platform/common/types';
 import { createDeferred } from '../../../platform/common/utils/async';
 import { Integrations } from '../../../platform/common/utils/localize';
@@ -335,12 +336,12 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
     // Every branch below reports trouble to the user; without cover they can each regress into silent success,
     // or into the wrong diagnosis: the message is what tells the user which one they hit.
-    const earlyFailures: { arrange: () => string; expectedMessage: string; name: string }[] = [
+    const earlyFailures: { arrange: () => string | undefined; expectedMessage: string; name: string }[] = [
         {
             arrange: () => {
                 when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([]);
 
-                return Uri.file('/ws/missing.deepnote').toString();
+                return undefined;
             },
             expectedMessage: 'No active Deepnote notebook',
             name: 'no Deepnote notebook is open'
@@ -356,7 +357,7 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
                 return OTHER_URI.toString();
             },
-            expectedMessage: Integrations.addExistingIntegrationNotebookClosed,
+            expectedMessage: Integrations.commandNotebookClosed,
             name: 'the panel names a notebook that is no longer open'
         },
         {
@@ -497,5 +498,76 @@ suite('IntegrationManager.addExistingIntegration', () => {
                 })
             )
         ).once();
+    });
+});
+
+suite('IntegrationManager: the Manage Integrations command', () => {
+    let currentNotebook: NotebookDocument;
+    let manageIntegrations: ((...args: unknown[]) => Promise<void>) | undefined;
+    let webviewProvider: IIntegrationWebviewProvider;
+
+    setup(() => {
+        resetVSCodeMocks();
+
+        currentNotebook = createMockNotebook({
+            uri: CURRENT_URI,
+            metadata: { deepnoteProjectId: CURRENT_PROJECT_ID, deepnoteNotebookId: CURRENT_NOTEBOOK_ID }
+        });
+        manageIntegrations = undefined;
+        when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenCall(
+            (command: string, handler: (...args: unknown[]) => Promise<void>) => {
+                if (command === Commands.ManageIntegrations) {
+                    manageIntegrations = handler;
+                }
+
+                return { dispose: () => undefined };
+            }
+        );
+
+        webviewProvider = mock<IIntegrationWebviewProvider>();
+        when(webviewProvider.show(anything(), anything(), anything(), anything(), anything())).thenResolve();
+
+        const detector = mock<IIntegrationDetector>();
+        when(detector.detectIntegrations(anything())).thenResolve(new Map());
+
+        const extensionContext = mock<IExtensionContext>();
+        when(extensionContext.subscriptions).thenReturn([]);
+
+        new IntegrationManager(
+            instance(extensionContext),
+            instance(detector),
+            instance(mock<IIntegrationStorage>()),
+            instance(webviewProvider),
+            instance(mock<IDeepnoteNotebookManager>()),
+            instance(mock<ITelemetryService>())
+        ).activate();
+    });
+
+    function focus(notebook: NotebookDocument): void {
+        const editor = mock<NotebookEditor>();
+
+        when(editor.notebook).thenReturn(notebook);
+        when(mockedVSCodeNamespaces.window.activeNotebookEditor).thenReturn(instance(editor));
+    }
+
+    test('refuses a notebook URI that is no longer open instead of opening the panel for another notebook', async () => {
+        // Catches: a URI that resolves to nothing falling back to the focused editor, which re-targets the panel
+        // at whatever project that editor belongs to.
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([currentNotebook]);
+        focus(currentNotebook);
+
+        await manageIntegrations?.({ notebookUri: OTHER_URI.toString() });
+
+        verify(webviewProvider.show(anything(), anything(), anything(), anything(), anything())).never();
+        verify(mockedVSCodeNamespaces.window.showErrorMessage(Integrations.commandNotebookClosed)).once();
+    });
+
+    test('opens the panel for the focused notebook when no URI is given', async () => {
+        when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([currentNotebook]);
+        focus(currentNotebook);
+
+        await manageIntegrations?.();
+
+        verify(webviewProvider.show(CURRENT_PROJECT_ID, anything(), CURRENT_URI, undefined, anything())).once();
     });
 });

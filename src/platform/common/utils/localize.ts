@@ -871,8 +871,8 @@ export namespace Integrations {
     export const switchIntegrationSnapshotUnsupported = l10n.t(
         'The integration of a snapshot cannot be changed. Open the project notebook and try again.'
     );
-    export const addExistingIntegrationNotebookClosed = l10n.t(
-        'The notebook this integrations panel was opened for is no longer open. Open it again and retry.'
+    export const commandNotebookClosed = l10n.t(
+        'The notebook this was run for is no longer open. Open it again and retry.'
     );
     export const addExistingIntegrationPlaceholder = l10n.t(
         'Select an integration configured in another project of this workspace'

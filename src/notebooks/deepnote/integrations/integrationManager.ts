@@ -97,15 +97,6 @@ export class IntegrationManager implements IIntegrationManager {
         const activeNotebook = this.resolveDeepnoteNotebook(notebookUri);
 
         if (!activeNotebook) {
-            void window.showErrorMessage(l10n.t('No active Deepnote notebook'));
-
-            return 'failed';
-        }
-
-        // The panel keeps sending the URI it was opened for, so a closed notebook must not fall back to another project.
-        if (notebookUri && activeNotebook.uri.toString() !== notebookUri) {
-            void window.showErrorMessage(localize.Integrations.addExistingIntegrationNotebookClosed);
-
             return 'failed';
         }
 
@@ -279,19 +270,30 @@ export class IntegrationManager implements IIntegrationManager {
     }
 
     /**
-     * The Deepnote notebook to act on: `window.activeNotebookEditor` is unset until an editor is focused, so a
-     * restored but not yet focused notebook resolves via the menu's URI or the one visible editor instead.
+     * The Deepnote notebook to act on, or `undefined` after telling the user why there is none. A URI from a menu or
+     * the panel names the only notebook to act on: once it is closed, the focused editor may belong to another project.
      */
     private resolveDeepnoteNotebook(notebookUri: string | undefined): NotebookDocument | undefined {
-        if (notebookUri) {
-            const fromUri = workspace.notebookDocuments.find(
-                (notebook) => notebook.notebookType === 'deepnote' && notebook.uri.toString() === notebookUri
+        const notebook = notebookUri
+            ? workspace.notebookDocuments.find(
+                  (candidate) => candidate.notebookType === 'deepnote' && candidate.uri.toString() === notebookUri
+              )
+            : this.findFocusedDeepnoteNotebook();
+
+        if (!notebook) {
+            void window.showErrorMessage(
+                notebookUri ? localize.Integrations.commandNotebookClosed : l10n.t('No active Deepnote notebook')
             );
-            if (fromUri) {
-                return fromUri;
-            }
         }
 
+        return notebook;
+    }
+
+    /**
+     * `window.activeNotebookEditor` is unset until an editor is focused, so a restored but not yet focused notebook
+     * resolves via the one visible editor instead.
+     */
+    private findFocusedDeepnoteNotebook(): NotebookDocument | undefined {
         const active = window.activeNotebookEditor?.notebook;
         if (active?.notebookType === 'deepnote') {
             return active;
@@ -314,7 +316,6 @@ export class IntegrationManager implements IIntegrationManager {
         const activeNotebook = this.resolveDeepnoteNotebook(notebookUri);
 
         if (!activeNotebook) {
-            void window.showErrorMessage(l10n.t('No active Deepnote notebook'));
             return;
         }
 

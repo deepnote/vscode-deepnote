@@ -1,18 +1,34 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
-import { CancellationToken, CancellationTokenSource, EventEmitter, NotebookCell } from 'vscode';
+import { CancellationToken, CancellationTokenSource, EventEmitter, NotebookCell, NotebookDocument, Uri } from 'vscode';
 
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { ITelemetryService } from '../../platform/analytics/types';
 import { SqlCellStatusBarProvider } from './sqlCellStatusBarProvider';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
+import { stubDeepnoteFiles } from '../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
 import { IDeepnoteNotebookManager } from '../types';
 import { createDeepnoteFile, createDeepnoteProject, createMockCell } from './deepnoteTestHelpers';
 import { ISqlIntegrationEnvVarsProvider } from '../../platform/notebooks/deepnote/types';
+import { Integrations } from '../../platform/common/utils/localize';
+
+/**
+ * Puts a readable project file behind the open `notebook`; the returned map captures what the integrations writer
+ * persists.
+ */
+function stubProjectFileOnDisk(notebook: NotebookDocument, projectId: string): Map<string, DeepnoteFile> {
+    const onDisk = createDeepnoteFile({ project: createDeepnoteProject({ id: projectId, name: projectId }) });
+
+    when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(undefined);
+    when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
+
+    return stubDeepnoteFiles((target) => (target.fsPath === notebook.uri.fsPath ? onDisk : undefined));
+}
 
 /**
  * A merged-config source that yields nothing, so integrations resolve from SecretStorage alone.
@@ -297,7 +313,7 @@ suite('SqlCellStatusBarProvider', () => {
             notebookMetadata: { deepnoteProjectId: 'project-1' }
         });
 
-        // The merge only resolves roster and file ids; a bare merged-first rewrite would regress this to (configure).
+        // The merge only resolves project and file ids; a bare merged-first rewrite would regress this to (configure).
         when(integrationStorage.getProjectIntegrationConfig(anything(), anything())).thenResolve({
             id: integrationId,
             name: 'Stored Only',
@@ -713,7 +729,7 @@ suite('SqlCellStatusBarProvider', () => {
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).once();
         });
 
-        test('switchSqlIntegration offers `.deepnote.env.yaml` integrations the project roster omits', async () => {
+        test('switchSqlIntegration offers `.deepnote.env.yaml` integrations the project omits', async () => {
             let commandHandler: ((cell?: NotebookCell) => Promise<void>) | undefined;
             when(mockedVSCodeNamespaces.commands.registerCommand('deepnote.switchSqlIntegration', anything())).thenCall(
                 (_name, handler) => {
@@ -1243,6 +1259,7 @@ suite('SqlCellStatusBarProvider', () => {
             const notebookMetadata = { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' };
             const cell = createMockCell({ languageId: 'sql', metadata: {}, notebookMetadata });
             const fileOnlyId = 'file-only-bq';
+            const writes = stubProjectFileOnDisk(cell.notebook, 'project-1');
 
             const envVars = mock<ISqlIntegrationEnvVarsProvider>();
             when(envVars.getMergedIntegrationConfigs(anything())).thenResolve([
@@ -1272,9 +1289,19 @@ suite('SqlCellStatusBarProvider', () => {
 
             await switchIntegrationHandler(cell);
 
-            const [projectId, integrations] = capture(commandNotebookManager.updateProjectIntegrations).last();
-            assert.strictEqual(projectId, 'project-1');
-            assert.deepStrictEqual(integrations, [{ id: fileOnlyId, name: 'BigQuery from file', type: 'big-query' }]);
+            const expected = [{ id: fileOnlyId, name: 'BigQuery from file', type: 'big-query' }];
+            const [projectId, notebookId, integrations] = capture(
+                commandNotebookManager.updateProjectIntegrationsForNotebook
+            ).last();
+            assert.deepStrictEqual(
+                { integrations, notebookId, projectId },
+                { integrations: expected, notebookId: 'notebook-1', projectId: 'project-1' }
+            );
+            assert.deepStrictEqual(
+                writes.get(cell.notebook.uri.fsPath)?.project.integrations,
+                expected,
+                'the entry reaches the file, not just the cache'
+            );
             verify(
                 fileTelemetry.trackEvent(
                     deepEqual({
@@ -1283,6 +1310,41 @@ suite('SqlCellStatusBarProvider', () => {
                     })
                 )
             ).once();
+        });
+
+        test('refuses to switch the integration of a snapshot notebook', async () => {
+            // `*.snapshot.deepnote` matches the notebook selector, so the command is reachable there; switching
+            // would edit the record and rewrite the real project files behind it. Everything else is arranged so
+            // the switch would go through, leaving the snapshot check as the only thing that can stop it.
+            const newIntegrationId = 'new-integration';
+            const cell = createMockCell({
+                languageId: 'sql',
+                metadata: { sql_integration_id: 'old-integration' },
+                notebookMetadata: { deepnoteProjectId: 'project-1', deepnoteNotebookId: 'notebook-1' },
+                notebookUri: Uri.file('/ws/report_project-1_nb_main.snapshot.deepnote')
+            });
+
+            when(commandNotebookManager.getProjectForNotebook('project-1', 'notebook-1')).thenReturn(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        integrations: [{ id: newIntegrationId, name: 'New Integration', type: 'pgsql' }]
+                    })
+                })
+            );
+            when(mockedVSCodeNamespaces.window.showErrorMessage(anything())).thenReturn(Promise.resolve(undefined));
+            when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenReturn(
+                Promise.resolve({ id: newIntegrationId, label: 'New Integration' } as any)
+            );
+            when(mockedVSCodeNamespaces.workspace.applyEdit(anything())).thenReturn(Promise.resolve(true));
+
+            await switchIntegrationHandler(cell);
+
+            verify(
+                mockedVSCodeNamespaces.window.showErrorMessage(Integrations.switchIntegrationSnapshotUnsupported)
+            ).once();
+            verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
+            verify(mockedVSCodeNamespaces.workspace.applyEdit(anything())).never();
+            verify(commandTelemetry.trackEvent(anything())).never();
         });
 
         test('does not update if user cancels quick pick', async () => {

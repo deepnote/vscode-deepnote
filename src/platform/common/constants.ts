@@ -239,6 +239,7 @@ export namespace Commands {
     export const CopyNotebookDetails = 'deepnote.copyNotebookDetails';
     export const EnableSnapshots = 'deepnote.enableSnapshots';
     export const DisableSnapshots = 'deepnote.disableSnapshots';
+    export const AddExistingIntegration = 'deepnote.addExistingIntegration';
     export const AuthenticateIntegration = 'deepnote.authenticateIntegration';
     export const ManageIntegrations = 'deepnote.manageIntegrations';
     export const SelectInterpreterForNotebook = 'deepnote.selectInterpreterForNotebook';

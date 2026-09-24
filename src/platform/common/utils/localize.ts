@@ -2,9 +2,11 @@
 // Licensed under the MIT License.
 
 import { l10n } from 'vscode';
+import { getPythonEnvDisplayName } from '../../interpreter/helpers';
+import { integrationTypeLabelKey, type IntegrationTypeLabelKey } from '../../notebooks/deepnote/integrationTypeLabels';
+import type { ConfigurableDatabaseIntegrationType } from '../../notebooks/deepnote/integrationTypes';
 import { PythonEnvironment } from '../../pythonEnvironments/info';
 import { fromNow } from './date';
-import { getPythonEnvDisplayName } from '../../interpreter/helpers';
 
 function getInterpreterDisplayName(interpreter: PythonEnvironment) {
     return getPythonEnvDisplayName(interpreter);
@@ -861,6 +863,51 @@ export namespace Integrations {
     export const cancel = l10n.t('Cancel');
     export const save = l10n.t('Save');
     export const addNewIntegration = l10n.t('Add New Integration');
+    export const addExistingIntegration = l10n.t('Add Existing Integration');
+    export const addExistingIntegrationScanning = l10n.t('Looking for integrations in other projects...');
+    export const snapshotIntegrationsUnsupported = l10n.t(
+        'Integrations cannot be managed from a snapshot file. Open the project notebook and try again.'
+    );
+    export const switchIntegrationSnapshotUnsupported = l10n.t(
+        'The integration of a snapshot cannot be changed. Open the project notebook and try again.'
+    );
+    export const commandNotebookClosed = l10n.t(
+        'The notebook this was run for is no longer open. Open it again and retry.'
+    );
+    export const addExistingIntegrationPlaceholder = l10n.t(
+        'Select an integration configured in another project of this workspace'
+    );
+    export const addExistingIntegrationNoneAvailable = l10n.t(
+        'No integrations from other projects in this workspace are available to add. Integrations configured only in .deepnote.env.yaml already apply to every project under it.'
+    );
+    export const addExistingIntegrationConflictsSkipped = (count: number) =>
+        l10n.t(
+            '{0} integration(s) were skipped because another project declares them with a different type than the stored configuration.',
+            count
+        );
+    export const addExistingIntegrationSucceeded = (integrationName: string) =>
+        l10n.t('Added integration "{0}" to this project.', integrationName);
+    export const addExistingIntegrationFailed = l10n.t(
+        'Failed to add the integration to the notebook file. Please try again.'
+    );
+    export const addExistingIntegrationUsedIn = (projectNames: string) => l10n.t('Used in: {0}', projectNames);
+    export const integrationUnlinked = (projectNames: string) =>
+        l10n.t(
+            'Removed from this project. Its credentials were kept because other projects still use them: {0}',
+            projectNames
+        );
+    export const integrationSavedShared = (projectNames: string) =>
+        l10n.t(
+            'Configuration saved successfully. These credentials are shared, so this also changed them for: {0}',
+            projectNames
+        );
+    export const integrationResetShared = (projectNames: string) =>
+        l10n.t(
+            'Configuration reset successfully. These credentials were shared, so this also removed them from: {0}',
+            projectNames
+        );
+    export const integrationSignedOutShared = (projectNames: string) =>
+        l10n.t('Signed out. This sign-in was shared, so this also signed out: {0}', projectNames);
     export const database = l10n.t('Database');
     export const dataWarehousesLakes = l10n.t('Data Warehouses & Lakes');
     export const databases = l10n.t('Databases');
@@ -870,26 +917,32 @@ export namespace Integrations {
     export const defaultName = (type: string) => l10n.t('My {0} integration', type);
     export const unsupportedIntegrationType = (type: string) => l10n.t('Unsupported integration type: {0}', type);
 
-    // Integration type labels
-    export const postgresTypeLabel = l10n.t('PostgreSQL');
-    export const bigQueryTypeLabel = l10n.t('Google BigQuery');
-    export const snowflakeTypeLabel = l10n.t('Snowflake');
-    export const alloyDBTypeLabel = l10n.t('Google AlloyDB');
-    export const athenaTypeLabel = l10n.t('Amazon Athena');
-    export const clickHouseTypeLabel = l10n.t('ClickHouse');
-    export const cloudSqlTypeLabel = l10n.t('Google Cloud SQL');
-    export const databricksTypeLabel = l10n.t('Databricks');
-    export const dremioTypeLabel = l10n.t('Dremio');
-    export const mariaDBTypeLabel = l10n.t('MariaDB');
-    export const materializeTypeLabel = l10n.t('Materialize');
-    export const mindsDBTypeLabel = l10n.t('MindsDB');
-    export const mongoDBTypeLabel = l10n.t('MongoDB');
-    export const mySQLTypeLabel = l10n.t('MySQL');
-    export const duckDBTypeLabel = l10n.t('DuckDB');
-    export const redshiftTypeLabel = l10n.t('Amazon Redshift');
-    export const spannerTypeLabel = l10n.t('Google Spanner');
-    export const sqlServerTypeLabel = l10n.t('Microsoft SQL Server');
-    export const trinoTypeLabel = l10n.t('Trino');
+    /**
+     * The one place integration type labels are written down.
+     * `l10n.t` extracts literal arguments only, so these stay literal.
+     */
+    export const typeLabels = {
+        'integrationType.alloydb': l10n.t('Google AlloyDB'),
+        'integrationType.athena': l10n.t('Amazon Athena'),
+        'integrationType.big-query': l10n.t('Google BigQuery'),
+        'integrationType.clickhouse': l10n.t('ClickHouse'),
+        'integrationType.cloud-sql': l10n.t('Google Cloud SQL'),
+        'integrationType.databricks': l10n.t('Databricks'),
+        'integrationType.dremio': l10n.t('Dremio'),
+        'integrationType.mariadb': l10n.t('MariaDB'),
+        'integrationType.materialize': l10n.t('Materialize'),
+        'integrationType.mindsdb': l10n.t('MindsDB'),
+        'integrationType.mongodb': l10n.t('MongoDB'),
+        'integrationType.mysql': l10n.t('MySQL'),
+        'integrationType.pgsql': l10n.t('PostgreSQL'),
+        'integrationType.redshift': l10n.t('Amazon Redshift'),
+        'integrationType.snowflake': l10n.t('Snowflake'),
+        'integrationType.spanner': l10n.t('Google Spanner'),
+        'integrationType.sql-server': l10n.t('Microsoft SQL Server'),
+        'integrationType.trino': l10n.t('Trino')
+    } satisfies Record<IntegrationTypeLabelKey, string>;
+
+    export const typeLabel = (type: ConfigurableDatabaseIntegrationType) => typeLabels[integrationTypeLabelKey(type)];
 
     // PostgreSQL form strings
     export const postgresNameLabel = l10n.t('Name (optional)');

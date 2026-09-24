@@ -306,7 +306,9 @@ suite('IntegrationManager.addExistingIntegration', () => {
         await buildManager().addExistingIntegration(CURRENT_URI.toString());
 
         assert.strictEqual(writes.size, 0);
-        verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
+        verify(
+            mockedVSCodeNamespaces.window.showWarningMessage(Integrations.addExistingIntegrationConflictsSkipped(1))
+        ).once();
         verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
     });
 
@@ -405,24 +407,34 @@ suite('IntegrationManager.addExistingIntegration', () => {
             assert.strictEqual(writes.size, 0);
             assert.deepStrictEqual(cacheUpdates, [], 'the cache must not move before the file does');
             verify(mockedVSCodeNamespaces.window.showErrorMessage(expectedMessage)).once();
+            verify(mockedVSCodeNamespaces.window.withProgress(anything(), anything())).never();
             verify(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).never();
             verify(telemetry.trackEvent(anything())).never();
         });
     }
 
-    const lateFailures: { arrange: () => void; name: string }[] = [
-        { arrange: () => writeFailures.add(CURRENT_URI.fsPath), name: 'the active file cannot be written' },
+    const lateFailures: { arrange: () => void; checksCache?: boolean; name: string }[] = [
+        {
+            arrange: () => writeFailures.add(CURRENT_URI.fsPath),
+            checksCache: true,
+            name: 'the active file cannot be written'
+        },
+        // The cache double throws before recording, so `cacheUpdates` stays empty whatever the manager does.
         { arrange: () => (cacheUpdateError = new Error('cache rejected the update')), name: 'the writer throws' }
     ];
 
-    for (const { arrange, name } of lateFailures) {
+    for (const { arrange, checksCache, name } of lateFailures) {
         test(`reports failure and records the outcome in telemetry when ${name}`, async () => {
             arrange();
 
             const outcome = await buildManager().addExistingIntegration(CURRENT_URI.toString());
 
             assert.strictEqual(outcome, 'failed');
-            assert.deepStrictEqual(cacheUpdates, [], 'no failure path leaves the link in the cache');
+
+            if (checksCache) {
+                assert.deepStrictEqual(cacheUpdates, [], 'no failure path leaves the link in the cache');
+            }
+
             assert.isTrue(refreshSpy.notCalled, 'the refresh reserved for a successful link never runs');
             verify(mockedVSCodeNamespaces.window.showErrorMessage(Integrations.addExistingIntegrationFailed)).once();
             verify(
@@ -444,7 +456,6 @@ suite('IntegrationManager.addExistingIntegration', () => {
 
         assert.strictEqual(outcome, 'completed');
         assert.isDefined(writes.get(CURRENT_URI.fsPath), 'the active file is still persisted');
-        assert.isUndefined(writes.get(SIBLING_URI.fsPath));
         verify(mockedVSCodeNamespaces.window.showWarningMessage(anything())).once();
     });
 

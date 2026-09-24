@@ -1,8 +1,9 @@
-import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
-import { anything, instance, mock, when } from 'ts-mockito';
-import { Uri, workspace, type NotebookDocument } from 'vscode';
+import { anything, when } from 'ts-mockito';
+import { Uri, type NotebookDocument } from 'vscode';
 
+import { stubDeepnoteFiles } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { ProjectIntegration, RawProjectIntegration } from '../../types';
 import { DeepnoteNotebookManager } from '../deepnoteNotebookManager';
@@ -61,7 +62,6 @@ function stubWorkspace(opts: {
     when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve(opts.discovered));
 
     const byPath = new Map(opts.onDisk.map((entry) => [entry.uri.fsPath, entry.file] as const));
-    const writes = new Map<string, DeepnoteFile>();
 
     const documents = (opts.openNotebooks ?? []).map(({ notebookId, onSave, uri }): NotebookDocument => {
         const notebook = createMockNotebook({
@@ -83,28 +83,13 @@ function stubWorkspace(opts: {
     });
 
     when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn(documents);
-    const mockFs = mock<typeof workspace.fs>();
 
-    when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
-        const file = byPath.get(uri.fsPath);
-
-        return file
-            ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
-            : Promise.reject(new Error(`no readFile stub for ${uri.fsPath}`));
-    });
-    when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri, bytes: Uint8Array) => {
-        if (opts.failWriteFor?.has(uri.fsPath)) {
-            return Promise.reject(new Error(`write failed for ${uri.fsPath}`));
-        }
-
-        opts.onWrite?.(uri);
-        writes.set(uri.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
-
-        return Promise.resolve();
-    });
-    when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-    return { writes };
+    return {
+        writes: stubDeepnoteFiles((uri) => byPath.get(uri.fsPath), {
+            failWriteFor: opts.failWriteFor,
+            onWrite: opts.onWrite
+        })
+    };
 }
 
 suite('addProjectIntegration', () => {

@@ -1,7 +1,7 @@
-import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import sinon from 'sinon';
-import { EventEmitter, Uri, workspace } from 'vscode';
+import { EventEmitter, Uri } from 'vscode';
 import { anyString, anything, deepEqual, instance, mock, reset, resetCalls, verify, when } from 'ts-mockito';
 
 import { ITelemetryService } from '../../../platform/analytics/types';
@@ -29,6 +29,7 @@ import {
     ConfigurableDatabaseIntegrationConfig,
     DetectedIntegration
 } from '../../../platform/notebooks/deepnote/integrationTypes';
+import { stubDeepnoteFiles } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import {
     buildGoogleOauthIntegration,
@@ -249,7 +250,6 @@ suite('IntegrationWebviewProvider', () => {
     function stubProjectFiles(files: Array<{ file: DeepnoteFile; uri: Uri }>): Map<string, DeepnoteFile> {
         const onDisk = new Map(files.map(({ file, uri }) => [uri.fsPath, file] as const));
         const discovered = files.map(({ uri }) => uri);
-        const writes = new Map<string, DeepnoteFile>();
 
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([createWorkspaceFolder(Uri.file('/ws'))]);
         when(mockedVSCodeNamespaces.workspace.findFiles(anything(), anything(), anything(), anything())).thenReturn(
@@ -258,23 +258,7 @@ suite('IntegrationWebviewProvider', () => {
         // The writer enumerates without a token; the scan passes one.
         when(mockedVSCodeNamespaces.workspace.findFiles(anything())).thenReturn(Promise.resolve(discovered));
 
-        const mockFs = mock<typeof workspace.fs>();
-
-        when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
-            const file = onDisk.get(uri.fsPath);
-
-            return file
-                ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
-                : Promise.reject(new Error(`no readFile stub for ${uri.fsPath}`));
-        });
-        when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri, bytes: Uint8Array) => {
-            writes.set(uri.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
-
-            return Promise.resolve();
-        });
-        when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-        return writes;
+        return stubDeepnoteFiles((uri) => onDisk.get(uri.fsPath));
     }
 
     function successMessages(): CapturedMessage[] {

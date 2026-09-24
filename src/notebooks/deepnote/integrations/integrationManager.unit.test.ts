@@ -1,4 +1,4 @@
-import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import sinon from 'sinon';
 import { anything, deepEqual, instance, mock, verify, when } from 'ts-mockito';
@@ -8,8 +8,7 @@ import {
     NotebookDocument,
     NotebookEditor,
     QuickPickItem,
-    Uri,
-    workspace
+    Uri
 } from 'vscode';
 
 import { ITelemetryService } from '../../../platform/analytics/types';
@@ -19,6 +18,7 @@ import { createDeferred } from '../../../platform/common/utils/async';
 import { Integrations } from '../../../platform/common/utils/localize';
 import { ConfigurableDatabaseIntegrationConfig } from '../../../platform/notebooks/deepnote/integrationTypes';
 import { waitForCondition } from '../../../test/common';
+import { stubDeepnoteFiles } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { IDeepnoteNotebookManager, ProjectIntegration, RawProjectIntegration } from '../../types';
 import {
@@ -105,7 +105,6 @@ suite('IntegrationManager.addExistingIntegration', () => {
         onDiskCurrent = undefined;
         cacheUpdateError = undefined;
         storedConfigs = [SHARED_CONFIG];
-        writes = new Map();
         cacheUpdates = [];
         quickPickItems = undefined;
         scanProgress = new CancellationTokenSource();
@@ -131,28 +130,15 @@ suite('IntegrationManager.addExistingIntegration', () => {
                 task({ report: () => undefined }, scanProgress.token)
         );
 
-        const mockFs = mock<typeof workspace.fs>();
-        when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
-            const file = new Map([
-                [CURRENT_URI.fsPath, onDiskCurrent ?? currentProject],
-                [OTHER_URI.fsPath, onDiskOther],
-                [SIBLING_URI.fsPath, onDiskSibling]
-            ]).get(uri.fsPath);
-
-            return file
-                ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
-                : Promise.reject(new Error(`no readFile stub for ${uri.fsPath}`));
-        });
-        when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri, bytes: Uint8Array) => {
-            if (writeFailures.has(uri.fsPath)) {
-                return Promise.reject(new Error(`write blocked for ${uri.fsPath}`));
-            }
-
-            writes.set(uri.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
-
-            return Promise.resolve();
-        });
-        when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
+        writes = stubDeepnoteFiles(
+            (uri) =>
+                new Map([
+                    [CURRENT_URI.fsPath, onDiskCurrent ?? currentProject],
+                    [OTHER_URI.fsPath, onDiskOther],
+                    [SIBLING_URI.fsPath, onDiskSibling]
+                ]).get(uri.fsPath),
+            { failWriteFor: writeFailures }
+        );
 
         // Picks the first offered item; tests that want a cancel override this.
         when(mockedVSCodeNamespaces.window.showQuickPick(anything(), anything())).thenCall((items: QuickPickItem[]) => {

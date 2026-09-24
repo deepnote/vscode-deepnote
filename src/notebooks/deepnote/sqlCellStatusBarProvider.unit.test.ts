@@ -1,21 +1,14 @@
-import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
-import {
-    CancellationToken,
-    CancellationTokenSource,
-    EventEmitter,
-    NotebookCell,
-    NotebookDocument,
-    Uri,
-    workspace
-} from 'vscode';
+import { CancellationToken, CancellationTokenSource, EventEmitter, NotebookCell, NotebookDocument, Uri } from 'vscode';
 
 import { IDisposableRegistry } from '../../platform/common/types';
 import { IIntegrationStorage } from './integrations/types';
 import { ITelemetryService } from '../../platform/analytics/types';
 import { SqlCellStatusBarProvider } from './sqlCellStatusBarProvider';
 import { DATAFRAME_SQL_INTEGRATION_ID } from '../../platform/notebooks/deepnote/integrationTypes';
+import { stubDeepnoteFiles } from '../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { createEventHandler } from '../../test/common';
 import { Commands } from '../../platform/common/constants';
@@ -30,24 +23,11 @@ import { Integrations } from '../../platform/common/utils/localize';
  */
 function stubProjectFileOnDisk(notebook: NotebookDocument, projectId: string): Map<string, DeepnoteFile> {
     const onDisk = createDeepnoteFile({ project: createDeepnoteProject({ id: projectId, name: projectId }) });
-    const writes = new Map<string, DeepnoteFile>();
-    const mockFs = mock<typeof workspace.fs>();
 
     when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn(undefined);
     when(mockedVSCodeNamespaces.workspace.notebookDocuments).thenReturn([notebook]);
-    when(mockFs.readFile(anything())).thenCall((target: Uri) =>
-        target.fsPath === notebook.uri.fsPath
-            ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(onDisk)))
-            : Promise.reject(new Error(`no readFile stub for ${target.fsPath}`))
-    );
-    when(mockFs.writeFile(anything(), anything())).thenCall((target: Uri, bytes: Uint8Array) => {
-        writes.set(target.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
 
-        return Promise.resolve();
-    });
-    when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
-
-    return writes;
+    return stubDeepnoteFiles((target) => (target.fsPath === notebook.uri.fsPath ? onDisk : undefined));
 }
 
 /**

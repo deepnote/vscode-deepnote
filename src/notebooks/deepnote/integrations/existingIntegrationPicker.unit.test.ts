@@ -1,10 +1,11 @@
-import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
+import type { DeepnoteFile } from '@deepnote/blocks';
 import { assert, use } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { CancellationError, CancellationToken, CancellationTokenSource, Uri, workspace } from 'vscode';
+import { CancellationError, CancellationToken, CancellationTokenSource, Uri } from 'vscode';
 
 import { ConfigurableDatabaseIntegrationConfig } from '../../../platform/notebooks/deepnote/integrationTypes';
+import { stubDeepnoteFiles } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { IDeepnoteNotebookManager, RawProjectIntegration } from '../../types';
 import {
@@ -76,26 +77,12 @@ function stubWorkspace(opts: {
 
     const byPath = new Map(opts.projects.map((project) => [project.uri.fsPath, projectFile(project)] as const));
     const reads: string[] = [];
-    const writes = new Map<string, DeepnoteFile>();
-    const mockFs = mock<typeof workspace.fs>();
-
-    when(mockFs.readFile(anything())).thenCall((uri: Uri) => {
-        reads.push(uri.fsPath);
-
-        const file = byPath.get(uri.fsPath);
-
-        opts.onRead?.(uri);
-
-        return file
-            ? Promise.resolve(new TextEncoder().encode(serializeDeepnoteFile(file)))
-            : Promise.reject(new Error(`no readFile stub for ${uri.fsPath}`));
+    const writes = stubDeepnoteFiles((uri) => byPath.get(uri.fsPath), {
+        onRead: (uri) => {
+            reads.push(uri.fsPath);
+            opts.onRead?.(uri);
+        }
     });
-    when(mockFs.writeFile(anything(), anything())).thenCall((uri: Uri, bytes: Uint8Array) => {
-        writes.set(uri.fsPath, deserializeDeepnoteFile(new TextDecoder().decode(bytes)));
-
-        return Promise.resolve();
-    });
-    when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
 
     return { reads, writes };
 }

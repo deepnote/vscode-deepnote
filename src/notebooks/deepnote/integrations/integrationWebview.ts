@@ -823,6 +823,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
 
         try {
+            // A new integration has a fresh id no other project can declare yet.
+            const otherProjectNames = this.integrations.has(integrationId)
+                ? await this.findOtherProjectsSharing(integrationId)
+                : [];
+
             // Invalidate stale federated tokens before saving (fingerprint change or auth-method switch).
             await this.invalidateStaleFederatedToken(integrationId, config);
 
@@ -856,7 +861,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
             if (persisted) {
                 await this.currentPanel?.webview.postMessage({
-                    message: l10n.t('Configuration saved successfully'),
+                    message:
+                        otherProjectNames.length > 0
+                            ? localize.Integrations.integrationSavedShared(otherProjectNames.join(', '))
+                            : l10n.t('Configuration saved successfully'),
                     type: 'success'
                 });
 
@@ -889,8 +897,17 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      */
     private async signOutIntegration(integrationId: string): Promise<void> {
         try {
+            const otherProjectNames = await this.findOtherProjectsSharing(integrationId);
+
             // `delete` fires onDidChangeTokens, which re-renders the panel; no explicit updateWebview needed.
             await this.tokenStorage?.delete(integrationId);
+
+            if (otherProjectNames.length > 0) {
+                await this.currentPanel?.webview.postMessage({
+                    message: localize.Integrations.integrationSignedOutShared(otherProjectNames.join(', ')),
+                    type: 'success'
+                });
+            }
         } catch (error) {
             logger.error('Failed to sign out integration', error);
             await this.currentPanel?.webview.postMessage({
@@ -909,6 +926,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
 
         try {
+            const otherProjectNames = await this.findOtherProjectsSharing(integrationId);
+
             // Token first: a failure here has to abort before the config is committed, otherwise the token is
             // stranded with no integration left in the panel to retry from.
             await this.tokenStorage?.delete(integrationId);
@@ -924,7 +943,10 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             await this.updateWebview();
 
             await this.currentPanel?.webview.postMessage({
-                message: l10n.t('Configuration reset successfully'),
+                message:
+                    otherProjectNames.length > 0
+                        ? localize.Integrations.integrationResetShared(otherProjectNames.join(', '))
+                        : l10n.t('Configuration reset successfully'),
                 type: 'success'
             });
 
@@ -953,9 +975,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
 
         try {
-            const otherProjectNames = this.projectId
-                ? await findOtherProjectsDeclaring({ integrationId, projectId: this.projectId })
-                : [];
+            const otherProjectNames = await this.findOtherProjectsSharing(integrationId);
 
             if (otherProjectNames.length === 0) {
                 // Token first: a failure here has to abort before the config is committed, otherwise the token is
@@ -1002,6 +1022,14 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
 
             return false;
         }
+    }
+
+    /**
+     * Other workspace projects declaring `integrationId`: credentials are keyed by id alone, so they share whatever
+     * this panel does to its stored config or token.
+     */
+    private async findOtherProjectsSharing(integrationId: string): Promise<string[]> {
+        return this.projectId ? findOtherProjectsDeclaring({ integrationId, projectId: this.projectId }) : [];
     }
 
     /**

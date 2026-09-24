@@ -896,6 +896,18 @@ export namespace Integrations {
             'Removed from this project. Its credentials were kept because other projects still use them: {0}',
             projectNames
         );
+    export const integrationSavedShared = (projectNames: string) =>
+        l10n.t(
+            'Configuration saved successfully. These credentials are shared, so this also changed them for: {0}',
+            projectNames
+        );
+    export const integrationResetShared = (projectNames: string) =>
+        l10n.t(
+            'Configuration reset successfully. These credentials were shared, so this also removed them from: {0}',
+            projectNames
+        );
+    export const integrationSignedOutShared = (projectNames: string) =>
+        l10n.t('Signed out. This sign-in was shared, so this also signed out: {0}', projectNames);
     export const database = l10n.t('Database');
     export const dataWarehousesLakes = l10n.t('Data Warehouses & Lakes');
     export const databases = l10n.t('Databases');

@@ -933,6 +933,75 @@ suite('IntegrationWebviewProvider', () => {
         });
     });
 
+    suite('credentials another project shares', () => {
+        const ALPHA_URI = Uri.file('/ws/alpha.deepnote');
+        const SHARED_CONFIG = buildGoogleOauthIntegration({ id: 'bq-shared', name: 'Shared BigQuery' });
+        const SHARED_ENTRY: RawProjectIntegration = {
+            id: SHARED_CONFIG.id,
+            name: SHARED_CONFIG.name,
+            type: SHARED_CONFIG.type
+        };
+
+        setup(() => {
+            when(integrationStorage.save(anything())).thenResolve();
+            when(integrationStorage.delete(anyString())).thenResolve();
+            preStoreToken(SHARED_CONFIG.id);
+        });
+
+        /** This project's active file declares `bq-shared`; `/ws/alpha.deepnote` holds project-alpha ("Alpha"). */
+        async function showSharedIntegration(alphaIntegrations: RawProjectIntegration[]): Promise<void> {
+            stubProjectFiles([
+                { file: projectFile(PROJECT_ID, 'Active', [SHARED_ENTRY]), uri: ACTIVE_FILE_URI },
+                { file: projectFile('project-alpha', 'Alpha', alphaIntegrations), uri: ALPHA_URI }
+            ]);
+
+            await show(buildProvider({ tokenStorage }), singleIntegrationMap(SHARED_CONFIG.id, SHARED_CONFIG));
+        }
+
+        test('a reset still clears shared credentials, and names the projects that lose them', async () => {
+            await showSharedIntegration([SHARED_ENTRY]);
+
+            await fakePanel.onDidReceiveMessage({ type: 'reset', integrationId: SHARED_CONFIG.id });
+
+            verify(integrationStorage.delete(SHARED_CONFIG.id)).once();
+            sinon.assert.calledOnceWithExactly(tokenDeleteSpy, SHARED_CONFIG.id);
+            assert.deepStrictEqual(successMessages(), [
+                { message: Integrations.integrationResetShared('Alpha'), type: 'success' }
+            ]);
+        });
+
+        test('a sign-out names the projects signed out along with this one', async () => {
+            await showSharedIntegration([SHARED_ENTRY]);
+
+            await fakePanel.onDidReceiveMessage({ type: 'signOut', integrationId: SHARED_CONFIG.id });
+
+            sinon.assert.calledOnceWithExactly(tokenDeleteSpy, SHARED_CONFIG.id);
+            assert.deepStrictEqual(successMessages(), [
+                { message: Integrations.integrationSignedOutShared('Alpha'), type: 'success' }
+            ]);
+        });
+
+        test('a sign-out no other project shares posts no message', async () => {
+            await showSharedIntegration([]);
+
+            await fakePanel.onDidReceiveMessage({ type: 'signOut', integrationId: SHARED_CONFIG.id });
+
+            sinon.assert.calledOnceWithExactly(tokenDeleteSpy, SHARED_CONFIG.id);
+            assert.deepStrictEqual(successMessages(), []);
+        });
+
+        test('a save of shared credentials names the projects it also changes them for', async () => {
+            await showSharedIntegration([SHARED_ENTRY]);
+            const changed = { ...SHARED_CONFIG, name: 'Renamed BigQuery' };
+
+            await fakePanel.onDidReceiveMessage({ type: 'save', integrationId: changed.id, config: changed });
+
+            assert.deepStrictEqual(successMessages(), [
+                { message: Integrations.integrationSavedShared('Alpha'), type: 'success' }
+            ]);
+        });
+    });
+
     test('saveConfiguration: deletes the token BEFORE save when fingerprint changes', async () => {
         const integrationId = 'bq-save-fp';
         const integrationSaveSpy = sinon.spy();

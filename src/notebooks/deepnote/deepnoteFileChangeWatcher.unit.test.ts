@@ -1,4 +1,3 @@
-import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import { anything, instance, mock, when } from 'ts-mockito';
@@ -18,6 +17,12 @@ import type { DeepnoteOutput } from '../../platform/deepnote/deepnoteTypes';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { IDeepnoteNotebookManager } from '../types';
 import { DeepnoteFileChangeWatcher } from './deepnoteFileChangeWatcher';
+import {
+    createDeepnoteBlock,
+    createDeepnoteFile,
+    createDeepnoteNotebook,
+    createDeepnoteProject
+} from './deepnoteTestHelpers';
 import { SnapshotService } from './snapshots/snapshotService';
 
 const waitForTimeoutMs = 5000;
@@ -1248,21 +1253,19 @@ project:
             // Create a mock notebook manager that returns an original project via the exact
             // (projectId, notebookId) lookup the snapshot path uses.
             const mockedManager = mock<IDeepnoteNotebookManager>();
-            when(mockedManager.getProjectForNotebook('e132b172-b114-410e-8331-011517db664f', 'notebook-1')).thenReturn({
-                version: '1.0',
-                metadata: { createdAt: '2025-01-01T00:00:00Z' },
-                project: {
-                    id: 'e132b172-b114-410e-8331-011517db664f',
-                    name: 'Test Project',
-                    notebooks: [
-                        {
-                            id: 'notebook-1',
-                            name: 'Notebook 1',
-                            blocks: [{ id: 'block-1', type: 'code', sortingKey: 'a0' }]
-                        }
-                    ]
-                }
-            } as DeepnoteFile);
+            when(mockedManager.getProjectForNotebook('e132b172-b114-410e-8331-011517db664f', 'notebook-1')).thenReturn(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        id: 'e132b172-b114-410e-8331-011517db664f',
+                        notebooks: [
+                            createDeepnoteNotebook({
+                                id: 'notebook-1',
+                                blocks: [createDeepnoteBlock({ id: 'block-1', sortingKey: 'a0' })]
+                            })
+                        ]
+                    })
+                })
+            );
 
             // Re-create the watcher with the mocked manager
             const fallbackDisposables: IDisposableRegistry = [];
@@ -1319,7 +1322,7 @@ project:
                             output_type: 'execute_result',
                             data: { 'text/plain': 'Fallback Output' },
                             execution_count: 2
-                        } as DeepnoteOutput
+                        }
                     ]
                 ]
             ]);
@@ -1344,26 +1347,20 @@ project:
             // exist in the document but are stripped from the file, so every cell below one is offset —
             // the metadata-less cell would adopt the wrong block's id and outputs, and that id gets
             // written back, leaving two cells claiming one block.
-            const deepnoteFile: DeepnoteFile = {
-                version: '1.0',
-                metadata: { createdAt: '2025-01-01T00:00:00Z' },
-                project: {
+            const deepnoteFile = createDeepnoteFile({
+                project: createDeepnoteProject({
                     id: 'e132b172-b114-410e-8331-011517db664f',
-                    name: 'Test Project',
                     notebooks: [
-                        {
+                        createDeepnoteNotebook({
                             id: 'notebook-1',
-                            name: 'Notebook 1',
-                            blocks: []
-                        }
+                            blocks: [
+                                createDeepnoteBlock({ id: 'block-1', sortingKey: 'a0' }),
+                                createDeepnoteBlock({ id: 'block-2', sortingKey: 'a1' })
+                            ]
+                        })
                     ]
-                }
-            };
-            // Force casting without metadata
-            deepnoteFile.project.notebooks[0].blocks = [
-                { id: 'block-1', type: 'code', sortingKey: 'a0' } as DeepnoteBlock,
-                { id: 'block-2', type: 'code', sortingKey: 'a1' } as DeepnoteBlock
-            ];
+                })
+            });
 
             const mockedManager = mock<IDeepnoteNotebookManager>();
             when(mockedManager.getProjectForNotebook('e132b172-b114-410e-8331-011517db664f', 'notebook-1')).thenReturn(
@@ -1388,13 +1385,8 @@ project:
             });
 
             // The vscode mock's NotebookEdit.updateCellMetadata drops its metadata argument, so the
-            // WorkspaceEdit cannot reveal which block id was written. Stub the static to capture it.
-            const metadataWrites: Array<{ index: number; metadata: Record<string, unknown> }> = [];
-            sinon.stub(NotebookEdit, 'updateCellMetadata').callsFake((index: number, metadata) => {
-                metadataWrites.push({ index, metadata: metadata as Record<string, unknown> });
-
-                return {} as NotebookEdit;
-            });
+            // WorkspaceEdit cannot reveal which block id was written. Spy on the static to capture it.
+            const updateCellMetadataSpy = sinon.spy(NotebookEdit, 'updateCellMetadata');
 
             const offsetWatcher = new DeepnoteFileChangeWatcher(
                 offsetDisposables,
@@ -1465,17 +1457,19 @@ project:
             );
 
             await waitFor(() => offsetApplyEditCount > 0);
-            await waitFor(() => metadataWrites.length > 0);
+            await waitFor(() => updateCellMetadataSpy.called);
 
-            const writeForLastCell = metadataWrites.find((w) => w.index === 2);
-            assert.isDefined(writeForLastCell, 'the metadata-less cell at live index 2 should receive a block id');
+            const metadataForLastCell: Record<string, unknown> | undefined = updateCellMetadataSpy.args.find(
+                ([index]) => index === 2
+            )?.[1];
+            assert.isDefined(metadataForLastCell, 'the metadata-less cell at live index 2 should receive a block id');
             assert.strictEqual(
-                writeForLastCell!.metadata.__deepnoteBlockId,
+                metadataForLastCell?.__deepnoteBlockId,
                 'block-2',
                 'live index 2 is the second *persisted* cell, so it must resolve to block-2'
             );
             assert.notStrictEqual(
-                writeForLastCell!.metadata.__deepnoteBlockId,
+                metadataForLastCell?.__deepnoteBlockId,
                 'block-1',
                 'block-1 already belongs to live index 0 — two cells must never claim one block'
             );

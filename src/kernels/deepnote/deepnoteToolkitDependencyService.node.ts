@@ -27,6 +27,12 @@ export interface ToolkitProbe {
 export type ToolkitState = 'ok' | 'missing' | 'needsUpdate';
 
 /**
+ * Time bound for probing deepnote-toolkit metadata before falling back to the import test.
+ * Guards against wedged interpreters (e.g. hung sitecustomize, stalled NFS venv, or locking hooks).
+ */
+export const PROBE_TIMEOUT_MS = 15_000;
+
+/**
  * Reads distribution metadata rather than importing `deepnote_toolkit`, which costs seconds and floods
  * the log. The toolkit server refuses to start without `jupyter_server`.
  */
@@ -123,7 +129,7 @@ export class DeepnoteToolkitDependencyService implements IDeepnoteToolkitDepende
         resource: Resource,
         token: CancellationToken
     ): Promise<DeepnoteToolkitDependencyResponse> {
-        const state = await this.probe(interpreter);
+        const state = await this.probe(interpreter, token);
 
         if (state === 'ok') {
             return DeepnoteToolkitDependencyResponse.ok;
@@ -205,10 +211,14 @@ export class DeepnoteToolkitDependencyService implements IDeepnoteToolkitDepende
      * Falls back to the installer's import test when the probe cannot run, so a broken environment
      * still gets the install prompt rather than an opaque failure.
      */
-    private async probe(interpreter: PythonEnvironment): Promise<ToolkitState> {
+    private async probe(interpreter: PythonEnvironment, token?: CancellationToken): Promise<ToolkitState> {
         try {
             const python = await this.pythonExecutionFactory.createActivatedEnvironment({ interpreter });
-            const result = await python.exec(['-c', TOOLKIT_PROBE], { throwOnStdErr: false });
+            const result = await python.exec(['-c', TOOLKIT_PROBE], {
+                throwOnStdErr: false,
+                token,
+                timeout: PROBE_TIMEOUT_MS
+            });
             const lastLine = result.stdout.trim().split(/\r?\n/).pop() ?? '';
             const parsed = JSON.parse(lastLine) as { version?: unknown; server?: unknown };
             const found: ToolkitProbe = {

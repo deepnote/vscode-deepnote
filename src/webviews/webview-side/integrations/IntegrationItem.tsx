@@ -1,8 +1,8 @@
 import * as React from 'react';
 
 import { getLocString } from '../react-common/locReactSide';
-import { ConfigurableDatabaseIntegrationType, DetectedIntegration } from './types';
-import { integrationTypeIcons } from './integrationUtils';
+import { DetectedIntegration } from './types';
+import { integrationTypeIcons, integrationTypeLabel } from './integrationUtils';
 
 export interface IIntegrationItemProps {
     integration: DetectedIntegration;
@@ -12,49 +12,6 @@ export interface IIntegrationItemProps {
     onAuthenticate: (integrationId: string) => void;
     onSignOut: (integrationId: string) => void;
 }
-
-const getIntegrationTypeLabel = (type: ConfigurableDatabaseIntegrationType): string => {
-    switch (type) {
-        case 'alloydb':
-            return getLocString('integrationsAlloyDBTypeLabel', 'Google AlloyDB');
-        case 'athena':
-            return getLocString('integrationsAthenaTypeLabel', 'Amazon Athena');
-        case 'big-query':
-            return getLocString('integrationsBigQueryTypeLabel', 'Google BigQuery');
-        case 'clickhouse':
-            return getLocString('integrationsClickHouseTypeLabel', 'ClickHouse');
-        case 'cloud-sql':
-            return getLocString('integrationsCloudSqlTypeLabel', 'Google Cloud SQL');
-        case 'databricks':
-            return getLocString('integrationsDatabricksTypeLabel', 'Databricks');
-        case 'dremio':
-            return getLocString('integrationsDremioTypeLabel', 'Dremio');
-        case 'mariadb':
-            return getLocString('integrationsMariaDBTypeLabel', 'MariaDB');
-        case 'materialize':
-            return getLocString('integrationsMaterializeTypeLabel', 'Materialize');
-        case 'mindsdb':
-            return getLocString('integrationsMindsDBTypeLabel', 'MindsDB');
-        case 'mongodb':
-            return getLocString('integrationsMongoDBTypeLabel', 'MongoDB');
-        case 'mysql':
-            return getLocString('integrationsMySQLTypeLabel', 'MySQL');
-        case 'pgsql':
-            return getLocString('integrationsPostgresTypeLabel', 'PostgreSQL');
-        case 'redshift':
-            return getLocString('integrationsRedshiftTypeLabel', 'Amazon Redshift');
-        case 'snowflake':
-            return getLocString('integrationsSnowflakeTypeLabel', 'Snowflake');
-        case 'spanner':
-            return getLocString('integrationsSpannerTypeLabel', 'Google Spanner');
-        case 'sql-server':
-            return getLocString('integrationsSQLServerTypeLabel', 'Microsoft SQL Server');
-        case 'trino':
-            return getLocString('integrationsTrinoTypeLabel', 'Trino');
-        default:
-            return type;
-    }
-};
 
 export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
     integration,
@@ -86,7 +43,7 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
     const type = integration.config?.type || integration.integrationType;
 
     // Get the type label and icon
-    const typeLabel = type ? getIntegrationTypeLabel(type) : undefined;
+    const typeLabel = type ? integrationTypeLabel(type) : undefined;
     const typeIcon = type ? integrationTypeIcons[type] : undefined;
 
     // Federated-auth UI: `tokenStatus` alone decides. The extension gates on its candidate set, which also

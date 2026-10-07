@@ -1,0 +1,17 @@
+# Accepted risks for the root package-lock.json, scanned by qlty's osv-scanner plugin.
+# Mirrors .nsprc (better-npm-audit), which holds the full assessment: keep both in sync.
+
+[[IgnoredVulns]]
+id = "GHSA-848j-6mx2-7j84"
+ignoreUntil = 2026-10-17
+reason = "CVE-2025-14505 (elliptic): dev-only, via node-stdlib-browser; no patched release. See .nsprc."
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2026-11-06
+reason = "CVE-2026-93687 (braces): not shipped, not reachable with untrusted input; no patched release. See .nsprc."
+
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = 2026-11-06
+reason = "CVE-2026-97058 (sprintf-js): not shipped, not reachable; no patched release. See .nsprc."

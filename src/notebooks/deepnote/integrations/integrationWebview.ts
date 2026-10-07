@@ -1,5 +1,5 @@
 import { inject, injectable, optional } from 'inversify';
-import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
+import { commands, Disposable, l10n, Uri, ViewColumn, WebviewPanel, window, workspace } from 'vscode';
 
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 
@@ -10,9 +10,20 @@ import * as localize from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { LocalizedMessages, SharedMessages } from '../../../messageTypes';
 import { ISqlIntegrationEnvVarsProvider } from '../../../platform/notebooks/deepnote/types';
-import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
-import { persistProjectIntegrations } from './projectIntegrationsWriter';
-import { IFederatedAuthTokenStorage, IIntegrationStorage, IIntegrationWebviewProvider } from './types';
+import { IDeepnoteNotebookManager } from '../../types';
+import { findOtherProjectsDeclaring } from './existingIntegrationPicker';
+import {
+    addProjectIntegration,
+    PersistIntegrationsResult,
+    ProjectFilesParams,
+    removeProjectIntegration
+} from './projectIntegrationsWriter';
+import {
+    IFederatedAuthTokenStorage,
+    IIntegrationEnvLiveRefresher,
+    IIntegrationStorage,
+    IIntegrationWebviewProvider
+} from './types';
 import {
     ConfigurableDatabaseIntegrationConfig,
     FederatedAuthTokenStatus,
@@ -49,7 +60,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         @inject(ISqlIntegrationEnvVarsProvider) private readonly sqlIntegrationEnvVars: ISqlIntegrationEnvVarsProvider,
         @inject(IFederatedAuthTokenStorage)
         @optional()
-        private readonly tokenStorage?: IFederatedAuthTokenStorage
+        private readonly tokenStorage?: IFederatedAuthTokenStorage,
+        // Node-only service: the web extension has no kernels to refresh.
+        @inject(IIntegrationEnvLiveRefresher)
+        @optional()
+        private readonly liveRefresher?: IIntegrationEnvLiveRefresher
     ) {
         // Refresh on token-storage change so the auth pill flips without panel reload. Pushed into the extension-lifetime registry to survive panel close/reopen.
         if (this.tokenStorage) {
@@ -61,6 +76,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 })
             );
         }
+    }
+
+    public async refresh(projectId: string, integrations: Map<string, DetectedIntegration>): Promise<void> {
+        if (!this.currentPanel || this.projectId !== projectId) {
+            return;
+        }
+
+        this.integrations = integrations;
+
+        await this.updateWebview();
     }
 
     /**
@@ -135,7 +160,6 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             this.disposables
         );
 
-        await this.sendLocStrings();
         await this.updateWebview();
 
         // If a specific integration was requested, show its configuration form
@@ -171,28 +195,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             integrationsConfirmDeleteDetails: localize.Integrations.confirmDeleteDetails,
             integrationsConfigureTitle: localize.Integrations.configureTitle,
             integrationsAddNewIntegration: localize.Integrations.addNewIntegration,
+            integrationsAddExistingIntegration: localize.Integrations.addExistingIntegration,
             integrationsDatabase: localize.Integrations.database,
             integrationsDataWarehousesLakes: localize.Integrations.dataWarehousesLakes,
             integrationsDatabases: localize.Integrations.databases,
-            integrationsPostgresTypeLabel: localize.Integrations.postgresTypeLabel,
-            integrationsBigQueryTypeLabel: localize.Integrations.bigQueryTypeLabel,
-            integrationsSnowflakeTypeLabel: localize.Integrations.snowflakeTypeLabel,
-            integrationsAlloyDBTypeLabel: localize.Integrations.alloyDBTypeLabel,
-            integrationsAthenaTypeLabel: localize.Integrations.athenaTypeLabel,
-            integrationsClickHouseTypeLabel: localize.Integrations.clickHouseTypeLabel,
-            integrationsCloudSqlTypeLabel: localize.Integrations.cloudSqlTypeLabel,
-            integrationsDatabricksTypeLabel: localize.Integrations.databricksTypeLabel,
-            integrationsDremioTypeLabel: localize.Integrations.dremioTypeLabel,
-            integrationsMariaDBTypeLabel: localize.Integrations.mariaDBTypeLabel,
-            integrationsMaterializeTypeLabel: localize.Integrations.materializeTypeLabel,
-            integrationsMindsDBTypeLabel: localize.Integrations.mindsDBTypeLabel,
-            integrationsMongoDBTypeLabel: localize.Integrations.mongoDBTypeLabel,
-            integrationsMySQLTypeLabel: localize.Integrations.mySQLTypeLabel,
-            integrationsDuckDBTypeLabel: localize.Integrations.duckDBTypeLabel,
-            integrationsRedshiftTypeLabel: localize.Integrations.redshiftTypeLabel,
-            integrationsSpannerTypeLabel: localize.Integrations.spannerTypeLabel,
-            integrationsSQLServerTypeLabel: localize.Integrations.sqlServerTypeLabel,
-            integrationsTrinoTypeLabel: localize.Integrations.trinoTypeLabel,
+            ...localize.Integrations.typeLabels,
             integrationsCancel: localize.Integrations.cancel,
             integrationsSave: localize.Integrations.save,
             integrationsRequiredField: localize.Integrations.requiredField,
@@ -693,6 +700,12 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         config?: ConfigurableDatabaseIntegrationConfig;
     }): Promise<void> {
         switch (message.type) {
+            // Posted by the webview once its listener is attached, on every mount: anything sent before that is lost,
+            // including after a reload.
+            case SharedMessages.Started:
+                await this.sendLocStrings();
+                await this.updateWebview();
+                break;
             case 'configure':
                 if (message.integrationId) {
                     await this.showConfigurationForm(message.integrationId);
@@ -742,6 +755,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
             case 'signOut':
                 if (message.integrationId) {
                     await this.signOutIntegration(message.integrationId);
+                }
+                break;
+            case 'addExisting':
+                // The command owns the picker and the integrations write, and refreshes this panel when it is done.
+                try {
+                    await commands.executeCommand(Commands.AddExistingIntegration, {
+                        notebookUri: this.activeFileUri?.toString()
+                    });
+                } catch (error) {
+                    logger.error('IntegrationWebviewProvider: AddExistingIntegration command failed', error);
                 }
                 break;
             case 'authenticate':
@@ -815,6 +838,11 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
 
         try {
+            // A new integration has a fresh id no other project can declare yet.
+            const otherProjectNames = this.integrations.has(integrationId)
+                ? await this.findOtherProjectsSharing(integrationId)
+                : [];
+
             // Invalidate stale federated tokens before saving (fingerprint change or auth-method switch).
             await this.invalidateStaleFederatedToken(integrationId, config);
 
@@ -837,15 +865,27 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 });
             }
 
-            const persisted = await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectFiles((target) =>
+                addProjectIntegration({
+                    ...target,
+                    integration: { id: integrationId, name: config.name || integrationId, type: config.type }
+                })
+            );
 
             await this.updateWebview();
 
             if (persisted) {
                 await this.currentPanel?.webview.postMessage({
-                    message: l10n.t('Configuration saved successfully'),
+                    message:
+                        otherProjectNames.length > 0
+                            ? localize.Integrations.integrationSavedShared(otherProjectNames.join(', '))
+                            : l10n.t('Configuration saved successfully'),
                     type: 'success'
                 });
+
+                // The credential save above already refreshed the kernels, possibly before this project declared a
+                // new integration; refresh again now that it does.
+                await this.refreshProjectKernels();
             }
 
             // The credential save above is the tracked operation; a skipped project-YAML sync is not a failure.
@@ -872,8 +912,17 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
      */
     private async signOutIntegration(integrationId: string): Promise<void> {
         try {
+            const otherProjectNames = await this.findOtherProjectsSharing(integrationId);
+
             // `delete` fires onDidChangeTokens, which re-renders the panel; no explicit updateWebview needed.
             await this.tokenStorage?.delete(integrationId);
+
+            if (otherProjectNames.length > 0) {
+                await this.currentPanel?.webview.postMessage({
+                    message: localize.Integrations.integrationSignedOutShared(otherProjectNames.join(', ')),
+                    type: 'success'
+                });
+            }
         } catch (error) {
             logger.error('Failed to sign out integration', error);
             await this.currentPanel?.webview.postMessage({
@@ -892,6 +941,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
 
         try {
+            const otherProjectNames = await this.findOtherProjectsSharing(integrationId);
+
             // Token first: a failure here has to abort before the config is committed, otherwise the token is
             // stranded with no integration left in the panel to retry from.
             await this.tokenStorage?.delete(integrationId);
@@ -904,18 +955,16 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                 this.integrations.set(integrationId, integration);
             }
 
-            const persisted = await this.updateProjectIntegrationsList();
-
             await this.updateWebview();
 
-            if (persisted) {
-                await this.currentPanel?.webview.postMessage({
-                    message: l10n.t('Configuration reset successfully'),
-                    type: 'success'
-                });
-            }
+            await this.currentPanel?.webview.postMessage({
+                message:
+                    otherProjectNames.length > 0
+                        ? localize.Integrations.integrationResetShared(otherProjectNames.join(', '))
+                        : l10n.t('Configuration reset successfully'),
+                type: 'success'
+            });
 
-            // The credential reset above is the tracked operation; a skipped project-YAML sync is not a failure.
             return true;
         } catch (error) {
             logger.error('Failed to reset integration configuration', error);
@@ -932,7 +981,8 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Delete the integration completely (removes credentials and integration entry)
+     * Removes the integration from the project, and its credentials too unless another workspace project still
+     * declares the id: credentials are keyed by id alone, so projects that linked one integration share them.
      */
     private async deleteConfiguration(integrationId: string): Promise<boolean> {
         if (await this.refuseEditIfFileConfigured(integrationId)) {
@@ -940,26 +990,40 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
         }
 
         try {
-            // Token first: a failure here has to abort before the config is committed, otherwise the token is
-            // stranded with no integration left in the panel to retry from.
-            await this.tokenStorage?.delete(integrationId);
-            await this.integrationStorage.delete(integrationId);
+            const otherProjectNames = await this.findOtherProjectsSharing(integrationId);
+
+            if (otherProjectNames.length === 0) {
+                // Token first: a failure here has to abort before the config is committed, otherwise the token is
+                // stranded with no integration left in the panel to retry from.
+                await this.tokenStorage?.delete(integrationId);
+                await this.integrationStorage.delete(integrationId);
+            }
 
             // Remove from local state
             this.integrations.delete(integrationId);
 
-            const persisted = await this.updateProjectIntegrationsList();
+            const persisted = await this.updateProjectFiles((target) =>
+                removeProjectIntegration({ ...target, integrationId })
+            );
 
             await this.updateWebview();
 
             if (persisted) {
                 await this.currentPanel?.webview.postMessage({
-                    message: l10n.t('Integration deleted successfully'),
+                    message:
+                        otherProjectNames.length > 0
+                            ? localize.Integrations.integrationUnlinked(otherProjectNames.join(', '))
+                            : l10n.t('Integration deleted successfully'),
                     type: 'success'
                 });
             }
 
-            // The credential delete above is the tracked operation; a skipped project-YAML sync is not a failure.
+            if (otherProjectNames.length > 0) {
+                await this.refreshProjectKernels();
+            }
+
+            // Deleting the credentials, or taking a shared integration off this project, is the tracked operation;
+            // a skipped project-YAML sync is not a failure.
             return true;
         } catch (error) {
             logger.error('Failed to delete integration', error);
@@ -976,41 +1040,46 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
     }
 
     /**
-     * Update the project's integrations list based on current integrations
+     * Other workspace projects declaring `integrationId`: credentials are keyed by id alone, so they share whatever
+     * this panel does to its stored config or token.
      */
-    private async updateProjectIntegrationsList(): Promise<boolean> {
+    private async findOtherProjectsSharing(integrationId: string): Promise<string[]> {
+        return this.projectId ? findOtherProjectsDeclaring({ integrationId, projectId: this.projectId }) : [];
+    }
+
+    /**
+     * Re-applies integration env in this project's running kernels. A SecretStorage change triggers
+     * `IntegrationEnvRefreshHandler` by itself, but an edit to the project's integrations list fires no event.
+     */
+    private async refreshProjectKernels(): Promise<void> {
+        const projectNotebooks = workspace.notebookDocuments.filter(
+            (notebook) =>
+                notebook.notebookType === 'deepnote' && notebook.metadata?.deepnoteProjectId === this.projectId
+        );
+
+        try {
+            await this.liveRefresher?.refresh(projectNotebooks, 'integration_config');
+        } catch (error) {
+            logger.error('IntegrationWebviewProvider: failed to refresh integration env', error);
+        }
+    }
+
+    /**
+     * Applies one edit to the project's `.deepnote` files and reports how it went: an error when the active file did
+     * not take it, a warning for the siblings that did not. Returns whether the active file took it.
+     */
+    private async updateProjectFiles(
+        edit: (target: ProjectFilesParams) => Promise<PersistIntegrationsResult>
+    ): Promise<boolean> {
         if (!this.projectId || !this.activeFileUri) {
             logger.warn('IntegrationWebviewProvider: No project ID / active file available, skipping project update');
             return false;
         }
 
-        // Build the integrations list from current integrations
-        const projectIntegrations: ProjectIntegration[] = Array.from(this.integrations.entries())
-            .map(([id, integration]): ProjectIntegration | null => {
-                // Get the integration type from config or integration metadata
-                const type = integration.config?.type || integration.integrationType;
-                if (!type) {
-                    logger.warn(`IntegrationWebviewProvider: No type found for integration ${id}, skipping`);
-                    return null;
-                }
-
-                return {
-                    id,
-                    name: integration.config?.name || integration.integrationName || id,
-                    type
-                };
-            })
-            .filter((integration): integration is ProjectIntegration => integration !== null);
-
-        logger.debug(
-            `IntegrationWebviewProvider: Updating project ${this.projectId} with ${projectIntegrations.length} integrations`
-        );
-
-        const { activePersisted, siblingsFailed } = await persistProjectIntegrations({
+        const { activePersisted, siblingsFailed } = await edit({
+            activeFileUri: this.activeFileUri,
             notebookManager: this.notebookManager,
-            projectId: this.projectId,
-            integrations: projectIntegrations,
-            activeFileUri: this.activeFileUri
+            projectId: this.projectId
         });
 
         if (!activePersisted) {

@@ -2988,9 +2988,6 @@
         "@jupyterlab/services": {
             "ws": "7.5.11"
         },
-        "@deepnote/runtime-core": {
-            "ws": "8.21.3"
-        },
         "@jupyterlab/filebrowser": {
             "ws": "8.21.0"
         },

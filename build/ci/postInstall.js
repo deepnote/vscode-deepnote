@@ -140,7 +140,7 @@ function verifyMomentIsOnlyUsedByJupyterLabCoreUtils() {
     const packageLock = JSON.parse(fs.readFileSync(packageLockPath, 'utf8'));
     const packagesAllowedToUseMoment = ['node_modules/@jupyterlab/coreutils', '@jupyterlab/coreutils'];
     const otherPackagesUsingMoment = [];
-    ['packages', 'dependencies'].forEach((key) => {
+    ['packages'].forEach((key) => {
         if (!(key in packageLock)) {
             throw new Error(`Invalid package-lock.json, as it does not contain the key '${key}'`);
         }
@@ -152,7 +152,7 @@ function verifyMomentIsOnlyUsedByJupyterLabCoreUtils() {
             ) {
                 return;
             }
-            ['dependencies', 'requires'].forEach((dependencyKey) => {
+            ['dependencies', 'optionalDependencies'].forEach((dependencyKey) => {
                 if (dependencyKey in packages[packageName]) {
                     const dependenciesOfPackage = packages[packageName][dependencyKey];
                     if ('moment' in dependenciesOfPackage) {

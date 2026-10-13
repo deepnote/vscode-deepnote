@@ -1,10 +1,13 @@
 import { serializeDeepnoteFile } from '@deepnote/blocks';
 import { RelativePattern, Uri, workspace } from 'vscode';
 
-import { flushNotebookDocumentIfDirty } from '../../../platform/deepnote/deepnoteDocumentFlush';
+import {
+    findOpenNotebookDocument,
+    flushNotebookDocumentIfDirty
+} from '../../../platform/deepnote/deepnoteDocumentFlush';
 import { readDeepnoteProjectFile } from '../../../platform/deepnote/deepnoteProjectFileReader';
 import { logger } from '../../../platform/logging';
-import { IDeepnoteNotebookManager, ProjectIntegration } from '../../types';
+import { IDeepnoteNotebookManager, RawProjectIntegration } from '../../types';
 import { isSnapshotFile } from '../snapshots/snapshotFiles';
 
 export interface PersistIntegrationsResult {
@@ -12,32 +15,83 @@ export interface PersistIntegrationsResult {
     siblingsFailed: number;
 }
 
-export interface PersistProjectIntegrationsParams {
+/** The project whose `.deepnote` files an edit goes to, starting with the one the user acted in. */
+export interface ProjectFilesParams {
+    activeFileUri: Uri;
     notebookManager: IDeepnoteNotebookManager;
     projectId: string;
-    integrations: ProjectIntegration[];
-    activeFileUri: Uri;
+}
+
+export interface AddProjectIntegrationParams extends ProjectFilesParams {
+    integration: RawProjectIntegration;
+}
+
+export interface RemoveProjectIntegrationParams extends ProjectFilesParams {
+    integrationId: string;
+}
+
+interface WriteSiblingFilesParams extends ProjectFilesParams {
+    resolve: ResolveIntegrations;
 }
 
 interface WriteIntegrationsToFileParams {
     fileUri: Uri;
+    notebookManager: IDeepnoteNotebookManager;
     projectId: string;
-    integrations: ProjectIntegration[];
+    resolve: ResolveIntegrations;
 }
 
-type IntegrationWriteOutcome = 'failed' | 'skipped' | 'written';
+/** Builds the array to write from the one the file holds, read a step earlier in the same function. */
+type ResolveIntegrations = (existing: RawProjectIntegration[]) => RawProjectIntegration[];
 
-/** Writes `integrations` to the active file and every on-disk sibling; `activePersisted` reflects disk truth, not the cache. */
-export async function persistProjectIntegrations(
-    params: PersistProjectIntegrationsParams
+type IntegrationWriteStatus = 'failed' | 'skipped' | 'written';
+
+/**
+ * Adds one integration to the project; an id a file already declares is replaced where it stands. Like every edit
+ * here it merges into what each file holds instead of replacing the list, so a caller holding a list across a prompt
+ * cannot delete entries written while it waited, nor ones it never listed.
+ */
+export function addProjectIntegration(params: AddProjectIntegrationParams): Promise<PersistIntegrationsResult> {
+    const { integration, ...target } = params;
+
+    return editProjectFiles(target, (existing) =>
+        existing.some((entry) => entry.id === integration.id)
+            ? existing.map((entry) => (entry.id === integration.id ? integration : entry))
+            : [...existing, integration]
+    );
+}
+
+/** Takes one integration off the project, leaving every other entry each file holds as it is. */
+export function removeProjectIntegration(params: RemoveProjectIntegrationParams): Promise<PersistIntegrationsResult> {
+    const { integrationId, ...target } = params;
+
+    return editProjectFiles(target, (existing) => existing.filter((entry) => entry.id !== integrationId));
+}
+
+/** Applies `resolve` to the active file, then to every sibling; `activePersisted` reflects disk truth, not the cache. */
+async function editProjectFiles(
+    params: ProjectFilesParams,
+    resolve: ResolveIntegrations
 ): Promise<PersistIntegrationsResult> {
-    const { notebookManager, projectId, integrations, activeFileUri } = params;
-
-    // Refresh the cache first so live env/kernel behavior stays correct even if a disk write fails.
-    notebookManager.updateProjectIntegrations(projectId, integrations);
+    const { activeFileUri, notebookManager, projectId } = params;
 
     // findFiles only covers open folders, so write the active file explicitly (no open folder / out-of-workspace).
-    const activeOutcome = await writeIntegrationsToFile({ fileUri: activeFileUri, projectId, integrations });
+    const status = await writeIntegrationsToFile({ fileUri: activeFileUri, notebookManager, projectId, resolve });
+
+    // The active file is the mandate for the sweep. `skipped` means it is a snapshot or another project's file, and
+    // `failed` means the edit landed nowhere — stamping the project's other files on its behalf is data loss either way.
+    if (status !== 'written') {
+        return { activePersisted: false, siblingsFailed: 0 };
+    }
+
+    const siblingsFailed = await writeSiblingFiles({ activeFileUri, notebookManager, projectId, resolve });
+
+    return { activePersisted: true, siblingsFailed };
+}
+
+/** Writes every discovered `.deepnote` of the project except `activeFileUri`; returns how many failed. */
+async function writeSiblingFiles(params: WriteSiblingFilesParams): Promise<number> {
+    const { activeFileUri, notebookManager, projectId, resolve } = params;
 
     const visited = new Set<string>([activeFileUri.toString()]);
     let siblingsFailed = 0;
@@ -48,7 +102,7 @@ export async function persistProjectIntegrations(
         try {
             files = await workspace.findFiles(new RelativePattern(workspaceFolder, '**/*.deepnote'));
         } catch (error) {
-            logger.error('persistProjectIntegrations: failed to enumerate .deepnote files', error);
+            logger.error('projectIntegrationsWriter: failed to enumerate .deepnote files', error);
 
             continue;
         }
@@ -60,22 +114,28 @@ export async function persistProjectIntegrations(
 
             visited.add(fileUri.toString());
 
-            if ((await writeIntegrationsToFile({ fileUri, projectId, integrations })) === 'failed') {
+            const status = await writeIntegrationsToFile({ fileUri, notebookManager, projectId, resolve });
+            if (status === 'failed') {
                 siblingsFailed++;
             }
         }
     }
 
-    return { activePersisted: activeOutcome === 'written', siblingsFailed };
+    return siblingsFailed;
 }
 
-/** Returns `'skipped'` (snapshot / other project), `'failed'`, or `'written'` for one `.deepnote` file. */
-async function writeIntegrationsToFile(params: WriteIntegrationsToFileParams): Promise<IntegrationWriteOutcome> {
-    const { fileUri, projectId, integrations } = params;
+/**
+ * Writes one `.deepnote` file, and moves the cache entry of the notebook open from it to the same list: `skipped`
+ * for a snapshot or another project's file.
+ */
+async function writeIntegrationsToFile(params: WriteIntegrationsToFileParams): Promise<IntegrationWriteStatus> {
+    const { fileUri, notebookManager, projectId, resolve } = params;
 
     if (isSnapshotFile(fileUri)) {
         return 'skipped';
     }
+
+    let integrations: RawProjectIntegration[];
 
     try {
         let projectData = await readDeepnoteProjectFile(fileUri);
@@ -86,7 +146,7 @@ async function writeIntegrationsToFile(params: WriteIntegrationsToFileParams): P
 
         // Flush an open dirty file and re-read, so live cell edits aren't clobbered by the watcher reload.
         if (!(await flushNotebookDocumentIfDirty(fileUri))) {
-            logger.warn(`persistProjectIntegrations: ${fileUri.path} — unsaved edits could not be saved`);
+            logger.warn(`projectIntegrationsWriter: ${fileUri.path} — unsaved edits could not be saved`);
 
             return 'failed';
         }
@@ -99,6 +159,8 @@ async function writeIntegrationsToFile(params: WriteIntegrationsToFileParams): P
         }
 
         // Rewrite ONLY integrations; every other field round-trips from disk, so saved cells are untouched.
+        integrations = resolve(projectData.project.integrations ?? []);
+
         projectData.project.integrations = integrations;
 
         if (!projectData.metadata) {
@@ -108,11 +170,19 @@ async function writeIntegrationsToFile(params: WriteIntegrationsToFileParams): P
         projectData.metadata.modifiedAt = new Date().toISOString();
 
         await workspace.fs.writeFile(fileUri, new TextEncoder().encode(serializeDeepnoteFile(projectData)));
-
-        return 'written';
     } catch (error) {
-        logger.error(`persistProjectIntegrations: failed to update ${fileUri.path}`, error);
+        logger.error(`projectIntegrationsWriter: failed to update ${fileUri.path}`, error);
 
         return 'failed';
     }
+
+    // Saving the notebook rebuilds this whole file from its cache entry, so the entry has to hold this file's list:
+    // another file's list would overwrite the entries only this one declares on that save.
+    const notebookId = findOpenNotebookDocument(fileUri)?.metadata?.deepnoteNotebookId;
+
+    if (notebookId) {
+        notebookManager.updateProjectIntegrationsForNotebook(projectId, notebookId, integrations);
+    }
+
+    return 'written';
 }

@@ -1,6 +1,13 @@
-import { Uri, workspace } from 'vscode';
+import { NotebookDocument, Uri, workspace } from 'vscode';
 
 import { logger } from '../logging';
+
+/** The notebook document open from `fileUri`, if any; a query or fragment on the document's URI is ignored. */
+export function findOpenNotebookDocument(fileUri: Uri): NotebookDocument | undefined {
+    return workspace.notebookDocuments.find(
+        (doc) => doc.uri.with({ query: '', fragment: '' }).toString() === fileUri.toString()
+    );
+}
 
 /**
  * Saves a dirty open notebook for `fileUri` before a disk read-modify-write so live edits are not
@@ -9,9 +16,7 @@ import { logger } from '../logging';
  * @returns `false` only when a dirty document could not be saved (the save was declined or threw).
  */
 export async function flushNotebookDocumentIfDirty(fileUri: Uri): Promise<boolean> {
-    const openDocument = workspace.notebookDocuments.find(
-        (doc) => doc.uri.with({ query: '', fragment: '' }).toString() === fileUri.toString()
-    );
+    const openDocument = findOpenNotebookDocument(fileUri);
 
     if (!openDocument?.isDirty) {
         return true;

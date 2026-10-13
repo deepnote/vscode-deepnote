@@ -19,7 +19,7 @@ import { SpannerForm } from './SpannerForm';
 import { SQLServerForm } from './SQLServerForm';
 import { isTrinoPasswordConfig, TrinoForm } from './TrinoForm';
 import { ConfigurableDatabaseIntegrationConfig, ConfigurableDatabaseIntegrationType } from './types';
-import { integrationTypeLabels } from './integrationUtils';
+import { integrationTypeLabel } from './integrationUtils';
 
 export interface IConfigurationFormProps {
     integrationId: string;
@@ -38,7 +38,7 @@ export const ConfigurationForm: React.FC<IConfigurationFormProps> = ({
     onSave,
     onCancel
 }) => {
-    const typeLabel = integrationTypeLabels[integrationType] || integrationType;
+    const typeLabel = integrationTypeLabel(integrationType);
     const title = getLocString('integrationsConfigureTitle', '{0} integration').replace('{0}', typeLabel);
 
     return (

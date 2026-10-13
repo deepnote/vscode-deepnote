@@ -28,6 +28,12 @@ export interface IIntegrationDetector {
 export const IIntegrationWebviewProvider = Symbol('IIntegrationWebviewProvider');
 export interface IIntegrationWebviewProvider {
     /**
+     * Re-renders an open panel that shows `projectId` with `integrations`, without revealing it; does nothing when no
+     * panel is open or it shows another project.
+     */
+    refresh(projectId: string, integrations: Map<string, DetectedIntegration>): Promise<void>;
+
+    /**
      * Show the integration management webview
      * @param projectId The Deepnote project ID
      * @param integrations Map of integration IDs to their detected config and metadata

@@ -36,6 +36,12 @@ export interface ProjectIntegration {
     type: ConfigurableDatabaseIntegrationType;
 }
 
+/**
+ * An entry as recorded on disk: unlike `ProjectIntegration`, `type` is not narrowed to the known types, so it also
+ * covers the internal `pandas-dataframe` integration and anything a newer Deepnote release writes.
+ */
+export type RawProjectIntegration = NonNullable<DeepnoteFile['project']['integrations']>[number];
+
 export const IDeepnoteNotebookManager = Symbol('IDeepnoteNotebookManager');
 export interface IDeepnoteNotebookManager {
     /**
@@ -46,14 +52,14 @@ export interface IDeepnoteNotebookManager {
     storeOriginalProject(projectId: string, notebookId: string, project: DeepnoteFile): void;
 
     /**
-     * Updates the integrations list in the cached project data (cache-only).
-     * Iterates every cached notebook entry under the project and updates each.
-     *
-     * @param projectId - Project identifier
-     * @param integrations - Array of integration metadata to store in the project
-     * @returns `true` if at least one cached entry was found and updated, `false` otherwise
+     * Replaces the integrations list of the one cached (projectId, notebookId) entry (cache-only); does nothing
+     * when that entry is not cached. Sibling entries keep their own lists: each mirrors its own file.
      */
-    updateProjectIntegrations(projectId: string, integrations: ProjectIntegration[]): boolean;
+    updateProjectIntegrationsForNotebook(
+        projectId: string,
+        notebookId: string,
+        integrations: RawProjectIntegration[]
+    ): void;
 }
 
 export const IDeepnoteInitNotebookRunner = Symbol('IDeepnoteInitNotebookRunner');

@@ -96,9 +96,19 @@ jobs:
         if: "!cancelled() && github.event_name != 'pull_request'"
         run: qlty smells --all
 
-      # osv-scanner declares skip_upstream, so only --all ever sees a lockfile. Accepted risks for
-      # the root package-lock.json live in osv-scanner.toml, mirroring .nsprc. qlty silently skips
-      # files over 2,098,000 bytes, so the root lockfile drops out of this scan if it grows past that.
+      - name: Check lockfiles fit qlty's size limit
+        if: '!cancelled()'
+        run: |
+          status=0
+          for f in $(git ls-files '*package-lock.json'); do
+            size=$(stat -c%s "$f")
+            if [ "$size" -gt 2098000 ]; then
+              echo "::error file=$f::$f is $size bytes; qlty skips files over 2,098,000 bytes, so osv-scanner would not scan it"
+              status=1
+            fi
+          done
+          exit $status
+
       - name: Run qlty dependency scan
         if: '!cancelled()'
         run: qlty check --all --filter=osv-scanner

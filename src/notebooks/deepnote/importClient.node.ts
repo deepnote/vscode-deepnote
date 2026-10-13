@@ -39,7 +39,7 @@ function getDomain(resource?: Uri): string {
 /**
  * Gets the API endpoint from configuration
  */
-function getApiEndpoint(resource?: Uri): string {
+export function getApiEndpoint(resource?: Uri): string {
     const domain = getDomain(resource);
     return `https://api.${domain}`;
 }

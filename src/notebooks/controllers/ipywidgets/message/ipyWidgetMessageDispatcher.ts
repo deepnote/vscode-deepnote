@@ -460,7 +460,7 @@ export class IPyWidgetMessageDispatcher implements IIPyWidgetMessageDispatcher {
                             // The underlying buffer is an ArrayBuffer,
                             // & thats what needs to be sent to the kernel.
                             // One simple test is FileUpload widget.
-                            return buffer.buffer;
+                            return buffer.buffer as ArrayBuffer;
                         }
                         return buffer;
                     });

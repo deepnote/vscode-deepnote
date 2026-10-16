@@ -15,8 +15,8 @@ export function pythonEnvironmentQuickPick(item: Environment, quickPick: BasePro
         item.id === quickPick.recommended?.id
             ? '$(star-full) '
             : isCondaEnvironmentWithoutPython(item)
-            ? '$(warning) '
-            : '';
+              ? '$(warning) '
+              : '';
     const quickPickItem: QuickPickItem = { label: `${icon}${label}` };
     quickPickItem.description = getDisplayPath(item.executable.uri || item.path, workspace.workspaceFolders || []);
     quickPickItem.tooltip = isCondaEnvironmentWithoutPython(item) ? DataScience.pythonCondaKernelsWithoutPython : '';

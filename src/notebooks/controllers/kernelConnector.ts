@@ -172,9 +172,7 @@ export class KernelConnector {
             kernel: Deferred<{
                 kernel: IKernel;
                 deadKernelAction?:
-                    | 'deadKernelNeedsToBeRestarted'
-                    | 'deadKernelWasNoRestarted'
-                    | 'deadKernelWasRestarted';
+                    'deadKernelNeedsToBeRestarted' | 'deadKernelWasNoRestarted' | 'deadKernelWasRestarted';
             }>;
             options: IDisplayOptions;
         }
@@ -185,9 +183,7 @@ export class KernelConnector {
             kernel: Deferred<{
                 kernel: IBaseKernel;
                 deadKernelAction?:
-                    | 'deadKernelNeedsToBeRestarted'
-                    | 'deadKernelWasNoRestarted'
-                    | 'deadKernelWasRestarted';
+                    'deadKernelNeedsToBeRestarted' | 'deadKernelWasNoRestarted' | 'deadKernelWasRestarted';
             }>;
             options: IDisplayOptions;
         }
@@ -201,16 +197,12 @@ export class KernelConnector {
             | Promise<{
                   kernel: IBaseKernel;
                   deadKernelAction?:
-                      | 'deadKernelNeedsToBeRestarted'
-                      | 'deadKernelWasNoRestarted'
-                      | 'deadKernelWasRestarted';
+                      'deadKernelNeedsToBeRestarted' | 'deadKernelWasNoRestarted' | 'deadKernelWasRestarted';
               }>
             | Promise<{
                   kernel: IKernel;
                   deadKernelAction?:
-                      | 'deadKernelNeedsToBeRestarted'
-                      | 'deadKernelWasNoRestarted'
-                      | 'deadKernelWasRestarted';
+                      'deadKernelNeedsToBeRestarted' | 'deadKernelWasNoRestarted' | 'deadKernelWasRestarted';
               }>,
         actionSource: KernelActionSource,
         onAction: (action: KernelAction, kernel: IBaseKernel) => void,
@@ -355,10 +347,7 @@ export class KernelConnector {
         deferred: Deferred<{
             kernel: IBaseKernel;
             deadKernelAction?:
-                | 'deadKernelNeedsToBeRestarted'
-                | 'deadKernelWasNoRestarted'
-                | 'deadKernelWasRestarted'
-                | undefined;
+                'deadKernelNeedsToBeRestarted' | 'deadKernelWasNoRestarted' | 'deadKernelWasRestarted' | undefined;
         }>,
         options: IDisplayOptions
     ) {
@@ -383,10 +372,7 @@ export class KernelConnector {
         matchingKernelPromise?: Promise<{
             kernel: IBaseKernel;
             deadKernelAction?:
-                | 'deadKernelNeedsToBeRestarted'
-                | 'deadKernelWasNoRestarted'
-                | 'deadKernelWasRestarted'
-                | undefined;
+                'deadKernelNeedsToBeRestarted' | 'deadKernelWasNoRestarted' | 'deadKernelWasRestarted' | undefined;
         }>
     ) {
         if (!matchingKernelPromise) {
@@ -580,5 +566,4 @@ export class KernelConnector {
 }
 
 type NotebookResource =
-    | { resource: Resource; notebook: NotebookDocument; controller: IKernelController }
-    | { resource: Uri };
+    { resource: Resource; notebook: NotebookDocument; controller: IKernelController } | { resource: Uri };

@@ -620,10 +620,10 @@ suite('IntegrationWebviewProvider', () => {
 
             await provider.refresh(PROJECT_ID, linkedMap());
 
-            assert.deepStrictEqual(lastUpdate().integrations?.map((integration) => integration.id), [
-                'pg-1',
-                'pg-linked'
-            ]);
+            assert.deepStrictEqual(
+                lastUpdate().integrations?.map((integration) => integration.id),
+                ['pg-1', 'pg-linked']
+            );
             sinon.assert.notCalled(reveal);
         });
 

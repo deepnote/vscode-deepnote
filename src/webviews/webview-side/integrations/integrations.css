@@ -329,9 +329,16 @@ form {
     border-top: 1px solid var(--vscode-panel-border);
 }
 
-.integration-type-selector h2 {
-    margin-top: 0;
+.integration-type-selector-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
     margin-bottom: 24px;
+}
+
+.integration-type-selector h2 {
+    margin: 0;
     font-size: 1.2em;
     font-weight: 600;
 }

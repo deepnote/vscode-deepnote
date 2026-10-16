@@ -52,91 +52,33 @@ suite('DeepnoteNotebookManager', () => {
         });
     });
 
-    suite('updateProjectIntegrations', () => {
-        test('should update integrations list for existing project and return true', () => {
-            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
-
-            const integrations: ProjectIntegration[] = [
-                { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' },
-                { id: 'int-2', name: 'BigQuery', type: 'big-query' }
-            ];
-
-            const result = manager.updateProjectIntegrations('project-123', integrations);
-
-            assert.strictEqual(result, true);
-
-            const updatedProject = manager.getProjectForNotebook('project-123', 'notebook-456');
-            assert.deepStrictEqual(updatedProject?.project.integrations, integrations);
-        });
-
-        test('should replace existing integrations list and return true', () => {
-            const projectWithIntegrations: DeepnoteFile = {
+    suite('updateProjectIntegrationsForNotebook', () => {
+        test('replaces the list of the entry and keeps every other field of it', () => {
+            manager.storeOriginalProject('project-123', 'notebook-456', {
                 ...mockProject,
-                project: {
-                    ...mockProject.project,
-                    integrations: [{ id: 'old-int', name: 'Old Integration', type: 'pgsql' }]
-                }
-            };
-
-            manager.storeOriginalProject('project-123', 'notebook-456', projectWithIntegrations);
-
-            const newIntegrations: ProjectIntegration[] = [
-                { id: 'new-int-1', name: 'New Integration 1', type: 'pgsql' },
-                { id: 'new-int-2', name: 'New Integration 2', type: 'big-query' }
-            ];
-
-            const result = manager.updateProjectIntegrations('project-123', newIntegrations);
-
-            assert.strictEqual(result, true);
-
-            const updatedProject = manager.getProjectForNotebook('project-123', 'notebook-456');
-            assert.deepStrictEqual(updatedProject?.project.integrations, newIntegrations);
-        });
-
-        test('should handle empty integrations array and return true', () => {
-            const projectWithIntegrations: DeepnoteFile = {
-                ...mockProject,
-                project: {
-                    ...mockProject.project,
-                    integrations: [{ id: 'int-1', name: 'Integration 1', type: 'pgsql' }]
-                }
-            };
-
-            manager.storeOriginalProject('project-123', 'notebook-456', projectWithIntegrations);
-
-            const result = manager.updateProjectIntegrations('project-123', []);
-
-            assert.strictEqual(result, true);
-
-            const updatedProject = manager.getProjectForNotebook('project-123', 'notebook-456');
-            assert.deepStrictEqual(updatedProject?.project.integrations, []);
-        });
-
-        test('should return false for unknown project', () => {
-            const result = manager.updateProjectIntegrations('unknown-project', [
-                { id: 'int-1', name: 'Integration', type: 'pgsql' }
-            ]);
-
-            assert.strictEqual(result, false);
-
-            const project = manager.getProjectForNotebook('unknown-project', 'notebook-456');
-            assert.strictEqual(project, undefined);
-        });
-
-        test('should preserve other project properties and return true', () => {
-            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
+                project: { ...mockProject.project, integrations: [{ id: 'old-int', name: 'Old', type: 'pgsql' }] }
+            });
 
             const integrations: ProjectIntegration[] = [{ id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }];
 
-            const result = manager.updateProjectIntegrations('project-123', integrations);
+            manager.updateProjectIntegrationsForNotebook('project-123', 'notebook-456', integrations);
 
-            assert.strictEqual(result, true);
+            assert.deepStrictEqual(manager.getProjectForNotebook('project-123', 'notebook-456'), {
+                ...mockProject,
+                project: { ...mockProject.project, integrations }
+            });
+        });
 
-            const updatedProject = manager.getProjectForNotebook('project-123', 'notebook-456');
-            assert.strictEqual(updatedProject?.project.id, mockProject.project.id);
-            assert.strictEqual(updatedProject?.project.name, mockProject.project.name);
-            assert.strictEqual(updatedProject?.version, mockProject.version);
-            assert.deepStrictEqual(updatedProject?.metadata, mockProject.metadata);
+        test('caches nothing for a project or notebook that is not cached', () => {
+            manager.storeOriginalProject('project-123', 'notebook-456', mockProject);
+            const integrations: ProjectIntegration[] = [{ id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }];
+
+            manager.updateProjectIntegrationsForNotebook('unknown-project', 'notebook-456', integrations);
+            manager.updateProjectIntegrationsForNotebook('project-123', 'unknown-notebook', integrations);
+
+            assert.strictEqual(manager.getProjectForNotebook('unknown-project', 'notebook-456'), undefined);
+            assert.strictEqual(manager.getProjectForNotebook('project-123', 'unknown-notebook'), undefined);
+            assert.deepStrictEqual(manager.getProjectForNotebook('project-123', 'notebook-456'), mockProject);
         });
     });
 
@@ -180,42 +122,38 @@ suite('DeepnoteNotebookManager', () => {
             assert.strictEqual(result, undefined);
         });
 
-        test('updateProjectIntegrations updates every cached notebook entry under the project', () => {
+        test('updateProjectIntegrationsForNotebook updates that entry alone, leaving the siblings on their own lists', () => {
+            const siblingIntegrations: ProjectIntegration[] = [{ id: 'int-b', name: 'MySQL', type: 'mysql' }];
+            const projectB = siblingProject(nbB, 'Sibling B');
+            projectB.project.integrations = siblingIntegrations;
             manager.storeOriginalProject(projectId, nbA, siblingProject(nbA, 'Sibling A'));
-            manager.storeOriginalProject(projectId, nbB, siblingProject(nbB, 'Sibling B'));
+            manager.storeOriginalProject(projectId, nbB, projectB);
 
-            const integrations: ProjectIntegration[] = [
-                { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' },
-                { id: 'int-2', name: 'BigQuery', type: 'big-query' }
-            ];
+            const integrations: ProjectIntegration[] = [{ id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }];
 
-            const updated = manager.updateProjectIntegrations(projectId, integrations);
+            manager.updateProjectIntegrationsForNotebook(projectId, nbA, integrations);
 
-            assert.strictEqual(updated, true);
-            // BOTH siblings of the project must see the new integrations.
             assert.deepStrictEqual(manager.getProjectForNotebook(projectId, nbA)?.project.integrations, integrations);
-            assert.deepStrictEqual(manager.getProjectForNotebook(projectId, nbB)?.project.integrations, integrations);
+            assert.deepStrictEqual(
+                manager.getProjectForNotebook(projectId, nbB)?.project.integrations,
+                siblingIntegrations
+            );
         });
 
-        test('updateProjectIntegrations deep-clones integrations so cached siblings are isolated from the caller and each other', () => {
+        test('updateProjectIntegrationsForNotebook deep-clones integrations so the cache is isolated from the caller', () => {
             manager.storeOriginalProject(projectId, nbA, siblingProject(nbA, 'Sibling A'));
-            manager.storeOriginalProject(projectId, nbB, siblingProject(nbB, 'Sibling B'));
 
             const pg: ProjectIntegration = { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' };
             const integrations: ProjectIntegration[] = [pg];
 
-            manager.updateProjectIntegrations(projectId, integrations);
+            manager.updateProjectIntegrationsForNotebook(projectId, nbA, integrations);
 
-            // Mutating the caller-owned array and its contents after the call must not leak into the cache.
             pg.name = 'MUTATED';
             integrations.push({ id: 'int-2', name: 'BigQuery', type: 'big-query' });
 
-            const cachedA = manager.getProjectForNotebook(projectId, nbA)?.project.integrations;
-            const cachedB = manager.getProjectForNotebook(projectId, nbB)?.project.integrations;
-
-            assert.deepStrictEqual(cachedA, [{ id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }]);
-            // Each sibling holds its own array instance rather than a shared reference.
-            assert.notStrictEqual(cachedA, cachedB);
+            assert.deepStrictEqual(manager.getProjectForNotebook(projectId, nbA)?.project.integrations, [
+                { id: 'int-1', name: 'PostgreSQL', type: 'pgsql' }
+            ]);
         });
     });
 });

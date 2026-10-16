@@ -1,5 +1,5 @@
 import type { AgentBlock } from '@deepnote/blocks';
-import type { AgentBlockContext, ServerInfo, ServerOptions } from '@deepnote/runtime-core';
+import type { AgentBlockContext, ServerExit, ServerInfo, ServerOptions } from '@deepnote/runtime-core';
 import type { ChildProcess } from 'child_process';
 
 /**
@@ -60,7 +60,11 @@ export const startServer: RuntimeCore['startServer'] = async (options) => {
         url: `http://127.0.0.1:${50000 + id}`,
         jupyterPort: 50000 + id,
         lspPort: 51000 + id,
-        process: makeFakeProcess(id)
+        process: makeFakeProcess(id),
+        // Never settles: the fake server never exits.
+        exited: new Promise<ServerExit>(() => undefined),
+        stderrTail: '',
+        childPids: []
     };
 };
 

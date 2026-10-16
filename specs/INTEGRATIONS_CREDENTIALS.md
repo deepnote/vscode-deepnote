@@ -433,6 +433,32 @@ Orchestrates the integration management UI and commands.
 3. Manager opens webview with integration list
 4. Optionally pre-selects a specific integration for configuration
 
+Both commands act only on the notebook a menu or the panel names, when one is given, and refuse it once it is closed
+rather than acting on whichever editor has focus. They also refuse a snapshot (`*.snapshot.deepnote`): it matches the
+notebook selector, but it records a past run, and the integrations writer never edits one.
+
+**Add Existing Integration** (`deepnote.addExistingIntegration`, also the "Add Existing Integration" button in the
+webview, implemented in `existingIntegrationPicker.ts`):
+
+1. Scans every `.deepnote` file in the workspace folders (snapshots excluded) and collects the roster entries of
+   _other_ projects whose id has a config in SecretStorage; ids already on the active project's roster are skipped,
+   as are file-only (`.deepnote.env.yaml`) integrations, which already apply workspace-wide.
+2. Shows a QuickPick (name, type, "Used in: <projects>"). An id whose roster type disagrees with the stored config's
+   type is dropped with a warning rather than offered.
+3. On selection, appends `{ id, name, type }` to the active project's roster via `addProjectIntegration` (see "Project
+   files" below). Nothing is copied in SecretStorage: configs (and federated refresh tokens) are keyed by integration
+   id alone, and the roster entry is what scopes an integration to a project, so the linked project resolves the same
+   credentials.
+4. Refreshes the integrations panel when one is open for this project, without revealing it; run from the command
+   palette, the command never opens one. Then re-runs the integration env refresh in the project's running kernels,
+   since no storage change event fires for a roster-only edit. The panel goes first: a busy kernel answers the refresh
+   only after its running cell.
+
+The panel's Delete only takes a linked integration off the active project's roster, and keeps its credentials, while
+another project in the open workspace folders still declares the id. No storage change event fires then either, so the
+panel refreshes the project's running kernels itself. Reset, Sign out and Save go ahead on shared credentials, which
+are the same for every project declaring the id, and their success message names the other projects they affected.
+
 #### 4. **Integration Webview** (`integrationWebview.ts`)
 
 Provides the webview-based UI for managing integration credentials.
@@ -443,6 +469,17 @@ Provides the webview-based UI for managing integration credentials.
 - Real-time updates as credentials are saved or cleared
 - Configuration forms for each integration type
 - Delete/reset functionality
+
+**Project files:**
+
+Each panel action edits the roster entry it acts on, through `projectIntegrationsWriter.ts`: Save adds the saved
+integration or updates its entry in place (`addProjectIntegration`), Delete removes it (`removeProjectIntegration`),
+and Reset leaves the roster alone. Every edit merges into what each of the project's `.deepnote` files holds rather
+than writing the panel's list, so entries the panel does not list survive it: types it cannot configure, like
+`pandas-dataframe`, and integrations linked after it opened. The active file goes first, and the siblings are only
+swept once it is on disk; each open notebook's cached project then takes the list its own file now holds. A Save
+refreshes the project's running kernels once the roster holds the integration, since the refresh its credential save
+triggers may have read the roster before.
 
 **Connection Status:**
 
@@ -480,6 +517,9 @@ Extension → Webview:
 Webview → Extension:
 
 ```typescript
+// Posted on every mount, once the listener is attached; answered with the loc strings, then the list
+{ type: 'started' }
+
 // Save configuration
 { type: 'save', integrationId: string, config: IntegrationConfig }
 

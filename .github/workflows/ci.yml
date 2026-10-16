@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
@@ -51,7 +51,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
@@ -77,7 +77,7 @@ jobs:
           persist-credentials: false
 
       - name: Install qlty
-        uses: qltysh/qlty-action/install@08a0a862c159eae9b9003081da6663d96efef637 # v2.3.0
+        uses: qltysh/qlty-action/install@c9b09987143d1e4ac955f4803c7bea742102feb5 # v2.4.0
 
       - name: Run qlty check (pull request)
         if: github.event_name == 'pull_request'
@@ -96,9 +96,19 @@ jobs:
         if: "!cancelled() && github.event_name != 'pull_request'"
         run: qlty smells --all
 
-      # osv-scanner declares skip_upstream, so only --all ever sees a lockfile. The root
-      # package-lock.json is too large for qlty to analyze (better-npm-audit gates it in the
-      # audit-* jobs), so in practice this gates src/test/vscode-notebook-perf/package-lock.json.
+      - name: Check lockfiles fit qlty's size limit
+        if: '!cancelled()'
+        run: |
+          status=0
+          for f in $(git ls-files '*package-lock.json'); do
+            size=$(stat -c%s "$f")
+            if [ "$size" -gt 2098000 ]; then
+              echo "::error file=$f::$f is $size bytes; qlty skips files over 2,098,000 bytes, so osv-scanner would not scan it"
+              status=1
+            fi
+          done
+          exit $status
+
       - name: Run qlty dependency scan
         if: '!cancelled()'
         run: qlty check --all --filter=osv-scanner
@@ -117,7 +127,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
@@ -138,7 +148,7 @@ jobs:
           VSC_JUPYTER_INSTRUMENT_CODE_FOR_COVERAGE: true
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           use_oidc: true
           files: coverage/lcov.info
@@ -146,7 +156,7 @@ jobs:
 
       - name: Upload test results to Codecov
         if: '!cancelled()'
-        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           use_oidc: true
           files: test-results.xml
@@ -170,7 +180,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
@@ -192,7 +202,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
@@ -214,7 +224,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
@@ -237,7 +247,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
@@ -259,7 +269,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
@@ -281,7 +291,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'

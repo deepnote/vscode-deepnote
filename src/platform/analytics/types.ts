@@ -10,6 +10,7 @@ export type TelemetryEventName =
     | 'delete_integration'
     | 'delete_notebook'
     | 'duplicate_notebook'
+    | 'add_existing_integration'
     | 'execute_cell'
     | 'execute_notebook'
     | 'export_notebook'
@@ -33,6 +34,7 @@ export type CommandOutcome = 'completed' | 'cancelled' | 'failed';
 /** Caller-supplied properties per event; `undefined` means none beyond the common properties the service attaches. */
 export interface TelemetryEventProperties {
     add_block: { blockType: string; isEphemeral: boolean };
+    add_existing_integration: { integrationType: string; outcome: CommandOutcome };
     authenticate_integration: { integrationType: string; outcome: CommandOutcome };
     configure_integration: { integrationType: string };
     copy_notebook_details: undefined;
@@ -66,7 +68,7 @@ export interface TelemetryEventProperties {
     reset_integration: { integrationType: string };
     save_integration: { integrationType: string; authMethod?: 'service-account' | 'google-oauth' };
     split_notebook: { notebookCount: number; outcome: CommandOutcome };
-    /** `fromEnvFile` is file-ONLY, not file-configured: false when the id is also in the project roster. */
+    /** `fromEnvFile` is file-ONLY, not file-configured: false when the id is also in the project's integrations. */
     switch_sql_integration: { fromEnvFile: boolean; integrationType: string };
     switch_sql_return_variable_type: { returnVariableType: 'dataframe' | 'query_preview' };
     toggle_snapshots: { enabled: boolean };

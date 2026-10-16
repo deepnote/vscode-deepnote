@@ -1570,7 +1570,7 @@ export async function getDebugSessionAndAdapter(
     const session = debuggingManager.getDebugSession(doc)!;
 
     const debugAdapter = debuggingManager.getDebugAdapter(doc)!;
-    assert.isOk<IKernelDebugAdapter | undefined>(debugAdapter, 'DebugAdapter not started');
+    assert.isOk(debugAdapter, 'DebugAdapter not started');
 
     return { session, debugAdapter };
 }

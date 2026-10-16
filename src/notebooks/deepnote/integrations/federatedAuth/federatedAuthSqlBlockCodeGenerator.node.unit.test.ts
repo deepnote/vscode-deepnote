@@ -343,9 +343,9 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             assert.fail('Expected OAuthClientMisconfiguredError');
         } catch (err) {
             assert(err instanceof OAuthClientMisconfiguredError);
+            assert.equal(err.integrationName, 'My BigQuery');
             assert.notInstanceOf(err, NotAuthenticatedError);
             assert.notInstanceOf(err, InvalidClientError);
-            assert.equal(err.integrationName, 'My BigQuery');
         }
         sinon.assert.notCalled(deleteSpy);
     });

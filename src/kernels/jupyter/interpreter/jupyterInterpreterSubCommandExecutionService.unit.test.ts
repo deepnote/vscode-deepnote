@@ -118,8 +118,9 @@ suite('Jupyter InterpreterSubCommandExecutionService', () => {
         });
         test('Jupyter cannot be started because no interpreter has been selected', async () => {
             when(interpreterService.getActiveInterpreter(undefined)).thenResolve(undefined);
-            const reason =
-                await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(undefined);
+            const reason = await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(
+                undefined
+            );
             assert.equal(reason, DataScience.selectJupyterInterpreter);
         });
         test('Jupyter cannot be started because jupyter is not installed', async () => {
@@ -151,8 +152,9 @@ suite('Jupyter InterpreterSubCommandExecutionService', () => {
             when(jupyterDependencyService.getDependenciesNotInstalled(activePythonInterpreter, undefined)).thenResolve([
                 Product.jupyter
             ]);
-            const reason =
-                await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(undefined);
+            const reason = await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(
+                undefined
+            );
             assert.equal(reason, expectedReason);
         });
         test('Jupyter cannot be started because notebook is not installed', async () => {
@@ -181,8 +183,9 @@ suite('Jupyter InterpreterSubCommandExecutionService', () => {
             when(jupyterDependencyService.getDependenciesNotInstalled(activePythonInterpreter, undefined)).thenResolve([
                 Product.notebook
             ]);
-            const reason =
-                await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(undefined);
+            const reason = await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(
+                undefined
+            );
             assert.equal(reason, expectedReason);
         });
         test('Cannot start notebook', async () => {
@@ -303,8 +306,9 @@ suite('Jupyter InterpreterSubCommandExecutionService', () => {
                 jupyterDependencyService.getDependenciesNotInstalled(selectedJupyterInterpreter, undefined)
             ).thenResolve([Product.jupyter]);
 
-            let reason =
-                await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(undefined);
+            let reason = await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(
+                undefined
+            );
 
             // replace interpreter name with *** to workaround flakey test.
             reason = reason.replace(/('.*?')/g, "'***'");
@@ -339,8 +343,9 @@ suite('Jupyter InterpreterSubCommandExecutionService', () => {
                 jupyterDependencyService.getDependenciesNotInstalled(selectedJupyterInterpreter, undefined)
             ).thenResolve([Product.notebook]);
 
-            let reason =
-                await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(undefined);
+            let reason = await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(
+                undefined
+            );
             // replace interpreter name with *** to workaround flakey test.
             reason = reason.replace(/('.*?')/g, "'***'");
 
@@ -351,8 +356,9 @@ suite('Jupyter InterpreterSubCommandExecutionService', () => {
                 jupyterDependencyService.getDependenciesNotInstalled(selectedJupyterInterpreter, undefined)
             ).thenResolve([Product.kernelspec]);
 
-            const reason =
-                await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(undefined);
+            const reason = await jupyterInterpreterExecutionService.getReasonForJupyterNotebookNotBeingSupported(
+                undefined
+            );
 
             assert.equal(reason, DataScience.jupyterKernelSpecModuleNotFound(selectedJupyterInterpreter.uri.fsPath));
         });

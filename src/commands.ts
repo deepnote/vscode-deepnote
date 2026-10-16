@@ -22,7 +22,9 @@ export type CommandIds = keyof ICommandNameArgumentTypeMapping;
 type ContextKeyPrimitiveValue = null | undefined | boolean | number | string | Uri;
 
 export type ContextKeyValue =
-    ContextKeyPrimitiveValue | Array<ContextKeyPrimitiveValue> | Record<string, ContextKeyPrimitiveValue>;
+    | ContextKeyPrimitiveValue
+    | Array<ContextKeyPrimitiveValue>
+    | Record<string, ContextKeyPrimitiveValue>;
 
 /**
  * Mapping between commands and list of arguments.
@@ -93,7 +95,8 @@ export interface ICommandNameArgumentTypeMapping {
     ['notebook.execute']: [];
     ['notebook.cell.edit']: [];
     ['notebook.cell.execute']:
-        [] | [{ ranges: { start: number; end: number }[]; document?: Uri; autoReveal?: boolean }]; // TODO update this
+        | []
+        | [{ ranges: { start: number; end: number }[]; document?: Uri; autoReveal?: boolean }]; // TODO update this
     ['notebook.cell.insertCodeCellBelow']: [];
     ['notebook.undo']: [];
     ['notebook.redo']: [];

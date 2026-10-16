@@ -253,7 +253,8 @@ export class WidgetManager implements IIPyWidgetManager, IMessageHandler {
                         const renderer = await context.getRenderer(rendererId);
                         const isImage = mime.toLowerCase().startsWith('image/') && !mime.toLowerCase().includes('svg');
                         const renderOutputItem = renderer?.renderOutputItem as
-                            undefined | ((outputItem: OutputItem, element: HTMLElement, signal: AbortSignal) => void);
+                            | undefined
+                            | ((outputItem: OutputItem, element: HTMLElement, signal: AbortSignal) => void);
                         if (renderOutputItem) {
                             renderOutputItem(
                                 {
@@ -326,7 +327,9 @@ export class WidgetManager implements IIPyWidgetManager, IMessageHandler {
             return;
         }
         const displayMsg = payload as
-            KernelMessage.IDisplayDataMsg | KernelMessage.IUpdateDisplayDataMsg | KernelMessage.IExecuteResultMsg;
+            | KernelMessage.IDisplayDataMsg
+            | KernelMessage.IUpdateDisplayDataMsg
+            | KernelMessage.IExecuteResultMsg;
 
         if (displayMsg.content && displayMsg.content.data && displayMsg.content.data[WIDGET_MIMETYPE]) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -71,7 +71,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             tokens.delete(id);
         });
         getMergedIntegrationConfigsSpy = sinon.spy(async (resource: Resource) =>
-            resource ? (mergedIntegrationConfigs.get(resource.toString()) ?? []) : []
+            resource ? mergedIntegrationConfigs.get(resource.toString()) ?? [] : []
         );
 
         // Declared as a plain object (not a typed literal) so the extra members the provider grows for other

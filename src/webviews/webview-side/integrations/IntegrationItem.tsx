@@ -30,8 +30,8 @@ export const IntegrationItem: React.FC<IIntegrationItemProps> = ({
     const statusText = isFileConfigured
         ? getLocString('integrationsConfiguredInFile', 'Configured in file')
         : integration.config
-          ? getLocString('integrationsConnected', 'Connected')
-          : getLocString('integrationsNotConfigured', 'Not Configured');
+        ? getLocString('integrationsConnected', 'Connected')
+        : getLocString('integrationsNotConfigured', 'Not Configured');
     const configureText = integration.config
         ? getLocString('integrationsReconfigure', 'Reconfigure')
         : getLocString('integrationsConfigure', 'Configure');

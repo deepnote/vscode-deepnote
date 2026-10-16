@@ -160,8 +160,9 @@ export class DataViewerCommandRegistry implements IExtensionSyncActivationServic
                     pythonEnv && (await this.dataViewerDependencyService.checkAndInstallMissingDependencies(pythonEnv));
                 }
 
-                const jupyterVariableDataProvider =
-                    await this.jupyterVariableDataProviderFactory.create(requestVariable);
+                const jupyterVariableDataProvider = await this.jupyterVariableDataProviderFactory.create(
+                    requestVariable
+                );
                 const dataFrameInfo = await jupyterVariableDataProvider.getDataFrameInfo();
                 const columnSize = dataFrameInfo?.columns?.length;
                 if (columnSize && (await this.dataViewerChecker.isRequestedColumnSizeAllowed(columnSize))) {

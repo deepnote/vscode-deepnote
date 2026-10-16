@@ -18,7 +18,8 @@ export class RunInDedicatedExtensionHostCommandHandler implements IExtensionSync
     }
     private async updateAffinity() {
         const affinity = workspace.getConfiguration('extensions').get('experimental.affinity') as
-            { [key: string]: number } | undefined;
+            | { [key: string]: number }
+            | undefined;
         let maxAffinity = 0;
         if (affinity) {
             Object.values(affinity).forEach((value) => {

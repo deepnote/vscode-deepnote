@@ -147,7 +147,9 @@ export class RemoteNotebookKernelSourceSelector implements IRemoteNotebookKernel
             | QuickPickItem
         )[] = [];
         const quickPickCommandItems: (
-            ContributedKernelFinderQuickPickItem | KernelProviderItemsQuickPickItem | QuickPickItem
+            | ContributedKernelFinderQuickPickItem
+            | KernelProviderItemsQuickPickItem
+            | QuickPickItem
         )[] = [];
 
         const serversAndTimes: { server: IRemoteKernelFinder; time?: number }[] = [];
@@ -290,7 +292,9 @@ export class RemoteNotebookKernelSourceSelector implements IRemoteNotebookKernel
         if (serverProvider) {
             // If the only item is a server, then aut select that.
             const itemsWithoutSeparators = items.filter((i) => 'type' in i) as (
-                ContributedKernelFinderQuickPickItem | KernelProviderItemsQuickPickItem | JupyterServerQuickPickItem
+                | ContributedKernelFinderQuickPickItem
+                | KernelProviderItemsQuickPickItem
+                | JupyterServerQuickPickItem
             )[];
             if (
                 itemsWithoutSeparators.length === 1 &&

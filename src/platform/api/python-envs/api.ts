@@ -928,8 +928,7 @@ export interface PythonProjectEnvironmentApi {
 }
 
 export interface PythonEnvironmentManagerApi
-    extends
-        PythonEnvironmentManagerRegistrationApi,
+    extends PythonEnvironmentManagerRegistrationApi,
         PythonEnvironmentItemApi,
         PythonEnvironmentManagementApi,
         PythonEnvironmentsApi,
@@ -994,8 +993,7 @@ export interface PythonPackageManagementApi {
 }
 
 export interface PythonPackageManagerApi
-    extends
-        PythonPackageManagerRegistrationApi,
+    extends PythonPackageManagerRegistrationApi,
         PythonPackageGetterApi,
         PythonPackageManagementApi,
         PythonPackageItemApi {}
@@ -1214,7 +1212,10 @@ export interface PythonBackgroundRunApi {
 }
 
 export interface PythonExecutionApi
-    extends PythonTerminalCreateApi, PythonTerminalRunApi, PythonTaskRunApi, PythonBackgroundRunApi {}
+    extends PythonTerminalCreateApi,
+        PythonTerminalRunApi,
+        PythonTaskRunApi,
+        PythonBackgroundRunApi {}
 
 /**
  * Event arguments for when the monitored `.env` files or any other sources change.
@@ -1262,8 +1263,7 @@ export interface PythonEnvironmentVariablesApi {
  * The API for interacting with Python environments, package managers, and projects.
  */
 export interface PythonEnvironmentApi
-    extends
-        PythonEnvironmentManagerApi,
+    extends PythonEnvironmentManagerApi,
         PythonPackageManagerApi,
         PythonProjectApi,
         PythonExecutionApi,

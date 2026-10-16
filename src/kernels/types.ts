@@ -307,7 +307,8 @@ export type KernelConnectionMetadata = RemoteKernelConnectionMetadata | LocalKer
  * Connection metadata for local kernels. Makes it easier to not have to check for the live connection type.
  */
 export type LocalKernelConnectionMetadata =
-    Readonly<LocalKernelSpecConnectionMetadata> | Readonly<PythonKernelConnectionMetadata>;
+    | Readonly<LocalKernelSpecConnectionMetadata>
+    | Readonly<PythonKernelConnectionMetadata>;
 
 /**
  * Connection metadata for remote kernels. Makes it easier to not have to check for the live connection type.
@@ -332,7 +333,12 @@ export function isRemoteConnection(
 }
 
 export type KernelHooks =
-    'willRestart' | 'willInterrupt' | 'restartCompleted' | 'interruptCompleted' | 'didStart' | 'willCancel';
+    | 'willRestart'
+    | 'willInterrupt'
+    | 'restartCompleted'
+    | 'interruptCompleted'
+    | 'didStart'
+    | 'willCancel';
 
 export interface IStartOptions extends IDisplayOptions {
     /**

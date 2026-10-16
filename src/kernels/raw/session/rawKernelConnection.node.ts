@@ -390,7 +390,9 @@ export class RawKernelConnection implements Kernel.IKernelConnection {
     }
     public requestHistory(
         content:
-            KernelMessage.IHistoryRequestRange | KernelMessage.IHistoryRequestSearch | KernelMessage.IHistoryRequestTail
+            | KernelMessage.IHistoryRequestRange
+            | KernelMessage.IHistoryRequestSearch
+            | KernelMessage.IHistoryRequestTail
     ): Promise<KernelMessage.IHistoryReplyMsg> {
         return this.realKernel!.requestHistory(content);
     }

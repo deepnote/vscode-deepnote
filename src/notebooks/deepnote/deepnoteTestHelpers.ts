@@ -144,7 +144,7 @@ export function createMockCell(options?: CreateMockCellOptions): NotebookCell {
     } = opts;
 
     // Preserve explicit undefined for metadata fields
-    const metadata = 'metadata' in opts ? (opts.metadata ?? {}) : {};
+    const metadata = 'metadata' in opts ? opts.metadata ?? {} : {};
     const notebookMetadata = Object.prototype.hasOwnProperty.call(opts, 'notebookMetadata')
         ? opts.notebookMetadata
         : {};

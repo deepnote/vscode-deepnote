@@ -25,7 +25,10 @@ import {
 import { IConnectionDisplayData, IConnectionDisplayDataProvider } from '../types';
 import { DisposableBase } from '../../../platform/common/utils/lifecycle';
 export type CompoundQuickPickItem =
-    CommandQuickPickItem | ConnectionQuickPickItem | KernelListErrorQuickPickItem | QuickPickItem;
+    | CommandQuickPickItem
+    | ConnectionQuickPickItem
+    | KernelListErrorQuickPickItem
+    | QuickPickItem;
 export function isKernelPickItem(item: CompoundQuickPickItem): item is ConnectionQuickPickItem {
     return 'connection' in item;
 }

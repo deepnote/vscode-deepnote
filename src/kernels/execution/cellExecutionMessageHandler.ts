@@ -195,8 +195,7 @@ export class CellExecutionMessageHandler implements IDisposable {
         private readonly formatters: ITracebackFormatter[],
         private readonly kernel: Kernel.IKernelConnection,
         private readonly request:
-            | Kernel.IShellFuture<KernelMessage.IExecuteRequestMsg, KernelMessage.IExecuteReplyMsg>
-            | undefined,
+            Kernel.IShellFuture<KernelMessage.IExecuteRequestMsg, KernelMessage.IExecuteReplyMsg> | undefined,
         cellExecution: NotebookCellExecution,
         executionMessageId: string
     ) {

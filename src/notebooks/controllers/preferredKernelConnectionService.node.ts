@@ -97,8 +97,7 @@ export async function getRecommendedPythonEnvironment(uri: Uri): Promise<Resolve
         | undefined;
     try {
         const result = (await raceTimeout(5_000, commands.executeCommand('python.getRecommendedEnvironment', uri))) as
-            | RecommededEnvironment
-            | undefined;
+            RecommededEnvironment | undefined;
         if (!result) {
             logger.trace(`No recommended Python environment found for ${getDisplayPath(uri)}`);
             return;

@@ -236,7 +236,8 @@ export interface IJupyterRemoteCachedKernelValidator {
 }
 
 export interface IRemoteKernelFinder
-    extends IContributedKernelFinder<RemoteKernelConnectionMetadata>,
+    extends
+        IContributedKernelFinder<RemoteKernelConnectionMetadata>,
         IQuickPickItemProvider<RemoteKernelConnectionMetadata> {
     kind: ContributedKernelFinderKind.Remote;
     serverProviderHandle: JupyterServerProviderHandle;

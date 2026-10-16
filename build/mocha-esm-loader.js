@@ -1,8 +1,5 @@
 // ESM loader for Mocha tests
 // This provides custom module resolution for mocked modules
-//
-// `.mocha.unittests.js.json` passes `--no-experimental-require-module` because, with require(esm)
-// available, Mocha >= 11.7 loads spec and --require files through `require()`, which skips these async hooks.
 
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL, fileURLToPath } from 'node:url';

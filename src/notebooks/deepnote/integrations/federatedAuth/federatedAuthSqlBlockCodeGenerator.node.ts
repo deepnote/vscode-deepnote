@@ -121,7 +121,7 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
         const query = sqlBlock.content ?? '';
         const rawVariableName = sqlBlock.metadata?.deepnote_variable_name;
         const pythonVariableName =
-            rawVariableName !== undefined ? sanitizePythonVariableName(rawVariableName) ?? 'input_1' : undefined;
+            rawVariableName !== undefined ? (sanitizePythonVariableName(rawVariableName) ?? 'input_1') : undefined;
         const returnVariableType: SqlCellVariableType = sqlBlock.metadata?.deepnote_return_variable_type ?? 'dataframe';
         const sqlCacheMode: SqlCacheMode = 'cache_disabled';
 

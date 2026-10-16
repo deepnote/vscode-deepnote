@@ -13,7 +13,7 @@ import { PythonEnvironment } from '../../platform/pythonEnvironments/info';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { Commands, DEEPNOTE_TOOLKIT_VERSION } from '../../platform/common/constants';
 import { Common } from '../../platform/common/utils/localize';
-import { DeepnoteToolkitDependencyService, ToolkitProbe, toolkitState } from './deepnoteToolkitDependencyService.node';
+import { DeepnoteToolkitDependencyService, PROBE_TIMEOUT_MS, ToolkitProbe, toolkitState } from './deepnoteToolkitDependencyService.node';
 import { DeepnoteToolkitDependencyResponse } from './types';
 
 suite('DeepnoteToolkitDependencyService', () => {
@@ -152,6 +152,34 @@ suite('DeepnoteToolkitDependencyService', () => {
             const result = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
 
             assert.strictEqual(result, DeepnoteToolkitDependencyResponse.cancel);
+        });
+
+        test('passes token and timeout to python.exec when probing', async () => {
+            when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(true);
+            let capturedOptions: any;
+            when(python.exec(anything(), anything())).thenCall((_args: any, options: any) => {
+                capturedOptions = options;
+                return Promise.resolve({
+                    stdout: `${JSON.stringify({ version: DEEPNOTE_TOOLKIT_VERSION, server: true })}\n`,
+                    stderr: ''
+                });
+            });
+
+            const testToken = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) };
+            await service.ensureToolkitInstalled(interpreter, resource, testToken as never);
+
+            assert.strictEqual(capturedOptions?.timeout, PROBE_TIMEOUT_MS);
+            assert.strictEqual(capturedOptions?.token, testToken);
+        });
+
+        test('a timed-out probe falls through to installer.isInstalled without hanging pendingChecks', async () => {
+            when(python.exec(anything(), anything())).thenReject(new Error('Process timed out'));
+            when(installer.isInstalled(Product.deepnoteToolkit, anything())).thenResolve(true);
+
+            const result = await service.ensureToolkitInstalled(interpreter, resource, notCancelled as never);
+
+            assert.strictEqual(result, DeepnoteToolkitDependencyResponse.ok);
+            verify(installer.isInstalled(Product.deepnoteToolkit, interpreter)).once();
         });
 
         suite('toolkitState', () => {

@@ -456,7 +456,7 @@ export class IPyWidgetMessageDispatcher implements IIPyWidgetMessageDispatcher {
                 // When sending to the kernel, we need to convert them to ArrayBuffer
                 if (msg.buffers?.length) {
                     msg.buffers = msg.buffers.map((buffer) => {
-                        if (buffer instanceof DataView) {
+                        if (buffer instanceof DataView && buffer.buffer instanceof ArrayBuffer) {
                             // The underlying buffer is an ArrayBuffer,
                             // & thats what needs to be sent to the kernel.
                             // One simple test is FileUpload widget.

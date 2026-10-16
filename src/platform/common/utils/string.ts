@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-export function base64ToUint8Array(base64: string): Uint8Array {
+export function base64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
     if (typeof Buffer !== 'undefined' && typeof Buffer.from === 'function') {
         return Buffer.from(base64, 'base64');
     } else {

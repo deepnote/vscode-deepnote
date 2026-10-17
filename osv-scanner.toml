@@ -3,7 +3,7 @@
 
 [[IgnoredVulns]]
 id = "GHSA-848j-6mx2-7j84"
-ignoreUntil = 2026-10-17
+ignoreUntil = 2026-11-06
 reason = "CVE-2025-14505 (elliptic): dev-only, via node-stdlib-browser; no patched release. See .nsprc."
 
 [[IgnoredVulns]]

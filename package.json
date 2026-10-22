@@ -3004,7 +3004,7 @@
         "serialize-javascript@<7.0.5": "7.0.5",
         "flatted@<3.4.2": "3.4.2",
         "yaml": "2.8.3",
-        "ip-address": "10.7.3",
+        "ip-address": "10.7.4",
         "mermaid": "11.16.1",
         "postcss": "$postcss",
         "sanitize-html": "2.18.1",

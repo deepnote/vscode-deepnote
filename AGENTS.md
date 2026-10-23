@@ -24,6 +24,7 @@ Start with the owning directory and its colocated tests before searching broadly
 | Environment snapshots & `requirements.txt` generation    | `src/notebooks/deepnote/snapshots/`                                                       |
 | Database integrations (credentials, env refresh, webview) | `src/notebooks/deepnote/integrations/`, `src/webviews/webview-side/integrations/`       |
 | Kernel selection, SQL LSP, server startup                | `src/kernels/deepnote/`                                                                   |
+| Deepnote Cloud API token, sync and publishing            | `src/notebooks/deepnote/cloud/`                                                           |
 | Shared Deepnote types & platform config                  | `src/platform/deepnote/`, `src/platform/notebooks/deepnote/`                             |
 | Core serializer architecture & data flow                 | `specs/architecture.md`                                                                   |
 | Kernel management internals                               | `specs/DEBUGGING_KERNEL_MANAGEMENT.md`, `specs/DEEPNOTE_KERNEL_IMPLEMENTATION.md`         |

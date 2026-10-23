@@ -99,6 +99,8 @@ import { EphemeralCellStatusBarProvider } from './deepnote/ephemeralCellStatusBa
 import { OrphanedEphemeralCellCleaner } from './deepnote/orphanedEphemeralCellCleaner';
 import { DeepnoteNewCellLanguageService } from './deepnote/deepnoteNewCellLanguageService';
 import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
+import { DeepnoteApiTokenService } from './deepnote/cloud/deepnoteApiTokenService.node';
+import { IDeepnoteApiTokenService } from './deepnote/cloud/types';
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 import { IntegrationEnvRefreshHandler } from './deepnote/integrations/integrationEnvRefreshHandler';
 import { IntegrationsEnvFileWatcher } from './deepnote/integrations/integrationsEnvFileWatcher.node';
@@ -230,6 +232,8 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         IExtensionSyncActivationService,
         OpenInDeepnoteHandler
     );
+    serviceManager.addSingleton<IDeepnoteApiTokenService>(IDeepnoteApiTokenService, DeepnoteApiTokenService);
+    serviceManager.addBinding(IDeepnoteApiTokenService, IExtensionSyncActivationService);
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         IntegrationEnvRefreshHandler

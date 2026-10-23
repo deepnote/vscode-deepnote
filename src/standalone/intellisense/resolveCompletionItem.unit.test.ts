@@ -46,7 +46,7 @@ suite('Jupyter Kernel Completion (requestInspect)', () => {
     let disposables: IDisposable[] = [];
     let toDispose: DisposableStore;
     let clock: fakeTimers.InstalledClock;
-    let resolveCompletionItem: typeof import('./resolveCompletionItem')['resolveCompletionItem'];
+    let resolveCompletionItem: (typeof import('./resolveCompletionItem'))['resolveCompletionItem'];
     let maxPendingKernelRequests: number;
     let execCodeInBackgroundThreadStub: sinon.SinonStub<[...args: any[]], Promise<unknown>>;
 

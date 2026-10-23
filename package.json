@@ -2818,7 +2818,7 @@
         "vscode-tas-client": "^0.1.84",
         "ws": "^6.2.4",
         "zeromq": "^6.5.0",
-        "zod": "^4.1.12"
+        "zod": "^4.6.6"
     },
     "devDependencies": {
         "@actions/core": "^2.0.3",

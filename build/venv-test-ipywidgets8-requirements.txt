@@ -11,7 +11,7 @@ ipympl
 
 # Security updates for transitive dependencies
 pillow>=12.3.0
-setuptools>=84.2.0
+setuptools>=84.2.1
 zipp>=4.1.1
 tornado>=6.5.10
 anyio>=4.4.0

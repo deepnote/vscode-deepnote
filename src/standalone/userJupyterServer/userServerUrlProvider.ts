@@ -308,11 +308,7 @@ export class UserJupyterServerUrlProvider
     ): Promise<string | InputFlowAction> {
         await this.initializeServers();
         type Steps =
-            | 'Get Url'
-            | 'Check Passwords'
-            | 'Check Insecure Connections'
-            | 'Verify Connection'
-            | 'Get Display Name';
+            'Get Url' | 'Check Passwords' | 'Check Insecure Connections' | 'Verify Connection' | 'Get Display Name';
 
         const disposables: Disposable[] = [];
         let jupyterServerUri: IJupyterServerUri = { baseUrl: '', displayName: '', token: '' };
@@ -565,8 +561,8 @@ export class UserJupyterServerUrlProvider
                         previousStep = isInsecureConnection
                             ? 'Check Insecure Connections'
                             : requiresPassword && jupyterServerUri.token.length === 0
-                            ? 'Check Passwords'
-                            : 'Get Url';
+                              ? 'Check Passwords'
+                              : 'Get Url';
                         if (previousStep === 'Get Url') {
                             // If we were given a Url, then back should get out of this flow.
                             previousStep = initialUrlWasValid && initialUrl ? undefined : 'Get Url';

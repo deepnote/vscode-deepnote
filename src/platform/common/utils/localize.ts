@@ -1286,17 +1286,22 @@ export namespace DeepnoteCloud {
     export const apiTokenRejected = l10n.t('Deepnote rejected this API token.');
     export const apiTokenCheckFailed = (message: string) =>
         l10n.t('Could not check the API token with Deepnote: {0}', message);
-    export const apiTokenSaved = (envPath: string) => l10n.t('Deepnote API token saved to {0}.', envPath);
-    export const envEditFailed = (envPath: string) =>
-        l10n.t('Could not update DEEPNOTE_TOKEN in {0} automatically. Edit the file by hand.', envPath);
-    export const apiTokenSavedForWorkspace = (workspaceName: string, envPath: string) =>
-        l10n.t('Signed in to the Deepnote workspace "{0}". Token saved to {1}.', workspaceName, envPath);
+    export const apiTokenSaved = l10n.t('Deepnote API token saved.');
+    export const apiTokenSavedForWorkspace = (workspaceName: string) =>
+        l10n.t('Signed in to the Deepnote workspace "{0}". Token saved.', workspaceName);
+    export const apiTokenOverriddenByEnv = (envPath: string) =>
+        l10n.t(
+            'Deepnote API token saved, but {0} sets DEEPNOTE_TOKEN, and that token is used for this folder.',
+            envPath
+        );
+    export const apiTokenStoreFailed = (message: string) =>
+        l10n.t('Could not save the Deepnote API token: {0}', message);
     export const apiTokenCleared = l10n.t('Deepnote API token removed.');
-    export const noApiTokenFound = l10n.t('No Deepnote API token is set for this folder.');
-    export const envNotIgnored = (envPath: string) =>
-        l10n.t('{0} is not ignored by git, so the token could be committed. Add .env to .gitignore?', envPath);
-    export const addToGitignore = l10n.t('Add to .gitignore');
-    export const openFolderFirst = l10n.t('Open a folder to store the Deepnote API token in.');
+    export const apiTokenClearFailed = l10n.t('Could not remove the Deepnote API token.');
+    export const apiTokenStillInEnv = (envPath: string) =>
+        l10n.t('{0} still sets DEEPNOTE_TOKEN for this folder. Edit that file to remove it.', envPath);
+    export const noApiTokenFound = l10n.t('No Deepnote API token is saved.');
+    export const openFolderFirst = l10n.t('Open a folder to set the Deepnote API token for.');
     export const localFilesOnly = l10n.t('Deepnote Cloud sync and publishing work with local files only.');
     export const workspaceNotTrusted = l10n.t(
         'Deepnote Cloud features need a trusted workspace. Trust this workspace, then try again.'

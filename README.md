@@ -64,7 +64,7 @@ Open the Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`) and type `Deepnote` t
 | `Deepnote: Manage Integrations`    | Configure database connections and credentials                          |
 | `Deepnote: New Project`            | Create a new Deepnote project                                           |
 | `Deepnote: Import Notebook`        | Import an existing notebook into your project                           |
-| `Deepnote: Set API Token`          | Save a Deepnote API token to `.env` for syncing and publishing          |
+| `Deepnote: Set API Token`          | Save a Deepnote API token for syncing and publishing                    |
 | `Deepnote: Clear API Token`        | Remove the saved Deepnote API token                                     |
 | `Notebook: Select Notebook Kernel` | Select or switch kernels within your notebook                           |
 | `Notebook: Change Cell Language`   | Change the language of the cell currently in focus                      |

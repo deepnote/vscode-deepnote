@@ -207,4 +207,6 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.DuplicateNotebook]: [];
     [DSCommands.AddNotebookToProject]: [];
     [DSCommands.OpenInDeepnote]: [];
+    [DSCommands.SetApiToken]: [Uri | undefined];
+    [DSCommands.ClearApiToken]: [];
 }

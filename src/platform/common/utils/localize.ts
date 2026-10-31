@@ -1276,6 +1276,41 @@ export namespace Integrations {
     export const caCertificateTextPlaceholder = l10n.t('-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----');
 }
 
+export namespace DeepnoteCloud {
+    export const apiTokenPrompt = l10n.t(
+        'Enter your Deepnote API token. Create one in Deepnote under Workspace > Settings & members > Security > API keys.'
+    );
+    export const apiTokenPlaceholder = l10n.t('Deepnote API token');
+    export const apiTokenInvalidCharacters = l10n.t('The token cannot contain spaces, quotes, # or control characters');
+    export const checkingApiToken = l10n.t('Checking the Deepnote API token…');
+    export const apiTokenRejected = l10n.t('Deepnote rejected this API token.');
+    export const apiTokenCheckFailed = (message: string) =>
+        l10n.t('Could not check the API token with Deepnote: {0}', message);
+    export const apiTokenSaved = l10n.t('Deepnote API token saved.');
+    export const apiTokenSavedForWorkspace = (workspaceName: string) =>
+        l10n.t('Signed in to the Deepnote workspace "{0}". Token saved.', workspaceName);
+    export const apiTokenOverriddenByEnv = (envPath: string) =>
+        l10n.t(
+            'Deepnote API token saved, but {0} sets DEEPNOTE_TOKEN, and that token is used for this folder.',
+            envPath
+        );
+    export const apiTokenStoreFailed = (message: string) =>
+        l10n.t('Could not save the Deepnote API token: {0}', message);
+    export const apiTokenCleared = l10n.t('Deepnote API token removed.');
+    export const apiTokenClearFailed = l10n.t('Could not remove the Deepnote API token.');
+    export const apiTokenStillInEnv = (envPath: string) =>
+        l10n.t('{0} still sets DEEPNOTE_TOKEN for this folder. Edit that file to remove it.', envPath);
+    export const noApiTokenFound = l10n.t('No Deepnote API token is saved.');
+    export const openFolderFirst = l10n.t('Open a folder to set the Deepnote API token for.');
+    export const localFilesOnly = l10n.t('Deepnote Cloud sync and publishing work with local files only.');
+    export const workspaceNotTrusted = l10n.t(
+        'Deepnote Cloud features need a trusted workspace. Trust this workspace, then try again.'
+    );
+    export const apiTokenRejectedForRequest = l10n.t('Deepnote rejected the API token. Set a new one and try again.');
+    export const setApiToken = l10n.t('Set API Token');
+    export const errorWithDetail = (message: string, detail: string) => l10n.t('{0}: {1}', message, detail);
+}
+
 export namespace SelectInputSettings {
     export const title = l10n.t('Select Input Settings');
     export const allowMultipleValues = l10n.t('Allow to select multiple values');

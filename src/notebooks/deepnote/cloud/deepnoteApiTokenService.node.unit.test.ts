@@ -662,26 +662,35 @@ suite('DeepnoteApiTokenService', () => {
             assertOnlyStored(DEFAULT_API, 'padded');
         });
 
-        test('asks the input box for a masked prompt that rejects whitespace, quotes, # and control characters', async () => {
+        test('asks for the token in a masked input box that stays open when focus moves away', async () => {
             await setApiToken();
 
-            const { validateInput, ...options } = inputBoxOptions();
+            const { validateInput: _validateInput, ...options } = inputBoxOptions();
             assert.deepStrictEqual(options, {
                 password: true,
                 ignoreFocusOut: true,
                 prompt: DeepnoteCloud.apiTokenPrompt,
                 placeHolder: DeepnoteCloud.apiTokenPlaceholder
             });
-            for (const invalid of ['a b', 'a"b', "a'b", 'a#b', 'a\tb', 'a\u0000b', 'a\u007fb']) {
-                assert.strictEqual(
-                    validateInput!(invalid),
-                    DeepnoteCloud.apiTokenInvalidCharacters,
-                    JSON.stringify(invalid)
-                );
-            }
-            assert.isUndefined(validateInput!('abc-123_XYZ.='));
-            assert.isUndefined(validateInput!('  abc  '));
         });
+
+        // `^` falls inside `A-z`, the classic slip for `A-Za-z`.
+        for (const input of ['a b', 'a\u0000b', 'a\nb', 'a-b', 'a.b', 'a=b', 'a^b', 'aéb']) {
+            test(`refuses ${JSON.stringify(input)} in the input box`, async () => {
+                await setApiToken();
+
+                assert.strictEqual(inputBoxOptions().validateInput!(input), DeepnoteCloud.apiTokenInvalidCharacters);
+            });
+        }
+
+        // An empty box must show no error, so the user is not warned before typing and an empty submit cancels.
+        for (const input of ['dn_AZaz09', '  abc  ', '']) {
+            test(`accepts ${JSON.stringify(input)} in the input box`, async () => {
+                await setApiToken();
+
+                assert.isUndefined(inputBoxOptions().validateInput!(input));
+            });
+        }
 
         test('stores nothing and says so when Deepnote rejects the token with 401', async () => {
             service.fetchWorkspaceStub.rejects(new ApiError(401, 'Unauthorized'));

@@ -1281,7 +1281,7 @@ export namespace DeepnoteCloud {
         'Enter your Deepnote API token. Create one in Deepnote under Workspace > Settings & members > Security > API keys.'
     );
     export const apiTokenPlaceholder = l10n.t('Deepnote API token');
-    export const apiTokenInvalidCharacters = l10n.t('The token cannot contain spaces, quotes, # or control characters');
+    export const apiTokenInvalidCharacters = l10n.t('The token can only contain the characters A–Z, a–z, 0–9 and _');
     export const checkingApiToken = l10n.t('Checking the Deepnote API token…');
     export const apiTokenRejected = l10n.t('Deepnote rejected this API token.');
     export const apiTokenCheckFailed = (message: string) =>

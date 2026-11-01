@@ -27,9 +27,9 @@ const TOKEN_ENV_VAR = 'DEEPNOTE_TOKEN';
 const ENV_FILE_NAME = '.env';
 const TOKEN_STORAGE_SERVICE = 'deepnote-api-token';
 
-// What a `.env` line or a shell would split or unquote on, plus control characters: `fetch` rejects a NUL in a header
-// with an error that quotes the whole `Authorization` value, token included.
-const INVALID_TOKEN_CHARACTERS = /[\s"'#\p{Cc}]/u;
+// Deepnote API keys are `dn_` plus base62, or lowercase hex for older keys. The input box checks this so a typed NUL or
+// line break never reaches `fetch`, whose invalid-header error quotes the whole `Authorization` value.
+const VALID_TOKEN_CHARACTERS = /^[A-Za-z0-9_]*$/;
 
 function withoutQueryAndFragment(uri: Uri): Uri {
     return uri.with({ query: '', fragment: '' });
@@ -84,7 +84,12 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
             return undefined;
         }
 
-        return (await this.getToken(resource)) ?? (await this.promptAndSaveToken(resource));
+        const token = await this.getToken(resource);
+        if (token) {
+            return token;
+        }
+
+        return this.promptAndSaveToken(resource);
     }
 
     public async getToken(resource: Uri): Promise<string | undefined> {
@@ -289,7 +294,7 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
             prompt: DeepnoteCloud.apiTokenPrompt,
             placeHolder: DeepnoteCloud.apiTokenPlaceholder,
             validateInput: (input) =>
-                INVALID_TOKEN_CHARACTERS.test(input.trim()) ? DeepnoteCloud.apiTokenInvalidCharacters : undefined
+                VALID_TOKEN_CHARACTERS.test(input.trim()) ? undefined : DeepnoteCloud.apiTokenInvalidCharacters
         });
 
         return value?.trim() || undefined;

@@ -9,7 +9,7 @@
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import gulp from 'gulp';
-import glob from 'glob';
+import { globSync } from 'glob';
 import spawn from 'cross-spawn';
 import path from 'path';
 import del from 'del';
@@ -66,7 +66,7 @@ gulp.task('validateTranslationFiles', (done) => {
         additionalProperties: false
     };
 
-    glob.sync('package.nls.*.json', { sync: true }).forEach((file) => {
+    globSync('package.nls.*.json', { sync: true }).forEach((file) => {
         // Verify we can open and parse as JSON.
         try {
             const js = JSON.parse(fs.readFileSync(file, 'utf-8'));

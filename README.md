@@ -124,6 +124,7 @@ Want to contribute? Check out our [Contributing guide](CONTRIBUTING.md) for deta
 
 This project includes the following third-party packages with notable licenses:
 
+- **glob** - Licensed under the [Blue Oak Model License 1.0.0](https://blueoakcouncil.org/license/1.0.0)
 - **tar** - Licensed under the [Blue Oak Model License 1.0.0](https://blueoakcouncil.org/license/1.0.0)
 
 ---

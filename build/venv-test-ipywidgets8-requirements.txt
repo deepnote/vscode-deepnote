@@ -21,4 +21,4 @@ jupyter-server>=2.21.1
 jupyter-core>=5.9.1
 ipython>=9.18.0
 urllib3>=2.8.0
-jupyterlab>=4.6.4
+jupyterlab>=4.6.5

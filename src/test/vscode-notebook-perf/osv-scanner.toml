@@ -1,0 +1,13 @@
+# Accepted risks for this fixture's package-lock.json, scanned by qlty's osv-scanner plugin.
+# osv-scanner reads only the config beside each lockfile, so the root osv-scanner.toml does not apply here.
+# Mirrors the root .nsprc, which holds the full assessment: keep both in sync.
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2026-11-15
+reason = "CVE-2026-118773 (glob): dev-only fixture tooling (mocha, @vscode/test-cli, test-exclude); no signal passed; none of them admits 14.x. See the root .nsprc."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2026-11-15
+reason = "CVE-2026-118764 (minimatch): crafted-pattern DoS; dev-only fixture tooling fed repo patterns; fix only in 11.x. See the root .nsprc."

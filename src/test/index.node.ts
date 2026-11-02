@@ -10,7 +10,7 @@ import { setupCoverage } from './coverage.node';
 const nycPromise = setupCoverage();
 
 import * as fs from 'fs-extra';
-import glob from 'glob';
+import { glob } from 'glob';
 import Mocha from 'mocha';
 import * as path from '../platform/vscode-path/path';
 import * as v8 from 'v8';

@@ -7,7 +7,7 @@ import './platform/ioc/reflectMetadata';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as ts from 'typescript';
 import * as fs from 'fs-extra';
-import glob from 'glob';
+import { glob } from 'glob';
 import { initialize } from './test/vscode-mock';
 import { Parser } from 'json2csv';
 import colors from 'colors';

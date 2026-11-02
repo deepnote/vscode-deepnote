@@ -719,7 +719,7 @@ export class IntegrationWebviewProvider implements IIntegrationWebviewProvider {
                         // Legacy big-query configs may omit authMethod, which means service-account.
                         const authMethod =
                             message.config.type === 'big-query'
-                                ? message.config.metadata.authMethod ?? BigQueryAuthMethods.ServiceAccount
+                                ? (message.config.metadata.authMethod ?? BigQueryAuthMethods.ServiceAccount)
                                 : undefined;
 
                         this.analytics.trackEvent({

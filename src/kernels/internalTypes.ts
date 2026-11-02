@@ -11,8 +11,9 @@ export enum ContributedKernelFinderKind {
     LocalPythonEnvironment = 'localPythonEnvironment'
 }
 
-export interface IContributedKernelFinder<T extends KernelConnectionMetadata = KernelConnectionMetadata>
-    extends ObservableDisposable {
+export interface IContributedKernelFinder<
+    T extends KernelConnectionMetadata = KernelConnectionMetadata
+> extends ObservableDisposable {
     readonly status: 'discovering' | 'idle';
     onDidChangeStatus: Event<void>;
     /**

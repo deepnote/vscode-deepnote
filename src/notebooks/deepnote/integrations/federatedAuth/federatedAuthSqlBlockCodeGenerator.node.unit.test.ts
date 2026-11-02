@@ -71,7 +71,7 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             tokens.delete(id);
         });
         getMergedIntegrationConfigsSpy = sinon.spy(async (resource: Resource) =>
-            resource ? mergedIntegrationConfigs.get(resource.toString()) ?? [] : []
+            resource ? (mergedIntegrationConfigs.get(resource.toString()) ?? []) : []
         );
 
         // Declared as a plain object (not a typed literal) so the extra members the provider grows for other
@@ -343,9 +343,9 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
             assert.fail('Expected OAuthClientMisconfiguredError');
         } catch (err) {
             assert(err instanceof OAuthClientMisconfiguredError);
+            assert.equal(err.integrationName, 'My BigQuery');
             assert.notInstanceOf(err, NotAuthenticatedError);
             assert.notInstanceOf(err, InvalidClientError);
-            assert.equal(err.integrationName, 'My BigQuery');
         }
         sinon.assert.notCalled(deleteSpy);
     });

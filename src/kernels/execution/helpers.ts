@@ -112,8 +112,9 @@ export function traceCellMessage(cell: NotebookCell, message: string | (() => st
         () =>
             `Cell Index:${cell.index}, of document ${uriPath.basename(
                 cell.notebook.uri
-            )} with state:${NotebookCellStateTracker.getCellStatus(cell)}, exec: ${cell.executionSummary
-                ?.executionOrder}. ${messageToLog()}. called from ${getExtensionSpecificStack()}`
+            )} with state:${NotebookCellStateTracker.getCellStatus(cell)}, exec: ${
+                cell.executionSummary?.executionOrder
+            }. ${messageToLog()}. called from ${getExtensionSpecificStack()}`
     );
 }
 
@@ -302,11 +303,7 @@ function getOutputStreamType(output: NotebookCellOutput): string | undefined {
 }
 
 type JupyterOutput =
-    | nbformat.IUnrecognizedOutput
-    | nbformat.IExecuteResult
-    | nbformat.IDisplayData
-    | nbformat.IStream
-    | nbformat.IError;
+    nbformat.IUnrecognizedOutput | nbformat.IExecuteResult | nbformat.IDisplayData | nbformat.IStream | nbformat.IError;
 
 /**
  * Metadata we store in VS Code cell output items.
@@ -717,8 +714,8 @@ export async function updateNotebookMetadataWithSelectedKernel(
         kernelConnection && kernelConnectionMetadataHasKernelModel(kernelConnection)
             ? kernelConnection.kernelModel
             : kernelConnection && 'kernelSpec' in kernelConnection
-            ? kernelConnection.kernelSpec
-            : undefined;
+              ? kernelConnection.kernelSpec
+              : undefined;
     if (kernelConnection?.kind === 'startUsingPythonInterpreter') {
         // Store interpreter name, we expect the kernel finder will find the corresponding interpreter based on this name.
         const kernelSpec = kernelConnection.kernelSpec;

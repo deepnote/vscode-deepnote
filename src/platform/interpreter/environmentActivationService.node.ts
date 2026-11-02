@@ -149,8 +149,8 @@ export class EnvironmentActivationService implements IEnvironmentActivationServi
         resource = resource
             ? resource
             : workspace.workspaceFolders?.length
-            ? workspace.workspaceFolders[0].uri
-            : undefined;
+              ? workspace.workspaceFolders[0].uri
+              : undefined;
         const stopWatch = new StopWatch();
         // We'll need this later.
         const customEnvVarsPromise = this.customEnvVarsService
@@ -159,9 +159,8 @@ export class EnvironmentActivationService implements IEnvironmentActivationServi
 
         // Check cache.
         let reasonForFailure:
-            | 'emptyVariables'
-            | 'failedToGetActivatedEnvVariablesFromPython'
-            | 'failedToGetCustomEnvVariables' = 'emptyVariables';
+            'emptyVariables' | 'failedToGetActivatedEnvVariablesFromPython' | 'failedToGetCustomEnvVariables' =
+            'emptyVariables';
         let failureEx: Error | undefined;
 
         let env = await this.apiProvider.getApi().then((api) =>

@@ -275,7 +275,7 @@ export class KernelVariables implements IJupyterVariables {
             result.pageStartIndex = startPos;
 
             // Do one at a time. All at once doesn't work as they all have to wait for each other anyway
-            for (let i = startPos; i < startPos + chunkSize && i < list.variables.length; ) {
+            for (let i = startPos; i < startPos + chunkSize && i < list.variables.length;) {
                 if (exclusionList && exclusionList.indexOf(list.variables[i].type) >= 0) {
                     // Remove from the list before fetching the full value
                     list.variables.splice(i, 1);

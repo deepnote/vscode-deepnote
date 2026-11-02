@@ -11,9 +11,9 @@ import { IBaseKernelSession, IKernelSocket } from '../types';
 import { KernelSocketMap } from '../kernelSocket';
 
 export abstract class BaseJupyterSessionConnection<
-        S extends Session.ISessionConnection,
-        T extends 'remoteJupyter' | 'localJupyter' | 'localRaw'
-    >
+    S extends Session.ISessionConnection,
+    T extends 'remoteJupyter' | 'localJupyter' | 'localRaw'
+>
     extends ObservableDisposable
     implements Session.ISessionConnection, IBaseKernelSession<T>
 {

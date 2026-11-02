@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import glob from 'glob';
+import { globSync } from 'glob';
 import path from 'node:path';
 import { ExtensionRootDir } from '../constants.js';
 
@@ -22,7 +22,7 @@ export function getDefaultPlugins(name) {
 
 export function getListOfExistingModulesInOutDir() {
     const outDir = path.join(ExtensionRootDir, 'out');
-    const files = glob.sync('**/*.js', { sync: true, cwd: outDir });
+    const files = globSync('**/*.js', { sync: true, cwd: outDir });
     return files.map((filePath) => `./${filePath.slice(0, -3)}`);
 }
 

@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { ChildProcess, ExecOptions, SpawnOptions as ChildProcessSpawnOptions } from 'child_process';
+import { ChildProcess, ExecOptionsWithStringEncoding, SpawnOptions as ChildProcessSpawnOptions } from 'child_process';
 import { CancellationToken, Event } from 'vscode';
 
 import { BaseError } from '../../errors/types';
@@ -37,7 +37,7 @@ export type SpawnOptions = ChildProcessSpawnOptions & {
 };
 
 // eslint-disable-next-line @typescript-eslint/naming-convention
-export type ShellOptions = ExecOptions & { throwOnStdErr?: boolean; token?: CancellationToken };
+export type ShellOptions = ExecOptionsWithStringEncoding & { throwOnStdErr?: boolean; token?: CancellationToken };
 
 export type ExecutionResult<T extends string | Buffer> = {
     stdout: T;

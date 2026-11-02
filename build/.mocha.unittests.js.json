@@ -7,5 +7,9 @@
     "ui": "tdd",
     "recursive": true,
     "colors": true,
-    "node-option": ["no-warnings=ExperimentalWarning", "loader=./build/mocha-esm-loader.js"]
+    "node-option": [
+        "no-warnings=ExperimentalWarning",
+        "loader=./build/mocha-esm-loader.js",
+        "no-experimental-require-module"
+    ]
 }

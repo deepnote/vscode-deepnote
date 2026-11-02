@@ -10,7 +10,7 @@ import dedent from 'dedent';
 import { EventEmitter } from 'events';
 import colors from 'colors';
 import core from '@actions/core';
-import glob from 'glob';
+import { globSync } from 'glob';
 import { ExtensionRootDir } from './constants.js';
 import { webcrypto } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -150,7 +150,7 @@ async function addCell(cells, output, failed, executionCount) {
     // Look for a screenshot file with the above prefix & attach that to the cell outputs.
     const screenshots = (
         await Promise.all(
-            glob.sync(`${fileNamePrefix}*-screenshot.png`, { cwd: logsDir }).map((file) => {
+            globSync(`${fileNamePrefix}*-screenshot.png`, { cwd: logsDir }).map((file) => {
                 file = path.join(logsDir, file);
                 try {
                     const blob = fs.readFileSync(file);

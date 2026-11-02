@@ -3,6 +3,8 @@ import { By, EditorView, VSBrowser, WebElement, WebView } from 'vscode-extension
 import { OUTPUT_FRAME_SWITCH_TIMEOUT, OUTPUT_POLL_INTERVAL, OUTPUT_SELECTOR, WORKBENCH_TIMEOUT } from './constants';
 import { dismissAllNotifications } from './notifications';
 
+const NO_KERNEL_LABEL = 'Select Kernel';
+
 /**
  * Focuses the given notebook editor and clicks the toolbar button carrying `ariaLabel`. The
  * command-palette entries for these actions are gated behind context keys
@@ -53,7 +55,36 @@ async function clickNotebookToolbarButton(
     );
 }
 
+/**
+ * Waits until the notebook toolbar names a kernel. "Run All" runs on the kernel that label shows; with
+ * none, VS Code holds the run on a kernel picker that nothing answers under automation. The Deepnote
+ * controller registers only once the interpreter resolves, which can land after the editor opens.
+ */
+async function awaitNotebookKernel(): Promise<void> {
+    const driver = VSBrowser.instance.driver;
+
+    await driver.wait(
+        async () => {
+            try {
+                const [label] = await driver.findElements(By.css('.kernel-action-view-item .kernel-label'));
+                const text = ((await label?.getAttribute('textContent')) ?? '').trim();
+
+                return text !== '' && text !== NO_KERNEL_LABEL;
+            } catch (error) {
+                console.warn('[deepnote-e2e] read notebook kernel label (retrying):', error);
+
+                return false;
+            }
+        },
+        WORKBENCH_TIMEOUT,
+        'notebook toolbar never named a kernel, so "Run All" would block on the kernel picker'
+    );
+}
+
 export async function clickRunAll(notebookFileName: string): Promise<void> {
+    await new EditorView().openEditor(notebookFileName);
+    await awaitNotebookKernel();
+
     return clickNotebookToolbarButton(notebookFileName, 'Run All');
 }
 

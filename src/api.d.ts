@@ -197,14 +197,7 @@ interface OutputItem {
     data: Uint8Array;
 }
 export type KernelStatus =
-    | 'unknown'
-    | 'starting'
-    | 'idle'
-    | 'busy'
-    | 'terminating'
-    | 'restarting'
-    | 'autorestarting'
-    | 'dead';
+    'unknown' | 'starting' | 'idle' | 'busy' | 'terminating' | 'restarting' | 'autorestarting' | 'dead';
 
 /**
  * Represents a Jupyter Kernel.

@@ -1,18 +1,12 @@
 type IsAny<T> = 0 extends 1 & T ? true : false;
 type ArrayElement<T> = T extends readonly unknown[] ? T[number] : never;
 type IsNonAnyString<T> = IsAny<T> extends true ? false : [T] extends [string] ? true : false;
-type IsNonAnyStringArray<T> = IsAny<T> extends true
-    ? false
-    : IsAny<ArrayElement<T>> extends true
-    ? false
-    : [T] extends [string[]]
-    ? true
-    : false;
+type IsNonAnyStringArray<T> =
+    IsAny<T> extends true ? false : IsAny<ArrayElement<T>> extends true ? false : [T] extends [string[]] ? true : false;
 
 export type AssertNonAnyString<T> = IsNonAnyString<T> extends true ? true : 'ERROR: expected a non-any string';
-export type AssertNonAnyStringArray<T> = IsNonAnyStringArray<T> extends true
-    ? true
-    : 'ERROR: expected a non-any string array';
+export type AssertNonAnyStringArray<T> =
+    IsNonAnyStringArray<T> extends true ? true : 'ERROR: expected a non-any string array';
 
 /**
  * Static check test cases fixtures

@@ -10,15 +10,15 @@ matplotlib
 ipympl
 
 # Security updates for transitive dependencies
-pillow>=12.3.0
-setuptools>=84.0.0
-zipp>=4.1.0
-tornado>=6.5.9
-anyio>=4.4.0
+pillow>=13.0.0
+setuptools>=84.2.1
+zipp>=4.1.2
+tornado>=6.6
+anyio>=4.15.1
 requests>=2.34.2
-fonttools>=4.65.0
-jupyter-server>=2.21.0
+fonttools>=4.68.0
+jupyter-server>=2.21.1
 jupyter-core>=5.9.1
 ipython>=9.17.1
-urllib3>=2.7.0
-jupyterlab>=4.6.3
+urllib3>=2.8.0
+jupyterlab>=4.6.4

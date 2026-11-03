@@ -394,6 +394,38 @@ suite('DeepnoteApiTokenService', () => {
         });
     });
 
+    suite('getToken and getOrPromptToken with a sync root', () => {
+        const syncRoot = () => Uri.file(path.join(ws, 'sync'));
+
+        setup(async () => {
+            await fs.promises.mkdir(path.join(ws, 'sync'));
+            await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=above\n');
+        });
+
+        test('ignores a .env above it before and after its manifest exists', async () => {
+            seedToken(DEFAULT_API, 'stored');
+
+            assert.strictEqual(await service.getToken(syncRoot(), syncRoot()), 'stored');
+
+            await createSyncManifest(path.join(ws, 'sync'));
+            assert.strictEqual(await service.getToken(syncRoot(), syncRoot()), 'stored');
+        });
+
+        test('reads the .env in the sync root itself', async () => {
+            await writeFile(path.join(ws, 'sync', '.env'), 'DEEPNOTE_TOKEN=in-root\n');
+
+            assert.strictEqual(await service.getToken(syncRoot(), syncRoot()), 'in-root');
+        });
+
+        test('prompts and saves without warning about a .env above it', async () => {
+            enterToken('fresh');
+
+            assert.strictEqual(await service.getOrPromptToken(syncRoot(), syncRoot()), 'fresh');
+            assertOnlyStored(DEFAULT_API, 'fresh');
+            verify(win().showWarningMessage(anything())).never();
+        });
+    });
+
     suite('getOrPromptToken', () => {
         const notebook = () => Uri.file(path.join(ws, 'a', 'nb.deepnote'));
 

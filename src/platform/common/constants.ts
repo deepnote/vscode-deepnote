@@ -275,6 +275,7 @@ export namespace Commands {
     export const OpenInDeepnote = 'deepnote.openInDeepnote';
     export const SetApiToken = 'deepnote.setApiToken';
     export const ClearApiToken = 'deepnote.clearApiToken';
+    export const SyncWithDeepnoteCloud = 'deepnote.syncWithDeepnoteCloud';
     export const ExportAsPythonScript = 'deepnote.exportAsPythonScript';
     export const ExportToHTML = 'deepnote.exportToHTML';
     export const ExportToPDF = 'deepnote.exportToPDF';

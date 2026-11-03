@@ -145,6 +145,13 @@
                 "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
             },
             {
+                "command": "deepnote.syncWithDeepnoteCloud",
+                "title": "%deepnote.commands.syncWithDeepnoteCloud.title%",
+                "category": "Deepnote",
+                "icon": "$(sync)",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
                 "command": "deepnote.newProject",
                 "title": "%deepnote.commands.newProject.title%",
                 "category": "Deepnote",
@@ -932,6 +939,11 @@
                     "command": "deepnote.refreshExplorer",
                     "when": "view == deepnoteExplorer",
                     "group": "navigation@3"
+                },
+                {
+                    "command": "deepnote.syncWithDeepnoteCloud",
+                    "when": "view == deepnoteExplorer && isWorkspaceTrusted && !deepnote.webExtension",
+                    "group": "navigation@4"
                 }
             ],
             "editor/context": [

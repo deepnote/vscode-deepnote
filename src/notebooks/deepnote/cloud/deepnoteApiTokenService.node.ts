@@ -74,7 +74,7 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
         );
     }
 
-    public async getOrPromptToken(resource: Uri): Promise<string | undefined> {
+    public async getOrPromptToken(resource: Uri, syncRoot?: Uri): Promise<string | undefined> {
         if (!this.ensureTrusted()) {
             return undefined;
         }
@@ -85,7 +85,7 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
             return undefined;
         }
 
-        const token = await this.getToken(resource);
+        const token = await this.getToken(resource, syncRoot);
         if (token && !VALID_TOKEN_CHARACTERS.test(token)) {
             void window.showErrorMessage(DeepnoteCloud.envApiTokenInvalidCharacters);
 
@@ -95,15 +95,15 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
             return token;
         }
 
-        return this.promptAndSaveToken(resource);
+        return this.promptAndSaveToken(resource, syncRoot);
     }
 
-    public async getToken(resource: Uri): Promise<string | undefined> {
+    public async getToken(resource: Uri, syncRoot?: Uri): Promise<string | undefined> {
         if (!workspace.isTrusted || resource.scheme !== 'file') {
             return undefined;
         }
 
-        const fromEnv = await this.findEnvToken(resource);
+        const fromEnv = await this.findEnvToken(resource, syncRoot);
         if (fromEnv) {
             return fromEnv.token;
         }
@@ -177,8 +177,8 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
         return false;
     }
 
-    private async findEnvToken(resource: Uri): Promise<{ token: string; envUri: Uri } | undefined> {
-        for (const dir of await this.getLookupDirs(resource)) {
+    private async findEnvToken(resource: Uri, syncRoot?: Uri): Promise<{ token: string; envUri: Uri } | undefined> {
+        for (const dir of await this.getLookupDirs(resource, syncRoot)) {
             const token = (await this.readEnvFile(dir))?.[TOKEN_ENV_VAR]?.trim();
             if (token) {
                 return { token, envUri: Uri.joinPath(dir, ENV_FILE_NAME) };
@@ -201,14 +201,17 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
     }
 
     /**
-     * The folders to search for a `.env`, nearest first, from the folder of `resource` up to its sync root, or up to
-     * its workspace folder root when there is no sync root.
+     * The folders to search for a `.env`, nearest first, from the folder of `resource` up to `syncRoot` when given, else
+     * up to its sync root, or up to its workspace folder root when there is no sync root.
      */
-    private async getLookupDirs(resource: Uri): Promise<Uri[]> {
+    private async getLookupDirs(resource: Uri, syncRoot?: Uri): Promise<Uri[]> {
         const start = withoutQueryAndFragment(resource);
         const startFolder = await getStartFolder(start);
         const stopFolder = removeTrailingPathSeparator(
-            (await this.findSyncRoot(startFolder)) ?? workspace.getWorkspaceFolder(start)?.uri ?? startFolder
+            syncRoot ??
+                (await this.findSyncRoot(startFolder)) ??
+                workspace.getWorkspaceFolder(start)?.uri ??
+                startFolder
         );
 
         // VS Code matches workspace folders case-insensitively on macOS and Windows and keeps a trailing slash from a
@@ -243,7 +246,7 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
         return folder?.uri;
     }
 
-    private async promptAndSaveToken(resource?: Uri): Promise<string | undefined> {
+    private async promptAndSaveToken(resource?: Uri, syncRoot?: Uri): Promise<string | undefined> {
         if (!this.ensureTrusted()) {
             return undefined;
         }
@@ -275,7 +278,7 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
             return undefined;
         }
 
-        const fromEnv = await this.findEnvToken(start);
+        const fromEnv = await this.findEnvToken(start, syncRoot);
         if (fromEnv) {
             void window.showWarningMessage(
                 DeepnoteCloud.apiTokenOverriddenByEnv(workspace.asRelativePath(fromEnv.envUri))

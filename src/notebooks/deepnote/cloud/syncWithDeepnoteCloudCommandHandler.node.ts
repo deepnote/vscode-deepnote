@@ -18,6 +18,7 @@ import {
     ProgressLocation,
     QuickPickItem,
     RelativePattern,
+    TextDocument,
     Uri,
     window,
     workspace
@@ -42,8 +43,15 @@ function label(uri: Uri): string {
     return workspace.asRelativePath(uri);
 }
 
-function unsavedDeepnoteNotebooks(): NotebookDocument[] {
-    return workspace.notebookDocuments.filter((notebook) => notebook.notebookType === 'deepnote' && notebook.isDirty);
+function unsavedDeepnoteDocuments(): (NotebookDocument | TextDocument)[] {
+    return [
+        ...workspace.notebookDocuments.filter((notebook) => notebook.notebookType === 'deepnote' && notebook.isDirty),
+        // "Reopen Editor With… > Text Editor" opens a .deepnote file as a text document. Notebook cells are text
+        // documents with the notebook's path too, but not with the `file` scheme.
+        ...workspace.textDocuments.filter(
+            (document) => document.isDirty && document.uri.scheme === 'file' && document.uri.path.endsWith('.deepnote')
+        )
+    ];
 }
 
 function logSyncEvent(event: SyncEvent): void {
@@ -204,7 +212,7 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
     }
 
     private async saveUnsavedNotebooks(): Promise<boolean> {
-        const unsaved = unsavedDeepnoteNotebooks();
+        const unsaved = unsavedDeepnoteDocuments();
         if (unsaved.length === 0) {
             return true;
         }
@@ -218,9 +226,9 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
             return false;
         }
 
-        await Promise.allSettled(unsaved.map((notebook) => notebook.save()));
+        await Promise.allSettled(unsaved.map((document) => document.save()));
 
-        const stillUnsaved = unsavedDeepnoteNotebooks().length;
+        const stillUnsaved = unsavedDeepnoteDocuments().length;
         if (stillUnsaved > 0) {
             void window.showWarningMessage(DeepnoteCloud.syncStillUnsaved(stillUnsaved));
 

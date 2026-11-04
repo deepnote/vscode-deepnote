@@ -14,7 +14,15 @@ import minimatch from 'minimatch';
 import * as os from 'os';
 import * as sinon from 'sinon';
 import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
-import { MessageItem, NotebookDocument, QuickPickItem, RelativePattern, Uri, WorkspaceFolder } from 'vscode';
+import {
+    MessageItem,
+    NotebookDocument,
+    QuickPickItem,
+    RelativePattern,
+    TextDocument,
+    Uri,
+    WorkspaceFolder
+} from 'vscode';
 
 import { Commands } from '../../../platform/common/constants';
 import { IExtensionContext } from '../../../platform/common/types';
@@ -159,6 +167,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
         when(wsp().asRelativePath(anything())).thenCall((uri: Uri) =>
             path.relative(folder.uri.fsPath, uri.fsPath).split(path.sep).join('/')
         );
+        when(wsp().textDocuments).thenReturn([]);
         when(wsp().getConfiguration('deepnote', anything())).thenReturn({
             get: (_key: string, fallback: unknown) => fallback
         } as any);
@@ -405,6 +414,21 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             return notebook as unknown as NotebookDocument;
         }
 
+        function openTextFile(saves: boolean, calls: string[]): TextDocument {
+            const document = {
+                uri: Uri.file(path.join(ws, 'a', 'Project', 'notebook.deepnote')),
+                isDirty: true,
+                save: async () => {
+                    calls.push('save');
+                    document.isDirty = !saves;
+
+                    return saves;
+                }
+            };
+
+            return document as unknown as TextDocument;
+        }
+
         setup(async () => {
             await addManifest('a');
             pick('a');
@@ -456,6 +480,47 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
 
             assert.deepStrictEqual(calls, []);
             assert.isTrue(handler.runSyncWorkspaceStub.notCalled);
+        });
+
+        test('saves a .deepnote file with unsaved changes in the text editor before syncing', async () => {
+            const calls: string[] = [];
+            when(wsp().textDocuments).thenReturn([openTextFile(true, calls)]);
+            handler.runSyncWorkspaceStub.callsFake(async () => {
+                calls.push('sync');
+
+                return EMPTY_RESULT;
+            });
+            answer('1 Deepnote notebook(s) have unsaved changes. Save them before syncing?', 'Save and Sync');
+
+            await sync();
+
+            assert.deepStrictEqual(calls, ['save', 'sync']);
+        });
+
+        test('syncs nothing when a .deepnote file in the text editor stays unsaved', async () => {
+            when(wsp().textDocuments).thenReturn([openTextFile(false, [])]);
+            answer('1 Deepnote notebook(s) have unsaved changes. Save them before syncing?', 'Save and Sync');
+
+            await sync();
+
+            assert.deepStrictEqual(messages('Warning'), [
+                '1 Deepnote notebook(s) have unsaved changes. Save them before syncing?',
+                '1 Deepnote notebook(s) still have unsaved changes, so nothing was synced.'
+            ]);
+            assert.isTrue(handler.runSyncWorkspaceStub.notCalled);
+        });
+
+        test('ignores unsaved notebook cells and other unsaved text files', async () => {
+            const notebookPath = path.join(ws, 'a', 'Project', 'notebook.deepnote');
+            when(wsp().textDocuments).thenReturn([
+                { uri: Uri.file(notebookPath).with({ scheme: 'vscode-notebook-cell' }), isDirty: true },
+                { uri: Uri.file(path.join(ws, 'a', 'notes.txt')), isDirty: true }
+            ] as unknown as TextDocument[]);
+
+            await sync();
+
+            assert.deepStrictEqual(messages('Warning'), []);
+            assert.isTrue(handler.runSyncWorkspaceStub.calledOnce);
         });
 
         test('ignores unsaved notebooks of other types', async () => {

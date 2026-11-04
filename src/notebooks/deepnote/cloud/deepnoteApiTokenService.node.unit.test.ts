@@ -419,6 +419,18 @@ suite('DeepnoteApiTokenService', () => {
             assert.isTrue(service.fetchWorkspaceStub.notCalled);
         });
 
+        // dotenv turns `\n` in a double-quoted value into a line break.
+        for (const value of ['"dn_abc\\ndef"', 'dn-abc']) {
+            test(`refuses ${JSON.stringify(`DEEPNOTE_TOKEN=${value}`)} from a .env without prompting`, async () => {
+                await writeFile(path.join(ws, 'a', '.env'), `DEEPNOTE_TOKEN=${value}\n`);
+
+                assert.isUndefined(await service.getOrPromptToken(notebook()));
+
+                verifyError(DeepnoteCloud.envApiTokenInvalidCharacters);
+                verifyNoInputBox();
+            });
+        }
+
         test('tells the user about local files and does not prompt for a non-file URI', async () => {
             assert.isUndefined(await service.getOrPromptToken(Uri.parse('vscode-vfs://github/o/r/nb.deepnote')));
 

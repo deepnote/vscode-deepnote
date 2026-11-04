@@ -1282,6 +1282,9 @@ export namespace DeepnoteCloud {
     );
     export const apiTokenPlaceholder = l10n.t('Deepnote API token');
     export const apiTokenInvalidCharacters = l10n.t('The token can only contain the characters A–Z, a–z, 0–9 and _');
+    export const envApiTokenInvalidCharacters = l10n.t(
+        'DEEPNOTE_TOKEN in .env can only contain the characters A–Z, a–z, 0–9 and _'
+    );
     export const checkingApiToken = l10n.t('Checking the Deepnote API token…');
     export const apiTokenRejected = l10n.t('Deepnote rejected this API token.');
     export const apiTokenCheckFailed = (message: string) =>

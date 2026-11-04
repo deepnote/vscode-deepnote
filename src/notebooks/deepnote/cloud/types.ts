@@ -11,8 +11,8 @@ export interface IDeepnoteApiTokenService {
 
     /**
      * {@link getToken}, else asks the user for a token, checks it with Deepnote and saves it to VS Code SecretStorage.
-     * `undefined` means the user cancelled, `resource` is not a local file, or the workspace is not trusted; the user
-     * has already been told.
+     * `undefined` means the user cancelled, `resource` is not a local file, the workspace is not trusted, or the `.env`
+     * token has a character an API key cannot contain; the user has already been told.
      */
     getOrPromptToken(resource: Uri): Promise<string | undefined>;
 }

@@ -27,8 +27,9 @@ const TOKEN_ENV_VAR = 'DEEPNOTE_TOKEN';
 const ENV_FILE_NAME = '.env';
 const TOKEN_STORAGE_SERVICE = 'deepnote-api-token';
 
-// Deepnote API keys are `dn_` plus base62, or lowercase hex for older keys. The input box checks this so a typed NUL or
-// line break never reaches `fetch`, whose invalid-header error quotes the whole `Authorization` value.
+// Deepnote API keys are `dn_` plus base62, or lowercase hex for older keys. Checking tokens against this keeps a NUL or
+// line break, typed or read from a `.env`, from reaching `fetch`, whose invalid-header error quotes the whole
+// `Authorization` value.
 const VALID_TOKEN_CHARACTERS = /^[A-Za-z0-9_]*$/;
 
 function withoutQueryAndFragment(uri: Uri): Uri {
@@ -85,6 +86,11 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
         }
 
         const token = await this.getToken(resource);
+        if (token && !VALID_TOKEN_CHARACTERS.test(token)) {
+            void window.showErrorMessage(DeepnoteCloud.envApiTokenInvalidCharacters);
+
+            return undefined;
+        }
         if (token) {
             return token;
         }

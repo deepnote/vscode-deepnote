@@ -6,6 +6,14 @@ import { dismissAllNotifications } from './notifications';
 const NO_KERNEL_LABEL = 'Select Kernel';
 
 /**
+ * Selenium errors carry a ~20-line `remoteStacktrace`, so logging the object on every expected
+ * re-render retry buries the real failure in the CI log.
+ */
+function describeRetryError(error: unknown): string {
+    return String(error).split('\n')[0];
+}
+
+/**
  * Focuses the given notebook editor and clicks the toolbar button carrying `ariaLabel`. The
  * command-palette entries for these actions are gated behind context keys
  * (`deepnote.ispythonornativeactive`, …) that are not reliably set under automation, so driving them
@@ -45,7 +53,9 @@ async function clickNotebookToolbarButton(
 
                 return true;
             } catch (error) {
-                console.warn(`[deepnote-e2e] locate/click notebook "${ariaLabel}" (retrying):`, error);
+                console.warn(
+                    `[deepnote-e2e] locate/click notebook "${ariaLabel}" (retrying): ${describeRetryError(error)}`
+                );
 
                 return false;
             }
@@ -71,7 +81,7 @@ async function awaitNotebookKernel(): Promise<void> {
 
                 return text !== '' && text !== NO_KERNEL_LABEL;
             } catch (error) {
-                console.warn('[deepnote-e2e] read notebook kernel label (retrying):', error);
+                console.warn(`[deepnote-e2e] read notebook kernel label (retrying): ${describeRetryError(error)}`);
 
                 return false;
             }
@@ -162,7 +172,9 @@ export async function clickCellStatusBarItem(label: string, occurrence = 0): Pro
 
                 return true;
             } catch (error) {
-                console.warn('[deepnote-e2e] locate/click cell status bar item (retrying):', error);
+                console.warn(
+                    `[deepnote-e2e] locate/click cell status bar item (retrying): ${describeRetryError(error)}`
+                );
 
                 return false;
             }
@@ -188,7 +200,7 @@ export async function awaitCellStatusBarItems(label: string, count: number, time
             try {
                 return (await findCellStatusBarItems(label)).length >= count;
             } catch (error) {
-                console.warn('[deepnote-e2e] read cell status bar items (retrying):', error);
+                console.warn(`[deepnote-e2e] read cell status bar items (retrying): ${describeRetryError(error)}`);
 
                 return false;
             }

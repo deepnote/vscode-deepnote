@@ -21,7 +21,7 @@
  *
  * Prerequisites:
  *   - The Python extension (`ms-python.python`) must be installed in the test instance.
- *   - `python3` must be on PATH and able to create a venv (CI installs `python3.12-venv`).
+ *   - `python3` must be on PATH and able to create a venv.
  *   - Network access: the toolkit is installed from PyPI, which is slow.
  */
 

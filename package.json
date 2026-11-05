@@ -133,6 +133,18 @@
                 "icon": "$(globe)"
             },
             {
+                "command": "deepnote.setApiToken",
+                "title": "%deepnote.commands.setApiToken.title%",
+                "category": "Deepnote",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
+                "command": "deepnote.clearApiToken",
+                "title": "%deepnote.commands.clearApiToken.title%",
+                "category": "Deepnote",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
                 "command": "deepnote.newProject",
                 "title": "%deepnote.commands.newProject.title%",
                 "category": "Deepnote",

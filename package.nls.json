@@ -259,6 +259,8 @@
     "deepnote.commands.manageIntegrations.title": "Manage Integrations",
     "deepnote.commands.addExistingIntegration.title": "Add Existing Integration",
     "deepnote.commands.authenticateIntegration.title": "Authenticate Integration",
+    "deepnote.commands.setApiToken.title": "Set API Token",
+    "deepnote.commands.clearApiToken.title": "Clear API Token",
     "deepnote.commands.newProject.title": "New Project",
     "deepnote.commands.importNotebook.title": "Import Notebook",
     "deepnote.commands.importJupyterNotebook.title": "Import Jupyter Notebook",

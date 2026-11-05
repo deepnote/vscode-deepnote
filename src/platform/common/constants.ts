@@ -273,6 +273,8 @@ export namespace Commands {
     export const AddNotebookToProject = 'deepnote.addNotebookToProject';
     export const ExportNotebook = 'deepnote.exportNotebook';
     export const OpenInDeepnote = 'deepnote.openInDeepnote';
+    export const SetApiToken = 'deepnote.setApiToken';
+    export const ClearApiToken = 'deepnote.clearApiToken';
     export const ExportAsPythonScript = 'deepnote.exportAsPythonScript';
     export const ExportToHTML = 'deepnote.exportToHTML';
     export const ExportToPDF = 'deepnote.exportToPDF';

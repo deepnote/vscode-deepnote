@@ -151,7 +151,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
     setup(async () => {
         resetVSCodeMocks();
         sandbox = sinon.createSandbox();
-        tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'deepnote-sync-'));
+        tmp = Uri.file(await fs.promises.mkdtemp(path.join(os.tmpdir(), 'deepnote-sync-'))).fsPath;
         assert.isUndefined(
             await findSyncManifestRoot(tmp),
             'A .deepnote-sync.json above the temp dir would make every folder overlap it'

@@ -1713,6 +1713,12 @@
                     "description": "Deepnote domain (e.g., 'deepnote.com' or 'ra-18838.deepnote-staging.com')",
                     "scope": "resource"
                 },
+                "deepnote.apiUrl": {
+                    "type": "string",
+                    "default": "",
+                    "markdownDescription": "Base URL of the Deepnote API, such as `http://localhost:4010` for a local server. Leave empty to use `https://api.<domain>`, where `<domain>` is the `#deepnote.domain#` setting. Your Deepnote API token is sent to this URL. Links that open Deepnote in the browser still use `#deepnote.domain#`.",
+                    "scope": "resource"
+                },
                 "deepnote.disableSSLVerification": {
                     "type": "boolean",
                     "default": false,

@@ -37,9 +37,15 @@ function getDomain(resource?: Uri): string {
 }
 
 /**
- * Gets the API endpoint from configuration
+ * Gets the API endpoint from configuration: the `apiUrl` setting without a trailing slash when it is set,
+ * else `https://api.<domain>`.
  */
 export function getApiEndpoint(resource?: Uri): string {
+    const apiUrl = workspace.getConfiguration('deepnote', resource).get<string>('apiUrl', '');
+    if (apiUrl) {
+        return apiUrl.replace(/\/+$/, '');
+    }
+
     const domain = getDomain(resource);
     return `https://api.${domain}`;
 }

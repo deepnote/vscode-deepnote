@@ -144,7 +144,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
     }
 
     function verifyNoTokenRequested(): void {
-        verify(tokenService.getOrPromptToken(anything(), anything())).never();
+        verify(tokenService.getOrPromptToken(anything())).never();
         assert.isTrue(handler.runSyncWorkspaceStub.notCalled);
     }
 
@@ -201,7 +201,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
         );
 
         tokenService = mock<IDeepnoteApiTokenService>();
-        when(tokenService.getOrPromptToken(anything(), anything())).thenResolve('tok');
+        when(tokenService.getOrPromptToken(anything())).thenResolve('tok');
 
         handler = new TestableHandler(instance(tokenService), { subscriptions: [] } as unknown as IExtensionContext);
         handler.runSyncWorkspaceStub.resolves(EMPTY_RESULT);
@@ -263,7 +263,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             verifyNoTokenRequested();
         });
 
-        test('asks before a first sync and reads the token for the new folder only', async () => {
+        test('asks before a first sync and requests the token for the new folder', async () => {
             const folder = path.join(ws, 'new');
             chooseInDialog(folder);
             answer('Download every project of your Deepnote workspace into new?', 'Download Projects');
@@ -283,8 +283,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
                     openLabel: 'Sync Here'
                 }
             );
-            const [resource, syncRoot] = capture(tokenService.getOrPromptToken).last();
-            assert.deepStrictEqual([resource.fsPath, syncRoot?.fsPath], [folder, folder]);
+            assert.strictEqual(capture(tokenService.getOrPromptToken).last()[0].fsPath, folder);
             assert.strictEqual(syncOptions().rootDir, folder);
         });
 
@@ -533,7 +532,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
         });
 
         test('syncs nothing without a token', async () => {
-            when(tokenService.getOrPromptToken(anything(), anything())).thenResolve(undefined);
+            when(tokenService.getOrPromptToken(anything())).thenResolve(undefined);
 
             await sync();
 
@@ -769,7 +768,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
         });
 
         test('syncs again after the previous attempt threw', async () => {
-            when(tokenService.getOrPromptToken(anything(), anything()))
+            when(tokenService.getOrPromptToken(anything()))
                 .thenReject(new Error('SecretStorage is unavailable'))
                 .thenResolve('tok');
 

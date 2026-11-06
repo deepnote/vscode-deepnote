@@ -13,12 +13,7 @@ import { getFilePath } from '../../../platform/common/platform/fs-paths';
 import { IExtensionContext } from '../../../platform/common/types';
 import { DeepnoteCloud } from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
-import {
-    dirname,
-    extUriBiasedIgnorePathCase,
-    isEqual,
-    removeTrailingPathSeparator
-} from '../../../platform/vscode-path/resources';
+import { dirname, extUriBiasedIgnorePathCase, isEqual } from '../../../platform/vscode-path/resources';
 import { getApiEndpoint } from '../importClient.node';
 import { isRejectedTokenError } from './cloudErrors.node';
 import { IDeepnoteApiTokenService } from './types';
@@ -74,7 +69,7 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
         );
     }
 
-    public async getOrPromptToken(resource: Uri, syncRoot?: Uri): Promise<string | undefined> {
+    public async getOrPromptToken(resource: Uri): Promise<string | undefined> {
         if (!this.ensureTrusted()) {
             return undefined;
         }
@@ -85,7 +80,7 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
             return undefined;
         }
 
-        const token = await this.getToken(resource, syncRoot);
+        const token = await this.getToken(resource);
         if (token && !VALID_TOKEN_CHARACTERS.test(token)) {
             void window.showErrorMessage(DeepnoteCloud.envApiTokenInvalidCharacters);
 
@@ -95,15 +90,15 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
             return token;
         }
 
-        return this.promptAndSaveToken(resource, syncRoot);
+        return this.promptAndSaveToken(resource);
     }
 
-    public async getToken(resource: Uri, syncRoot?: Uri): Promise<string | undefined> {
+    public async getToken(resource: Uri): Promise<string | undefined> {
         if (!workspace.isTrusted || resource.scheme !== 'file') {
             return undefined;
         }
 
-        const fromEnv = await this.findEnvToken(resource, syncRoot);
+        const fromEnv = await this.findEnvToken(resource);
         if (fromEnv) {
             return fromEnv.token;
         }
@@ -177,8 +172,8 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
         return false;
     }
 
-    private async findEnvToken(resource: Uri, syncRoot?: Uri): Promise<{ token: string; envUri: Uri } | undefined> {
-        for (const dir of await this.getLookupDirs(resource, syncRoot)) {
+    private async findEnvToken(resource: Uri): Promise<{ token: string; envUri: Uri } | undefined> {
+        for (const dir of await this.getLookupDirs(resource)) {
             const token = (await this.readEnvFile(dir))?.[TOKEN_ENV_VAR]?.trim();
             if (token) {
                 return { token, envUri: Uri.joinPath(dir, ENV_FILE_NAME) };
@@ -200,23 +195,13 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
         }
     }
 
-    /**
-     * The folders to search for a `.env`, nearest first, from the folder of `resource` up to `syncRoot` when given, else
-     * up to its sync root, or up to its workspace folder root when there is no sync root.
-     */
-    private async getLookupDirs(resource: Uri, syncRoot?: Uri): Promise<Uri[]> {
+    private async getLookupDirs(resource: Uri): Promise<Uri[]> {
         const start = withoutQueryAndFragment(resource);
         const startFolder = await getStartFolder(start);
-        const stopFolder = removeTrailingPathSeparator(
-            syncRoot ??
-                (await this.findSyncRoot(startFolder)) ??
-                workspace.getWorkspaceFolder(start)?.uri ??
-                startFolder
-        );
+        const stopFolder = (await this.findSyncRoot(startFolder)) ?? startFolder;
 
-        // VS Code matches workspace folders case-insensitively on macOS and Windows and keeps a trailing slash from a
-        // `.code-workspace` file. A stop folder that is not above `startFolder`, such as a workspace folder missing on
-        // disk, must end the search, not widen it to the filesystem root.
+        // A folder URI can end in a slash that the sync root, built by `Uri.file`, lacks, so `isEqual` may never match
+        // it. Walking out of `stopFolder` must end the search instead of reaching the filesystem root.
         const dirs: Uri[] = [];
         for (let dir = startFolder; extUriBiasedIgnorePathCase.isEqualOrParent(dir, stopFolder); dir = dirname(dir)) {
             dirs.push(dir);
@@ -246,7 +231,7 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
         return folder?.uri;
     }
 
-    private async promptAndSaveToken(resource?: Uri, syncRoot?: Uri): Promise<string | undefined> {
+    private async promptAndSaveToken(resource?: Uri): Promise<string | undefined> {
         if (!this.ensureTrusted()) {
             return undefined;
         }
@@ -278,7 +263,7 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
             return undefined;
         }
 
-        const fromEnv = await this.findEnvToken(start, syncRoot);
+        const fromEnv = await this.findEnvToken(start);
         if (fromEnv) {
             void window.showWarningMessage(
                 DeepnoteCloud.apiTokenOverriddenByEnv(workspace.asRelativePath(fromEnv.envUri))

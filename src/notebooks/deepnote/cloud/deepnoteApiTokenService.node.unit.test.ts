@@ -13,7 +13,6 @@ import { Commands, NotebookCellScheme } from '../../../platform/common/constants
 import { IExtensionContext } from '../../../platform/common/types';
 import { DeepnoteCloud } from '../../../platform/common/utils/localize';
 import * as path from '../../../platform/vscode-path/path';
-import { extUriBiasedIgnorePathCase, extUriIgnorePathCase } from '../../../platform/vscode-path/resources';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { DeepnoteApiTokenService } from './deepnoteApiTokenService.node';
 
@@ -57,9 +56,6 @@ suite('DeepnoteApiTokenService', () => {
         const folder: WorkspaceFolder = { uri: Uri.file(folderPath), name: path.basename(folderPath), index: 0 };
         when(wsp().workspaceFolders).thenReturn([folder]);
         // fsPath lower-cases a Windows drive letter, so compare against the folder's fsPath, not folderPath.
-        when(wsp().getWorkspaceFolder(anything())).thenCall((uri: Uri) =>
-            isInside(uri.fsPath, folder.uri.fsPath) ? folder : undefined
-        );
         when(wsp().asRelativePath(anything())).thenCall((uri: Uri) => path.relative(folder.uri.fsPath, uri.fsPath));
     }
 
@@ -185,7 +181,8 @@ suite('DeepnoteApiTokenService', () => {
     });
 
     suite('getToken', () => {
-        test('prefers the .env nearest the file over the one at the workspace root', async () => {
+        test('prefers the .env nearest the file over the one at the sync root', async () => {
+            await createSyncManifest(ws);
             await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=root\n');
             await writeFile(path.join(ws, 'a', 'b', '.env'), 'DEEPNOTE_TOKEN=near\n');
 
@@ -193,6 +190,7 @@ suite('DeepnoteApiTokenService', () => {
         });
 
         test('skips a .env with an empty DEEPNOTE_TOKEN in favor of its parent', async () => {
+            await createSyncManifest(ws);
             await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=root\n');
             await writeFile(path.join(ws, 'a', 'b', '.env'), 'DEEPNOTE_TOKEN=\n');
 
@@ -208,6 +206,7 @@ suite('DeepnoteApiTokenService', () => {
         });
 
         test('is undefined when no .env on the path defines it', async () => {
+            await createSyncManifest(ws);
             await writeFile(path.join(ws, '.env'), 'OTHER=1\n');
             await writeFile(path.join(tmp, '.env'), 'DEEPNOTE_TOKEN=outside\n');
 
@@ -223,31 +222,27 @@ suite('DeepnoteApiTokenService', () => {
             assert.strictEqual(await service.getToken(Uri.file(path.join(syncRoot, 'P', 'nb.deepnote'))), 'stored');
         });
 
-        test('searches up to the sync root when it is above the workspace folder', async () => {
-            const syncRoot = path.join(ws, 'sync');
-            const projectFolder = path.join(syncRoot, 'P');
-            openWorkspaceFolder(projectFolder);
-            await createSyncManifest(syncRoot);
-            await writeFile(path.join(syncRoot, '.env'), 'DEEPNOTE_TOKEN=at-sync-root\n');
-            await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=above-sync-root\n');
-
-            assert.strictEqual(
-                await service.getToken(Uri.file(path.join(projectFolder, 'nb.deepnote'))),
-                'at-sync-root'
-            );
-        });
-
         test('treats a symbolic-link sync manifest as no sync root', async () => {
             const syncRoot = path.join(ws, 'sync');
             await fs.promises.mkdir(path.join(syncRoot, 'P'), { recursive: true });
             await writeFile(path.join(tmp, 'real-manifest.json'), '{}');
             await fs.promises.symlink(path.join(tmp, 'real-manifest.json'), path.join(syncRoot, '.deepnote-sync.json'));
-            await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=at-workspace\n');
+            await writeFile(path.join(syncRoot, '.env'), 'DEEPNOTE_TOKEN=next-to-symlink\n');
+            seedToken(DEFAULT_API, 'stored');
 
-            assert.strictEqual(
-                await service.getToken(Uri.file(path.join(syncRoot, 'P', 'nb.deepnote'))),
-                'at-workspace'
-            );
+            assert.strictEqual(await service.getToken(Uri.file(path.join(syncRoot, 'P', 'nb.deepnote'))), 'stored');
+        });
+
+        test('ignores a .env above a folder before and after its first sync', async () => {
+            const folder = Uri.file(path.join(ws, 'sync'));
+            await fs.promises.mkdir(folder.fsPath);
+            await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=above\n');
+            seedToken(DEFAULT_API, 'stored');
+
+            assert.strictEqual(await service.getToken(folder), 'stored');
+
+            await createSyncManifest(folder.fsPath);
+            assert.strictEqual(await service.getToken(folder), 'stored');
         });
 
         test('reads the folder itself when given a folder', async () => {
@@ -256,78 +251,23 @@ suite('DeepnoteApiTokenService', () => {
             assert.strictEqual(await service.getToken(Uri.file(path.join(ws, 'a'))), 'in-folder');
         });
 
-        test('ignores the query and fragment of a notebook URI', async () => {
-            await writeFile(path.join(ws, 'a', '.env'), 'DEEPNOTE_TOKEN=in-folder\n');
-
-            assert.strictEqual(
-                await service.getToken(
-                    Uri.file(path.join(ws, 'a', 'nb.deepnote')).with({ query: 'id=1', fragment: 'x' })
-                ),
-                'in-folder'
-            );
-        });
-
-        test('does not search above the workspace folder for a notebook URI with a query', async () => {
-            await writeFile(path.join(tmp, '.env'), 'DEEPNOTE_TOKEN=above-workspace\n');
-
-            assert.isUndefined(
-                await service.getToken(
-                    Uri.file(path.join(ws, 'a', 'nb.deepnote')).with({ query: 'id=1', fragment: 'x' })
-                )
-            );
-        });
-
-        test('does not search above a workspace folder that is missing on disk', async () => {
-            const missing = path.join(tmp, 'projects', 'foo');
-            openWorkspaceFolder(missing);
-            await writeFile(path.join(tmp, 'projects', '.env'), 'DEEPNOTE_TOKEN=other-project\n');
-
-            assert.isUndefined(await service.getToken(Uri.file(missing)));
-        });
-
-        test('does not search above the workspace folder for a folder URI with a trailing slash', async () => {
+        test('does not search above a sync root given as a folder URI that ends in a slash', async () => {
+            await createSyncManifest(ws);
             await writeFile(path.join(tmp, '.env'), 'DEEPNOTE_TOKEN=above-workspace\n');
 
             assert.isUndefined(await service.getToken(Uri.file(ws + '/')));
         });
 
-        test('stops at, and still reads, a workspace folder whose URI ends in a slash', async () => {
-            const folder: WorkspaceFolder = { uri: Uri.parse(Uri.file(ws).toString() + '/'), name: 'ws', index: 0 };
-            when(wsp().getWorkspaceFolder(anything())).thenReturn(folder);
-            await writeFile(path.join(tmp, '.env'), 'DEEPNOTE_TOKEN=above-workspace\n');
-            const notebook = Uri.file(path.join(ws, 'a', 'nb.deepnote'));
+        test('ignores the query and fragment of a notebook URI', async () => {
+            await createSyncManifest(ws);
+            await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=at-sync-root\n');
 
-            assert.isUndefined(await service.getToken(notebook));
-            await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=at-root\n');
-            assert.strictEqual(await service.getToken(notebook), 'at-root');
-        });
-
-        test('does not search above a workspace folder matched in another path case', async () => {
-            // VS Code matches file URIs to workspace folders case-insensitively on macOS and Windows.
-            const folder: WorkspaceFolder = { uri: Uri.file(path.join(tmp, 'WS')), name: 'WS', index: 0 };
-            when(wsp().getWorkspaceFolder(anything())).thenReturn(folder);
-            await writeFile(path.join(tmp, '.env'), 'DEEPNOTE_TOKEN=above-workspace\n');
-
-            assert.isUndefined(await service.getToken(Uri.file(path.join(ws, 'a', 'nb.deepnote'))));
-        });
-
-        test('reads the root of a workspace folder matched in another path case', async () => {
-            // Path case is ignored only off Linux and CI runs on Linux, so apply the macOS and Windows comparison.
-            sandbox
-                .stub(extUriBiasedIgnorePathCase, 'isEqualOrParent')
-                .callsFake((...args) => extUriIgnorePathCase.isEqualOrParent(...args));
-            sandbox
-                .stub(extUriBiasedIgnorePathCase, 'isEqual')
-                .callsFake((...args) => extUriIgnorePathCase.isEqual(...args));
-            when(wsp().getWorkspaceFolder(anything())).thenReturn({
-                uri: Uri.file(path.join(tmp, 'WS')),
-                name: 'WS',
-                index: 0
-            });
-            await writeFile(path.join(tmp, '.env'), 'DEEPNOTE_TOKEN=above-workspace\n');
-            await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=at-workspace\n');
-
-            assert.strictEqual(await service.getToken(Uri.file(path.join(ws, 'a', 'nb.deepnote'))), 'at-workspace');
+            assert.strictEqual(
+                await service.getToken(
+                    Uri.file(path.join(ws, 'a', 'nb.deepnote')).with({ query: 'id=1', fragment: 'x' })
+                ),
+                'at-sync-root'
+            );
         });
 
         test('resolves undefined for a non-file URI without touching the disk or the stored token', async () => {
@@ -362,6 +302,7 @@ suite('DeepnoteApiTokenService', () => {
         });
 
         test('returns the stored token when no .env on the path has a non-empty one', async () => {
+            await createSyncManifest(ws);
             await writeFile(path.join(ws, '.env'), 'OTHER=1\n');
             await writeFile(path.join(ws, 'a', '.env'), 'DEEPNOTE_TOKEN=\n');
             seedToken(DEFAULT_API, 'stored');
@@ -394,38 +335,6 @@ suite('DeepnoteApiTokenService', () => {
         });
     });
 
-    suite('getToken and getOrPromptToken with a sync root', () => {
-        const syncRoot = () => Uri.file(path.join(ws, 'sync'));
-
-        setup(async () => {
-            await fs.promises.mkdir(path.join(ws, 'sync'));
-            await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=above\n');
-        });
-
-        test('ignores a .env above it before and after its manifest exists', async () => {
-            seedToken(DEFAULT_API, 'stored');
-
-            assert.strictEqual(await service.getToken(syncRoot(), syncRoot()), 'stored');
-
-            await createSyncManifest(path.join(ws, 'sync'));
-            assert.strictEqual(await service.getToken(syncRoot(), syncRoot()), 'stored');
-        });
-
-        test('reads the .env in the sync root itself', async () => {
-            await writeFile(path.join(ws, 'sync', '.env'), 'DEEPNOTE_TOKEN=in-root\n');
-
-            assert.strictEqual(await service.getToken(syncRoot(), syncRoot()), 'in-root');
-        });
-
-        test('prompts and saves without warning about a .env above it', async () => {
-            enterToken('fresh');
-
-            assert.strictEqual(await service.getOrPromptToken(syncRoot(), syncRoot()), 'fresh');
-            assertOnlyStored(DEFAULT_API, 'fresh');
-            verify(win().showWarningMessage(anything())).never();
-        });
-    });
-
     suite('getOrPromptToken', () => {
         const notebook = () => Uri.file(path.join(ws, 'a', 'nb.deepnote'));
 
@@ -434,6 +343,17 @@ suite('DeepnoteApiTokenService', () => {
 
             assert.strictEqual(await service.getOrPromptToken(notebook()), 'stored');
             verifyNoInputBox();
+        });
+
+        test('prompts and saves without warning about a .env above the folder', async () => {
+            const folder = Uri.file(path.join(ws, 'sync'));
+            await fs.promises.mkdir(folder.fsPath);
+            await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=above\n');
+            enterToken('fresh');
+
+            assert.strictEqual(await service.getOrPromptToken(folder), 'fresh');
+            assertOnlyStored(DEFAULT_API, 'fresh');
+            verify(win().showWarningMessage(anything())).never();
         });
 
         test('prompts, saves and returns a new token when none is stored', async () => {
@@ -553,6 +473,7 @@ suite('DeepnoteApiTokenService', () => {
 
         test('warns, and leaves the .env unchanged, when a .env on the path sets the token it overrides', async () => {
             const content = 'A=1\nDEEPNOTE_TOKEN=from-file\n';
+            await createSyncManifest(ws);
             await writeFile(path.join(ws, '.env'), content);
 
             await setApiToken();
@@ -564,6 +485,7 @@ suite('DeepnoteApiTokenService', () => {
         });
 
         test('names the nearest .env that sets a non-empty token in the warning', async () => {
+            await createSyncManifest(ws);
             await writeFile(path.join(ws, 'a', 'b', '.env'), 'DEEPNOTE_TOKEN=\n');
             await writeFile(path.join(ws, 'a', '.env'), 'DEEPNOTE_TOKEN=near\n');
             await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=root\n');
@@ -821,6 +743,7 @@ suite('DeepnoteApiTokenService', () => {
 
         test('warns, and leaves the file unchanged, when a .env on the path still sets the token', async () => {
             const content = 'A=1\nDEEPNOTE_TOKEN=t\n';
+            await createSyncManifest(path.join(ws, 'sync'));
             await writeFile(path.join(ws, 'sync', '.env'), content);
             seedToken(DEFAULT_API, 'saved');
 
@@ -833,6 +756,7 @@ suite('DeepnoteApiTokenService', () => {
         });
 
         test('warns about a .env that sets the token even when none is saved', async () => {
+            await createSyncManifest(ws);
             await writeFile(path.join(ws, '.env'), 'DEEPNOTE_TOKEN=t\n');
 
             await clearApiToken();

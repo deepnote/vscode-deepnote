@@ -286,7 +286,7 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
             return;
         }
 
-        const token = await this.apiTokenService.getOrPromptToken(root, root);
+        const token = await this.apiTokenService.getOrPromptToken(root);
         if (!token) {
             return;
         }

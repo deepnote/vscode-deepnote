@@ -1,11 +1,13 @@
 /**
- * A minimal Deepnote Cloud: the Public API v2 routes that "Deepnote: Set API Token" and `syncWorkspace` call,
- * backed by a directory with one subdirectory per project, named by its id and holding its `.deepnote` files.
- * Editing those files is how a test, or a person, changes a project "in Deepnote". Any Bearer token is accepted.
+ * A minimal Deepnote Cloud: the Public API v2 routes that "Deepnote: Set API Token", `syncWorkspace` and
+ * `publishApp` call, backed by a directory with one subdirectory per project, named by its id and holding its
+ * `.deepnote` files. The project's working files, such as a published app under `_deepnote_static/`, live below
+ * its `files/` subdirectory. Editing those files is how a test, or a person, changes a project "in Deepnote".
+ * Static-file sharing settings are kept in memory. Any Bearer token is accepted.
  */
 
 import { deserializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
-import { sha256 } from '@deepnote/cloud-sync';
+import { isSafeRelativeFilePath, sha256 } from '@deepnote/cloud-sync';
 import express, { type Response } from 'express';
 import { unzipSync, zipSync } from 'fflate';
 import { once } from 'events';
@@ -14,13 +16,16 @@ import type { AddressInfo } from 'net';
 import * as os from 'os';
 import * as path from 'path';
 
-import type { components } from './deepnoteCloudApi.generated';
+import type { components, operations } from './deepnoteCloudApi.generated';
 
 type Schemas = components['schemas'];
+type UpdateProjectBody = operations['updateProject']['requestBody']['content']['application/json'];
 
 const PROJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const NOTEBOOK_FILE = /^[^/\\]+\.deepnote$/;
 const MAX_ARCHIVE_SIZE = '100mb';
+const MAX_FILE_SIZE = '100mb';
+const FILES_DIR = 'files';
 
 export const MOCK_WORKSPACE_NAME = 'Mock Workspace';
 
@@ -84,6 +89,48 @@ function findImportViolation(projectId: string, projects: DeepnoteFile['project'
     return undefined;
 }
 
+/** `publishApp` detects cloud edits by comparing each entry's `size` and `updatedAt`. */
+async function listProjectFiles(filesDir: string): Promise<Schemas['FileEntryFile'][]> {
+    let entries: fs.Dirent[];
+    try {
+        entries = await fs.promises.readdir(filesDir, { recursive: true, withFileTypes: true });
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            return [];
+        }
+        throw error;
+    }
+
+    return Promise.all(
+        entries
+            .filter((entry) => entry.isFile())
+            .map(async (entry): Promise<Schemas['FileEntryFile']> => {
+                const absolute = path.join(entry.parentPath, entry.name);
+                const { size, mtime } = await fs.promises.stat(absolute);
+
+                return {
+                    name: entry.name,
+                    path: path.relative(filesDir, absolute).split(path.sep).join('/'),
+                    type: 'file',
+                    size,
+                    updatedAt: mtime.toISOString()
+                };
+            })
+    );
+}
+
+/** Like Deepnote, stores an upload to a taken path at a new unique path instead of overwriting it. */
+function freeFilePath(filesDir: string, filePath: string): string {
+    const extension = path.posix.extname(filePath);
+    const stem = filePath.slice(0, filePath.length - extension.length);
+    let candidate = filePath;
+    for (let n = 1; fs.existsSync(path.join(filesDir, ...candidate.split('/'))); n++) {
+        candidate = `${stem} (${n})${extension}`;
+    }
+
+    return candidate;
+}
+
 function sendError(res: Response, status: number, message: string): void {
     const body: Schemas['ErrorResponse'] = { message };
     res.status(status).json(body);
@@ -95,6 +142,25 @@ export async function startMockDeepnoteCloud(rootDir?: string): Promise<MockDeep
     await fs.promises.mkdir(root, { recursive: true });
 
     const projectDir = (projectId: string) => path.join(root, projectId);
+    const filesDir = (projectId: string) => path.join(projectDir(projectId), FILES_DIR);
+    const isKnownProject = (projectId: unknown): projectId is string =>
+        typeof projectId === 'string' && PROJECT_ID.test(projectId) && fs.existsSync(projectDir(projectId));
+    const projectName = async (projectId: string) => {
+        const [first] = await readNotebookFiles(projectDir(projectId));
+
+        return first ? deserializeDeepnoteFile(first.content.toString('utf8')).project.name : projectId;
+    };
+
+    let url = '';
+    const staticFiles = new Map<string, Schemas['StaticFilesSettings']>();
+    const staticFilesOf = (projectId: string): Schemas['StaticFilesSettings'] =>
+        staticFiles.get(projectId) ?? {
+            sharingEnabled: false,
+            apiAccessEnabled: false,
+            published: false,
+            url: `${url}/apps/${projectId}/`
+        };
+
     const app = express();
 
     app.use((req, res, next) =>
@@ -102,9 +168,7 @@ export async function startMockDeepnoteCloud(rootDir?: string): Promise<MockDeep
     );
 
     app.param('projectId', (_req, res, next, projectId: string) =>
-        PROJECT_ID.test(projectId) && fs.existsSync(projectDir(projectId))
-            ? next()
-            : sendError(res, 404, 'Project not found')
+        isKnownProject(projectId) ? next() : sendError(res, 404, 'Project not found')
     );
 
     app.get('/v2/me', (_req, res) => {
@@ -136,12 +200,11 @@ export async function startMockDeepnoteCloud(rootDir?: string): Promise<MockDeep
             .map(({ name }) => name);
         const projects = await Promise.all(
             ids.map(async (id): Promise<Schemas['ListProjectsItem']> => {
-                const [first] = await readNotebookFiles(projectDir(id));
                 const { birthtime, mtime } = await fs.promises.stat(projectDir(id));
 
                 return {
                     id,
-                    name: first ? deserializeDeepnoteFile(first.content.toString('utf8')).project.name : id,
+                    name: await projectName(id),
                     projectType: 'standard',
                     createdAt: birthtime.toISOString(),
                     updatedAt: mtime.toISOString(),
@@ -157,6 +220,126 @@ export async function startMockDeepnoteCloud(rootDir?: string): Promise<MockDeep
         };
 
         res.json(body);
+    });
+
+    app.get('/v2/projects/:projectId', async (req, res) => {
+        const { projectId } = req.params;
+        const { birthtime, mtime } = await fs.promises.stat(projectDir(projectId));
+        const body: Schemas['GetProjectResponse'] = {
+            project: {
+                id: projectId,
+                name: await projectName(projectId),
+                projectType: 'standard',
+                createdAt: birthtime.toISOString(),
+                updatedAt: mtime.toISOString(),
+                folder: null,
+                // publishApp reads only the files and the static-file settings.
+                notebooks: [],
+                integrations: [],
+                files: await listProjectFiles(filesDir(projectId)),
+                staticFiles: staticFilesOf(projectId),
+                streamlitAppApiAccessEnabled: false,
+                environment: null
+            }
+        };
+
+        res.json(body);
+    });
+
+    app.patch('/v2/projects/:projectId', express.json(), async (req, res) => {
+        const { projectId } = req.params;
+        const update = (req.body as UpdateProjectBody | undefined)?.staticFiles;
+        if (update?.sharingEnabled === undefined && update?.apiAccessEnabled === undefined) {
+            return sendError(res, 400, 'At least one setting is required');
+        }
+
+        const current = staticFilesOf(projectId);
+        const sharingEnabled = update.sharingEnabled ?? current.sharingEnabled;
+        if (update.apiAccessEnabled === true && !sharingEnabled) {
+            return sendError(res, 400, 'API access can be enabled only when sharing is enabled');
+        }
+
+        const settings: Schemas['StaticFilesSettings'] = {
+            ...current,
+            sharingEnabled,
+            apiAccessEnabled: sharingEnabled && (update.apiAccessEnabled ?? current.apiAccessEnabled)
+        };
+        staticFiles.set(projectId, settings);
+
+        const { birthtime, mtime } = await fs.promises.stat(projectDir(projectId));
+        const body: Schemas['UpdateProjectResponse'] = {
+            project: {
+                id: projectId,
+                name: await projectName(projectId),
+                projectType: 'standard',
+                createdAt: birthtime.toISOString(),
+                updatedAt: mtime.toISOString(),
+                staticFiles: settings,
+                streamlitAppApiAccessEnabled: false,
+                environment: null,
+                folder: null
+            }
+        };
+
+        res.json(body);
+    });
+
+    app.post('/v2/files', express.raw({ type: 'multipart/form-data', limit: MAX_FILE_SIZE }), async (req, res) => {
+        let form: FormData;
+        try {
+            form = await new Request('http://mock.invalid/', {
+                method: 'POST',
+                headers: { 'content-type': req.headers['content-type'] ?? '' },
+                body: new Uint8Array(req.body as Buffer)
+            }).formData();
+        } catch {
+            return sendError(res, 400, 'The body is not a readable multipart form');
+        }
+
+        const projectId = form.get('projectId');
+        const filePath = form.get('path');
+        const file = form.get('file');
+        if (typeof filePath !== 'string' || !(file instanceof Blob) || typeof projectId !== 'string') {
+            return sendError(res, 400, 'projectId, path and file are required');
+        }
+        if (!isSafeRelativeFilePath(filePath)) {
+            return sendError(res, 400, `Unsafe file path: ${filePath}`);
+        }
+        if (!isKnownProject(projectId)) {
+            return sendError(res, 404, 'Project not found');
+        }
+
+        const storedPath = freeFilePath(filesDir(projectId), filePath);
+        const absolute = path.join(filesDir(projectId), ...storedPath.split('/'));
+        await fs.promises.mkdir(path.dirname(absolute), { recursive: true });
+        await fs.promises.writeFile(absolute, Buffer.from(await file.arrayBuffer()));
+        const { size, mtime } = await fs.promises.stat(absolute);
+        const body: Schemas['CreateFileResponse'] = {
+            file: { projectId, path: storedPath, size, updatedAt: mtime.toISOString() }
+        };
+
+        res.status(201).json(body);
+    });
+
+    app.delete('/v2/files', async (req, res) => {
+        const { projectId, path: filePath } = req.query;
+        if (typeof filePath !== 'string' || !isSafeRelativeFilePath(filePath) || typeof projectId !== 'string') {
+            return sendError(res, 400, 'projectId and a safe path are required');
+        }
+        if (!isKnownProject(projectId)) {
+            return sendError(res, 404, 'Project not found');
+        }
+
+        try {
+            await fs.promises.unlink(path.join(filesDir(projectId), ...filePath.split('/')));
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                return sendError(res, 404, 'File not found');
+            }
+            throw error;
+        }
+
+        res.status(204).end();
     });
 
     app.get('/v2/projects/:projectId/export', async (req, res) => {
@@ -234,10 +417,11 @@ export async function startMockDeepnoteCloud(rootDir?: string): Promise<MockDeep
     const server = app.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const { port } = server.address() as AddressInfo;
+    url = `http://127.0.0.1:${port}`;
 
     return {
         rootDir: root,
-        url: `http://127.0.0.1:${port}`,
+        url,
         stop: async () => {
             await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
             if (!rootDir) {

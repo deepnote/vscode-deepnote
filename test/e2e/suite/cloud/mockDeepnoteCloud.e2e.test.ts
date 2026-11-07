@@ -152,3 +152,75 @@ describe('Deepnote Cloud — the mock rejects the imports Deepnote Cloud rejects
         expect(readProjectFiles()).to.deep.equal({ 'main.deepnote': MAIN });
     });
 });
+
+describe('Deepnote Cloud — the mock serves the files and settings that publishing uses', function () {
+    let cloud: MockDeepnoteCloud;
+
+    async function request(method: string, route: string, body?: FormData | object): Promise<Response> {
+        return fetch(`${cloud.url}${route}`, {
+            method,
+            headers: {
+                Authorization: 'Bearer test-token',
+                ...(body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {})
+            },
+            body: body instanceof FormData ? body : body && JSON.stringify(body)
+        });
+    }
+
+    function upload(filePath: string, content: string): Promise<Response> {
+        const form = new FormData();
+        form.set('projectId', PROJECT_ID);
+        form.set('path', filePath);
+        form.set('file', new Blob([content]), path.posix.basename(filePath));
+
+        return request('POST', '/v2/files', form);
+    }
+
+    beforeEach(async function () {
+        cloud = await startMockDeepnoteCloud();
+        const projectDir = path.join(cloud.rootDir, PROJECT_ID);
+        fs.mkdirSync(projectDir);
+        fs.writeFileSync(path.join(projectDir, 'main.deepnote'), MAIN);
+    });
+
+    afterEach(async function () {
+        await cloud.stop();
+    });
+
+    it('stores an upload to a taken path at a new path, and lists both', async function () {
+        expect((await upload('_deepnote_static/app.js', 'one')).status).to.equal(201);
+
+        const second = await upload('_deepnote_static/app.js', 'second');
+
+        expect(second.status).to.equal(201);
+        expect(((await second.json()) as { file: { path: string } }).file.path).to.equal('_deepnote_static/app (1).js');
+        const { project } = (await (await request('GET', `/v2/projects/${PROJECT_ID}`)).json()) as {
+            project: { files: { path: string; size: number }[] };
+        };
+        expect(project.files.map(({ path: filePath, size }) => ({ path: filePath, size }))).to.have.deep.members([
+            { path: '_deepnote_static/app.js', size: 3 },
+            { path: '_deepnote_static/app (1).js', size: 6 }
+        ]);
+    });
+
+    it('answers 404 for a delete of a missing file', async function () {
+        const response = await request(
+            'DELETE',
+            `/v2/files?projectId=${PROJECT_ID}&path=${encodeURIComponent('_deepnote_static/missing.js')}`
+        );
+
+        expect(response.status).to.equal(404);
+        expect(await response.json()).to.deep.equal({ message: 'File not found' });
+    });
+
+    it('refuses to enable API access while sharing is disabled', async function () {
+        const response = await request('PATCH', `/v2/projects/${PROJECT_ID}`, {
+            staticFiles: { apiAccessEnabled: true }
+        });
+
+        expect(response.status).to.equal(400);
+        expect(await response.json()).to.deep.equal({
+            message: 'API access can be enabled only when sharing is enabled'
+        });
+    });
+});

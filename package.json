@@ -152,6 +152,13 @@
                 "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
             },
             {
+                "command": "deepnote.publishApp",
+                "title": "%deepnote.commands.publishApp.title%",
+                "category": "Deepnote",
+                "icon": "$(rocket)",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
                 "command": "deepnote.newProject",
                 "title": "%deepnote.commands.newProject.title%",
                 "category": "Deepnote",
@@ -1248,6 +1255,11 @@
                 {
                     "when": "resourceExtname == .ipynb && isWorkspaceTrusted",
                     "command": "deepnote.importnotebookfile",
+                    "group": "Deepnote"
+                },
+                {
+                    "when": "explorerResourceIsFolder && isWorkspaceTrusted && !deepnote.webExtension",
+                    "command": "deepnote.publishApp",
                     "group": "Deepnote"
                 }
             ],

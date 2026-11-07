@@ -31,6 +31,7 @@ import { DeepnoteCloud } from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import * as path from '../../../platform/vscode-path/path';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
+import { DeepnoteCloudOperationLock } from './deepnoteCloudOperationLock';
 import { SyncWithDeepnoteCloudCommandHandler } from './syncWithDeepnoteCloudCommandHandler.node';
 import { IDeepnoteApiTokenService } from './types';
 
@@ -63,7 +64,8 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
     let ws: string;
     let handler: TestableHandler;
     let tokenService: IDeepnoteApiTokenService;
-    let commandHandlers: Map<string, () => Promise<unknown>>;
+    let lock: DeepnoteCloudOperationLock;
+    let commandHandlers: Map<string, (...args: unknown[]) => Promise<unknown>>;
     let manifests: { file: string; hidden: boolean }[];
     let shown: { severity: Severity; args: unknown[] }[];
     let answers: Map<string, string | Promise<never>>;
@@ -135,8 +137,8 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
         when(win().showOpenDialog(anything())).thenCall(async () => [Uri.file(folder)]);
     }
 
-    function sync(): Promise<unknown> {
-        return commandHandlers.get(Commands.SyncWithDeepnoteCloud)!();
+    function sync(...args: unknown[]): Promise<unknown> {
+        return commandHandlers.get(Commands.SyncWithDeepnoteCloud)!(...args);
     }
 
     function syncOptions(): WorkspaceSyncOptions {
@@ -193,7 +195,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
 
         commandHandlers = new Map();
         when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenCall(
-            (id: string, commandHandler: () => Promise<unknown>) => {
+            (id: string, commandHandler: (...args: unknown[]) => Promise<unknown>) => {
                 commandHandlers.set(id, commandHandler);
 
                 return { dispose: () => undefined };
@@ -203,7 +205,10 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
         tokenService = mock<IDeepnoteApiTokenService>();
         when(tokenService.getOrPromptToken(anything())).thenResolve('tok');
 
-        handler = new TestableHandler(instance(tokenService), { subscriptions: [] } as unknown as IExtensionContext);
+        lock = new DeepnoteCloudOperationLock();
+        handler = new TestableHandler(instance(tokenService), lock, {
+            subscriptions: []
+        } as unknown as IExtensionContext);
         handler.runSyncWorkspaceStub.resolves(EMPTY_RESULT);
         handler.activate();
     });
@@ -237,7 +242,8 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             assert.deepStrictEqual(rest, {
                 rootDir: path.join(ws, 'b'),
                 baseUrl: 'https://api.example.test',
-                token: 'tok'
+                token: 'tok',
+                allFiles: false
             });
             assert.isFunction(onConflict);
             assert.isFunction(onEvent);
@@ -316,6 +322,34 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             assert.deepStrictEqual(messages('Information'), [
                 'Sync finished: 0 pulled, 0 pushed, 0 unchanged, 0 skipped, 0 failed.'
             ]);
+        });
+    });
+
+    suite('syncing a requested folder', () => {
+        test('syncs the requested folder with working files, without asking for a folder', async () => {
+            await addManifest('a');
+            const result: WorkspaceSyncResult = { ...EMPTY_RESULT, root: path.join(ws, 'a') };
+            handler.runSyncWorkspaceStub.resolves(result);
+
+            const resolved = await sync({ root: Uri.file(path.join(ws, 'a')), allFiles: true });
+
+            verify(win().showQuickPick(anything(), anything())).never();
+            verify(win().showOpenDialog(anything())).never();
+            assert.strictEqual(syncOptions().rootDir, path.join(ws, 'a'));
+            assert.isTrue(syncOptions().allFiles);
+            assert.strictEqual(resolved, result);
+        });
+
+        test('refuses a requested folder outside the workspace', async () => {
+            const outside = path.join(tmp, 'outside');
+
+            const resolved = await sync({ root: Uri.file(outside), allFiles: true });
+
+            assert.deepStrictEqual(messages('Warning'), [
+                `${outside} is outside the open workspace. Open it as a workspace folder to sync it with Deepnote Cloud.`
+            ]);
+            verifyNoTokenRequested();
+            assert.isUndefined(resolved);
         });
     });
 
@@ -747,12 +781,31 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             await started.promise;
             await sync();
 
-            assert.deepStrictEqual(messages('Information'), ['A sync with Deepnote Cloud is already in progress.']);
+            assert.deepStrictEqual(messages('Information'), [
+                'A sync or app publish with Deepnote Cloud is already in progress.'
+            ]);
             verify(win().showQuickPick(anything(), anything())).once();
             assert.isTrue(handler.runSyncWorkspaceStub.calledOnce);
 
             finish.resolve(EMPTY_RESULT);
             await first;
+        });
+
+        test('refuses to sync while another operation holds the lock, and syncs once it is released', async () => {
+            const lease = lock.tryAcquire()!;
+
+            await sync();
+
+            assert.deepStrictEqual(messages('Information'), [
+                'A sync or app publish with Deepnote Cloud is already in progress.'
+            ]);
+            verify(win().showQuickPick(anything(), anything())).never();
+            assert.isTrue(handler.runSyncWorkspaceStub.notCalled);
+
+            lease.dispose();
+            await sync();
+
+            assert.isTrue(handler.runSyncWorkspaceStub.calledOnce);
         });
 
         test('does not wait for the summary to be dismissed', async () => {

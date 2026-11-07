@@ -262,6 +262,7 @@
     "deepnote.commands.setApiToken.title": "Set API Token",
     "deepnote.commands.clearApiToken.title": "Clear API Token",
     "deepnote.commands.syncWithDeepnoteCloud.title": "Sync with Deepnote Cloud",
+    "deepnote.commands.publishApp.title": "Publish App…",
     "deepnote.commands.newProject.title": "New Project",
     "deepnote.commands.importNotebook.title": "Import Notebook",
     "deepnote.commands.importJupyterNotebook.title": "Import Jupyter Notebook",

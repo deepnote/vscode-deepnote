@@ -4,7 +4,7 @@
  * Editing those files is how a test, or a person, changes a project "in Deepnote". Any Bearer token is accepted.
  */
 
-import { deserializeDeepnoteFile } from '@deepnote/blocks';
+import { deserializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { sha256 } from '@deepnote/cloud-sync';
 import express, { type Response } from 'express';
 import { unzipSync, zipSync } from 'fflate';
@@ -59,6 +59,29 @@ function contentHash(files: NotebookFile[]): string {
             .sort()
             .join('\n')
     );
+}
+
+/** The import rules that the `importProject` description in `deepnoteCloudApi.generated` states. */
+function findImportViolation(projectId: string, projects: DeepnoteFile['project'][]): string | undefined {
+    if (projects.some(({ id }) => id !== projectId)) {
+        return 'A document belongs to another project';
+    }
+    if (projects.some(({ notebooks }) => notebooks.length !== 1)) {
+        return 'A document must contain exactly one notebook';
+    }
+    if (new Set(projects.map(({ name }) => name)).size > 1) {
+        return 'The documents disagree on the project name';
+    }
+
+    // A document without `integrations` leaves the project's integrations as they are, so it cannot disagree.
+    const integrationIdSets = projects.flatMap(({ integrations }) =>
+        integrations ? [JSON.stringify([...new Set(integrations.map(({ id }) => id))].sort())] : []
+    );
+    if (new Set(integrationIdSets).size > 1) {
+        return 'The documents disagree on the integrations';
+    }
+
+    return undefined;
 }
 
 function sendError(res: Response, status: number, message: string): void {
@@ -151,20 +174,35 @@ export async function startMockDeepnoteCloud(rootDir?: string): Promise<MockDeep
         express.raw({ type: 'application/zip', limit: MAX_ARCHIVE_SIZE }),
         async (req, res) => {
             const dir = projectDir(req.params.projectId);
-            const entries = Object.entries(unzipSync(new Uint8Array(req.body as Buffer)));
+            let archive: Record<string, Uint8Array>;
+            try {
+                archive = unzipSync(new Uint8Array(req.body as Buffer));
+            } catch {
+                return sendError(res, 422, 'The archive is not a readable ZIP');
+            }
+
+            const entries = Object.entries(archive);
             if (!entries.every(([filename]) => NOTEBOOK_FILE.test(filename))) {
                 return sendError(res, 422, 'The archive may contain only .deepnote files');
             }
 
-            let documents: { content: Uint8Array; filename: string; notebooks: { id: string; name: string }[] }[];
+            let documents: { content: Uint8Array; filename: string; project: DeepnoteFile['project'] }[];
             try {
                 documents = entries.map(([filename, content]) => ({
                     content,
                     filename,
-                    notebooks: deserializeDeepnoteFile(Buffer.from(content).toString('utf8')).project.notebooks
+                    project: deserializeDeepnoteFile(Buffer.from(content).toString('utf8')).project
                 }));
             } catch (error) {
                 return sendError(res, 422, error instanceof Error ? error.message : String(error));
+            }
+
+            const violation = findImportViolation(
+                req.params.projectId,
+                documents.map(({ project }) => project)
+            );
+            if (violation) {
+                return sendError(res, 422, violation);
             }
 
             const notebooks: Schemas['ImportProjectResponse']['notebooks'] = [];
@@ -173,7 +211,7 @@ export async function startMockDeepnoteCloud(rootDir?: string): Promise<MockDeep
                     ? ('overwritten' as const)
                     : ('created' as const);
                 await fs.promises.writeFile(path.join(dir, document.filename), document.content);
-                notebooks.push(...document.notebooks.map(({ id, name }) => ({ id, name, action })));
+                notebooks.push(...document.project.notebooks.map(({ id, name }) => ({ id, name, action })));
             }
 
             const body: Schemas['ImportProjectResponse'] = {

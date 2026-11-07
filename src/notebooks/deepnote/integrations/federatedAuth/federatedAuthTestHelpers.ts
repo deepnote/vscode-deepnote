@@ -130,7 +130,7 @@ export function settleAsyncHandlers(ms = DEFAULT_SETTLE_DELAY_MS): Promise<void>
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Inverse of `escapePythonString`: parses a Python single-quoted literal back to its source string. */
+/** Parses a Python single-quoted literal, decoding only `\\`, `\'` and `\n`; other escapes are kept verbatim. */
 export function parsePythonSingleQuoted(escaped: string): string {
     if (!escaped.startsWith("'") || !escaped.endsWith("'")) {
         throw new Error('must be wrapped in single quotes');

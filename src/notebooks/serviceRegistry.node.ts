@@ -100,8 +100,10 @@ import { OrphanedEphemeralCellCleaner } from './deepnote/orphanedEphemeralCellCl
 import { DeepnoteNewCellLanguageService } from './deepnote/deepnoteNewCellLanguageService';
 import { DeepnoteCellCopyHandler } from './deepnote/deepnoteCellCopyHandler';
 import { DeepnoteApiTokenService } from './deepnote/cloud/deepnoteApiTokenService.node';
+import { DeepnoteCloudOperationLock } from './deepnote/cloud/deepnoteCloudOperationLock';
+import { PublishAppCommandHandler } from './deepnote/cloud/publishAppCommandHandler.node';
 import { SyncWithDeepnoteCloudCommandHandler } from './deepnote/cloud/syncWithDeepnoteCloudCommandHandler.node';
-import { IDeepnoteApiTokenService } from './deepnote/cloud/types';
+import { IDeepnoteApiTokenService, IDeepnoteCloudOperationLock } from './deepnote/cloud/types';
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
 import { IntegrationEnvRefreshHandler } from './deepnote/integrations/integrationEnvRefreshHandler';
 import { IntegrationsEnvFileWatcher } from './deepnote/integrations/integrationsEnvFileWatcher.node';
@@ -235,9 +237,14 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
     );
     serviceManager.addSingleton<IDeepnoteApiTokenService>(IDeepnoteApiTokenService, DeepnoteApiTokenService);
     serviceManager.addBinding(IDeepnoteApiTokenService, IExtensionSyncActivationService);
+    serviceManager.addSingleton<IDeepnoteCloudOperationLock>(IDeepnoteCloudOperationLock, DeepnoteCloudOperationLock);
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         SyncWithDeepnoteCloudCommandHandler
+    );
+    serviceManager.addSingleton<IExtensionSyncActivationService>(
+        IExtensionSyncActivationService,
+        PublishAppCommandHandler
     );
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,

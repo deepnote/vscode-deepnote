@@ -16,6 +16,7 @@ import { PythonEnvironment } from './platform/pythonEnvironments/info';
 import { Channel } from './platform/common/application/types';
 import { IJupyterVariable } from './kernels/variables/types';
 import { IShowDataViewerFromVariablePanel } from './messageTypes';
+import { SyncWithDeepnoteCloudTarget } from './notebooks/deepnote/cloud/types';
 
 export type CommandIds = keyof ICommandNameArgumentTypeMapping;
 
@@ -209,5 +210,6 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.OpenInDeepnote]: [];
     [DSCommands.SetApiToken]: [Uri | undefined];
     [DSCommands.ClearApiToken]: [];
-    [DSCommands.SyncWithDeepnoteCloud]: [];
+    [DSCommands.SyncWithDeepnoteCloud]: [SyncWithDeepnoteCloudTarget | undefined];
+    [DSCommands.PublishApp]: [Uri | undefined];
 }

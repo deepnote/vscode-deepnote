@@ -1312,6 +1312,52 @@ export namespace DeepnoteCloud {
     export const apiTokenRejectedForRequest = l10n.t('Deepnote rejected the API token. Set a new one and try again.');
     export const setApiToken = l10n.t('Set API Token');
     export const errorWithDetail = (message: string, detail: string) => l10n.t('{0}: {1}', message, detail);
+    export const syncing = l10n.t('Syncing with Deepnote Cloud…');
+    export const syncFailed = l10n.t('Sync with Deepnote Cloud failed');
+    export const syncInProgress = l10n.t('A sync with Deepnote Cloud is already in progress.');
+    export const chooseSyncFolder = l10n.t('Choose the folder to sync with Deepnote Cloud');
+    export const chooseAnotherSyncFolder = l10n.t('Choose another folder…');
+    export const chooseSyncFolderTitle = l10n.t('Choose a folder for your Deepnote workspace');
+    export const chooseSyncFolderOpenLabel = l10n.t('Sync Here');
+    export const syncFolderOutsideWorkspace = (folder: string) =>
+        l10n.t(
+            '{0} is outside the open workspace. Open it as a workspace folder to sync it with Deepnote Cloud.',
+            folder
+        );
+    export const syncFolderOverlaps = (folder: string, other: string) =>
+        l10n.t("{0} can't be synced because it overlaps {1}, which is also synced with Deepnote Cloud.", folder, other);
+    export const firstSyncConfirm = (folder: string) =>
+        l10n.t('Download every project of your Deepnote workspace into {0}?', folder);
+    export const downloadProjects = l10n.t('Download Projects');
+    export const syncUnsavedNotebooks = (count: number) =>
+        l10n.t('{0} Deepnote notebook(s) have unsaved changes. Save them before syncing?', count);
+    export const saveAndSync = l10n.t('Save and Sync');
+    export const syncStillUnsaved = (count: number) =>
+        l10n.t('{0} Deepnote notebook(s) still have unsaved changes, so nothing was synced.', count);
+    export const syncFinished = (pulled: number, pushed: number, unchanged: number, skipped: number, failed: number) =>
+        l10n.t(
+            'Sync finished: {0} pulled, {1} pushed, {2} unchanged, {3} skipped, {4} failed.',
+            pulled,
+            pushed,
+            unchanged,
+            skipped,
+            failed
+        );
+    export const syncMissingInCloud = (count: number) =>
+        l10n.t('{0} project(s) no longer in Deepnote were kept locally.', count);
+    export const syncUntrackedFiles = (count: number) =>
+        l10n.t('{0} local .deepnote file(s) are not linked to a Deepnote project and were not uploaded.', count);
+    export const showLog = l10n.t('Show Log');
+    export const skip = l10n.t('Skip');
+    export const conflictCloudChangedAfterLocalEdit = (project: string) =>
+        l10n.t('"{0}" changed in Deepnote after your last sync, so your local edits were not pushed.', project);
+    export const conflictCloudChangedAfterLocalEditOverride = l10n.t('Replace Deepnote Version with Local');
+    export const conflictChangedOnBothSides = (project: string) =>
+        l10n.t('"{0}" changed both locally and in Deepnote since the last sync.', project);
+    export const conflictChangedOnBothSidesOverride = l10n.t('Use Deepnote Version, Discard Local Changes');
+    export const conflictUntrackedLocalDirectory = (project: string, dir: string) =>
+        l10n.t('{1} already exists locally and differs from the Deepnote project "{0}".', project, dir);
+    export const conflictUntrackedLocalDirectoryOverride = l10n.t('Replace Local Files with Deepnote Version');
 }
 
 export namespace SelectInputSettings {

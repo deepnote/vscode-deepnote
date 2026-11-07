@@ -145,6 +145,13 @@
                 "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
             },
             {
+                "command": "deepnote.syncWithDeepnoteCloud",
+                "title": "%deepnote.commands.syncWithDeepnoteCloud.title%",
+                "category": "Deepnote",
+                "icon": "$(sync)",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
                 "command": "deepnote.newProject",
                 "title": "%deepnote.commands.newProject.title%",
                 "category": "Deepnote",
@@ -932,6 +939,11 @@
                     "command": "deepnote.refreshExplorer",
                     "when": "view == deepnoteExplorer",
                     "group": "navigation@3"
+                },
+                {
+                    "command": "deepnote.syncWithDeepnoteCloud",
+                    "when": "view == deepnoteExplorer && isWorkspaceTrusted && !deepnote.webExtension",
+                    "group": "navigation@4"
                 }
             ],
             "editor/context": [
@@ -1699,6 +1711,12 @@
                     "type": "string",
                     "default": "deepnote.com",
                     "description": "Deepnote domain (e.g., 'deepnote.com' or 'ra-18838.deepnote-staging.com')",
+                    "scope": "resource"
+                },
+                "deepnote.apiUrl": {
+                    "type": "string",
+                    "default": "",
+                    "markdownDescription": "Base URL of the Deepnote API, such as `http://localhost:4010` for a local server. Leave empty to use `https://api.<domain>`, where `<domain>` is the `#deepnote.domain#` setting. Your Deepnote API token is sent to this URL. Links that open Deepnote in the browser still use `#deepnote.domain#`.",
                     "scope": "resource"
                 },
                 "deepnote.disableSSLVerification": {
@@ -2718,6 +2736,8 @@
         "test:smoke": "cross-env VSC_JUPYTER_FORCE_LOGGING=true node --no-force-async-hooks-checks ./out/test/smokeTest.node.js",
         "compile-e2e": "tsc -p ./test/e2e/tsconfig.json",
         "compile-e2e-watch": "tsc -p ./test/e2e/tsconfig.json --watch",
+        "generate:e2e:deepnote-cloud-api": "npx -y openapi-typescript@7.13.0 https://api.deepnote.com/v2/openapi.json -o test/e2e/helpers/deepnoteCloudApi.generated.d.ts",
+        "mock:deepnote-cloud": "npx tsx test/e2e/helpers/mockDeepnoteCloud.ts",
         "setup:e2e:vscode": "extest get-vscode -c max && extest get-chromedriver -c max",
         "setup:e2e:deps": "extest install-from-marketplace ms-python.python -e .test-extensions",
         "setup:e2e:mock": "npx -y -p @copilotkit/aimock@1.37.4 llmock --help",
@@ -2903,6 +2923,7 @@
         "eslint-plugin-local-rules": "file:build/eslint-rules",
         "eslint-plugin-no-only-tests": "^3.1.0",
         "esmock": "^2.7.3",
+        "fflate": "^0.8.3",
         "flat": "^5.0.1",
         "get-port": "^3.2.0",
         "glob-parent": "^6.0.2",

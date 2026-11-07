@@ -13,12 +13,7 @@ import { getFilePath } from '../../../platform/common/platform/fs-paths';
 import { IExtensionContext } from '../../../platform/common/types';
 import { DeepnoteCloud } from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
-import {
-    dirname,
-    extUriBiasedIgnorePathCase,
-    isEqual,
-    removeTrailingPathSeparator
-} from '../../../platform/vscode-path/resources';
+import { dirname, extUriBiasedIgnorePathCase, isEqual } from '../../../platform/vscode-path/resources';
 import { getApiEndpoint } from '../importClient.node';
 import { isRejectedTokenError } from './cloudErrors.node';
 import { IDeepnoteApiTokenService } from './types';
@@ -200,20 +195,13 @@ export class DeepnoteApiTokenService implements IDeepnoteApiTokenService, IExten
         }
     }
 
-    /**
-     * The folders to search for a `.env`, nearest first, from the folder of `resource` up to its sync root, or up to
-     * its workspace folder root when there is no sync root.
-     */
     private async getLookupDirs(resource: Uri): Promise<Uri[]> {
         const start = withoutQueryAndFragment(resource);
         const startFolder = await getStartFolder(start);
-        const stopFolder = removeTrailingPathSeparator(
-            (await this.findSyncRoot(startFolder)) ?? workspace.getWorkspaceFolder(start)?.uri ?? startFolder
-        );
+        const stopFolder = (await this.findSyncRoot(startFolder)) ?? startFolder;
 
-        // VS Code matches workspace folders case-insensitively on macOS and Windows and keeps a trailing slash from a
-        // `.code-workspace` file. A stop folder that is not above `startFolder`, such as a workspace folder missing on
-        // disk, must end the search, not widen it to the filesystem root.
+        // A folder URI can end in a slash that the sync root, built by `Uri.file`, lacks, so `isEqual` may never match
+        // it. Walking out of `stopFolder` must end the search instead of reaching the filesystem root.
         const dirs: Uri[] = [];
         for (let dir = startFolder; extUriBiasedIgnorePathCase.isEqualOrParent(dir, stopFolder); dir = dirname(dir)) {
             dirs.push(dir);

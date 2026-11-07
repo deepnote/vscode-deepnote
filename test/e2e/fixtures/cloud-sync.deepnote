@@ -1,0 +1,21 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: 4f0c2a8e-6b1d-4c3e-9a7f-2d5e8b1c0a93
+  name: E2E Cloud Sync
+  notebooks:
+    - id: e2e-cloud-sync-notebook
+      name: Cloud Sync
+      blocks:
+        - id: e2e-cloud-sync-block
+          blockGroup: e2e-group
+          type: code
+          content: |-
+            print("synced from Deepnote")
+          sortingKey: a0
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

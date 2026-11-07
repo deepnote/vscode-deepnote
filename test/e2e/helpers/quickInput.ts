@@ -16,11 +16,12 @@ export async function tryOpenInputBox(timeout: number): Promise<InputBox | undef
 }
 
 /**
- * Clicks the "OK" button of the in-window simple file/folder dialog
- * (`files.simpleDialog.enable`). In that dialog Enter navigates *into* a directory rather than
- * accepting it, so clicking OK is the deterministic accept. Returns false if no OK button is found.
+ * Clicks the accept button of the in-window simple file/folder dialog
+ * (`files.simpleDialog.enable`), labelled "OK" unless the dialog sets `openLabel`. In that dialog
+ * Enter navigates *into* a directory rather than accepting it, so clicking the button is the
+ * deterministic accept. Returns false if no such button is found.
  */
-export async function clickDialogOkButton(): Promise<boolean> {
+export async function clickDialogOkButton(label = 'OK'): Promise<boolean> {
     const driver = VSBrowser.instance.driver;
     const buttons = await driver
         .findElements(By.css('.quick-input-widget .monaco-button.monaco-text-button'))
@@ -38,7 +39,7 @@ export async function clickDialogOkButton(): Promise<boolean> {
                 return '';
             })
         ).trim();
-        if (text === 'OK') {
+        if (text === label) {
             await button.click();
 
             return true;

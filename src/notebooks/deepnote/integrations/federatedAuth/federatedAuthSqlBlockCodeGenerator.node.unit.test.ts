@@ -385,4 +385,14 @@ suite('FederatedAuthSqlBlockCodeGenerator', () => {
         // Match upstream's shape: `my_df = _dntk.execute_sql_with_connection_json(...)` followed by `my_df` on the next line.
         assert.include(result, 'my_df = _dntk.execute_sql_with_connection_json(');
     });
+
+    test('escapes the carriage return of a CRLF query so the query stays one Python string literal', async () => {
+        setupValidFederatedIntegration();
+        const result = await generator.generate(buildSqlBlock({ content: 'SELECT 1\r\nFROM t' }), NOTEBOOK_URI);
+        if (typeof result !== 'string') {
+            throw new Error(`expected a string result, got ${typeof result}`);
+        }
+
+        assert.include(result, "'SELECT 1\\r\\nFROM t'");
+    });
 });

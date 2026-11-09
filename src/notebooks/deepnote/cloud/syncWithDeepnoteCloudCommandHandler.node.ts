@@ -50,6 +50,10 @@ async function offerToSyncNewFolder(): Promise<void> {
     }
 }
 
+function reportSyncFailure(error: unknown) {
+    void showCloudError(DeepnoteCloud.syncFailed, error);
+}
+
 function unsavedDeepnoteDocuments(): (NotebookDocument | TextDocument)[] {
     return [
         ...workspace.notebookDocuments.filter((notebook) => notebook.notebookType === 'deepnote' && notebook.isDirty),
@@ -99,12 +103,8 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
 
     public activate(): void {
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.SyncWithDeepnoteCloud, () =>
-                this.syncWithDeepnoteCloud(() => this.chooseSyncedRoot())
-            ),
-            commands.registerCommand(Commands.SyncNewFolderWithDeepnoteCloud, () =>
-                this.syncWithDeepnoteCloud(() => this.chooseNewRoot())
-            )
+            commands.registerCommand(Commands.SyncWithDeepnoteCloud, this.syncWithDeepnoteCloud, this),
+            commands.registerCommand(Commands.SyncNewFolderWithDeepnoteCloud, this.syncNewFolderWithDeepnoteCloud, this)
         );
     }
 
@@ -137,6 +137,27 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
 
                 return Promise.resolve('skip');
         }
+    }
+
+    private async checkSyncTarget(root: Uri): Promise<{ isFirstSync: boolean } | undefined> {
+        if (!workspace.getWorkspaceFolder(root)) {
+            void window.showWarningMessage(DeepnoteCloud.syncFolderOutsideWorkspace(getFilePath(root)));
+
+            return undefined;
+        }
+
+        const overlapping = await this.findOverlappingRoot(root);
+        if (overlapping) {
+            void window.showWarningMessage(
+                DeepnoteCloud.syncFolderOverlaps(workspaceRelativeUri(root), workspaceRelativeUri(overlapping))
+            );
+
+            return undefined;
+        }
+
+        const rootHasSyncManifest = await hasSyncManifest(getFilePath(root));
+
+        return { isFirstSync: !rootHasSyncManifest };
     }
 
     private async chooseNewRoot(): Promise<Uri | undefined> {
@@ -193,34 +214,6 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         return picked?.root;
     }
 
-    private async chooseSyncTarget(
-        chooseRoot: () => Promise<Uri | undefined>
-    ): Promise<{ root: Uri; isFirstSync: boolean } | undefined> {
-        const root = await chooseRoot();
-        if (!root) {
-            return undefined;
-        }
-
-        if (!workspace.getWorkspaceFolder(root)) {
-            void window.showWarningMessage(DeepnoteCloud.syncFolderOutsideWorkspace(getFilePath(root)));
-
-            return undefined;
-        }
-
-        const overlapping = await this.findOverlappingRoot(root);
-        if (overlapping) {
-            void window.showWarningMessage(
-                DeepnoteCloud.syncFolderOverlaps(workspaceRelativeUri(root), workspaceRelativeUri(overlapping))
-            );
-
-            return undefined;
-        }
-
-        const rootHasSyncManifest = await hasSyncManifest(getFilePath(root));
-
-        return { root, isFirstSync: !rootHasSyncManifest };
-    }
-
     private async confirmFirstSync(root: Uri): Promise<boolean> {
         const choice = await window.showInformationMessage(
             DeepnoteCloud.firstSyncConfirm(workspaceRelativeUri(root)),
@@ -243,6 +236,21 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         const [inner] = await workspace.findFiles(new RelativePattern(root, `*/**/${SYNC_MANIFEST_FILENAME}`), null, 1);
 
         return inner && dirname(inner);
+    }
+
+    private async runOneSyncAtATime(sync: () => Promise<void>): Promise<void> {
+        if (this.syncInProgress) {
+            void window.showInformationMessage(DeepnoteCloud.syncInProgress);
+
+            return;
+        }
+
+        this.syncInProgress = true;
+        try {
+            await sync();
+        } finally {
+            this.syncInProgress = false;
+        }
     }
 
     private async saveUnsavedNotebooks(): Promise<boolean> {
@@ -302,21 +310,12 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         }
     }
 
-    private async syncChosenFolder(chooseRoot: () => Promise<Uri | undefined>): Promise<void> {
-        let target: { root: Uri; isFirstSync: boolean } | undefined;
-        try {
-            target = await this.chooseSyncTarget(chooseRoot);
-        } catch (error) {
-            void showCloudError(DeepnoteCloud.syncFailed, error);
-
-            return;
-        }
+    private async syncFolder(root: Uri): Promise<void> {
+        const target = await this.checkSyncTarget(root).catch(reportSyncFailure);
         if (!target) {
             return;
         }
-
-        const { root, isFirstSync } = target;
-        if (isFirstSync && !(await this.confirmFirstSync(root))) {
+        if (target.isFirstSync && !(await this.confirmFirstSync(root))) {
             return;
         }
 
@@ -352,18 +351,21 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         void this.showSummary(result);
     }
 
-    private async syncWithDeepnoteCloud(chooseRoot: () => Promise<Uri | undefined>): Promise<void> {
-        if (this.syncInProgress) {
-            void window.showInformationMessage(DeepnoteCloud.syncInProgress);
+    private async syncNewFolderWithDeepnoteCloud(): Promise<void> {
+        await this.runOneSyncAtATime(async () => {
+            const root = await this.chooseNewRoot().catch(reportSyncFailure);
+            if (root) {
+                await this.syncFolder(root);
+            }
+        });
+    }
 
-            return;
-        }
-
-        this.syncInProgress = true;
-        try {
-            await this.syncChosenFolder(chooseRoot);
-        } finally {
-            this.syncInProgress = false;
-        }
+    private async syncWithDeepnoteCloud(): Promise<void> {
+        await this.runOneSyncAtATime(async () => {
+            const root = await this.chooseSyncedRoot().catch(reportSyncFailure);
+            if (root) {
+                await this.syncFolder(root);
+            }
+        });
     }
 }

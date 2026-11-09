@@ -196,12 +196,14 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
         }
 
         commandHandlers = new Map();
-        when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenCall(
-            (id: string, commandHandler: () => Promise<unknown>) => {
-                commandHandlers.set(id, commandHandler);
+        const registerCommand = (id: string, commandHandler: () => Promise<unknown>, thisArg?: unknown) => {
+            commandHandlers.set(id, commandHandler.bind(thisArg));
 
-                return { dispose: () => undefined };
-            }
+            return { dispose: () => undefined };
+        };
+        when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything())).thenCall(registerCommand);
+        when(mockedVSCodeNamespaces.commands.registerCommand(anything(), anything(), anything())).thenCall(
+            registerCommand
         );
 
         tokenService = mock<IDeepnoteApiTokenService>();
@@ -298,6 +300,15 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             await sync();
 
             assert.deepStrictEqual(shown, []);
+            verifyNoTokenRequested();
+        });
+
+        test('reports a failed search for synced folders and syncs nothing', async () => {
+            when(wsp().findFiles(anything(), anything())).thenReject(new Error('search failed'));
+
+            await sync();
+
+            assert.deepStrictEqual(messages('Error'), ['Sync with Deepnote Cloud failed: search failed']);
             verifyNoTokenRequested();
         });
 

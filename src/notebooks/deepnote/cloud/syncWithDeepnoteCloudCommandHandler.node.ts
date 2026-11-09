@@ -354,7 +354,7 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
     private async syncNewFolderWithDeepnoteCloud(): Promise<void> {
         await this.runOneSyncAtATime(async () => {
             const root = await this.chooseNewRoot().catch(reportSyncFailure);
-            if (root) {
+            if (root != null) {
                 await this.syncFolder(root);
             }
         });
@@ -363,7 +363,7 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
     private async syncWithDeepnoteCloud(): Promise<void> {
         await this.runOneSyncAtATime(async () => {
             const root = await this.chooseSyncedRoot().catch(reportSyncFailure);
-            if (root) {
+            if (root != null) {
                 await this.syncFolder(root);
             }
         });

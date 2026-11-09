@@ -210,4 +210,5 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.SetApiToken]: [Uri | undefined];
     [DSCommands.ClearApiToken]: [];
     [DSCommands.SyncWithDeepnoteCloud]: [];
+    [DSCommands.SyncNewFolderWithDeepnoteCloud]: [];
 }

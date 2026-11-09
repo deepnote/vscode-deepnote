@@ -152,6 +152,12 @@
                 "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
             },
             {
+                "command": "deepnote.syncNewFolderWithDeepnoteCloud",
+                "title": "%deepnote.commands.syncNewFolderWithDeepnoteCloud.title%",
+                "category": "Deepnote",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
                 "command": "deepnote.newProject",
                 "title": "%deepnote.commands.newProject.title%",
                 "category": "Deepnote",
@@ -944,6 +950,11 @@
                     "command": "deepnote.syncWithDeepnoteCloud",
                     "when": "view == deepnoteExplorer && isWorkspaceTrusted && !deepnote.webExtension",
                     "group": "navigation@4"
+                },
+                {
+                    "command": "deepnote.syncNewFolderWithDeepnoteCloud",
+                    "when": "view == deepnoteExplorer && isWorkspaceTrusted && !deepnote.webExtension",
+                    "group": "cloud@1"
                 }
             ],
             "editor/context": [

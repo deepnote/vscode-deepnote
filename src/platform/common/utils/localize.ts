@@ -1316,7 +1316,8 @@ export namespace DeepnoteCloud {
     export const syncFailed = l10n.t('Sync with Deepnote Cloud failed');
     export const syncInProgress = l10n.t('A sync with Deepnote Cloud is already in progress.');
     export const chooseSyncFolder = l10n.t('Choose the folder to sync with Deepnote Cloud');
-    export const chooseAnotherSyncFolder = l10n.t('Choose another folder…');
+    export const noSyncedFolder = l10n.t('No folder in this workspace is synced with Deepnote Cloud yet.');
+    export const syncNewFolder = l10n.t('Sync a New Folder…');
     export const chooseSyncFolderTitle = l10n.t('Choose a folder for your Deepnote workspace');
     export const chooseSyncFolderOpenLabel = l10n.t('Sync Here');
     export const syncFolderOutsideWorkspace = (folder: string) =>

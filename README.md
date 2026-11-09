@@ -54,26 +54,29 @@ Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/i
 
 Open the Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`) and type `Deepnote` to see all available commands:
 
-| Command                              | Description                                                             |
-| ------------------------------------ | ----------------------------------------------------------------------- |
-| `Deepnote: Refresh Explorer`         | Refresh the Deepnote project explorer                                   |
-| `Deepnote: Open Notebook`            | Open a specific notebook from a Deepnote project                        |
-| `Deepnote: Open File`                | Open the raw .deepnote project file                                     |
-| `Deepnote: Reveal in Explorer`       | Show active notebook information in the explorer                        |
-| `Deepnote: Show Project Explorer`    | Show the Deepnote sidebar and select the active notebook when available |
-| `Deepnote: Manage Integrations`      | Configure database connections and credentials                          |
-| `Deepnote: New Project`              | Create a new Deepnote project                                           |
-| `Deepnote: Import Notebook`          | Import an existing notebook into your project                           |
-| `Deepnote: Set API Token`            | Save a Deepnote API token for syncing and publishing                    |
-| `Deepnote: Clear API Token`          | Remove the saved Deepnote API token                                     |
-| `Deepnote: Sync with Deepnote Cloud` | Sync a local folder with your Deepnote workspace                        |
-| `Notebook: Select Notebook Kernel`   | Select or switch kernels within your notebook                           |
-| `Notebook: Change Cell Language`     | Change the language of the cell currently in focus                      |
-| `Deepnote: Enable Snapshots`         | Enable snapshot mode for the current workspace                          |
+| Command                                            | Description                                                             |
+| -------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Deepnote: Refresh Explorer`                       | Refresh the Deepnote project explorer                                   |
+| `Deepnote: Open Notebook`                          | Open a specific notebook from a Deepnote project                        |
+| `Deepnote: Open File`                              | Open the raw .deepnote project file                                     |
+| `Deepnote: Reveal in Explorer`                     | Show active notebook information in the explorer                        |
+| `Deepnote: Show Project Explorer`                  | Show the Deepnote sidebar and select the active notebook when available |
+| `Deepnote: Manage Integrations`                    | Configure database connections and credentials                          |
+| `Deepnote: New Project`                            | Create a new Deepnote project                                           |
+| `Deepnote: Import Notebook`                        | Import an existing notebook into your project                           |
+| `Deepnote: Set API Token`                          | Save a Deepnote API token for syncing and publishing                    |
+| `Deepnote: Clear API Token`                        | Remove the saved Deepnote API token                                     |
+| `Deepnote: Sync with Deepnote Cloud`               | Sync a folder that is already synced with your Deepnote workspace       |
+| `Deepnote: Sync a New Folder with Deepnote Cloud…` | Download your Deepnote workspace into a folder and start syncing it     |
+| `Notebook: Select Notebook Kernel`                 | Select or switch kernels within your notebook                           |
+| `Notebook: Change Cell Language`                   | Change the language of the cell currently in focus                      |
+| `Deepnote: Enable Snapshots`                       | Enable snapshot mode for the current workspace                          |
 
 ### Syncing with Deepnote Cloud
 
-Run `Deepnote: Sync with Deepnote Cloud` from the Command Palette, or click the sync button in the Deepnote explorer title bar. It offers the folders in your workspace that are already synced, or lets you choose another folder.
+To start, run `Deepnote: Sync a New Folder with Deepnote Cloud…` from the Command Palette or from the `…` menu of the Deepnote explorer, and choose a folder.
+
+After that, run `Deepnote: Sync with Deepnote Cloud`, or click the sync button in the Deepnote explorer title bar. With one synced folder in your workspace, it syncs that folder. With several, it asks which one, listing the folder of the file you have open first. With none, it offers to sync a new folder.
 
 - Sync uses `DEEPNOTE_TOKEN` from a `.env` file in the synced folder, or the token saved with `Deepnote: Set API Token`.
 - The first sync into a folder downloads every project of your Deepnote workspace, one folder per project, and creates `.deepnote-sync.json`.

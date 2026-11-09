@@ -30,17 +30,24 @@ import { getFilePath } from '../../../platform/common/platform/fs-paths';
 import { IExtensionContext } from '../../../platform/common/types';
 import { DeepnoteCloud } from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
-import { dirname, isEqual } from '../../../platform/vscode-path/resources';
+import { dirname, extUriBiasedIgnorePathCase, isEqual } from '../../../platform/vscode-path/resources';
 import { getApiEndpoint } from '../importClient.node';
 import { showCloudError } from './cloudErrors.node';
 import { IDeepnoteApiTokenService } from './types';
 
 interface RootPickItem extends QuickPickItem {
-    root?: Uri;
+    root: Uri;
 }
 
-function label(uri: Uri): string {
+function workspaceRelativeUri(uri: Uri): string {
     return workspace.asRelativePath(uri);
+}
+
+async function offerToSyncNewFolder(): Promise<void> {
+    const choice = await window.showInformationMessage(DeepnoteCloud.noSyncedFolder, DeepnoteCloud.syncNewFolder);
+    if (choice === DeepnoteCloud.syncNewFolder) {
+        await commands.executeCommand(Commands.SyncNewFolderWithDeepnoteCloud);
+    }
 }
 
 function unsavedDeepnoteDocuments(): (NotebookDocument | TextDocument)[] {
@@ -92,7 +99,12 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
 
     public activate(): void {
         this.extensionContext.subscriptions.push(
-            commands.registerCommand(Commands.SyncWithDeepnoteCloud, () => this.syncWithDeepnoteCloud())
+            commands.registerCommand(Commands.SyncWithDeepnoteCloud, () =>
+                this.syncWithDeepnoteCloud(() => this.chooseSyncedRoot())
+            ),
+            commands.registerCommand(Commands.SyncNewFolderWithDeepnoteCloud, () =>
+                this.syncWithDeepnoteCloud(() => this.chooseNewRoot())
+            )
         );
     }
 
@@ -127,25 +139,7 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         }
     }
 
-    private async chooseRoot(): Promise<Uri | undefined> {
-        const roots = (await workspace.findFiles(`**/${SYNC_MANIFEST_FILENAME}`, '**/node_modules/**'))
-            .map((manifest) => dirname(manifest))
-            .sort((a, b) => label(a).localeCompare(label(b)));
-
-        if (roots.length > 0) {
-            const items: RootPickItem[] = [
-                ...roots.map((root) => ({ label: label(root), root })),
-                { label: DeepnoteCloud.chooseAnotherSyncFolder }
-            ];
-            const picked = await window.showQuickPick(items, { placeHolder: DeepnoteCloud.chooseSyncFolder });
-            if (!picked) {
-                return undefined;
-            }
-            if (picked.root) {
-                return picked.root;
-            }
-        }
-
+    private async chooseNewRoot(): Promise<Uri | undefined> {
         const folder = (
             await window.showOpenDialog({
                 canSelectFolders: true,
@@ -165,8 +159,44 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         return root ? Uri.file(root) : folder;
     }
 
-    private async chooseSyncTarget(): Promise<{ root: Uri; isFirstSync: boolean } | undefined> {
-        const root = await this.chooseRoot();
+    private async chooseSyncedRoot(): Promise<Uri | undefined> {
+        const allSyncManifestFiles = await workspace.findFiles(`**/${SYNC_MANIFEST_FILENAME}`, '**/node_modules/**');
+        const roots = allSyncManifestFiles
+            .map((manifest) => dirname(manifest))
+            .sort((a, b) => workspaceRelativeUri(a).localeCompare(workspaceRelativeUri(b)));
+
+        if (roots.length === 0) {
+            // Not awaited, so the in-progress flag is clear by the time the offer's button runs the other command.
+            void offerToSyncNewFolder();
+
+            return undefined;
+        }
+        if (roots.length === 1) {
+            return roots[0];
+        }
+
+        // Deepnote notebook URIs carry a `?notebook=` query, and `isEqualOrParent` compares queries.
+        const activeFile = (window.activeNotebookEditor?.notebook.uri ?? window.activeTextEditor?.document.uri)?.with({
+            query: '',
+            fragment: ''
+        });
+        const activeIndex = activeFile
+            ? roots.findIndex((root) => extUriBiasedIgnorePathCase.isEqualOrParent(activeFile, root))
+            : -1;
+        if (activeIndex > 0) {
+            roots.unshift(...roots.splice(activeIndex, 1));
+        }
+
+        const items: RootPickItem[] = roots.map((root) => ({ label: workspaceRelativeUri(root), root }));
+        const picked = await window.showQuickPick(items, { placeHolder: DeepnoteCloud.chooseSyncFolder });
+
+        return picked?.root;
+    }
+
+    private async chooseSyncTarget(
+        chooseRoot: () => Promise<Uri | undefined>
+    ): Promise<{ root: Uri; isFirstSync: boolean } | undefined> {
+        const root = await chooseRoot();
         if (!root) {
             return undefined;
         }
@@ -179,17 +209,21 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
 
         const overlapping = await this.findOverlappingRoot(root);
         if (overlapping) {
-            void window.showWarningMessage(DeepnoteCloud.syncFolderOverlaps(label(root), label(overlapping)));
+            void window.showWarningMessage(
+                DeepnoteCloud.syncFolderOverlaps(workspaceRelativeUri(root), workspaceRelativeUri(overlapping))
+            );
 
             return undefined;
         }
 
-        return { root, isFirstSync: !(await hasSyncManifest(getFilePath(root))) };
+        const rootHasSyncManifest = await hasSyncManifest(getFilePath(root));
+
+        return { root, isFirstSync: !rootHasSyncManifest };
     }
 
     private async confirmFirstSync(root: Uri): Promise<boolean> {
         const choice = await window.showInformationMessage(
-            DeepnoteCloud.firstSyncConfirm(label(root)),
+            DeepnoteCloud.firstSyncConfirm(workspaceRelativeUri(root)),
             { modal: true },
             DeepnoteCloud.downloadProjects
         );
@@ -268,10 +302,10 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         }
     }
 
-    private async syncChosenFolder(): Promise<void> {
+    private async syncChosenFolder(chooseRoot: () => Promise<Uri | undefined>): Promise<void> {
         let target: { root: Uri; isFirstSync: boolean } | undefined;
         try {
-            target = await this.chooseSyncTarget();
+            target = await this.chooseSyncTarget(chooseRoot);
         } catch (error) {
             void showCloudError(DeepnoteCloud.syncFailed, error);
 
@@ -318,7 +352,7 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         void this.showSummary(result);
     }
 
-    private async syncWithDeepnoteCloud(): Promise<void> {
+    private async syncWithDeepnoteCloud(chooseRoot: () => Promise<Uri | undefined>): Promise<void> {
         if (this.syncInProgress) {
             void window.showInformationMessage(DeepnoteCloud.syncInProgress);
 
@@ -327,7 +361,7 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
 
         this.syncInProgress = true;
         try {
-            await this.syncChosenFolder();
+            await this.syncChosenFolder(chooseRoot);
         } finally {
             this.syncInProgress = false;
         }

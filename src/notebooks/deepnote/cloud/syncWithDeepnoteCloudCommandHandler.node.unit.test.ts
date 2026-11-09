@@ -66,7 +66,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
     let commandHandlers: Map<string, () => Promise<unknown>>;
     let manifests: { file: string; hidden: boolean }[];
     let shown: { severity: Severity; args: unknown[] }[];
-    let answers: Map<string, string | Promise<never>>;
+    let answers: Map<string, string | Promise<unknown>>;
     let sandbox: sinon.SinonSandbox;
 
     const win = () => mockedVSCodeNamespaces.window;
@@ -108,7 +108,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
         return shown.filter((message) => message.severity === severity).map((message) => message.args[0]);
     }
 
-    function answer(message: string, choice: string | Promise<never>): void {
+    function answer(message: string, choice: string | Promise<unknown>): void {
         answers.set(message, choice);
     }
 
@@ -137,6 +137,10 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
 
     function sync(): Promise<unknown> {
         return commandHandlers.get(Commands.SyncWithDeepnoteCloud)!();
+    }
+
+    function syncNewFolder(): Promise<unknown> {
+        return commandHandlers.get(Commands.SyncNewFolderWithDeepnoteCloud)!();
     }
 
     function syncOptions(): WorkspaceSyncOptions {
@@ -214,11 +218,11 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
         await fs.promises.rm(tmp, { recursive: true, force: true });
     });
 
-    suite('choosing the folder', () => {
-        test('offers the synced folders, then another folder, and syncs the picked one', async () => {
+    suite('choosing a synced folder', () => {
+        const NO_SYNCED_FOLDER = 'No folder in this workspace is synced with Deepnote Cloud yet.';
+
+        test('syncs the only synced folder without asking', async () => {
             await addManifest('b');
-            await addManifest('a');
-            pick('b');
             when(wsp().getConfiguration('deepnote', anything())).thenCall((_section: string, resource?: Uri) => ({
                 get: (key: string, fallback: unknown) =>
                     key === 'domain' && resource && isInside(resource.fsPath, path.join(ws, 'b'))
@@ -228,10 +232,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
 
             await sync();
 
-            assert.deepStrictEqual(pickedLabels(), ['a', 'b', 'Choose another folder…']);
-            assert.deepStrictEqual(capture(win().showQuickPick).last()[1], {
-                placeHolder: 'Choose the folder to sync with Deepnote Cloud'
-            });
+            verify(win().showQuickPick(anything(), anything())).never();
             assert.isTrue(handler.runSyncWorkspaceStub.calledOnce);
             const { onConflict, onEvent, ...rest } = syncOptions();
             assert.deepStrictEqual(rest, {
@@ -243,21 +244,99 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             assert.isFunction(onEvent);
         });
 
-        test('does nothing when the pick is dismissed', async () => {
+        test('asks which synced folder to sync when there are several', async () => {
+            await addManifest('b');
             await addManifest('a');
+            pick('b');
+
+            await sync();
+
+            assert.deepStrictEqual(pickedLabels(), ['a', 'b']);
+            assert.deepStrictEqual(capture(win().showQuickPick).last()[1], {
+                placeHolder: 'Choose the folder to sync with Deepnote Cloud'
+            });
+            assert.strictEqual(syncOptions().rootDir, path.join(ws, 'b'));
+        });
+
+        test('lists the synced folder of the active notebook first', async () => {
+            await addManifest('a');
+            await addManifest('b');
+            await addManifest('c');
+            const notebookUri = Uri.file(path.join(ws, 'c', 'Team', 'P', 'notebook.deepnote')).with({
+                query: 'notebook=n1'
+            });
+            when(win().activeNotebookEditor).thenReturn({ notebook: { uri: notebookUri } } as any);
+            when(win().activeTextEditor).thenReturn({
+                document: { uri: notebookUri.with({ scheme: 'vscode-notebook-cell' }) }
+            } as any);
             pick(undefined);
 
             await sync();
 
-            verify(win().showOpenDialog(anything())).never();
+            assert.deepStrictEqual(pickedLabels(), ['c', 'a', 'b']);
+        });
+
+        test('lists the synced folder of the active text editor first', async () => {
+            await addManifest('a');
+            await addManifest('b');
+            await addManifest('c');
+            when(win().activeTextEditor).thenReturn({
+                document: { uri: Uri.file(path.join(ws, 'b', 'notes.txt')) }
+            } as any);
+            pick(undefined);
+
+            await sync();
+
+            assert.deepStrictEqual(pickedLabels(), ['b', 'a', 'c']);
+        });
+
+        test('does nothing when the pick is dismissed', async () => {
+            await addManifest('a');
+            await addManifest('b');
+            pick(undefined);
+
+            await sync();
+
             assert.deepStrictEqual(shown, []);
             verifyNoTokenRequested();
         });
 
+        test('offers to sync a new folder when no folder is synced', async () => {
+            const offerAnswer = createDeferred<string>();
+            answer(NO_SYNCED_FOLDER, offerAnswer.promise);
+            when(mockedVSCodeNamespaces.commands.executeCommand(anything())).thenCall((id: string) =>
+                commandHandlers.get(id)!()
+            );
+            const dialogOpened = createDeferred<void>();
+            when(win().showOpenDialog(anything())).thenCall(async () => {
+                dialogOpened.resolve();
+
+                return undefined;
+            });
+
+            await sync();
+            offerAnswer.resolve('Sync a New Folder…');
+            await dialogOpened.promise;
+
+            assert.deepStrictEqual(shown, [
+                { severity: 'Information', args: [NO_SYNCED_FOLDER, 'Sync a New Folder…'] }
+            ]);
+        });
+
+        test('runs no command when the offer is dismissed', async () => {
+            await sync();
+            await new Promise((resolve) => setImmediate(resolve));
+
+            assert.deepStrictEqual(messages('Information'), [NO_SYNCED_FOLDER]);
+            verify(mockedVSCodeNamespaces.commands.executeCommand(anything())).never();
+        });
+    });
+
+    suite('syncing a new folder', () => {
         test('does nothing when the folder dialog is dismissed', async () => {
             when(win().showOpenDialog(anything())).thenResolve(undefined);
 
-            await sync();
+            await syncNewFolder();
 
             assert.deepStrictEqual(shown, []);
             verifyNoTokenRequested();
@@ -268,9 +347,8 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             chooseInDialog(folder);
             answer('Download every project of your Deepnote workspace into new?', 'Download Projects');
 
-            await sync();
+            await syncNewFolder();
 
-            verify(win().showQuickPick(anything(), anything())).never();
             const dialog = capture(win().showOpenDialog).last()[0];
             assert.deepStrictEqual(
                 { ...dialog, defaultUri: dialog?.defaultUri?.fsPath },
@@ -290,7 +368,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
         test('does nothing when the first-sync confirmation is dismissed', async () => {
             chooseInDialog(path.join(ws, 'new'));
 
-            await sync();
+            await syncNewFolder();
 
             assert.deepStrictEqual(shown, [
                 {
@@ -307,10 +385,9 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
 
         test('syncs the sync root of a folder chosen inside it, without the first-sync confirmation', async () => {
             await addManifest('a');
-            pick('Choose another folder…');
             chooseInDialog(path.join(ws, 'a', 'Team', 'P'));
 
-            await sync();
+            await syncNewFolder();
 
             assert.strictEqual(syncOptions().rootDir, path.join(ws, 'a'));
             assert.deepStrictEqual(messages('Information'), [
@@ -324,7 +401,7 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             const outside = path.join(tmp, 'outside');
             chooseInDialog(outside);
 
-            await sync();
+            await syncNewFolder();
 
             assert.deepStrictEqual(messages('Warning'), [
                 `${outside} is outside the open workspace. Open it as a workspace folder to sync it with Deepnote Cloud.`
@@ -362,18 +439,16 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             await addManifest(path.join('a', 'inner'), { hidden: true });
             chooseInDialog(path.join(ws, 'a'));
 
-            await sync();
+            await syncNewFolder();
 
-            verify(win().showQuickPick(anything(), anything())).never();
             assert.deepStrictEqual(messages('Warning'), [
                 "a can't be synced because it overlaps a/inner, which is also synced with Deepnote Cloud."
             ]);
             verifyNoTokenRequested();
         });
 
-        test('reports a picked folder whose manifest is a symbolic link and syncs nothing', async () => {
+        test('reports a synced folder whose manifest is a symbolic link and syncs nothing', async () => {
             await addSymlinkManifest('a');
-            pick('a');
 
             await sync();
 
@@ -385,10 +460,9 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
 
         test('reports a failed sync-root lookup for a folder chosen in the dialog', async () => {
             await addSymlinkManifest('a');
-            pick('Choose another folder…');
             chooseInDialog(path.join(ws, 'a', 'P'));
 
-            await sync();
+            await syncNewFolder();
 
             const errors = messages('Error');
             assert.lengthOf(errors, 1);
@@ -430,7 +504,6 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
 
         setup(async () => {
             await addManifest('a');
-            pick('a');
         });
 
         test('saves unsaved Deepnote notebooks before syncing', async () => {
@@ -545,7 +618,6 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
 
         async function getOnConflict(): Promise<(conflict: SyncConflict) => Promise<string>> {
             await addManifest('a');
-            pick('a');
             await sync();
 
             const { onConflict } = syncOptions();
@@ -632,7 +704,6 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
     suite('results', () => {
         setup(async () => {
             await addManifest('a');
-            pick('a');
         });
 
         test('offers to set a new token when Deepnote rejects it', async () => {
@@ -731,7 +802,6 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
     suite('one sync at a time', () => {
         setup(async () => {
             await addManifest('a');
-            pick('a');
         });
 
         test('refuses a second sync while one runs', async () => {
@@ -748,8 +818,28 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             await sync();
 
             assert.deepStrictEqual(messages('Information'), ['A sync with Deepnote Cloud is already in progress.']);
-            verify(win().showQuickPick(anything(), anything())).once();
+            verify(tokenService.getOrPromptToken(anything())).once();
             assert.isTrue(handler.runSyncWorkspaceStub.calledOnce);
+
+            finish.resolve(EMPTY_RESULT);
+            await first;
+        });
+
+        test('refuses to sync a new folder while a sync runs', async () => {
+            const started = createDeferred<void>();
+            const finish = createDeferred<WorkspaceSyncResult>();
+            handler.runSyncWorkspaceStub.onFirstCall().callsFake(() => {
+                started.resolve();
+
+                return finish.promise;
+            });
+
+            const first = sync();
+            await started.promise;
+            await syncNewFolder();
+
+            assert.deepStrictEqual(messages('Information'), ['A sync with Deepnote Cloud is already in progress.']);
+            verify(win().showOpenDialog(anything())).never();
 
             finish.resolve(EMPTY_RESULT);
             await first;

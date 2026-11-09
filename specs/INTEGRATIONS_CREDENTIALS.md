@@ -15,7 +15,7 @@ The integrations system enables Deepnote notebooks to connect to external data s
 
 ### External Dependencies
 
-#### **@deepnote/database-integrations Package** (v1.1.0)
+#### **@deepnote/database-integrations Package**
 
 The system uses the `@deepnote/database-integrations` package as the source of truth for:
 

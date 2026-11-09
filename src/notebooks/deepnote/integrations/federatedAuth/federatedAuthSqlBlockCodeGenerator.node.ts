@@ -1,4 +1,4 @@
-import type { DeepnoteBlock } from '@deepnote/blocks';
+import { createPythonCodeForSqlBlockWithConnectionJson, type DeepnoteBlock } from '@deepnote/blocks';
 import { BigQueryAuthMethods } from '@deepnote/database-integrations';
 import { inject, injectable } from 'inversify';
 import { Uri } from 'vscode';
@@ -11,13 +11,6 @@ import {
     computeMetadataFingerprint
 } from './federatedAuthTokenStorage.node';
 import { GOOGLE_TOKEN_URL } from './googleOAuthProvider.node';
-import {
-    createDataFrameConfig,
-    executeSqlQueryWithConnectionJson,
-    sanitizePythonVariableName,
-    SqlCacheMode,
-    SqlCellVariableType
-} from './vendoredBlocksHelpers';
 import {
     FederatedAuthTokenEntry,
     IFederatedAuthSqlBlockCodeGenerator,
@@ -117,24 +110,6 @@ export class FederatedAuthSqlBlockCodeGenerator implements IFederatedAuthSqlBloc
             param_style: 'pyformat'
         });
 
-        // Mirror upstream `createPythonCodeForSqlBlock`'s metadata reads.
-        const query = sqlBlock.content ?? '';
-        const rawVariableName = sqlBlock.metadata?.deepnote_variable_name;
-        const pythonVariableName =
-            rawVariableName !== undefined ? (sanitizePythonVariableName(rawVariableName) ?? 'input_1') : undefined;
-        const returnVariableType: SqlCellVariableType = sqlBlock.metadata?.deepnote_return_variable_type ?? 'dataframe';
-        const sqlCacheMode: SqlCacheMode = 'cache_disabled';
-
-        const dataFrameConfig = createDataFrameConfig(sqlBlock);
-        const executeSqlCall = executeSqlQueryWithConnectionJson({
-            query,
-            auditComment: '',
-            connectionJson,
-            pythonVariableName,
-            sqlCacheMode,
-            returnVariableType
-        });
-
-        return `${dataFrameConfig}\n\n${executeSqlCall}`;
+        return createPythonCodeForSqlBlockWithConnectionJson(sqlBlock, { connectionJson });
     }
 }

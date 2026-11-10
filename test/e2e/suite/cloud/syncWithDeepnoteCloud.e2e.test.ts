@@ -1,3 +1,4 @@
+import { MOCK_WORKSPACE_NAME, startMockDeepnoteCloud, type MockDeepnoteCloud } from '@deepnote/cloud-mock';
 import { expect } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -16,7 +17,6 @@ import {
     openWorkspaceFile,
     waitForNotification
 } from '../../helpers';
-import { MOCK_WORKSPACE_NAME, startMockDeepnoteCloud, type MockDeepnoteCloud } from '../../helpers/mockDeepnoteCloud';
 
 const API_TOKEN = 'e2e_mock_token';
 const SYNC = 'Deepnote: Sync with Deepnote Cloud';
@@ -392,7 +392,7 @@ describe('Deepnote Cloud — syncing folders with the mock Deepnote Cloud', func
     });
 
     it("does not upload a project's .files directory", async function () {
-        addCloudProject(ANALYTICS, [REVENUE, COSTS]);
+        const analyticsCloudDir = addCloudProject(ANALYTICS, [REVENUE, COSTS]);
         const alpha = addLocalFolder('alpha');
         await syncNewFolder(alpha);
         const analyticsDir = path.join(alpha, ANALYTICS.name);
@@ -402,8 +402,8 @@ describe('Deepnote Cloud — syncing folders with the mock Deepnote Cloud', func
 
         const summary = await sync(SYNC, NO_PROMPTS);
 
-        // The mock serves no /v2/files routes, so uploading .files would fail the project.
         expect(summary).to.equal('Sync finished: 0 pulled, 1 pushed, 0 unchanged, 0 skipped, 0 failed.');
+        expect(fs.existsSync(path.join(analyticsCloudDir, '.files'))).to.equal(false);
     });
 
     it("keeps a project's .files directory when pulling the project", async function () {

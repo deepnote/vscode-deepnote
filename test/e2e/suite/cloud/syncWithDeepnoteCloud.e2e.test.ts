@@ -6,6 +6,7 @@ import * as path from 'path';
 import { By, EditorView, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
 
 import {
+    API_TOKEN,
     QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
@@ -15,10 +16,10 @@ import {
     dismissAllNotifications,
     openFolderViaDialog,
     openWorkspaceFile,
+    setApiToken,
     waitForNotification
 } from '../../helpers';
 
-const API_TOKEN = 'e2e_mock_token';
 const SYNC = 'Deepnote: Sync with Deepnote Cloud';
 const SYNC_NEW_FOLDER = 'Deepnote: Sync a New Folder with Deepnote Cloud…';
 
@@ -54,26 +55,6 @@ async function sync(command: string, answerPrompts: () => Promise<void>): Promis
     const outcome = await waitForNotification(SYNC_OUTCOME, WORKBENCH_TIMEOUT, true);
     const message = (await outcome?.getMessage()) ?? '';
     if (!message.startsWith('Sync finished')) {
-        throw new Error(message);
-    }
-
-    return message;
-}
-
-async function setApiToken(): Promise<string> {
-    await dismissAllNotifications();
-    await new Workbench().executeCommand('Deepnote: Set API Token');
-    const input = await InputBox.create(QUICK_PICK_TIMEOUT);
-    await input.setText(API_TOKEN);
-    await input.confirm();
-
-    const outcome = await waitForNotification(
-        /^(Signed in to the Deepnote workspace|Deepnote API token saved|Deepnote rejected|Could not check|Could not save)/,
-        WORKBENCH_TIMEOUT,
-        true
-    );
-    const message = (await outcome?.getMessage()) ?? '';
-    if (/^(Deepnote rejected|Could not)/.test(message)) {
         throw new Error(message);
     }
 

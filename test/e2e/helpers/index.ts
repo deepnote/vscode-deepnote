@@ -1,3 +1,4 @@
+export * from './apiToken';
 export * from './assertions';
 export * from './constants';
 export * from './deepnoteTree';

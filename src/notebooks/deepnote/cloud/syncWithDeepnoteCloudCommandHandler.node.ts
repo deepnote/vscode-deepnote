@@ -77,8 +77,14 @@ function logSyncEvent(event: SyncEvent): void {
             logger.warn(event.message);
 
             return;
-        default:
+        case 'file-transferred':
+        case 'listing-projects':
             logger.debug('Deepnote Cloud sync event', event);
+
+            return;
+        default:
+            event satisfies never;
+            logger.error('Unknown Deepnote Cloud sync event', event);
     }
 }
 
@@ -108,7 +114,6 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         );
     }
 
-    /** Seam for tests, which never reach the network. */
     protected runSyncWorkspace(options: WorkspaceSyncOptions): Promise<WorkspaceSyncResult> {
         return syncWorkspace(options);
     }
@@ -136,6 +141,10 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
                 logger.warn(`Skipped an unexpected ${conflict.kind} conflict for "${conflict.projectName}"`);
 
                 return Promise.resolve('skip');
+            default:
+                conflict satisfies never;
+                logger.error(`Skipped an unknown conflict ${conflict}`);
+                return Promise.resolve('skip');
         }
     }
 
@@ -161,16 +170,15 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
     }
 
     private async chooseNewRoot(): Promise<Uri | undefined> {
-        const folder = (
-            await window.showOpenDialog({
-                canSelectFolders: true,
-                canSelectFiles: false,
-                canSelectMany: false,
-                defaultUri: workspace.workspaceFolders?.[0]?.uri,
-                title: DeepnoteCloud.chooseSyncFolderTitle,
-                openLabel: DeepnoteCloud.chooseSyncFolderOpenLabel
-            })
-        )?.[0];
+        const folders = await window.showOpenDialog({
+            canSelectFolders: true,
+            canSelectFiles: false,
+            canSelectMany: false,
+            defaultUri: workspace.workspaceFolders?.[0]?.uri,
+            title: DeepnoteCloud.chooseSyncFolderTitle,
+            openLabel: DeepnoteCloud.chooseSyncFolderOpenLabel
+        });
+        const folder = folders?.at(0);
         if (!folder) {
             return undefined;
         }

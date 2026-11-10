@@ -68,6 +68,7 @@ Open the Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`) and type `Deepnote` t
 | `Deepnote: Clear API Token`                        | Remove the saved Deepnote API token                                     |
 | `Deepnote: Sync with Deepnote Cloud`               | Sync a folder that is already synced with your Deepnote workspace       |
 | `Deepnote: Sync a New Folder with Deepnote Cloud…` | Download your Deepnote workspace into a folder and start syncing it     |
+| `Deepnote: Publish App…`                           | Publish a folder, such as an app's build output, as a Deepnote data app |
 | `Notebook: Select Notebook Kernel`                 | Select or switch kernels within your notebook                           |
 | `Notebook: Change Cell Language`                   | Change the language of the cell currently in focus                      |
 | `Deepnote: Enable Snapshots`                       | Enable snapshot mode for the current workspace                          |
@@ -96,6 +97,21 @@ Known limitations:
 - Saving a notebook after running cells writes its outputs into the file, so the next sync pushes that project.
 - After a sync updates an open notebook, the editor can save the notebook again, and the next sync can then push that project or report a conflict for it.
 - A folder reached through a symbolic link or junction is checked by its path in the workspace, not by its target, so a link into another synced folder is not refused.
+
+### Publishing apps
+
+Run `Deepnote: Publish App…` from the Command Palette, or right-click a folder in the file explorer and choose `Publish App…`. It uploads the folder to a Deepnote data app project and publishes the app, then shows the app URL with "Open" and "Copy". People with access to the project can open a published app; there is no anonymous or link-only access.
+
+- The folder is published as it is. Build your app first, then publish its build output folder, such as `dist/`.
+- Each file of the folder replaces the app file at the same path in Deepnote. Files you delete from the folder are not deleted in Deepnote and stay published; delete them in Deepnote.
+- Only data app projects can be published to. When the folder is inside a synced project, the app goes to that project after one confirmation, and publishing fails if it is not a data app. Otherwise you choose one of your workspace's data apps, or "New Data App…" to create a data app project with the name you enter.
+- The data app is remembered per folder, so publishing the folder again asks only for one confirmation, with "Change Settings…" to choose again.
+- A data app calls Deepnote with a short-lived token scoped to the person viewing it, never your personal token.
+- Publishing needs "Allow static file sharing in projects" turned on in the workspace settings.
+- Publishing uses `DEEPNOTE_TOKEN` from a `.env` file in a synced folder above the app folder, or else the token saved with `Deepnote: Set API Token`. A folder that contains a `.env` or `.env.*` file cannot be published, because every published file can be served to the app's viewers.
+- Publishing into a synced folder does not start while a sync or another such publish is in progress.
+- For a folder inside a synced project, when app files changed in Deepnote since the last sync or publish, publishing asks first. "Force" overwrites them in Deepnote. "Sync First" syncs the whole synced folder with the working files of every project, which downloads Deepnote's versions of the app files into the synced project's `.files/_deepnote_static` folder, so you can merge them into your app and publish again. A project with a working file over 100 MiB fails to sync this way. A folder outside a synced project overwrites app files changed in Deepnote without asking.
+- Publishing needs a trusted workspace and the desktop app.
 
 ### Database integrations
 

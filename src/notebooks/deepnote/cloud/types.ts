@@ -1,4 +1,4 @@
-import { Uri } from 'vscode';
+import { Disposable, Uri } from 'vscode';
 
 export const IDeepnoteApiTokenService = Symbol('IDeepnoteApiTokenService');
 export interface IDeepnoteApiTokenService {
@@ -19,4 +19,20 @@ export interface IDeepnoteApiTokenService {
      * token has a character an API key cannot contain; the user has already been told.
      */
     getOrPromptToken(resource: Uri): Promise<string | undefined>;
+}
+
+export const IDeepnoteCloudOperationLock = Symbol('IDeepnoteCloudOperationLock');
+export interface IDeepnoteCloudOperationLock {
+    /**
+     * Marks a sync, or a publish into a synced folder, as running in this window. `undefined` when one already is.
+     * Disposing the result releases the lock.
+     */
+    tryAcquire(): Disposable | undefined;
+}
+
+/** The argument of `deepnote.syncWithDeepnoteCloud` that syncs `root` without asking for a folder. */
+export interface SyncWithDeepnoteCloudTarget {
+    root: Uri;
+    /** Also sync each project's working files, such as app files. */
+    allFiles: boolean;
 }

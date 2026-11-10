@@ -158,6 +158,13 @@
                 "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
             },
             {
+                "command": "deepnote.publishApp",
+                "title": "%deepnote.commands.publishApp.title%",
+                "category": "Deepnote",
+                "icon": "$(rocket)",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
                 "command": "deepnote.newProject",
                 "title": "%deepnote.commands.newProject.title%",
                 "category": "Deepnote",
@@ -1259,6 +1266,11 @@
                 {
                     "when": "resourceExtname == .ipynb && isWorkspaceTrusted",
                     "command": "deepnote.importnotebookfile",
+                    "group": "Deepnote"
+                },
+                {
+                    "when": "explorerResourceIsFolder && isWorkspaceTrusted && !deepnote.webExtension",
+                    "command": "deepnote.publishApp",
                     "group": "Deepnote"
                 }
             ],
@@ -2767,8 +2779,8 @@
         "@c4312/evt": "^0.1.1",
         "@deepnote/blocks": "^5.0.0",
         "@deepnote/cli": "0.11.0",
-        "@deepnote/cloud": "0.3.0",
-        "@deepnote/cloud-sync": "0.2.0",
+        "@deepnote/cloud": "0.4.0",
+        "@deepnote/cloud-sync": "0.3.0",
         "@deepnote/convert": "^5.0.0",
         "@deepnote/database-integrations": "^2.0.0",
         "@deepnote/runtime-core": "^0.8.0",

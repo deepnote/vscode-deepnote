@@ -15,8 +15,3 @@ reason = "CVE-2025-14505 (elliptic): dev-only, via node-stdlib-browser; no patch
 id = "GHSA-g3hv-75wg-m249"
 ignoreUntil = 2026-11-15
 reason = "CVE-2026-118764 (minimatch): crafted-pattern DoS; shipped copies lack the code, dev copies get repo patterns only; fix only in 11.x. See .nsprc."
-
-[[IgnoredVulns]]
-id = "GHSA-xcx6-jx8p-x3h5"
-ignoreUntil = 2026-11-10
-reason = "CVE-2026-109461 (@azure/msal-node): dev-only, via @vscode/vsce; flow never used; no 6.x fix. See .nsprc."

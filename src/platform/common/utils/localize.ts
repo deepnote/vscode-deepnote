@@ -1394,7 +1394,10 @@ export namespace DeepnoteCloud {
     export const publishDiverged = (count: number, paths: string) =>
         l10n.t('{0} app file(s) changed in Deepnote since the last sync: {1}', count, paths);
     export const publishDivergedDetail = l10n.t(
-        "Sync First syncs the whole synced folder, including the working files of every project, so you can merge Deepnote's versions into your app. Force overwrites them in Deepnote."
+        "Sync First syncs the whole synced folder, including the working files of every project, so you can merge Deepnote's versions into your app. It replaces the local copy of every working file that changed in Deepnote. Force overwrites the changed app files in Deepnote."
+    );
+    export const publishDivergedInFilesDetail = l10n.t(
+        "Sync First is not offered because this folder is in, or contains, a project's .files folder, where syncing would replace your files with Deepnote's versions. To merge Deepnote's changes, publish the app from a folder outside .files. Force overwrites the changed app files in Deepnote."
     );
     export const syncFirst = l10n.t('Sync First');
     export const force = l10n.t('Force');

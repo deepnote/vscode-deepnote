@@ -66,6 +66,8 @@ const CONFIRM_SALES = 'Publish app to Sales?';
 const PARTIAL_FAILURE =
     '1 operation(s) failed while publishing the app. If it was already published, it now serves the files that uploaded, and the ones that failed may be missing or out of date. See the log for details.';
 const DIVERGED = '1 app file(s) changed in Deepnote since the last sync: _deepnote_static/a.js';
+const IN_FILES_DETAIL =
+    "Sync First is not offered because this folder is in, or contains, a project's .files folder, where syncing would replace your files with Deepnote's versions. To merge Deepnote's changes, publish the app from a folder outside .files. Force overwrites the changed app files in Deepnote.";
 const MISSED_APP_FILES =
     "The sync did not download Deepnote's changed app files for Sales, and nothing was published. Fix any errors or skipped conflicts the sync reported, then publish again and choose Sync First.";
 
@@ -686,7 +688,7 @@ suite('PublishAppCommandHandler', () => {
                     DIVERGED,
                     {
                         modal: true,
-                        detail: "Sync First syncs the whole synced folder, including the working files of every project, so you can merge Deepnote's versions into your app. Force overwrites them in Deepnote."
+                        detail: "Sync First syncs the whole synced folder, including the working files of every project, so you can merge Deepnote's versions into your app. It replaces the local copy of every working file that changed in Deepnote. Force overwrites the changed app files in Deepnote."
                     },
                     'Sync First',
                     'Force'
@@ -697,6 +699,60 @@ suite('PublishAppCommandHandler', () => {
                 publishCalls().map(({ force }) => force),
                 [false, true]
             );
+        });
+
+        for (const { name, folder, confirmation } of [
+            {
+                name: "offers only Force for the project's own .files/_deepnote_static, which syncing would overwrite",
+                folder: ['Team', 'Sales', '.files', '_deepnote_static'],
+                confirmation: 'Publish _deepnote_static to Sales?'
+            },
+            {
+                name: "offers only Force for a project folder, which contains the project's .files",
+                folder: ['Team', 'Sales'],
+                confirmation: 'Publish Sales to Sales?'
+            }
+        ]) {
+            test(name, async () => {
+                // Ops comes first and does not overlap the folder, so a check that stops at the first project fails.
+                await fs.promises.writeFile(
+                    path.join(tmp, 'root', '.deepnote-sync.json'),
+                    JSON.stringify({
+                        version: 1,
+                        projects: {
+                            p0: { dir: 'Ops', notebooks: [], contentHash: 'x' },
+                            p1: { dir: 'Team/Sales', notebooks: [], contentHash: 'x' }
+                        }
+                    })
+                );
+                const app = path.join(tmp, 'root', ...folder);
+                await fs.promises.mkdir(app, { recursive: true });
+                answers.set(confirmation, 'Publish');
+                answers.set(DIVERGED, 'Sync First');
+
+                await publish(app);
+
+                assert.deepStrictEqual(shown[1], {
+                    severity: 'Warning',
+                    args: [DIVERGED, { modal: true, detail: IN_FILES_DETAIL }, 'Force']
+                });
+                assert.deepStrictEqual(syncTargets, []);
+                assert.isTrue(handler.runPublishAppStub.calledOnce);
+            });
+        }
+
+        test('offers only Force when the sync manifest cannot be read to check the app folder', async () => {
+            handler.runPublishAppStub.onFirstCall().callsFake(async () => {
+                await fs.promises.writeFile(path.join(tmp, 'root', '.deepnote-sync.json'), '{');
+                throw new PublishDivergedError(path.join(tmp, 'root'), ['_deepnote_static/a.js']);
+            });
+
+            await publish(syncedAppFolder);
+
+            assert.deepStrictEqual(shown[1], {
+                severity: 'Warning',
+                args: [DIVERGED, { modal: true, detail: IN_FILES_DETAIL }, 'Force']
+            });
         });
 
         for (const { name, count, message } of [

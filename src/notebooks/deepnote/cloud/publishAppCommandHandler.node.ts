@@ -20,7 +20,7 @@ import { getFilePath } from '../../../platform/common/platform/fs-paths';
 import { IExtensionContext } from '../../../platform/common/types';
 import { DeepnoteCloud } from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
-import { basename, relativePath } from '../../../platform/vscode-path/resources';
+import { basename, extUriBiasedIgnorePathCase, relativePath } from '../../../platform/vscode-path/resources';
 import { getApiEndpoint } from '../importClient.node';
 import { showCloudError } from './cloudErrors.node';
 import { showPublishedAppUrl } from './publishedAppUrl.node';
@@ -210,6 +210,31 @@ export class PublishAppCommandHandler implements IExtensionSyncActivationService
         return undefined;
     }
 
+    /**
+     * Sync First runs `@deepnote/cloud-sync`'s `syncWorkspace` with `allFiles`, which downloads Deepnote's working files
+     * over every project's `.files` folder without checking for local edits, so it would replace an app folder that is
+     * in, or contains, one of them.
+     */
+    private async overlapsProjectFiles(folder: Uri, syncRoot: Uri): Promise<boolean> {
+        let manifest: SyncManifest;
+        try {
+            manifest = await loadSyncManifest(getFilePath(syncRoot));
+        } catch (error) {
+            logger.warn('Could not read the sync manifest to check the app folder', error);
+
+            return true;
+        }
+
+        return Object.values(manifest.projects).some(({ dir }) => {
+            const filesFolder = Uri.joinPath(syncRoot, projectFilesDir(dir));
+
+            return (
+                extUriBiasedIgnorePathCase.isEqualOrParent(folder, filesFolder) ||
+                extUriBiasedIgnorePathCase.isEqualOrParent(filesFolder, folder)
+            );
+        });
+    }
+
     private async publish(folder: Uri, target: PublishTarget, token: string, force: boolean): Promise<void> {
         const syncRoot = await findSyncManifestRoot(getFilePath(folder)).catch((error) => {
             // publishApp looks up the same sync root and reports why it is unusable.
@@ -358,10 +383,15 @@ export class PublishAppCommandHandler implements IExtensionSyncActivationService
         token: string,
         error: PublishDivergedError
     ): Promise<void> {
+        const syncRoot = Uri.file(error.syncRoot);
+        const canSyncFirst = !(await this.overlapsProjectFiles(folder, syncRoot));
         const choice = await window.showWarningMessage(
             DeepnoteCloud.publishDiverged(error.paths.length, listPaths(error.paths)),
-            { modal: true, detail: DeepnoteCloud.publishDivergedDetail },
-            DeepnoteCloud.syncFirst,
+            {
+                modal: true,
+                detail: canSyncFirst ? DeepnoteCloud.publishDivergedDetail : DeepnoteCloud.publishDivergedInFilesDetail
+            },
+            ...(canSyncFirst ? [DeepnoteCloud.syncFirst] : []),
             DeepnoteCloud.force
         );
         if (choice === DeepnoteCloud.force) {
@@ -373,7 +403,6 @@ export class PublishAppCommandHandler implements IExtensionSyncActivationService
             return;
         }
 
-        const syncRoot = Uri.file(error.syncRoot);
         const target: SyncWithDeepnoteCloudTarget = { root: syncRoot, allFiles: true };
         const result = await commands.executeCommand<WorkspaceSyncResult | undefined>(
             Commands.SyncWithDeepnoteCloud,

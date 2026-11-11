@@ -149,6 +149,12 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
     }
 
     private async checkSyncTarget(root: Uri): Promise<{ isFirstSync: boolean } | undefined> {
+        if (root.scheme !== 'file') {
+            void window.showErrorMessage(DeepnoteCloud.localFilesOnly);
+
+            return undefined;
+        }
+
         if (!workspace.getWorkspaceFolder(root)) {
             void window.showWarningMessage(DeepnoteCloud.syncFolderOutsideWorkspace(getFilePath(root)));
 

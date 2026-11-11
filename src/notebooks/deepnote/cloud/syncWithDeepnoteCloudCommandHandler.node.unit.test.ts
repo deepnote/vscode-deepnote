@@ -420,6 +420,19 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             verifyNoTokenRequested();
         });
 
+        test('refuses a folder that is not on the local disk before asking about a first sync', async () => {
+            const virtualFolder = Uri.from({ scheme: 'vscode-vfs', authority: 'github', path: '/owner/repo' });
+            when(wsp().getWorkspaceFolder(anything())).thenReturn({ uri: virtualFolder, name: 'repo', index: 0 });
+            when(win().showOpenDialog(anything())).thenCall(async () => [virtualFolder]);
+
+            await syncNewFolder();
+
+            assert.deepStrictEqual(shown, [
+                { severity: 'Error', args: ['Deepnote Cloud sync and publishing work with local files only.'] }
+            ]);
+            verifyNoTokenRequested();
+        });
+
         test('refuses a synced folder that contains another', async () => {
             await addManifest('a');
             await addManifest(path.join('a', 'inner'));

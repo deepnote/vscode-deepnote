@@ -1,6 +1,6 @@
 /**
- * ExTester E2E for kernel import paths: a notebook cell imports `local_helper.py`, a module that sits next to
- * the `.deepnote` file, and prints its marker.
+ * Covers the kernel's `sys.path`: the toolkit strips the notebook's folder from it when the server is started with
+ * the legacy `DEEPNOTE_PROJECT_ID`.
  */
 
 import { expect } from 'chai';

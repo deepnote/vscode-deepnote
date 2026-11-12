@@ -78,7 +78,6 @@ suite('AppPreviewSession', () => {
     let sessions: AppPreviewSession[];
     let unsupported: AppPreviewOperation[];
 
-    /** Starts a session on `folder`, by default the app folder of project `project-1`; `project: null` for none. */
     async function startSession(
         options: { folder?: string; project?: AppPreviewProject | null } = {}
     ): Promise<AppPreviewSession> {

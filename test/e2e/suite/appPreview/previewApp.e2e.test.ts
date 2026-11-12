@@ -1,8 +1,4 @@
 /**
- * ExTester E2E for **Deepnote: Preview App**: previews a data app folder whose page loads Deepnote's hosted client, and
- * reads what the page's client calls returned, which the fixture page (`test/e2e/fixtures/app-preview/`) writes into
- * its list items.
- *
  * VS Code 1.111 opens `simpleBrowser.api.open` in its integrated browser, an Electron view the driver lists as a window
  * of its own, so the page is read and captured from that window. With `simpleBrowser.useIntegratedBrowser` off, the
  * Simple Browser shows the page in a frame inside a webview, which the workbench screenshot includes.
@@ -61,7 +57,6 @@ function expectedReport(title: string, dataframe: string): string[] {
     ];
 }
 
-/** The page's heading and list items, once the page has replaced every `pending` placeholder. */
 async function readReport(): Promise<string[]> {
     const driver = VSBrowser.instance.driver;
     let report: string[] = [];
@@ -86,7 +81,6 @@ async function readReport(): Promise<string[]> {
     return report;
 }
 
-/** Runs `read` in the integrated browser's window that shows the page titled `title`, then returns to the workbench. */
 async function onIntegratedBrowserPage<T>(title: string, read: () => Promise<T>): Promise<T> {
     const driver = VSBrowser.instance.driver;
     const workbench = await driver.getWindowHandle();
@@ -117,7 +111,6 @@ async function onIntegratedBrowserPage<T>(title: string, read: () => Promise<T>)
     }
 }
 
-/** Runs `read` in the page frame of the Simple Browser's webview, then returns to the workbench. */
 async function onSimpleBrowserPage<T>(read: () => Promise<T>): Promise<T> {
     const driver = VSBrowser.instance.driver;
     const webView = new WebView();
@@ -131,10 +124,7 @@ async function onSimpleBrowserPage<T>(read: () => Promise<T>): Promise<T> {
     }
 }
 
-/**
- * The preview's warnings in the Notifications Center, once at least `count` of them have arrived. The center stays open,
- * so the next screenshot shows them.
- */
+/** Leaves the Notifications Center open, so the next screenshot shows the warnings. */
 async function previewWarnings(count: number): Promise<string[]> {
     const center = await new Workbench().openNotificationsCenter();
     let warnings: string[] = [];

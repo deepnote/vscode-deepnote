@@ -741,7 +741,7 @@ The `deepnote-toolkit` Python package reads credentials from environment variabl
 
 **Flow:**
 
-1. Extension starts the Jupyter server with the integration endpoint env vars applied by `applyIntegrationEndpointEnv` (`DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED`, `DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE`, `DEEPNOTE_RUNTIME__WEBAPP_URL`, `DEEPNOTE_RUNTIME__PROJECT_SECRET`, `DEEPNOTE_PROJECT_ID`) — no credentials are injected by the extension
+1. Extension starts the Jupyter server with the integration endpoint env vars applied by `applyIntegrationEndpointEnv` (`DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED`, `DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE`, `DEEPNOTE_RUNTIME__WEBAPP_URL`, `DEEPNOTE_RUNTIME__PROJECT_SECRET`, `DEEPNOTE_RUNTIME__PROJECT_ID`) — no credentials are injected by the extension
 2. At kernel init, `deepnote-toolkit`'s `set_integration_env()` calls the extension's loopback `userpod-api` endpoint at `DEEPNOTE_RUNTIME__WEBAPP_URL`, authenticating with the per-project bearer token in `DEEPNOTE_RUNTIME__PROJECT_SECRET`
 3. The endpoint resolves the project's integrations via `SqlIntegrationEnvironmentVariablesProvider` — reading secure storage and converting the configs to `SQL_*` JSON values — and returns them as `[{name, value}]`
 4. Toolkit sets the returned variables into the kernel's `os.environ`
@@ -783,7 +783,7 @@ Deepnote server starts
   → applyIntegrationEndpointEnv()
     → Awaits UserpodApiEndpoints readiness, reads its loopback baseUrl
     → Resolves the project id from the .deepnote file
-    → Sets DEEPNOTE_RUNTIME__* + DEEPNOTE_PROJECT_ID on the server process
+    → Sets DEEPNOTE_RUNTIME__* (including DEEPNOTE_RUNTIME__PROJECT_ID) on the server process
   → Jupyter server process starts with those env vars (no credentials)
 
 User executes SQL cell

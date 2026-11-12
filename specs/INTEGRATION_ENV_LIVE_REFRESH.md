@@ -72,7 +72,7 @@ Serves the credentials the toolkit fetches.
 The endpoint URL and token reach the kernel via `applyIntegrationEndpointEnv()`
 (`src/kernels/deepnote/deepnoteIntegrationEndpointEnv.ts`), which sets `DEEPNOTE_RUNTIME__WEBAPP_URL`,
 `DEEPNOTE_RUNTIME__PROJECT_SECRET`, `DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED`,
-`DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE` and `DEEPNOTE_PROJECT_ID` at spawn time.
+`DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE` and `DEEPNOTE_RUNTIME__PROJECT_ID` at spawn time.
 
 ## Flow
 

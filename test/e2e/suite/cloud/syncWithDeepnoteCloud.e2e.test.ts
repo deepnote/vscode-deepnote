@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { By, EditorView, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
+import { EditorView, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
 
 import {
     API_TOKEN,
@@ -11,9 +11,11 @@ import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     clickDialogOkButton,
+    closeModalDialogs,
     confirmModalDialog,
     copyFixtureIntoDir,
     dismissAllNotifications,
+    emptyDir,
     openFolderViaDialog,
     openWorkspaceFile,
     setApiToken,
@@ -87,16 +89,8 @@ async function closeLeftoverPrompts(): Promise<void> {
     const driver = VSBrowser.instance.driver;
     await driver
         .wait(async () => {
-            // A key press goes to whatever has focus, which need not be the dialog, so click its close button.
             // Sync asks about one conflict at a time, so closing one dialog can open the next.
-            for (const close of await driver.findElements(By.css('.monaco-dialog-box .codicon-dialog-close'))) {
-                await driver
-                    .actions()
-                    .move({ origin: close })
-                    .click()
-                    .perform()
-                    .catch(() => undefined);
-            }
+            await closeModalDialogs();
             await new InputBox().cancel().catch(() => undefined);
 
             return hasSyncEnded();
@@ -166,14 +160,6 @@ function readNotebookFiles(dir: string): Record<string, string> {
             .sort()
             .map((name) => [name, fs.readFileSync(path.join(dir, name), 'utf8')])
     );
-}
-
-function emptyDir(dir: string, keep: string[] = []): void {
-    for (const name of fs.readdirSync(dir)) {
-        if (!keep.includes(name)) {
-            fs.rmSync(path.join(dir, name), { recursive: true, force: true });
-        }
-    }
 }
 
 describe('Deepnote Cloud — syncing folders with the mock Deepnote Cloud', function () {

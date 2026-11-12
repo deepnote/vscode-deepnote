@@ -18,8 +18,10 @@ import {
     QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
+    closeModalDialogs,
     confirmModalDialog,
     copyFixtureIntoDir,
+    emptyDir,
     openActivityBarView,
     openFolderViaDialog,
     selectDeepnoteContextMenu,
@@ -121,6 +123,16 @@ async function findExplorerItem(folderPath: string): Promise<ViewItem> {
     return found!;
 }
 
+/** Clicks the explorer's own action, since the command palette also lists the extension's "Deepnote: Refresh Explorer". */
+async function refreshExplorer(): Promise<void> {
+    const [section] = await new SideBarView().getContent().getSections();
+    const refresh = await section.getAction('Refresh Explorer');
+    if (!refresh) {
+        throw new Error('the explorer has no Refresh Explorer action');
+    }
+    await refresh.click();
+}
+
 /**
  * A toast hides itself after about ten seconds, which one slow poll of the toasts can outlast, so the outcome is read
  * from the Notifications Center, which keeps it.
@@ -169,14 +181,28 @@ describe('Deepnote Cloud — publishing an app to the mock Deepnote Cloud', func
 
     let cloud: MockDeepnoteCloud | undefined;
     let workspaceDir = '';
-    let cloudAppFile = '';
-    const outcomes: string[] = [];
-    const cloudContent: string[] = [];
-    let listedProjects: string[] = [];
-    let projectAfterFirstPublish: PublishedProject | undefined;
-    let newAppId = '';
-    let newAppProject: PublishedProject | undefined;
-    let newAppContent = '';
+
+    function addCloudProject(projectId: string, fixture: string, { dataApp = true } = {}): string {
+        const dir = path.join(cloud!.rootDir, projectId);
+        fs.mkdirSync(dir);
+        copyFixtureIntoDir(dir, fixture);
+        if (dataApp) {
+            fs.writeFileSync(path.join(dir, '.data-app'), '');
+        }
+
+        return dir;
+    }
+
+    /**
+     * The extension saves each folder's data app in workspace state, keyed by path, which `emptyDir` does not clear, so
+     * every app folder gets a name no earlier test, or earlier attempt of the same test, has published.
+     */
+    function addAppFolder(html: string): string {
+        const dir = fs.mkdtempSync(path.join(workspaceDir, 'app-'));
+        fs.writeFileSync(path.join(dir, 'index.html'), html);
+
+        return dir;
+    }
 
     async function readProject(projectId: string): Promise<PublishedProject> {
         const response = await fetch(`${cloud!.url}/v2/projects/${projectId}`, {
@@ -188,14 +214,6 @@ describe('Deepnote Cloud — publishing an app to the mock Deepnote Cloud', func
 
     before(async function () {
         cloud = await startMockDeepnoteCloud();
-        const cloudProjectDir = path.join(cloud.rootDir, PROJECT_ID);
-        fs.mkdirSync(cloudProjectDir);
-        copyFixtureIntoDir(cloudProjectDir, FIXTURE);
-        fs.writeFileSync(path.join(cloudProjectDir, '.data-app'), '');
-        cloudAppFile = path.join(cloudProjectDir, APP_FILE);
-        const standardProjectDir = path.join(cloud.rootDir, STANDARD_PROJECT_ID);
-        fs.mkdirSync(standardProjectDir);
-        copyFixtureIntoDir(standardProjectDir, STANDARD_FIXTURE);
 
         workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-e2e-publish-'));
         fs.mkdirSync(path.join(workspaceDir, '.vscode'));
@@ -204,12 +222,92 @@ describe('Deepnote Cloud — publishing an app to the mock Deepnote Cloud', func
             // Compact folders would merge `Sales/app` into one row, so a right-click could target `Sales`.
             JSON.stringify({ 'deepnote.apiUrl': cloud.url, 'explorer.compactFolders': false })
         );
-        const siteFile = path.join(workspaceDir, 'site', 'index.html');
-        fs.mkdirSync(path.dirname(siteFile));
-        fs.writeFileSync(siteFile, '<h1>site v1</h1>');
-        const newAppFile = path.join(workspaceDir, 'newapp', 'index.html');
-        fs.mkdirSync(path.dirname(newAppFile));
-        fs.writeFileSync(newAppFile, '<h1>new app</h1>');
+
+        await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
+        await openFolderViaDialog(workspaceDir);
+        await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
+        await setApiToken();
+    });
+
+    afterEach(async function () {
+        // Mocha leaves `state` unset on an attempt it is about to retry.
+        if (this.currentTest?.state !== 'passed') {
+            // A prompt left open by a failed test would block the next one. Closing it ends that publish.
+            await closeModalDialogs();
+            await new InputBox().cancel().catch(() => undefined);
+        }
+        await new EditorView().closeAllEditors().catch(() => undefined);
+        if (cloud) {
+            emptyDir(cloud.rootDir);
+        }
+        if (workspaceDir) {
+            emptyDir(workspaceDir, ['.vscode']);
+        }
+    });
+
+    after(async function () {
+        await cloud?.stop();
+        if (workspaceDir) {
+            fs.rmSync(workspaceDir, { recursive: true, force: true });
+        }
+    });
+
+    it('lists only data apps, publishes a folder to the picked one, and shows the app URL', async function () {
+        const cloudDir = addCloudProject(PROJECT_ID, FIXTURE);
+        addCloudProject(STANDARD_PROJECT_ID, STANDARD_FIXTURE, { dataApp: false });
+        const appDir = addAppFolder('<h1>site v1</h1>');
+
+        let listed: string[] = [];
+        const outcome = await publishFromExplorer(path.basename(appDir), async () => {
+            listed = await pick(CHOOSE_PROJECT, PROJECT_NAME);
+        });
+
+        expect(listed).to.deep.equal([NEW_DATA_APP, PROJECT_NAME]);
+        expect(outcome).to.equal(`App published: ${cloud!.url}/apps/${PROJECT_ID}/`);
+        expect(fs.readFileSync(path.join(cloudDir, APP_FILE), 'utf8')).to.equal('<h1>site v1</h1>');
+        expect((await readProject(PROJECT_ID)).dataApp).to.deep.equal({
+            published: true,
+            url: `${cloud!.url}/apps/${PROJECT_ID}/`
+        });
+    });
+
+    it('republishes with the saved data app after one confirmation', async function () {
+        const cloudDir = addCloudProject(PROJECT_ID, FIXTURE);
+        const appDir = addAppFolder('<h1>site v1</h1>');
+        const folder = path.basename(appDir);
+        await publishFromExplorer(folder, async () => {
+            await pick(CHOOSE_PROJECT, PROJECT_NAME);
+        });
+        fs.writeFileSync(path.join(appDir, 'index.html'), '<h1>site v2</h1>');
+
+        const outcome = await publishFromExplorer(folder, () =>
+            confirmModalDialog('Publish', { messageIncludes: `Publish ${folder} to ${PROJECT_NAME}?` })
+        );
+
+        expect(outcome).to.equal(`App published: ${cloud!.url}/apps/${PROJECT_ID}/`);
+        expect(fs.readFileSync(path.join(cloudDir, APP_FILE), 'utf8')).to.equal('<h1>site v2</h1>');
+    });
+
+    it('creates a data app with New Data App… and publishes the folder to it', async function () {
+        addCloudProject(PROJECT_ID, FIXTURE);
+        const appDir = addAppFolder('<h1>new app</h1>');
+
+        const outcome = await publishFromExplorer(path.basename(appDir), async () => {
+            await pick(CHOOSE_PROJECT, NEW_DATA_APP);
+            await enterNewAppName(NEW_APP_NAME);
+        });
+
+        const newAppId = /\/apps\/([^/]+)\/$/.exec(outcome)?.[1] ?? '';
+        expect(newAppId).to.not.be.oneOf(['', PROJECT_ID]);
+        expect(await readProject(newAppId)).to.deep.include({
+            name: NEW_APP_NAME,
+            dataApp: { published: true, url: `${cloud!.url}/apps/${newAppId}/` }
+        });
+        expect(fs.readFileSync(path.join(cloud!.rootDir, newAppId, APP_FILE), 'utf8')).to.equal('<h1>new app</h1>');
+    });
+
+    it('overwrites app files changed in Deepnote when the user picks Force', async function () {
+        const cloudDir = addCloudProject(PROJECT_ID, FIXTURE);
         const syncedAppFile = path.join(workspaceDir, 'synced', SYNCED_PROJECT_DIR, 'app', 'index.html');
         fs.mkdirSync(path.dirname(syncedAppFile), { recursive: true });
         fs.writeFileSync(syncedAppFile, '<h1>synced app</h1>');
@@ -220,92 +318,23 @@ describe('Deepnote Cloud — publishing an app to the mock Deepnote Cloud', func
                 projects: { [PROJECT_ID]: { dir: SYNCED_PROJECT_DIR, notebooks: [], contentHash: 'x' } }
             })
         );
-
-        await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await openFolderViaDialog(workspaceDir);
-        await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
-        await setApiToken();
-
-        outcomes.push(
-            await publishFromExplorer('site', async () => {
-                listedProjects = await pick(CHOOSE_PROJECT, PROJECT_NAME);
-            })
-        );
-        cloudContent.push(fs.readFileSync(cloudAppFile, 'utf8'));
-        projectAfterFirstPublish = await readProject(PROJECT_ID);
-
-        fs.writeFileSync(siteFile, '<h1>site v2</h1>');
-        outcomes.push(
-            await publishFromExplorer('site', () =>
-                confirmModalDialog('Publish', { messageIncludes: `Publish site to ${PROJECT_NAME}?` })
-            )
-        );
-        cloudContent.push(fs.readFileSync(cloudAppFile, 'utf8'));
-
-        outcomes.push(
-            await publishFromExplorer('newapp', async () => {
-                await pick(CHOOSE_PROJECT, NEW_DATA_APP);
-                await enterNewAppName(NEW_APP_NAME);
-            })
-        );
-        newAppId = /\/apps\/([^/]+)\/$/.exec(outcomes[2])?.[1] ?? '';
-        newAppProject = await readProject(newAppId);
-        newAppContent = fs.readFileSync(path.join(cloud.rootDir, newAppId, APP_FILE), 'utf8');
-
         const syncedApp = `synced/${SYNCED_PROJECT_DIR}/app`;
         const confirmSyncedPublish = () =>
             confirmModalDialog('Publish', { messageIncludes: `Publish app to ${SYNCED_PROJECT_DIR}?` });
-        outcomes.push(await publishFromExplorer(syncedApp, confirmSyncedPublish));
-        // The publish mirrored the app into the synced project's `.files`. Once the explorer shows it, its rows
+        await publishFromExplorer(syncedApp, confirmSyncedPublish);
+        // The publish mirrored the app into the synced project's `.files`, which sorts above the app folder. The
+        // explorer misses that change in a folder created after the workspace opened. Once it shows `.files`, its rows
         // stop moving, so the next right-click lands on the app folder.
+        await refreshExplorer();
         await findExplorerItem(`synced/${SYNCED_PROJECT_DIR}/.files`);
-        fs.writeFileSync(cloudAppFile, '<h1>edited in Deepnote</h1>');
-        outcomes.push(
-            await publishFromExplorer(syncedApp, async () => {
-                await confirmSyncedPublish();
-                await confirmModalDialog('Force', { messageIncludes: 'changed in Deepnote since the last sync' });
-            })
-        );
-        cloudContent.push(fs.readFileSync(cloudAppFile, 'utf8'));
-    });
+        fs.writeFileSync(path.join(cloudDir, APP_FILE), '<h1>edited in Deepnote</h1>');
 
-    after(async function () {
-        await new EditorView().closeAllEditors().catch(() => undefined);
-        await cloud?.stop();
-        if (workspaceDir) {
-            fs.rmSync(workspaceDir, { recursive: true, force: true });
-        }
-    });
-
-    it('lists only data apps, publishes a folder to the picked one, and shows the app URL', function () {
-        expect(listedProjects).to.deep.equal([NEW_DATA_APP, PROJECT_NAME]);
-        expect(outcomes[0]).to.equal(`App published: ${cloud!.url}/apps/${PROJECT_ID}/`);
-        expect(cloudContent[0]).to.equal('<h1>site v1</h1>');
-        expect(projectAfterFirstPublish?.dataApp).to.deep.equal({
-            published: true,
-            url: `${cloud!.url}/apps/${PROJECT_ID}/`
+        const outcome = await publishFromExplorer(syncedApp, async () => {
+            await confirmSyncedPublish();
+            await confirmModalDialog('Force', { messageIncludes: 'changed in Deepnote since the last sync' });
         });
-    });
 
-    it('republishes with the saved data app after one confirmation', function () {
-        expect(outcomes[1]).to.equal(`App published: ${cloud!.url}/apps/${PROJECT_ID}/`);
-        expect(cloudContent[1]).to.equal('<h1>site v2</h1>');
-    });
-
-    it('creates a data app with New Data App… and publishes the folder to it', function () {
-        expect(newAppId).to.not.be.oneOf(['', PROJECT_ID, STANDARD_PROJECT_ID]);
-        expect(newAppProject).to.deep.include({
-            name: NEW_APP_NAME,
-            dataApp: { published: true, url: `${cloud!.url}/apps/${newAppId}/` }
-        });
-        expect(newAppContent).to.equal('<h1>new app</h1>');
-    });
-
-    it('overwrites app files changed in Deepnote when the user picks Force', function () {
-        expect(outcomes.slice(3)).to.deep.equal([
-            `App published: ${cloud!.url}/apps/${PROJECT_ID}/`,
-            `App published: ${cloud!.url}/apps/${PROJECT_ID}/`
-        ]);
-        expect(cloudContent[2]).to.equal('<h1>synced app</h1>');
+        expect(outcome).to.equal(`App published: ${cloud!.url}/apps/${PROJECT_ID}/`);
+        expect(fs.readFileSync(path.join(cloudDir, APP_FILE), 'utf8')).to.equal('<h1>synced app</h1>');
     });
 });

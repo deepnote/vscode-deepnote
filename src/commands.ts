@@ -213,4 +213,5 @@ export interface ICommandNameArgumentTypeMapping {
     [DSCommands.SyncWithDeepnoteCloud]: [SyncWithDeepnoteCloudTarget | undefined];
     [DSCommands.SyncNewFolderWithDeepnoteCloud]: [];
     [DSCommands.PublishApp]: [Uri | undefined];
+    [DSCommands.PreviewApp]: [Uri | undefined];
 }

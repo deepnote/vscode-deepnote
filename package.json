@@ -165,6 +165,13 @@
                 "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
             },
             {
+                "command": "deepnote.previewApp",
+                "title": "%deepnote.commands.previewApp.title%",
+                "category": "Deepnote",
+                "icon": "$(open-preview)",
+                "enablement": "isWorkspaceTrusted && !deepnote.webExtension"
+            },
+            {
                 "command": "deepnote.newProject",
                 "title": "%deepnote.commands.newProject.title%",
                 "category": "Deepnote",
@@ -1271,6 +1278,11 @@
                 {
                     "when": "explorerResourceIsFolder && isWorkspaceTrusted && !deepnote.webExtension",
                     "command": "deepnote.publishApp",
+                    "group": "Deepnote"
+                },
+                {
+                    "when": "explorerResourceIsFolder && isWorkspaceTrusted && !deepnote.webExtension",
+                    "command": "deepnote.previewApp",
                     "group": "Deepnote"
                 }
             ],

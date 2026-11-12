@@ -69,6 +69,7 @@ Open the Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`) and type `Deepnote` t
 | `Deepnote: Sync with Deepnote Cloud`               | Sync a folder that is already synced with your Deepnote workspace       |
 | `Deepnote: Sync a New Folder with Deepnote Cloud…` | Download your Deepnote workspace into a folder and start syncing it     |
 | `Deepnote: Publish App…`                           | Publish a folder, such as an app's build output, as a Deepnote data app |
+| `Deepnote: Preview App`                            | Preview a data app folder in the editor's built-in browser              |
 | `Notebook: Select Notebook Kernel`                 | Select or switch kernels within your notebook                           |
 | `Notebook: Change Cell Language`                   | Change the language of the cell currently in focus                      |
 | `Deepnote: Enable Snapshots`                       | Enable snapshot mode for the current workspace                          |
@@ -112,6 +113,15 @@ Run `Deepnote: Publish App…` from the Command Palette, or right-click a folder
 - Publishing into a synced folder does not start while a sync or another such publish is in progress.
 - For a folder inside a synced project, when app files changed in Deepnote since the last sync or publish, publishing asks first. "Force" overwrites them in Deepnote. "Sync First" syncs the whole synced folder with the working files of every project, which downloads Deepnote's versions of the app files into the synced project's `.files/_deepnote_static` folder, so you can merge them into your app and publish again. It also replaces the local copy of every working file that changed in Deepnote, so it is not offered for a folder that is in, or contains, a synced project's `.files` folder. A project with a working file over 100 MiB fails to sync this way. A folder outside a synced project overwrites app files changed in Deepnote without asking.
 - Publishing needs a trusted workspace and the desktop app.
+
+### Previewing apps
+
+Run `Deepnote: Preview App` from the Command Palette, or right-click a folder in the file explorer and choose `Preview App`, to see the app before you publish it. The page opens in the editor's built-in browser, or in your system browser when the editor has none.
+
+- The folder is served the way Deepnote serves a published app, from a local address. Edit a file and reload the page to see the change.
+- The page's script tag for Deepnote's client (`https://deepnote.com/static/app-client/v1.js`) is replaced with the extension's own client, so the preview works without network access.
+- The page's calls to Deepnote reach a local stand-in that does not support them yet: `inputs()`, `appData()`, `run()` and `dataframe()` reject with a message saying so, and VS Code shows a warning the first time the app calls each of them.
+- Previewing needs a trusted workspace and the desktop app.
 
 ### Database integrations
 

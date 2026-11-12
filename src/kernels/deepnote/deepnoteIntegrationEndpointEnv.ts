@@ -42,6 +42,7 @@ export async function applyIntegrationEndpointEnv({
     extraEnv['DEEPNOTE_RUNTIME__WEBAPP_URL'] = baseUrl;
     // 2.1.1 dereferences project_secret without a null-check in detached mode; also the endpoint's per-project bearer token.
     extraEnv['DEEPNOTE_RUNTIME__PROJECT_SECRET'] = endpoint.getAuthToken(projectId);
-    // Legacy key (not __PROJECT_ID): also satisfies set_notebook_path's has_env check, avoiding a session-name parse.
-    extraEnv['DEEPNOTE_PROJECT_ID'] = projectId;
+    // Never the legacy DEEPNOTE_PROJECT_ID: with it, the toolkit's set_notebook_path strips the notebook's folder and
+    // every path under ~/work from sys.path, and moves the working directory to ~/work.
+    extraEnv['DEEPNOTE_RUNTIME__PROJECT_ID'] = projectId;
 }

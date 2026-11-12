@@ -1,0 +1,22 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-local-module-import-project
+  name: E2E Local Module Import
+  notebooks:
+    - id: e2e-local-module-import-notebook
+      name: Local Module Import
+      blocks:
+        - id: e2e-local-module-import-block
+          blockGroup: e2e-group
+          type: code
+          content: |-
+            import local_helper
+            print(local_helper.MARKER)
+          sortingKey: a0
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

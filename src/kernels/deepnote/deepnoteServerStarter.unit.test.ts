@@ -115,14 +115,14 @@ suite('DeepnoteServerStarter', () => {
                         DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE: 'true',
                         DEEPNOTE_RUNTIME__WEBAPP_URL: 'http://127.0.0.1:5555',
                         DEEPNOTE_RUNTIME__PROJECT_SECRET: 'token-a',
-                        DEEPNOTE_PROJECT_ID: 'project-a'
+                        DEEPNOTE_RUNTIME__PROJECT_ID: 'project-a'
                     },
                     {
                         DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED: 'true',
                         DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE: 'true',
                         DEEPNOTE_RUNTIME__WEBAPP_URL: 'http://127.0.0.1:5555',
                         DEEPNOTE_RUNTIME__PROJECT_SECRET: 'token-b',
-                        DEEPNOTE_PROJECT_ID: 'project-b'
+                        DEEPNOTE_RUNTIME__PROJECT_ID: 'project-b'
                     }
                 ],
                 "notebook B's server must carry ONLY project B's id and bearer token"

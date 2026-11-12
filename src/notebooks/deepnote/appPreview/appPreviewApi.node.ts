@@ -29,8 +29,8 @@ function isAuthorized(authorizationHeader: string | undefined, token: string): b
 
 /**
  * The local stand-in for Deepnote's app viewer API (`/v2`), mounted at `/__deepnote/v2` on the preview server.
- * Requests without the preview's bearer token get 401; each supported route answers 501 until it is implemented,
- * and every other route gets 403, as Deepnote answers app viewer tokens.
+ * Requests without the preview's bearer token get 401, the routes Deepnote's client calls get 501, and every other
+ * route gets 403, as Deepnote answers app viewer tokens.
  */
 export function createAppPreviewApi(options: AppPreviewApiOptions): Router {
     const router = express.Router();

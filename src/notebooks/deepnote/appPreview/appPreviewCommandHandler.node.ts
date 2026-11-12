@@ -17,10 +17,8 @@ function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-/** Runs **Deepnote: Preview App**: serves an app folder from a preview session and opens it in the built-in browser. */
 @injectable()
 export class AppPreviewCommandHandler implements IExtensionSyncActivationService {
-    // Keyed by folder URI. The pending start is stored, so a second run during startup reuses it.
     private readonly sessions = new Map<string, Promise<AppPreviewSession>>();
 
     constructor(
@@ -51,8 +49,8 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
     }
 
     /**
-     * Opens the page in VS Code's built-in browser. An editor without the Simple Browser's command rejects with
-     * `command 'simpleBrowser.api.open' not found`, as does a browser that fails, and gets the system browser instead.
+     * Editors without the Simple Browser reject with `command 'simpleBrowser.api.open' not found`, so any rejection
+     * falls back to the system browser.
      */
     private async open(session: AppPreviewSession): Promise<void> {
         try {
@@ -91,7 +89,6 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
         const existing = this.sessions.get(key);
         if (existing) {
             const session = await existing;
-            // A `.deepnote` file may have been added, removed or changed since the last run.
             session.setProject(await resolvePreviewProject(folder));
 
             return session;

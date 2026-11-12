@@ -41,7 +41,6 @@ function notFound(res: Response): void {
     res.status(404).type('text/plain').send('Not found');
 }
 
-/** Answers 404 when a file could not be sent; once headers are out, the client has gone away. */
 function onSendError(res: Response): (error: Error | undefined) => void {
     return (error) => {
         if (error && !res.headersSent) {
@@ -50,7 +49,6 @@ function onSendError(res: Response): (error: Error | undefined) => void {
     };
 }
 
-/** The decoded, non-empty segments of a request path, or `undefined` when the path must not reach the disk. */
 function decodePathSegments(urlPath: string): string[] | undefined {
     let decoded: string;
     try {
@@ -85,7 +83,7 @@ function isHostedClientUrl(src: string): boolean {
     return src.trim().split(/[?#]/, 1)[0].endsWith(HOSTED_CLIENT_PATH);
 }
 
-/** Escapes for a double-quoted attribute, with every character outside printable ASCII as a character reference. */
+/** Escapes everything outside printable ASCII as well, so the value survives the page's latin1 round trip. */
 function escapeAttribute(value: string): string {
     let escaped = '';
     for (const character of value) {
@@ -98,8 +96,8 @@ function escapeAttribute(value: string): string {
 }
 
 /**
- * Points every script tag that loads Deepnote's hosted client at the extension's client instead. `page` is the
- * page's bytes decoded as latin1, so everything outside the swapped tags keeps its bytes whatever the encoding.
+ * `page` is the page's bytes decoded as latin1, so everything outside the swapped tags keeps its bytes whatever the
+ * encoding.
  */
 function swapClientScriptTags(page: string, token: string, projectId: string | undefined): string {
     const projectAttribute = projectId === undefined ? '' : ` data-deepnote-project-id="${escapeAttribute(projectId)}"`;

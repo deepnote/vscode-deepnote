@@ -54,21 +54,48 @@ Or install from the [VS Code Marketplace](https://marketplace.visualstudio.com/i
 
 Open the Command Palette (`Cmd+Shift+P` or `Ctrl+Shift+P`) and type `Deepnote` to see all available commands:
 
-| Command                            | Description                                                             |
-| ---------------------------------- | ----------------------------------------------------------------------- |
-| `Deepnote: Refresh Explorer`       | Refresh the Deepnote project explorer                                   |
-| `Deepnote: Open Notebook`          | Open a specific notebook from a Deepnote project                        |
-| `Deepnote: Open File`              | Open the raw .deepnote project file                                     |
-| `Deepnote: Reveal in Explorer`     | Show active notebook information in the explorer                        |
-| `Deepnote: Show Project Explorer`  | Show the Deepnote sidebar and select the active notebook when available |
-| `Deepnote: Manage Integrations`    | Configure database connections and credentials                          |
-| `Deepnote: New Project`            | Create a new Deepnote project                                           |
-| `Deepnote: Import Notebook`        | Import an existing notebook into your project                           |
-| `Deepnote: Set API Token`          | Save a Deepnote API token for syncing and publishing                    |
-| `Deepnote: Clear API Token`        | Remove the saved Deepnote API token                                     |
-| `Notebook: Select Notebook Kernel` | Select or switch kernels within your notebook                           |
-| `Notebook: Change Cell Language`   | Change the language of the cell currently in focus                      |
-| `Deepnote: Enable Snapshots`       | Enable snapshot mode for the current workspace                          |
+| Command                                            | Description                                                             |
+| -------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Deepnote: Refresh Explorer`                       | Refresh the Deepnote project explorer                                   |
+| `Deepnote: Open Notebook`                          | Open a specific notebook from a Deepnote project                        |
+| `Deepnote: Open File`                              | Open the raw .deepnote project file                                     |
+| `Deepnote: Reveal in Explorer`                     | Show active notebook information in the explorer                        |
+| `Deepnote: Show Project Explorer`                  | Show the Deepnote sidebar and select the active notebook when available |
+| `Deepnote: Manage Integrations`                    | Configure database connections and credentials                          |
+| `Deepnote: New Project`                            | Create a new Deepnote project                                           |
+| `Deepnote: Import Notebook`                        | Import an existing notebook into your project                           |
+| `Deepnote: Set API Token`                          | Save a Deepnote API token for syncing and publishing                    |
+| `Deepnote: Clear API Token`                        | Remove the saved Deepnote API token                                     |
+| `Deepnote: Sync with Deepnote Cloud`               | Sync a folder that is already synced with your Deepnote workspace       |
+| `Deepnote: Sync a New Folder with Deepnote Cloud…` | Download your Deepnote workspace into a folder and start syncing it     |
+| `Notebook: Select Notebook Kernel`                 | Select or switch kernels within your notebook                           |
+| `Notebook: Change Cell Language`                   | Change the language of the cell currently in focus                      |
+| `Deepnote: Enable Snapshots`                       | Enable snapshot mode for the current workspace                          |
+
+### Syncing with Deepnote Cloud
+
+To start, run `Deepnote: Sync a New Folder with Deepnote Cloud…` from the Command Palette or from the `…` menu of the Deepnote explorer, and choose a folder.
+
+After that, run `Deepnote: Sync with Deepnote Cloud`, or click the sync button in the Deepnote explorer title bar. With one synced folder in your workspace, it syncs that folder. With several, it asks which one, listing the folder of the file you have open first. With none, it offers to sync a new folder.
+
+- Sync uses `DEEPNOTE_TOKEN` from a `.env` file in the synced folder, or the token saved with `Deepnote: Set API Token`.
+- The first sync into a folder downloads every project of your Deepnote workspace, one folder per project, and creates `.deepnote-sync.json`.
+- Each sync pulls projects changed in Deepnote and pushes projects changed locally.
+- Before overwriting changes that were not synced, sync asks, offering one replacement and "Skip":
+  - For a project changed both locally and in Deepnote, or a local folder that already exists with different content where sync downloads a project, it offers to replace the local files with the Deepnote version.
+  - For local edits that Deepnote rejects because the project changed there, it offers to replace the Deepnote version with the local files.
+  - "Skip" leaves both copies as they are, and the next sync asks about that project again.
+- Unsaved notebooks must be saved before a sync starts.
+- Sync works only in a trusted workspace, in the desktop app, for a folder inside the open workspace that neither contains nor is inside another synced folder.
+- Sync does not create Deepnote projects. Local `.deepnote` files that are not linked to a project are left as they are.
+- Deleting a project folder or a notebook file locally does not delete it in Deepnote, and the next sync downloads it again.
+
+Known limitations:
+
+- Edits made in the folder while a sync runs can be overwritten.
+- Saving a notebook after running cells writes its outputs into the file, so the next sync pushes that project.
+- After a sync updates an open notebook, the editor can save the notebook again, and the next sync can then push that project or report a conflict for it.
+- A folder reached through a symbolic link or junction is checked by its path in the workspace, not by its target, so a link into another synced folder is not refused.
 
 ### Database integrations
 

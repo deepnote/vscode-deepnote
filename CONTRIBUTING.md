@@ -328,6 +328,16 @@ A few things worth knowing before you debug a failure:
 - **CI shards by directory**, one job per group, so a new group directory must also be added to the matrix
   in `.github/workflows/e2e.yml` — the `verify-coverage` job fails the build if a group ran nowhere, or if
   a suite sits directly in `test/e2e/suite/`.
+- **Deepnote Cloud is mocked.** The cloud suite starts the mock from `@deepnote/cloud-mock` on a free port
+  and points the extension at it by setting `deepnote.apiUrl` in the `.vscode/settings.json` of the suite's
+  temp workspace. The mock serves the Public API v2 routes that the token check and sync call, from a
+  directory with one subdirectory per project, named by its id.
+
+To try sync by hand against the same mock, run `npm run mock:deepnote-cloud -- <directory>` (it uses a temp
+directory when you leave it out), set `deepnote.apiUrl` to the URL it prints, and run
+"Deepnote: Set API Token" with any letters, digits or `_`. The mock takes a new port every time it starts,
+so set `deepnote.apiUrl` again after a restart. The token is saved per API URL, so set it again too, or put
+`DEEPNOTE_TOKEN` in a `.env` in the folder you sync instead.
 
 ### Testing Python scripts
 

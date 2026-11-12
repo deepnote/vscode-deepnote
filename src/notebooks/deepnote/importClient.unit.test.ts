@@ -2,9 +2,51 @@
 // Licensed under the MIT License.
 
 import * as assert from 'assert';
-import { getErrorMessage, MAX_FILE_SIZE, ApiError } from './importClient.node';
+import { anything, when } from 'ts-mockito';
+import { Uri, WorkspaceConfiguration } from 'vscode';
+import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
+import { getApiEndpoint, getErrorMessage, MAX_FILE_SIZE, ApiError } from './importClient.node';
 
 suite('ImportClient', () => {
+    suite('getApiEndpoint', () => {
+        setup(() => {
+            resetVSCodeMocks();
+        });
+
+        test('uses the api subdomain of the configured domain', () => {
+            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenReturn({
+                get: (key: string, fallback: unknown) => (key === 'domain' ? 'ra-18838.deepnote-staging.com' : fallback)
+            } as unknown as WorkspaceConfiguration);
+
+            assert.strictEqual(getApiEndpoint(), 'https://api.ra-18838.deepnote-staging.com');
+        });
+
+        test('uses apiUrl without its trailing slash instead of the configured domain when it is set', () => {
+            const settings: Record<string, string> = {
+                apiUrl: 'http://127.0.0.1:4010/',
+                domain: 'ra-18838.deepnote-staging.com'
+            };
+            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenReturn({
+                get: (key: string, fallback: unknown) => settings[key] ?? fallback
+            } as unknown as WorkspaceConfiguration);
+
+            assert.strictEqual(getApiEndpoint(), 'http://127.0.0.1:4010');
+        });
+
+        test('reads apiUrl from the settings that apply to the given resource', () => {
+            const folder = Uri.file('/projects/local-api');
+            when(mockedVSCodeNamespaces.workspace.getConfiguration('deepnote', anything())).thenCall(
+                (_section: string, resource?: Uri) =>
+                    ({
+                        get: (key: string, fallback: unknown) =>
+                            key === 'apiUrl' && resource?.fsPath === folder.fsPath ? 'http://127.0.0.1:4010' : fallback
+                    }) as unknown as WorkspaceConfiguration
+            );
+
+            assert.strictEqual(getApiEndpoint(folder), 'http://127.0.0.1:4010');
+        });
+    });
+
     suite('getErrorMessage', () => {
         test('should return rate limit error for 429 status', () => {
             const error: ApiError = {

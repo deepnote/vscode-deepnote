@@ -1,0 +1,21 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+  modifiedAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: 8b3e1f6a-2c4d-4e5f-9a7b-1c3d5e7f9a2b
+  name: Analytics
+  notebooks:
+    - id: e2e-analytics-costs-notebook
+      name: Costs
+      blocks:
+        - id: e2e-analytics-costs-block
+          blockGroup: e2e-analytics-costs-group
+          type: code
+          content: |-
+            print("costs from Deepnote")
+          sortingKey: a0
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

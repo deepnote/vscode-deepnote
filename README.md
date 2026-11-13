@@ -126,7 +126,7 @@ Run `Deepnote: Preview App` from the Command Palette, or right-click a folder in
   - Agent blocks run only when the model provider's API key, such as `OPENAI_API_KEY`, is set in VS Code's own environment. The key saved for agent cells is not used.
   - Its code can write files and store dataframes, and what it writes is kept after the run.
   - A run keeps going until its notebook finishes, even after you close the preview. Reloading or closing the VS Code window stops it.
-- The page's other calls to Deepnote reach a local stand-in that does not support them yet: `appData()` rejects with a message saying so, and VS Code shows a warning the first time the app calls it.
+- `appData()` answers from that notebook's newest successful `run()` in the preview: the first JSON object the run displayed (an `application/json` output), the first agent block's answer, and when the run started. Until a run succeeds, it rejects with Deepnote's message. The preview keeps run results in memory, so reloading or closing the VS Code window clears them.
 - Previewing needs a trusted workspace and the desktop app.
 
 ### Database integrations

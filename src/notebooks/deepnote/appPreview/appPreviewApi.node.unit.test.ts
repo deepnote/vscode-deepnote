@@ -511,7 +511,6 @@ suite('createAppPreviewApi', () => {
     }
 
     const stubs: [string, string, AppPreviewOperation][] = [
-        ['GET', '/notebooks/nb-1/app-data', 'appData()'],
         ['GET', '/projects/p-1/dataframes/sales%20by%20month', 'dataframe()']
     ];
     for (const [method, path, operation] of stubs) {

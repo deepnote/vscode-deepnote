@@ -29,9 +29,13 @@ let stopServerImpl: RuntimeCore['stopServer'] | null = null;
 const executionEngines: ExecutionEngine[] = [];
 let executionEngineBehavior: ExecutionEngineBehavior = {};
 
-/** What the fake engines do; each defaults to resolving at once, and `runProject` to an empty summary. */
+/**
+ * What the fake engines do; each defaults to resolving at once, and `runProject` to an empty summary. `stopped`
+ * settles once the engine's `stop()` is called: the real `stop()` fails the block that is executing, and
+ * `runProject` then resolves.
+ */
 export interface ExecutionEngineBehavior {
-    runProject?(file: DeepnoteFile, options: ExecutionOptions): Promise<ExecutionSummary>;
+    runProject?(file: DeepnoteFile, options: ExecutionOptions, stopped: Promise<void>): Promise<ExecutionSummary>;
     start?(): Promise<void>;
     stop?(): Promise<void>;
 }
@@ -51,6 +55,10 @@ export class ExecutionEngine implements Pick<RealExecutionEngine, 'runProject' |
     public readonly runProjectCalls: { file: DeepnoteFile; options: ExecutionOptions }[] = [];
     public startCalls = 0;
     public stopCalls = 0;
+    private markStopped: () => void = () => undefined;
+    private readonly stopped = new Promise<void>((resolve) => {
+        this.markStopped = resolve;
+    });
 
     constructor(
         public readonly config: RuntimeConfig,
@@ -63,7 +71,7 @@ export class ExecutionEngine implements Pick<RealExecutionEngine, 'runProject' |
         this.runProjectCalls.push({ file: structuredClone(file), options });
 
         return executionEngineBehavior.runProject
-            ? executionEngineBehavior.runProject(file, options)
+            ? executionEngineBehavior.runProject(file, options, this.stopped)
             : { totalBlocks: 0, executedBlocks: 0, failedBlocks: 0, totalDurationMs: 0 };
     }
 
@@ -74,6 +82,7 @@ export class ExecutionEngine implements Pick<RealExecutionEngine, 'runProject' |
 
     public async stop(): Promise<void> {
         this.stopCalls++;
+        this.markStopped();
         await executionEngineBehavior.stop?.();
     }
 }

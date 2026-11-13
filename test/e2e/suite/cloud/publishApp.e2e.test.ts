@@ -38,6 +38,8 @@ const SYNCED_PROJECT_DIR = 'Sales';
 const CHOOSE_PROJECT = 'Choose the data app to publish to';
 const NEW_DATA_APP = 'New Data App…';
 const PUBLISH_OUTCOME = /^(App published|Publishing the app failed)/;
+const PUBLISH_PROGRESS = /^Publishing .+ to Deepnote…/;
+const LEFTOVER_PUBLISH_TIMEOUT = 30_000;
 const APP_FILE = path.join('.files', '_deepnote_static', 'index.html');
 
 interface PublishedProject {
@@ -162,6 +164,33 @@ async function waitForPublishOutcome(): Promise<string> {
     return message;
 }
 
+/**
+ * A publish that a failed test left running cannot be cancelled, still reads the app folder the hook is about to
+ * empty, and for a synced folder holds the operation lock, which refuses the next synced publish. VS Code removes
+ * toasts when the Notifications Center opens, as this suite does around every publish, so its progress is read there.
+ */
+async function waitForLeftoverPublish(): Promise<void> {
+    const center = await new Workbench().openNotificationsCenter();
+    try {
+        await VSBrowser.instance.driver.wait(async () => {
+            const notifications = await center.getNotifications(NotificationType.Any).catch(() => undefined);
+            if (!notifications) {
+                return false;
+            }
+            for (const notification of notifications) {
+                const message = await notification.getMessage().catch(() => undefined);
+                if (message === undefined || PUBLISH_PROGRESS.test(message)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }, LEFTOVER_PUBLISH_TIMEOUT);
+    } finally {
+        await center.close().catch(() => undefined);
+    }
+}
+
 async function publishFromExplorer(folderPath: string, answerPrompts: () => Promise<void>): Promise<string> {
     // Every publish of a folder ends with the same message, so one left from the previous publish must not count.
     await (await new Workbench().openNotificationsCenter()).clearAllNotifications();
@@ -235,6 +264,9 @@ describe('Deepnote Cloud — publishing an app to the mock Deepnote Cloud', func
             // A prompt left open by a failed test would block the next one. Closing it ends that publish.
             await closeModalDialogs();
             await new InputBox().cancel().catch(() => undefined);
+            await waitForLeftoverPublish().catch((error) => {
+                console.warn('[cloud-publish] a publish left behind by a failed test did not end:', error);
+            });
         }
         await new EditorView().closeAllEditors().catch(() => undefined);
         if (cloud) {

@@ -1419,6 +1419,15 @@ export namespace DeepnoteAppPreview {
     export const startFailed = (message: string) => l10n.t('Could not start the app preview: {0}', message);
     export const operationNotSupported = (operation: string, folderName: string) =>
         l10n.t('The app in {1} called {0}, which the local preview does not support yet.', operation, folderName);
+    export const noInterpreter = l10n.t(
+        'No Python interpreter is selected for the notebook. Select one in VS Code, then run the app again.'
+    );
+    export const toolkitNotInstalled = l10n.t(
+        "deepnote-toolkit is not installed in the notebook's Python interpreter. Install it from VS Code, then run the app again."
+    );
+    export const blockFailed = (blockId: string) => l10n.t('Block {0} failed.', blockId);
+    export const notebookNotInFile = (notebookId: string) =>
+        l10n.t('The notebook {0} is no longer in its .deepnote file.', notebookId);
 }
 
 export namespace SelectInputSettings {

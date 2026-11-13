@@ -43,7 +43,6 @@ function inputControl(input) {
     return control;
 }
 
-/** Builds a form from the inputs, the way an app would, so the screenshots show them. */
 function renderInputs(inputs) {
     const form = document.getElementById('inputs-form');
     for (const input of inputs) {

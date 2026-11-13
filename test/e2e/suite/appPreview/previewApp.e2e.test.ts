@@ -48,7 +48,6 @@ const INPUTS_RESOLVED = 'inputs() resolved: ';
 const NO_PROJECT_DATAFRAME =
     "dataframe() rejected: This app folder is not next to or inside the folder of a Deepnote project's .deepnote files, so it has no stored dataframes. After adding one, run Deepnote: Preview App again.";
 
-/** The input blocks of `e2e-preview-notebook` in the inputs notebook fixture. */
 const NOTEBOOK_INPUTS = [
     { blockId: 'e2e-region-input', name: 'region', type: 'input-text', value: 'Europe', label: 'Region' },
     {
@@ -72,7 +71,6 @@ const NOTEBOOK_INPUTS = [
     }
 ];
 
-/** The page's report as `readReport` returns it. */
 function expectedReport(title: string, dataframe: string): unknown[] {
     return [
         title,
@@ -98,7 +96,6 @@ function appDataWarning(folderName: string): string {
     return `The app in ${folderName} called appData(), which the local preview does not support yet.`;
 }
 
-/** Reads the page's report once its client calls are done, with the resolved inputs parsed. */
 async function readReport(): Promise<unknown[]> {
     const driver = VSBrowser.instance.driver;
     let report: string[] = [];
@@ -282,7 +279,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         copyAppWithTitle(INPUTS_APP, INPUTS_TITLE);
         fs.cpSync(FIXTURE_APP, path.join(workspaceDir, SYNCED_APP), { recursive: true });
         copyFixtureIntoDir(path.join(workspaceDir, 'synced', 'Sales'), SYNCED_PROJECT_FIXTURE);
-        // Outside every app folder and its parents, so the apps' projects stay as they were.
+        // Kept out of every app folder and the folders above them, so no app resolves to this project.
         fs.mkdirSync(path.join(workspaceDir, 'notebooks'));
         inputsNotebookFile = copyFixtureIntoDir(path.join(workspaceDir, 'notebooks'), INPUTS_NOTEBOOK_FIXTURE);
 

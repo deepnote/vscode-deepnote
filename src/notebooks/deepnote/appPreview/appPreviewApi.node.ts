@@ -129,7 +129,7 @@ function firstJsonObject(blocks: SnapshotBlock[]): Record<string, unknown> | und
     return blocks
         .flatMap((block) => block.outputs)
         .map((output) => mimeData(output, 'application/json'))
-        .find(isObject);
+        .find(isJsonObject);
 }
 
 /** The input check Deepnote's `POST /v2/runs` makes before it accepts a run. */
@@ -162,10 +162,15 @@ function isAuthorized(authorizationHeader: string | undefined, token: string): b
     return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
+// isObject's own guard is `obj is any`, which would switch off type checking where it narrows.
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+    return isObject(value);
+}
+
 function mimeData(output: IOutput, mimeType: string): unknown {
     const data: unknown = output.data;
 
-    return isObject(data) ? data[mimeType] : undefined;
+    return isJsonObject(data) ? data[mimeType] : undefined;
 }
 
 function newestSuccessfulRun(runs: Map<string, PreviewRun>, notebookId: string): PreviewRun | undefined {

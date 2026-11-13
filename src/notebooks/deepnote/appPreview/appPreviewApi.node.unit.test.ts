@@ -522,6 +522,27 @@ suite('createAppPreviewApi', () => {
             assert.deepStrictEqual(unsupported, []);
         });
 
+        test('answers the newest started successful run, not the last one to finish, past a run still in flight', async () => {
+            const clock = sinon.useFakeTimers({ now: Date.parse(NOW), toFake: ['Date'] });
+            const older = await startRun();
+            clock.tick(60_000);
+            const newer = await startRun();
+            clock.tick(60_000);
+            await startRun();
+
+            runner.calls[1].finish({ status: 'success', error: null, snapshotBlocks: jsonSnapshot({ total: 2 }) });
+            await waitForStatus(newer, 'success');
+            clock.tick(60_000);
+            runner.calls[0].finish({ status: 'success', error: null, snapshotBlocks: jsonSnapshot({ total: 1 }) });
+            await waitForStatus(older, 'success');
+
+            await assertJson(await getAppData(), 200, {
+                appData: { total: 2 },
+                agentBlockSummary: null,
+                runCreatedAt: '2026-01-02T03:05:05.000Z'
+            });
+        });
+
         test('answers the first JSON object across blocks and their outputs, skipping a JSON array and null', async () => {
             placeRun({
                 runId: 'run',

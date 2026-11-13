@@ -33,7 +33,9 @@ const FILE_HEADERS = {
 };
 
 const HOSTED_CLIENT_PATH = '/static/app-client/v1.js';
-const SCRIPT_OPEN_TAG = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
+// As in HTML, a quote opens a value only right after `=`; the lookahead and backreference consume a quoted value
+// atomically, so a `>` inside it does not end the tag and nothing backtracks into it.
+const SCRIPT_OPEN_TAG = /<script(?=[\s/>])((?:[^>="']|["']|=(?=(\s*(?:"[^"]*"|'[^']*')?))\2)*)>/gi;
 const TAG_ATTRIBUTE = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
 const HTML_PAGE = /\.html?$/i;
 
@@ -227,7 +229,12 @@ export class AppPreviewSession implements IDisposable {
         app.use((req, res, next) => this.checkHost(req, res, next));
         app.get('/__deepnote/client.js', (_req, res) => {
             res.set({ 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
-            res.sendFile(this.options.scripts.appClient.fsPath, { dotfiles: 'allow' }, onSendError(res));
+            res.sendFile(this.options.scripts.appClient.fsPath, { dotfiles: 'allow' }, (error) => {
+                if (error) {
+                    logger.warn('AppPreviewSession: Could not send the app preview client script', error);
+                }
+                onSendError(res)(error);
+            });
         });
         app.use(
             '/__deepnote/v2',
@@ -267,7 +274,8 @@ export class AppPreviewSession implements IDisposable {
         }
 
         const segments = decodePathSegments(req.path);
-        if (!segments) {
+        // Express matches the reserved `/__deepnote` prefix before decoding, so an encoded one gets here.
+        if (!segments || segments[0]?.toLowerCase() === '__deepnote') {
             notFound(res);
 
             return;

@@ -113,8 +113,6 @@ suite('AppPreviewSession', () => {
         write('my file #1.txt', 'spaced');
         write('assets/app.css', 'body { color: red; }');
         write('__deepnote/x.js', 'shadowed');
-        write('secret.txt', 'outside', `${appFolder}-other`);
-        fs.symlinkSync(path.join(`${appFolder}-other`, 'secret.txt'), path.join(appFolder, 'escape.txt'));
     });
 
     teardown(() => {
@@ -164,8 +162,8 @@ suite('AppPreviewSession', () => {
             ['a NUL character', '/index.html%00.css'],
             ['a missing file', '/missing.txt'],
             ['a file under /__deepnote/', '/__deepnote/x.js'],
-            ['/__deepnote itself', '/__deepnote'],
-            ['a symlink to a file outside the folder', '/escape.txt']
+            ['a file under a percent-encoded /__deepnote/', '/%5F_deepnote/x.js'],
+            ['/__deepnote itself', '/__deepnote']
         ];
         for (const [condition, urlPath] of notFoundPaths) {
             test(`answers 404 to ${condition}`, async () => {
@@ -177,6 +175,17 @@ suite('AppPreviewSession', () => {
                 assert.strictEqual(response.body.toString(), 'Not found');
             });
         }
+
+        test('answers 404 to a symlink to a file outside the folder', async () => {
+            write('secret.txt', 'outside', `${appFolder}-other`);
+            fs.symlinkSync(path.join(`${appFolder}-other`, 'secret.txt'), path.join(appFolder, 'escape.txt'));
+            const session = await startSession();
+
+            const response = await request(session, '/escape.txt');
+
+            assert.strictEqual(response.status, 404);
+            assert.strictEqual(response.body.toString(), 'Not found');
+        });
 
         test('answers 405 to methods other than GET and HEAD', async () => {
             const session = await startSession();
@@ -324,6 +333,24 @@ suite('AppPreviewSession', () => {
                     '</head></html>'
                 ].join('\n')
             );
+        });
+
+        test('swaps only the opening tag when a quote sits inside an unquoted attribute value', async () => {
+            const rest = '</script>\n<p>Don\'t panic</p>\n<script src="app.js"></script>';
+            write('page.html', `<script data-note=it's src="${HOSTED}">${rest}`);
+            const session = await startSession();
+
+            const served = await getText(session, '/page.html');
+
+            assert.strictEqual(served, `${swapped(tokenOf(served))}${rest}`);
+        });
+
+        test('leaves a custom element whose name starts with script alone', async () => {
+            const page = `<script-loader src="${HOSTED}"></script-loader>`;
+            write('page.html', page);
+            const session = await startSession();
+
+            assert.strictEqual(await getText(session, '/page.html'), page);
         });
 
         test('gives each session its own token', async () => {

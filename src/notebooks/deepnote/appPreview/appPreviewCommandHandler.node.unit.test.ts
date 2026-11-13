@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as sinon from 'sinon';
-import { anything, capture, when } from 'ts-mockito';
+import { anything, capture, instance, mock, when } from 'ts-mockito';
 import { Uri, ViewColumn, type WorkspaceFolder } from 'vscode';
 
 import { Commands } from '../../../platform/common/constants';
@@ -44,7 +44,10 @@ suite('AppPreviewCommandHandler', () => {
     }
 
     function tokenOf(html: string): string {
-        return /data-deepnote-token="([^"]+)"/.exec(html)![1];
+        const match = /data-deepnote-token="([^"]+)"/.exec(html);
+        assert.isNotNull(match, 'the page carries no token');
+
+        return match[1];
     }
 
     setup(async () => {
@@ -108,13 +111,10 @@ suite('AppPreviewCommandHandler', () => {
         );
 
         disposables = [];
-        new AppPreviewCommandHandler(
-            {
-                subscriptions: [],
-                extensionUri: Uri.file(path.join(tmp, 'extension'))
-            } as unknown as IExtensionContext,
-            disposables
-        ).activate();
+        const context = mock<IExtensionContext>();
+        when(context.subscriptions).thenReturn([]);
+        when(context.extensionUri).thenReturn(Uri.file(path.join(tmp, 'extension')));
+        new AppPreviewCommandHandler(instance(context), disposables).activate();
     });
 
     teardown(async () => {
@@ -180,6 +180,13 @@ suite('AppPreviewCommandHandler', () => {
             ['http://localhost:1111/', 'http://localhost:2222/']
         );
         assert.include(await page(), 'data-deepnote-project-id="p-added"');
+    });
+
+    test('starts one server when the command runs again while the first run is starting', async () => {
+        await Promise.all([previewApp(Uri.file(appFolder)), previewApp(Uri.file(appFolder))]);
+
+        assert.strictEqual(new Set(externalUriRequests).size, 1);
+        assert.strictEqual(opened.length, 2);
     });
 
     test('opens the server URL in the system browser when the built-in browser command is missing', async () => {

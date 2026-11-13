@@ -10,6 +10,7 @@ import { basename } from '../../../platform/vscode-path/resources';
 import type { AppPreviewOperation } from './appPreviewApi.node';
 import { AppPreviewSession } from './appPreviewSession.node';
 import { resolvePreviewProject } from './appPreviewWorkspace.node';
+import { IAppPreviewRunner } from './types';
 
 const SIMPLE_BROWSER_OPEN_COMMAND = 'simpleBrowser.api.open';
 
@@ -23,7 +24,8 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
+        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
+        @inject(IAppPreviewRunner) private readonly runner: IAppPreviewRunner
     ) {}
 
     public activate(): void {
@@ -109,6 +111,7 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
         const session = new AppPreviewSession({
             folder,
             project: await resolvePreviewProject(folder),
+            runner: this.runner,
             scripts: {
                 appClient: Uri.joinPath(
                     this.extensionContext.extensionUri,

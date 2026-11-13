@@ -3,8 +3,9 @@ import express from 'express';
 import * as http from 'http';
 import type { AddressInfo } from 'net';
 import * as sinon from 'sinon';
-import { Uri } from 'vscode';
+import { Uri, type CancellationToken } from 'vscode';
 
+import { isUUID } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import {
     createDeepnoteBlock,
@@ -12,10 +13,13 @@ import {
     createDeepnoteNotebook,
     createDeepnoteProject
 } from '../deepnoteTestHelpers';
-import { createAppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
+import { createAppPreviewApi, type AppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
 import type { WorkspaceNotebook } from './appPreviewWorkspace.node';
+import type { AppPreviewRunOutcome, AppPreviewRunRequest, IAppPreviewRunner, SnapshotBlock } from './types';
 
 const TOKEN = 'preview-token';
+const SALES_FILE_URI = Uri.file('/workspace/sales.deepnote');
+const NOW = '2026-01-02T03:04:05.000Z';
 
 const SALES_FILE = createDeepnoteFile({
     metadata: { createdAt: '2025-03-04T05:06:07.000Z' },
@@ -45,14 +49,59 @@ const SALES_FILE = createDeepnoteFile({
                         }
                     }
                 ]
+            }),
+            createDeepnoteNotebook({
+                id: 'nb-limits',
+                name: 'Limits',
+                blocks: [
+                    {
+                        id: 'limit',
+                        type: 'input-text',
+                        blockGroup: 'g',
+                        sortingKey: 'a0',
+                        metadata: { deepnote_variable_name: 'limit', deepnote_variable_value: '5' }
+                    }
+                ]
             })
         ]
     })
 });
 
+interface RunnerCall {
+    request: AppPreviewRunRequest;
+    token: CancellationToken;
+    onRunning(): void;
+    finish(outcome: AppPreviewRunOutcome): void;
+    fail(error: Error): void;
+}
+
+/** A runner whose runs stay unfinished until the test finishes or fails them. */
+class FakeRunner implements IAppPreviewRunner {
+    public readonly calls: RunnerCall[] = [];
+
+    public run(request: AppPreviewRunRequest, token: CancellationToken, onRunning: () => void) {
+        return new Promise<AppPreviewRunOutcome>((finish, fail) =>
+            this.calls.push({ request, token, onRunning, finish, fail })
+        );
+    }
+}
+
+const CHART_SNAPSHOT: SnapshotBlock[] = [
+    {
+        id: 'chart',
+        type: 'code',
+        outputs: [{ output_type: 'display_data', data: { 'application/json': { total: 3 } }, metadata: {} }],
+        metadata: {},
+        outputHead: null,
+        outputTail: null
+    }
+];
+
 suite('createAppPreviewApi', () => {
     let server: http.Server;
     let baseUrl: string;
+    let api: AppPreviewApi;
+    let runner: FakeRunner;
     let unsupported: AppPreviewOperation[];
     let lookups: string[];
     let lookupFailure: Error | undefined;
@@ -61,28 +110,28 @@ suite('createAppPreviewApi', () => {
         unsupported = [];
         lookups = [];
         lookupFailure = undefined;
+        runner = new FakeRunner();
         const notebooks = new Map<string, WorkspaceNotebook>(
             SALES_FILE.project.notebooks.map((notebook) => [
                 notebook.id,
-                { file: SALES_FILE, fileUri: Uri.file('/workspace/sales.deepnote'), notebook }
+                { file: SALES_FILE, fileUri: SALES_FILE_URI, notebook }
             ])
         );
-        const app = express();
-        app.use(
-            '/__deepnote/v2',
-            createAppPreviewApi({
-                token: TOKEN,
-                findNotebook: async (notebookId) => {
-                    lookups.push(notebookId);
-                    if (lookupFailure) {
-                        throw lookupFailure;
-                    }
+        api = createAppPreviewApi({
+            token: TOKEN,
+            findNotebook: async (notebookId) => {
+                lookups.push(notebookId);
+                if (lookupFailure) {
+                    throw lookupFailure;
+                }
 
-                    return notebooks.get(notebookId);
-                },
-                onUnsupported: (operation) => unsupported.push(operation)
-            })
-        );
+                return notebooks.get(notebookId);
+            },
+            onUnsupported: (operation) => unsupported.push(operation),
+            runner
+        });
+        const app = express();
+        app.use('/__deepnote/v2', api.router);
         server = http.createServer(app);
         await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
         baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/__deepnote/v2`;
@@ -90,12 +139,49 @@ suite('createAppPreviewApi', () => {
 
     teardown(() => {
         sinon.restore();
+        api.dispose();
         server.closeAllConnections();
         server.close();
     });
 
     function call(method: string, path: string, authorization: string | null = `Bearer ${TOKEN}`): Promise<Response> {
         return fetch(`${baseUrl}${path}`, { method, headers: authorization === null ? {} : { authorization } });
+    }
+
+    function createRun(body: unknown): Promise<Response> {
+        return fetch(`${baseUrl}/runs`, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+    }
+
+    async function getRun(runId: string): Promise<Record<string, unknown>> {
+        const response = await call('GET', `/runs/${runId}`);
+        assert.strictEqual(response.status, 200);
+
+        return (await response.json()).run;
+    }
+
+    /** Polls the run until its status is `status`, as the client does. */
+    async function waitForStatus(runId: string, status: string): Promise<Record<string, unknown>> {
+        const deadline = Date.now() + 2_000;
+        for (;;) {
+            const run = await getRun(runId);
+            if (run.status === status || Date.now() > deadline) {
+                assert.strictEqual(run.status, status);
+
+                return run;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+    }
+
+    async function startRun(): Promise<string> {
+        const response = await createRun({ notebookId: 'nb-1', inputs: { region: 'Asia' } });
+        assert.strictEqual(response.status, 202);
+
+        return (await response.json()).runId;
     }
 
     async function assertJson(response: Response, status: number, body: unknown): Promise<void> {
@@ -157,10 +243,159 @@ suite('createAppPreviewApi', () => {
         );
     });
 
+    test('POST /runs starts a run of the notebook with the inputs, and answers 202 with it pending', async () => {
+        sinon.useFakeTimers({ now: Date.parse(NOW), toFake: ['Date'] });
+
+        const response = await createRun({
+            notebookId: 'nb-1',
+            inputs: { region: 'Asia' },
+            detachedRunStorageMode: 'readonly'
+        });
+
+        assert.strictEqual(response.status, 202);
+        const body = await response.json();
+        assert.isTrue(isUUID(body.runId), `${body.runId} is not a UUID`);
+        assert.deepStrictEqual(body, { runId: body.runId, status: 'pending', createdAt: NOW });
+        assert.deepStrictEqual(
+            runner.calls.map((runCall) => runCall.request),
+            [{ fileUri: SALES_FILE_URI, notebookId: 'nb-1', inputs: { region: 'Asia' } }]
+        );
+        assert.deepStrictEqual(unsupported, []);
+    });
+
+    test('POST /runs runs the notebook without inputs when the body has none', async () => {
+        assert.strictEqual((await createRun({ notebookId: 'nb-init' })).status, 202);
+
+        assert.deepStrictEqual(
+            runner.calls.map((runCall) => runCall.request),
+            [{ fileUri: SALES_FILE_URI, notebookId: 'nb-init', inputs: {} }]
+        );
+    });
+
+    test("GET /runs/:runId reports the run as pending, running, and then finished, in Deepnote's shape", async () => {
+        const clock = sinon.useFakeTimers({ now: Date.parse(NOW), toFake: ['Date'] });
+        const runId = await startRun();
+        const pending = {
+            runId,
+            notebookId: 'nb-1',
+            status: 'pending',
+            snapshotStatus: 'pending',
+            snapshotExpiresAt: null,
+            snapshotContent: null,
+            snapshotDownloadUrl: null,
+            snapshotBlocks: null,
+            error: null,
+            createdAt: NOW,
+            completedAt: null
+        };
+        assert.deepStrictEqual(await getRun(runId), pending);
+
+        runner.calls[0].onRunning();
+        assert.deepStrictEqual(await getRun(runId), { ...pending, status: 'running' });
+
+        clock.tick(65_000);
+        runner.calls[0].finish({ status: 'success', error: null, snapshotBlocks: CHART_SNAPSHOT });
+        assert.deepStrictEqual(await waitForStatus(runId, 'success'), {
+            ...pending,
+            status: 'success',
+            snapshotStatus: 'available',
+            snapshotBlocks: CHART_SNAPSHOT,
+            completedAt: '2026-01-02T03:05:10.000Z'
+        });
+        assert.deepStrictEqual(unsupported, []);
+    });
+
+    const outcomes: [AppPreviewRunOutcome, string][] = [
+        [{ status: 'error', error: 'ValueError: no data', snapshotBlocks: CHART_SNAPSHOT }, 'available'],
+        [{ status: 'internal_error', error: 'The kernel died', snapshotBlocks: null }, 'unavailable'],
+        [{ status: 'stopped', error: null, snapshotBlocks: null }, 'unavailable']
+    ];
+    for (const [outcome, snapshotStatus] of outcomes) {
+        test(`GET /runs/:runId reports a run that ended as ${outcome.status} with its snapshot ${snapshotStatus}`, async () => {
+            const runId = await startRun();
+
+            runner.calls[0].finish(outcome);
+
+            const run = await waitForStatus(runId, outcome.status);
+            assert.deepInclude(run, { ...outcome, snapshotStatus });
+            assert.isString(run.completedAt);
+        });
+    }
+
+    test('GET /runs/:runId reports a runner that rejects as an internal error, and logs it', async () => {
+        const logError = sinon.stub(logger, 'error');
+        const runId = await startRun();
+        const failure = new Error('runner bug');
+
+        runner.calls[0].fail(failure);
+
+        assert.deepInclude(await waitForStatus(runId, 'internal_error'), {
+            error: 'runner bug',
+            snapshotStatus: 'unavailable',
+            snapshotBlocks: null
+        });
+        assert.deepStrictEqual(
+            logError.getCalls().map((logged) => logged.args[1]),
+            [failure]
+        );
+    });
+
+    test('GET /runs/:runId answers 404 for a run ID the preview has not started', async () => {
+        await assertJson(await call('GET', '/runs/run-1'), 404, { message: 'Run not found' });
+    });
+
+    test('dispose() cancels the unfinished runs, and records how the runner ended them', async () => {
+        const stoppedRunId = await startRun();
+        const finishedRunId = await startRun();
+        runner.calls[1].finish({ status: 'success', error: null, snapshotBlocks: [] });
+        await waitForStatus(finishedRunId, 'success');
+
+        api.dispose();
+
+        assert.deepStrictEqual(
+            runner.calls.map((runCall) => runCall.token.isCancellationRequested === true),
+            [true, false]
+        );
+        runner.calls[0].finish({ status: 'stopped', error: null, snapshotBlocks: null });
+        assert.deepInclude(await waitForStatus(stoppedRunId, 'stopped'), { snapshotStatus: 'unavailable' });
+    });
+
+    const invalidBodies: [string, unknown, string][] = [
+        ['without notebookId', { inputs: {} }, 'notebookId is required'],
+        [
+            'with an empty notebookId',
+            { notebookId: '' },
+            'notebookId too small: expected string to have >=1 characters'
+        ],
+        ['with an empty input name', { notebookId: 'nb-1', inputs: { '': 'x' } }, 'inputs. invalid key in record'],
+        ['with a number as an input value', { notebookId: 'nb-1', inputs: { a: 1 } }, 'inputs.a invalid input'],
+        ['with an unknown key', { notebookId: 'nb-1', x: 1 }, 'Unrecognized key: "x"'],
+        ['for an unknown notebook', { notebookId: 'nb-missing' }, 'Notebook not found'],
+        [
+            'with an input the notebook does not define',
+            { notebookId: 'nb-1', inputs: { unknown: 'x' } },
+            'Input "unknown" is not defined for this notebook'
+        ],
+        [
+            'with an input only another notebook of the file defines',
+            { notebookId: 'nb-1', inputs: { limit: '5' } },
+            'Input "limit" is not defined for this notebook'
+        ],
+        [
+            'with a value the input block cannot hold',
+            { notebookId: 'nb-1', inputs: { region: true } },
+            'Input "region" must be a string for input-text'
+        ]
+    ];
+    for (const [condition, body, message] of invalidBodies) {
+        test(`POST /runs answers 400 to a body ${condition}, without starting a run`, async () => {
+            await assertJson(await createRun(body), 400, { message });
+            assert.deepStrictEqual(runner.calls, []);
+        });
+    }
+
     const stubs: [string, string, AppPreviewOperation][] = [
         ['GET', '/notebooks/nb-1/app-data', 'appData()'],
-        ['POST', '/runs', 'run()'],
-        ['GET', '/runs/run-1', 'run()'],
         ['GET', '/projects/p-1/dataframes/sales%20by%20month', 'dataframe()']
     ];
     for (const [method, path, operation] of stubs) {

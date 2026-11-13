@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as os from 'os';
 import { anything, when } from 'ts-mockito';
-import { Uri } from 'vscode';
+import { Uri, type CancellationToken } from 'vscode';
 
 import * as path from '../../../platform/vscode-path/path';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
@@ -12,6 +12,7 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-m
 import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from '../deepnoteTestHelpers';
 import type { AppPreviewOperation } from './appPreviewApi.node';
 import { AppPreviewSession, type AppPreviewProject } from './appPreviewSession.node';
+import type { AppPreviewRunOutcome, IAppPreviewRunner } from './types';
 
 const CSP = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:";
 const CLIENT_SCRIPT = '/* the extension client */\n';
@@ -27,7 +28,7 @@ interface RawResponse {
 function request(
     session: AppPreviewSession,
     urlPath: string,
-    options: { method?: string; host?: string; headers?: http.OutgoingHttpHeaders } = {}
+    options: { method?: string; host?: string; headers?: http.OutgoingHttpHeaders; body?: string } = {}
 ): Promise<RawResponse> {
     const port = Number(new URL(session.serverUrl.toString(true)).port);
 
@@ -52,7 +53,7 @@ function request(
             }
         );
         req.on('error', reject);
-        req.end();
+        req.end(options.body);
     });
 }
 
@@ -80,6 +81,16 @@ suite('AppPreviewSession', () => {
     let clientScript: string;
     let sessions: AppPreviewSession[];
     let unsupported: AppPreviewOperation[];
+    let runTokens: CancellationToken[];
+
+    /** Runs that end only once their token is cancelled. */
+    const runner: IAppPreviewRunner = {
+        run: (_request, token) =>
+            new Promise<AppPreviewRunOutcome>((resolve) => {
+                runTokens.push(token);
+                token.onCancellationRequested(() => resolve({ status: 'stopped', error: null, snapshotBlocks: null }));
+            })
+    };
 
     async function startSession(
         options: { folder?: string; project?: AppPreviewProject | null } = {}
@@ -88,6 +99,7 @@ suite('AppPreviewSession', () => {
         const session = new AppPreviewSession({
             folder: Uri.file(options.folder ?? appFolder),
             project: project ?? undefined,
+            runner,
             scripts: { appClient: Uri.file(clientScript) },
             onUnsupported: (operation) => unsupported.push(operation)
         });
@@ -106,6 +118,7 @@ suite('AppPreviewSession', () => {
     setup(() => {
         resetVSCodeMocks();
         unsupported = [];
+        runTokens = [];
         sessions = [];
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-'));
         appFolder = path.join(tmp, 'app');
@@ -324,6 +337,37 @@ suite('AppPreviewSession', () => {
             session.setProject({ id: 'project-1', folder: Uri.file(path.join(tmp, 'a')) });
 
             assert.strictEqual(await notebookName(), 'Copy a');
+        });
+
+        test('cancels its unfinished runs when it is disposed', async () => {
+            const notebook = createDeepnoteNotebook({ id: 'nb-1' });
+            const file = createDeepnoteFile({ project: createDeepnoteProject({ notebooks: [notebook] }) });
+            write('main.deepnote', serializeDeepnoteFile(file), tmp);
+            stubWorkspaceFsOnDisk();
+            when(mockedVSCodeNamespaces.workspace.findFiles('**/*.deepnote')).thenCall(async () => [
+                Uri.file(path.join(tmp, 'main.deepnote'))
+            ]);
+            write('page.html', `<script src="${HOSTED}"></script>`);
+            const session = await startSession();
+            const token = tokenOf(await getText(session, '/page.html'));
+
+            const created = await request(session, '/__deepnote/v2/runs', {
+                method: 'POST',
+                headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+                body: JSON.stringify({ notebookId: 'nb-1' })
+            });
+            assert.strictEqual(created.status, 202);
+            assert.deepStrictEqual(
+                runTokens.map((runToken) => runToken.isCancellationRequested === true),
+                [false]
+            );
+
+            session.dispose();
+
+            assert.deepStrictEqual(
+                runTokens.map((runToken) => runToken.isCancellationRequested === true),
+                [true]
+            );
         });
     });
 

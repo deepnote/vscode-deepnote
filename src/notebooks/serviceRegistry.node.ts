@@ -103,6 +103,8 @@ import { DeepnoteApiTokenService } from './deepnote/cloud/deepnoteApiTokenServic
 import { DeepnoteCloudOperationLock } from './deepnote/cloud/deepnoteCloudOperationLock';
 import { PublishAppCommandHandler } from './deepnote/cloud/publishAppCommandHandler.node';
 import { AppPreviewCommandHandler } from './deepnote/appPreview/appPreviewCommandHandler.node';
+import { AppPreviewRunner } from './deepnote/appPreview/appPreviewRunner.node';
+import { IAppPreviewRunner } from './deepnote/appPreview/types';
 import { SyncWithDeepnoteCloudCommandHandler } from './deepnote/cloud/syncWithDeepnoteCloudCommandHandler.node';
 import { IDeepnoteApiTokenService, IDeepnoteCloudOperationLock } from './deepnote/cloud/types';
 import { OpenInDeepnoteHandler } from './deepnote/openInDeepnoteHandler.node';
@@ -251,6 +253,7 @@ export function registerTypes(serviceManager: IServiceManager, isDevMode: boolea
         IExtensionSyncActivationService,
         AppPreviewCommandHandler
     );
+    serviceManager.addSingleton<IAppPreviewRunner>(IAppPreviewRunner, AppPreviewRunner);
     serviceManager.addSingleton<IExtensionSyncActivationService>(
         IExtensionSyncActivationService,
         IntegrationEnvRefreshHandler

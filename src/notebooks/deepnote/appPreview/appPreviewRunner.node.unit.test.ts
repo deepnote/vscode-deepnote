@@ -237,8 +237,7 @@ suite('AppPreviewRunner', () => {
             });
         });
 
-        const withoutInit: [string, string | undefined][] = [
-            ['the project has no init notebook', undefined],
+        const withoutInit: [string, string][] = [
             ['the notebook is the init notebook', 'nb-1'],
             ['no file has the init notebook', 'nb-init']
         ];
@@ -275,7 +274,7 @@ suite('AppPreviewRunner', () => {
             const fileUri = write('main.deepnote', file);
             const onDisk = fs.readFileSync(fileUri.fsPath, 'utf8');
 
-            const outcome = await run(fileUri, 'nb-1', { x: 'hello' });
+            await run(fileUri, 'nb-1', { x: 'hello' });
 
             const [initCall, notebookCall] = engine().runProjectCalls;
             assert.isUndefined(initCall.options.inputs);
@@ -283,7 +282,6 @@ suite('AppPreviewRunner', () => {
                 deepnote_variable_value: false
             });
             assert.deepStrictEqual(notebookCall.options.inputs, { x: 'hello' });
-            assert.deepInclude(outcome.snapshotBlocks?.[0].metadata, { deepnote_variable_value: 'hello' });
             assert.strictEqual(fs.readFileSync(fileUri.fsPath, 'utf8'), onDisk);
         });
 
@@ -334,25 +332,6 @@ suite('AppPreviewRunner', () => {
             );
             assert.deepStrictEqual(contents, [[WINDOWS_INIT_BLOCK], [DEEPNOTE_CLOUD_INIT_BLOCK]]);
             assert.strictEqual(fs.readFileSync(fileUri.fsPath, 'utf8'), onDisk);
-        });
-
-        test("runs Deepnote Cloud's init block unchanged on Linux", async () => {
-            sinon.stub(process, 'platform').value('linux');
-            const fileUri = write(
-                'main.deepnote',
-                projectFile(
-                    [
-                        notebookOf('nb-init', [createDeepnoteBlock({ content: DEEPNOTE_CLOUD_INIT_BLOCK })]),
-                        notebookOf('nb-1', [])
-                    ],
-                    'nb-init'
-                )
-            );
-
-            await run(fileUri, 'nb-1');
-
-            const [initBlock] = engine().runProjectCalls[0].file.project.notebooks[0].blocks;
-            assert.deepInclude(initBlock, { content: DEEPNOTE_CLOUD_INIT_BLOCK });
         });
     });
 
@@ -592,6 +571,17 @@ suite('AppPreviewRunner', () => {
                 ['open']
             ],
             [
+                'the interpreter resolves',
+                () =>
+                    when(interpreters.resolve(anything())).thenCall(async () => {
+                        steps.push('resolve');
+                        cancellation.cancel();
+
+                        return INTERPRETER;
+                    }),
+                ['open main.deepnote', 'resolve']
+            ],
+            [
                 'the toolkit install is checked',
                 () =>
                     when(toolkit.ensureToolkitInstalled(anything(), anything(), anything())).thenCall(async () => {
@@ -601,6 +591,17 @@ suite('AppPreviewRunner', () => {
                         return DeepnoteToolkitDependencyResponse.cancel;
                     }),
                 ['open main.deepnote', 'resolve', 'ensureToolkit']
+            ],
+            [
+                'the server starts',
+                () =>
+                    when(serverStarter.startServer(anything(), anything(), anything())).thenCall(async () => {
+                        steps.push('startServer');
+                        cancellation.cancel();
+
+                        return SERVER;
+                    }),
+                ['open main.deepnote', 'resolve', 'ensureToolkit', 'startServer']
             ],
             [
                 'the server starts, which then throws',

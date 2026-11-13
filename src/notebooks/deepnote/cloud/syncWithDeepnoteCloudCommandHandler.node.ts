@@ -66,9 +66,16 @@ function unsavedDeepnoteDocuments(): (NotebookDocument | TextDocument)[] {
 }
 
 function asSyncTarget(arg: unknown): SyncWithDeepnoteCloudTarget | undefined {
-    const candidate = arg as Partial<SyncWithDeepnoteCloudTarget> | undefined;
-
-    return candidate?.root instanceof Uri ? { root: candidate.root, allFiles: candidate.allFiles === true } : undefined;
+    if (
+        arg != null &&
+        arg instanceof Object &&
+        'root' in arg &&
+        arg.root instanceof Uri &&
+        'allFiles' in arg &&
+        typeof arg.allFiles === 'boolean'
+    ) {
+        return { root: arg.root, allFiles: arg.allFiles };
+    }
 }
 
 function logSyncEvent(event: SyncEvent): void {

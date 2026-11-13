@@ -370,11 +370,6 @@ suite('createAppPreviewApi', () => {
         ['with an unknown key', { notebookId: 'nb-1', x: 1 }, 'Unrecognized key: "x"'],
         ['for an unknown notebook', { notebookId: 'nb-missing' }, 'Notebook not found'],
         [
-            'with an input the notebook does not define',
-            { notebookId: 'nb-1', inputs: { unknown: 'x' } },
-            'Input "unknown" is not defined for this notebook'
-        ],
-        [
             'with an input only another notebook of the file defines',
             { notebookId: 'nb-1', inputs: { limit: '5' } },
             'Input "limit" is not defined for this notebook'

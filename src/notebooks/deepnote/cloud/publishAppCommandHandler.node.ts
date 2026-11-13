@@ -299,7 +299,9 @@ export class PublishAppCommandHandler implements IExtensionSyncActivationService
         if (result.errors.length > 0) {
             void this.showPartialFailure(result.errors.length);
         } else if (result.appUrl) {
-            void showPublishedAppUrl(DeepnoteCloud.publishSucceeded(result.appUrl), result.appUrl);
+            showPublishedAppUrl(DeepnoteCloud.publishSucceeded(result.appUrl), result.appUrl).catch((error) =>
+                logger.warn('Could not open or copy the published app URL', error)
+            );
         }
         if (mirrorIncompleteRoot) {
             void window.showWarningMessage(DeepnoteCloud.publishMirrorIncomplete(mirrorIncompleteRoot));

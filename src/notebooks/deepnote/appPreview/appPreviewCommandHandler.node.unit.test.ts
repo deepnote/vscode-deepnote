@@ -225,13 +225,10 @@ suite('AppPreviewCommandHandler', () => {
                 headers: { authorization: `Bearer ${token}` }
             });
 
-        assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
-        assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
         assert.strictEqual((await api('/projects/project-1/dataframes/sales')).status, 501);
         assert.strictEqual((await api('/projects/project-1/dataframes/sales')).status, 501);
 
         assert.deepStrictEqual(warnings, [
-            'The app in app called appData(), which the local preview does not support yet.',
             'The app in app called dataframe(), which the local preview does not support yet.'
         ]);
     });

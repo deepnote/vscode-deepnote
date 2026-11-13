@@ -2,9 +2,11 @@ import { deepnoteBlockSchema, serializeDeepnoteFile, type DeepnoteBlock } from '
 import { assert } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as sinon from 'sinon';
 import { anything, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
+import { logger } from '../../../platform/logging';
 import * as path from '../../../platform/vscode-path/path';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
@@ -146,8 +148,14 @@ suite('findNotebookById', () => {
         );
     }
 
-    async function find(notebookId: string): Promise<{ file: string; projectId: string; name: string } | undefined> {
-        const found = await findNotebookById(notebookId);
+    async function find(
+        notebookId: string,
+        projectFolder?: string
+    ): Promise<{ file: string; projectId: string; name: string } | undefined> {
+        const found = await findNotebookById(
+            notebookId,
+            projectFolder === undefined ? undefined : Uri.file(path.join(tmp, projectFolder))
+        );
 
         return (
             found && {
@@ -165,6 +173,7 @@ suite('findNotebookById', () => {
     });
 
     teardown(() => {
+        sinon.restore();
         fs.rmSync(tmp, { recursive: true, force: true });
     });
 
@@ -188,6 +197,36 @@ suite('findNotebookById', () => {
         });
     });
 
+    test("prefers the project folder's file when another file has the same notebook ID", async () => {
+        writeProject('other/copy.deepnote', 'p-main', [{ id: 'nb-main', name: 'Copy' }]);
+        writeProject('project/main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
+        workspaceFiles('other/copy.deepnote', 'project/main.deepnote');
+
+        assert.deepStrictEqual(await find('nb-main', 'project'), {
+            file: path.join('project', 'main.deepnote'),
+            projectId: 'p-main',
+            name: 'Main'
+        });
+    });
+
+    test('finds a notebook outside the project folder when no file in it has the ID', async () => {
+        writeProject('project/main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
+        writeProject('notebooks/inputs.deepnote', 'p-inputs', [{ id: 'nb-inputs', name: 'Inputs' }]);
+        workspaceFiles('project/main.deepnote', 'notebooks/inputs.deepnote');
+
+        assert.strictEqual((await find('nb-inputs', 'project'))?.name, 'Inputs');
+    });
+
+    test('answers the same file for a shared notebook ID whatever order the files are listed in', async () => {
+        writeProject('a.deepnote', 'p-main', [{ id: 'nb-main', name: 'A' }]);
+        writeProject('b.deepnote', 'p-main', [{ id: 'nb-main', name: 'B' }]);
+
+        workspaceFiles('b.deepnote', 'a.deepnote');
+        assert.strictEqual((await find('nb-main'))?.name, 'A');
+        workspaceFiles('a.deepnote', 'b.deepnote');
+        assert.strictEqual((await find('nb-main'))?.name, 'A');
+    });
+
     test('returns undefined for an ID that no file has', async () => {
         writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
         workspaceFiles('main.deepnote');
@@ -204,11 +243,21 @@ suite('findNotebookById', () => {
     });
 
     test('skips a file that fails to parse and reads on', async () => {
-        fs.writeFileSync(path.join(tmp, 'broken.deepnote'), 'project: [unclosed');
+        fs.writeFileSync(path.join(tmp, 'broken.deepnote'), 'project: [unclosed nb-main');
         writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
         workspaceFiles('broken.deepnote', 'main.deepnote');
 
         assert.deepStrictEqual(await find('nb-main'), { file: 'main.deepnote', projectId: 'p-main', name: 'Main' });
+    });
+
+    test('does not parse a file whose text does not contain the ID', async () => {
+        const warn = sinon.stub(logger, 'warn');
+        fs.writeFileSync(path.join(tmp, 'broken.deepnote'), 'project: [unclosed');
+        writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
+        workspaceFiles('broken.deepnote', 'main.deepnote');
+
+        assert.strictEqual((await find('nb-main'))?.name, 'Main');
+        sinon.assert.notCalled(warn);
     });
 
     test('reads the file again on every call, so an edit on disk shows in the next lookup', async () => {

@@ -246,7 +246,7 @@ export class AppPreviewSession implements IDisposable {
             '/v2',
             createAppPreviewApi({
                 token: this.token,
-                findNotebook: findNotebookById,
+                findNotebook: (notebookId) => findNotebookById(notebookId, this.project?.folder),
                 onUnsupported: (operation) => this.options.onUnsupported(operation)
             })
         );

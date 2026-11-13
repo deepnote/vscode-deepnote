@@ -1,7 +1,8 @@
 /**
- * VS Code 1.111 opens `simpleBrowser.api.open` in its integrated browser, an Electron view the driver lists as a window
- * of its own, so the page is read and captured from that window. With `simpleBrowser.useIntegratedBrowser` off, the
- * Simple Browser shows the page in a frame inside a webview, which the workbench screenshot includes.
+ * VS Code opens `simpleBrowser.api.open` in its integrated browser, an Electron view the driver lists as a window of its
+ * own, so the page is read and captured from that window. The Simple Browser routes there whenever
+ * `workbench.action.browser.open` exists, as it always does in desktop VS Code, so its webview, which editors without an
+ * integrated browser get, is not covered here.
  */
 
 import { expect } from 'chai';
@@ -9,15 +10,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-    By,
     EditorView,
     InputBox,
     NotificationType,
     SideBarView,
     VSBrowser,
-    WebView,
     Workbench,
-    until,
     type ViewItem
 } from 'vscode-extension-tester';
 
@@ -36,6 +34,7 @@ import {
 const FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview');
 const SYNCED_PROJECT_FIXTURE = 'hello-world.deepnote';
 const SYNCED_APP = path.join('synced', 'Sales', '.files', '_deepnote_static');
+const SYNCED_TITLE = 'Synced fixture';
 const RELOAD_APP = 'reload-app';
 const RELOAD_TITLE = 'Reload fixture';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
@@ -111,19 +110,6 @@ async function onIntegratedBrowserPage<T>(title: string, read: () => Promise<T>)
     }
 }
 
-async function onSimpleBrowserPage<T>(read: () => Promise<T>): Promise<T> {
-    const driver = VSBrowser.instance.driver;
-    const webView = new WebView();
-    await webView.switchToFrame(WORKBENCH_TIMEOUT);
-    try {
-        await driver.switchTo().frame(await driver.wait(until.elementLocated(By.css('iframe')), WORKBENCH_TIMEOUT));
-
-        return await read();
-    } finally {
-        await webView.switchBack();
-    }
-}
-
 /** Leaves the Notifications Center open, so the next screenshot shows the warnings. */
 async function previewWarnings(count: number): Promise<string[]> {
     const center = await new Workbench().openNotificationsCenter();
@@ -196,10 +182,13 @@ async function previewFromCommandPalette(folder: string): Promise<void> {
     );
 }
 
-async function setIntegratedBrowser(enabled: boolean): Promise<void> {
-    const settings = await new Workbench().openSettings();
-    await (await settings.findSettingByID('simpleBrowser.useIntegratedBrowser')).setValue(enabled);
-    await closeAllEditors();
+function copyRetitledApp(appDir: string, title: string): void {
+    fs.cpSync(FIXTURE_APP, appDir, { recursive: true });
+    const index = path.join(appDir, 'index.html');
+    fs.writeFileSync(
+        index,
+        fs.readFileSync(index, 'utf8').replace('<title>Preview fixture</title>', `<title>${title}</title>`)
+    );
 }
 
 /** EditorView.closeAllEditors cannot find the close button of the integrated browser's tab. */
@@ -225,16 +214,10 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
             JSON.stringify({ 'explorer.compactFolders': false })
         );
         fs.cpSync(FIXTURE_APP, path.join(workspaceDir, 'app'), { recursive: true });
-        // Its own folder, so its own preview session warns once whatever ran before, and its own page title.
-        fs.cpSync(FIXTURE_APP, path.join(workspaceDir, RELOAD_APP), { recursive: true });
-        const reloadIndex = path.join(workspaceDir, RELOAD_APP, 'index.html');
-        fs.writeFileSync(
-            reloadIndex,
-            fs
-                .readFileSync(reloadIndex, 'utf8')
-                .replace('<title>Preview fixture</title>', `<title>${RELOAD_TITLE}</title>`)
-        );
-        fs.cpSync(FIXTURE_APP, path.join(workspaceDir, SYNCED_APP), { recursive: true });
+        // Their own folders, so each preview session warns once whatever ran before, and their own page titles, so each
+        // integrated browser window is told apart.
+        copyRetitledApp(path.join(workspaceDir, RELOAD_APP), RELOAD_TITLE);
+        copyRetitledApp(path.join(workspaceDir, SYNCED_APP), SYNCED_TITLE);
         copyFixtureIntoDir(path.join(workspaceDir, 'synced', 'Sales'), SYNCED_PROJECT_FIXTURE);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
@@ -248,7 +231,6 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
     });
 
     after(async function () {
-        await setIntegratedBrowser(true).catch((error) => console.warn('[deepnote-e2e] restore browser:', error));
         if (workspaceDir) {
             fs.rmSync(workspaceDir, { recursive: true, force: true });
         }
@@ -304,21 +286,18 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         await center.close();
     });
 
-    it('renders a synced app in the Simple Browser, with the project of the .deepnote file next to its .files folder', async function () {
+    it('previews a synced app from the Command Palette, with the project of the .deepnote file next to its .files folder', async function () {
         const screenshot = createScreenshotter(this);
-        await setIntegratedBrowser(false);
         await clearNotifications();
 
         await previewFromCommandPalette(path.join(workspaceDir, SYNCED_APP));
 
-        await VSBrowser.instance.driver.wait(
-            async () =>
-                (await new EditorView().getOpenEditorTitles().catch((): string[] => [])).includes('Simple Browser'),
-            WORKBENCH_TIMEOUT,
-            'the Simple Browser did not open'
-        );
-        const report = await onSimpleBrowserPage(readReport);
-        await screenshot('simple-browser-synced-app');
+        const report = await onIntegratedBrowserPage(SYNCED_TITLE, async () => {
+            const read = await readReport();
+            await screenshot('synced-app-page');
+
+            return read;
+        });
 
         expect(report).to.deep.equal(
             expectedReport(

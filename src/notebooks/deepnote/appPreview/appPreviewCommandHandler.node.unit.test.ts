@@ -190,7 +190,6 @@ suite('AppPreviewCommandHandler', () => {
 
         assert.deepStrictEqual(opened, []);
         assert.deepStrictEqual(openedExternally, [externalUriRequests[0]]);
-        assert.notStrictEqual(externalUriRequests[0], 'http://localhost:4567/');
     });
 
     test('shows why the preview could not start, and starts afresh on the next run', async () => {

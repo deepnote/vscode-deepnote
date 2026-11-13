@@ -55,12 +55,18 @@ suite('createAppPreviewApi', () => {
         });
     }
 
-    test('answers 401 to a missing or wrong bearer token, without reaching a stub', async () => {
-        for (const authorization of [null, 'Bearer wrong-token', `Bearer ${TOKEN}x`, TOKEN]) {
+    const rejectedAuthorizations: [string, string | null][] = [
+        ['no authorization header', null],
+        ['a wrong token', 'Bearer wrong-token'],
+        ['the token with a suffix', `Bearer ${TOKEN}x`],
+        ['the token without the Bearer scheme', TOKEN]
+    ];
+    for (const [condition, authorization] of rejectedAuthorizations) {
+        test(`answers 401 to ${condition}, without reaching a stub`, async () => {
             await assertJson(await call('GET', '/notebooks/nb-1', authorization), 401, { message: 'Unauthorized' });
-        }
-        assert.deepStrictEqual(unsupported, []);
-    });
+            assert.deepStrictEqual(unsupported, []);
+        });
+    }
 
     test('answers 403 to every other route', async () => {
         const notAvailable = { message: 'This endpoint is not available to app viewer tokens' };

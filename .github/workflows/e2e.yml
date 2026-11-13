@@ -32,19 +32,19 @@ jobs:
       TEST_RESOURCES: ${{ github.workspace }}/test-resources
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        uses: actions/setup-node@v7.1.0
         with:
           cache: 'npm'
           node-version-file: '.nvmrc'
 
       - name: Setup Python # interpreter the Deepnote environment is created from
         id: python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.12'
 
@@ -85,13 +85,13 @@ jobs:
         run: echo "DEEPNOTE_E2E_VENV_DIR=$HOME/.deepnote-e2e/.venv-e2e" >> "$GITHUB_ENV"
 
       - name: Cache pip wheel downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6.1.0
         with:
           path: ~/.cache/pip
           key: pip-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/platform/common/toolkitSpec.json', 'test/e2e/helpers/venv.ts') }}
 
       - name: Cache the managed Deepnote toolkit venv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6.1.0
         with:
           path: ${{ env.DEEPNOTE_E2E_VENV_DIR }}
           key: e2e-venv-${{ runner.os }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('src/platform/common/toolkitSpec.json', 'test/e2e/helpers/venv.ts') }}
@@ -114,14 +114,14 @@ jobs:
 
       - name: Upload the shard record
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: e2e-ran-${{ matrix.group }}
           path: shard-ran/
 
       - name: Upload failure screenshots
         if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: e2e-screenshots-${{ matrix.group }}
           path: ${{ env.TEST_RESOURCES }}/screenshots/**/*.png
@@ -135,12 +135,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Collect what each shard reported
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        uses: actions/download-artifact@v8.0.2
         with:
           merge-multiple: true
           path: shard-ran

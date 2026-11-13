@@ -8,6 +8,7 @@ import { generateUuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import { extname, extUri } from '../../../platform/vscode-path/resources';
 import { createAppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
+import { findNotebookById } from './appPreviewWorkspace.node';
 
 export interface AppPreviewProject {
     id: string;
@@ -240,6 +241,7 @@ export class AppPreviewSession implements IDisposable {
             '/__deepnote/v2',
             createAppPreviewApi({
                 token: this.token,
+                findNotebook: (notebookId) => findNotebookById(notebookId, this.project?.folder),
                 onUnsupported: (operation) => this.options.onUnsupported(operation)
             })
         );

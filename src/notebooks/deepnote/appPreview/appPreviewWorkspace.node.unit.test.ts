@@ -1,14 +1,22 @@
+import { deepnoteBlockSchema, serializeDeepnoteFile, type DeepnoteBlock } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as sinon from 'sinon';
 import { anything, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
+import { logger } from '../../../platform/logging';
 import * as path from '../../../platform/vscode-path/path';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
-import { serializeProjectFile } from '../deepnoteTestHelpers';
-import { resolvePreviewProject } from './appPreviewWorkspace.node';
+import {
+    createDeepnoteFile,
+    createDeepnoteNotebook,
+    createDeepnoteProject,
+    serializeProjectFile
+} from '../deepnoteTestHelpers';
+import { findNotebookById, resolvePreviewProject, toNotebookInputs } from './appPreviewWorkspace.node';
 
 suite('resolvePreviewProject', () => {
     let tmp: string;
@@ -112,5 +120,295 @@ suite('resolvePreviewProject', () => {
             id: 'p-main',
             folder: path.join('ws', 'project')
         });
+    });
+});
+
+suite('findNotebookById', () => {
+    let tmp: string;
+
+    function writeProject(relativePath: string, projectId: string, notebooks: { id: string; name: string }[]): void {
+        const file = path.join(tmp, relativePath);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(
+            file,
+            serializeDeepnoteFile(
+                createDeepnoteFile({
+                    project: createDeepnoteProject({
+                        id: projectId,
+                        notebooks: notebooks.map((notebook) => createDeepnoteNotebook(notebook))
+                    })
+                })
+            )
+        );
+    }
+
+    function workspaceFiles(...relativePaths: string[]): void {
+        when(mockedVSCodeNamespaces.workspace.findFiles('**/*.deepnote')).thenCall(async () =>
+            relativePaths.map((relativePath) => Uri.file(path.join(tmp, relativePath)))
+        );
+    }
+
+    async function find(
+        notebookId: string,
+        projectFolder?: string
+    ): Promise<{ file: string; projectId: string; name: string } | undefined> {
+        const found = await findNotebookById(
+            notebookId,
+            projectFolder === undefined ? undefined : Uri.file(path.join(tmp, projectFolder))
+        );
+
+        return (
+            found && {
+                file: path.relative(tmp, found.fileUri.fsPath),
+                projectId: found.file.project.id,
+                name: found.notebook.name
+            }
+        );
+    }
+
+    setup(() => {
+        resetVSCodeMocks();
+        tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-notebooks-'));
+        stubWorkspaceFsOnDisk();
+    });
+
+    teardown(() => {
+        sinon.restore();
+        fs.rmSync(tmp, { recursive: true, force: true });
+    });
+
+    test('finds a notebook in a nested folder and in a multi-notebook file', async () => {
+        writeProject('team/sales/sales.deepnote', 'p-sales', [{ id: 'nb-sales', name: 'Sales' }]);
+        writeProject('legacy.deepnote', 'p-legacy', [
+            { id: 'nb-first', name: 'First' },
+            { id: 'nb-second', name: 'Second' }
+        ]);
+        workspaceFiles('team/sales/sales.deepnote', 'legacy.deepnote');
+
+        assert.deepStrictEqual(await find('nb-sales'), {
+            file: path.join('team', 'sales', 'sales.deepnote'),
+            projectId: 'p-sales',
+            name: 'Sales'
+        });
+        assert.deepStrictEqual(await find('nb-second'), {
+            file: 'legacy.deepnote',
+            projectId: 'p-legacy',
+            name: 'Second'
+        });
+    });
+
+    test("prefers the project folder's file when another file has the same notebook ID", async () => {
+        writeProject('other/copy.deepnote', 'p-main', [{ id: 'nb-main', name: 'Copy' }]);
+        writeProject('project/main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
+        workspaceFiles('other/copy.deepnote', 'project/main.deepnote');
+
+        assert.deepStrictEqual(await find('nb-main', 'project'), {
+            file: path.join('project', 'main.deepnote'),
+            projectId: 'p-main',
+            name: 'Main'
+        });
+    });
+
+    test('finds a notebook outside the project folder when no file in it has the ID', async () => {
+        writeProject('project/main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
+        writeProject('notebooks/inputs.deepnote', 'p-inputs', [{ id: 'nb-inputs', name: 'Inputs' }]);
+        workspaceFiles('project/main.deepnote', 'notebooks/inputs.deepnote');
+
+        assert.strictEqual((await find('nb-inputs', 'project'))?.name, 'Inputs');
+    });
+
+    test('answers the same file for a shared notebook ID whatever order the files are listed in', async () => {
+        writeProject('a.deepnote', 'p-main', [{ id: 'nb-main', name: 'A' }]);
+        writeProject('b.deepnote', 'p-main', [{ id: 'nb-main', name: 'B' }]);
+
+        workspaceFiles('b.deepnote', 'a.deepnote');
+        assert.strictEqual((await find('nb-main'))?.name, 'A');
+        workspaceFiles('a.deepnote', 'b.deepnote');
+        assert.strictEqual((await find('nb-main'))?.name, 'A');
+    });
+
+    test('returns undefined for an ID that no file has', async () => {
+        writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
+        workspaceFiles('main.deepnote');
+
+        assert.isUndefined(await find('nb-missing'));
+    });
+
+    test('skips a snapshot that holds the same notebook ID as its project file', async () => {
+        writeProject('snapshots/main_p-main_latest.snapshot.deepnote', 'p-main', [{ id: 'nb-main', name: 'Snapshot' }]);
+        writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
+        workspaceFiles('snapshots/main_p-main_latest.snapshot.deepnote', 'main.deepnote');
+
+        assert.deepStrictEqual(await find('nb-main'), { file: 'main.deepnote', projectId: 'p-main', name: 'Main' });
+    });
+
+    test('skips a file that fails to parse and reads on', async () => {
+        fs.writeFileSync(path.join(tmp, 'broken.deepnote'), 'project: [unclosed nb-main');
+        writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
+        workspaceFiles('broken.deepnote', 'main.deepnote');
+
+        assert.deepStrictEqual(await find('nb-main'), { file: 'main.deepnote', projectId: 'p-main', name: 'Main' });
+    });
+
+    test('does not parse a file whose text does not contain the ID', async () => {
+        const warn = sinon.stub(logger, 'warn');
+        fs.writeFileSync(path.join(tmp, 'broken.deepnote'), 'project: [unclosed');
+        writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
+        workspaceFiles('broken.deepnote', 'main.deepnote');
+
+        assert.strictEqual((await find('nb-main'))?.name, 'Main');
+        sinon.assert.notCalled(warn);
+    });
+
+    test('reads the file again on every call, so an edit on disk shows in the next lookup', async () => {
+        writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Before' }]);
+        workspaceFiles('main.deepnote');
+        assert.strictEqual((await find('nb-main'))?.name, 'Before');
+
+        writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'After' }]);
+
+        assert.strictEqual((await find('nb-main'))?.name, 'After');
+    });
+});
+
+suite('toNotebookInputs', () => {
+    function block(
+        id: string,
+        type: string,
+        sortingKey: string,
+        metadata: Record<string, unknown> = {}
+    ): DeepnoteBlock {
+        return deepnoteBlockSchema.parse({ id, type, blockGroup: 'g', sortingKey, metadata });
+    }
+
+    function inputsOf(...blocks: DeepnoteBlock[]) {
+        return toNotebookInputs(createDeepnoteNotebook({ blocks }));
+    }
+
+    test('maps each input type with its value, label and type-specific fields', () => {
+        assert.deepStrictEqual(
+            inputsOf(
+                block('text', 'input-text', 'a0', {
+                    deepnote_variable_name: 'region',
+                    deepnote_variable_value: 'Europe',
+                    deepnote_input_label: 'Region'
+                }),
+                block('textarea', 'input-textarea', 'a1', {
+                    deepnote_variable_name: 'notes',
+                    deepnote_variable_value: 'line 1\nline 2'
+                }),
+                block('checkbox', 'input-checkbox', 'a2', {
+                    deepnote_variable_name: 'include_returns',
+                    deepnote_variable_value: true,
+                    deepnote_input_label: 'Returns'
+                }),
+                block('select', 'input-select', 'a3', {
+                    deepnote_variable_name: 'products',
+                    deepnote_variable_value: ['Chairs', 'Lamps'],
+                    deepnote_variable_options: ['Chairs', 'Desks', 'Lamps'],
+                    deepnote_allow_multiple_values: true
+                }),
+                block('slider', 'input-slider', 'a4', {
+                    deepnote_variable_name: 'threshold',
+                    deepnote_variable_value: '40',
+                    deepnote_slider_min_value: 10,
+                    deepnote_slider_max_value: 90,
+                    deepnote_slider_step: 5
+                }),
+                block('date', 'input-date', 'a5', {
+                    deepnote_variable_name: 'start',
+                    deepnote_variable_value: '2025-01-01'
+                }),
+                block('range', 'input-date-range', 'a6', {
+                    deepnote_variable_name: 'period',
+                    deepnote_variable_value: ['2025-01-01', '2025-03-31']
+                }),
+                block('file', 'input-file', 'a7', {
+                    deepnote_variable_name: 'upload',
+                    deepnote_variable_value: 'data.csv'
+                })
+            ),
+            [
+                { blockId: 'text', name: 'region', type: 'input-text', value: 'Europe', label: 'Region' },
+                { blockId: 'textarea', name: 'notes', type: 'input-textarea', value: 'line 1\nline 2' },
+                {
+                    blockId: 'checkbox',
+                    name: 'include_returns',
+                    type: 'input-checkbox',
+                    value: true,
+                    label: 'Returns'
+                },
+                {
+                    blockId: 'select',
+                    name: 'products',
+                    type: 'input-select',
+                    value: ['Chairs', 'Lamps'],
+                    options: ['Chairs', 'Desks', 'Lamps'],
+                    multiple: true
+                },
+                { blockId: 'slider', name: 'threshold', type: 'input-slider', value: '40', min: 10, max: 90, step: 5 },
+                { blockId: 'date', name: 'start', type: 'input-date', value: '2025-01-01' },
+                { blockId: 'range', name: 'period', type: 'input-date-range', value: ['2025-01-01', '2025-03-31'] },
+                { blockId: 'file', name: 'upload', type: 'input-file', value: 'data.csv' }
+            ]
+        );
+    });
+
+    test('gives a slider without a range 0 to 100 by 1, and a select without options none and a single value', () => {
+        assert.deepStrictEqual(
+            inputsOf(
+                block('slider', 'input-slider', 'a0', {
+                    deepnote_variable_name: 'level',
+                    deepnote_variable_value: '3'
+                }),
+                block('select', 'input-select', 'a1', { deepnote_variable_name: 'choice' })
+            ),
+            [
+                { blockId: 'slider', name: 'level', type: 'input-slider', value: '3', min: 0, max: 100, step: 1 },
+                { blockId: 'select', name: 'choice', type: 'input-select', value: '', options: [], multiple: false }
+            ]
+        );
+    });
+
+    test('labels a checkbox with its checkbox label when it has no input label, and leaves an empty label out', () => {
+        assert.deepStrictEqual(
+            inputsOf(
+                block('checkbox', 'input-checkbox', 'a0', {
+                    deepnote_variable_name: 'agree',
+                    deepnote_input_label: '',
+                    deepnote_input_checkbox_label: 'I agree'
+                }),
+                block('no-label', 'input-checkbox', 'a1', {
+                    deepnote_variable_name: 'subscribe',
+                    deepnote_input_label: '',
+                    deepnote_input_checkbox_label: ''
+                })
+            ),
+            [
+                { blockId: 'checkbox', name: 'agree', type: 'input-checkbox', value: false, label: 'I agree' },
+                { blockId: 'no-label', name: 'subscribe', type: 'input-checkbox', value: false }
+            ]
+        );
+    });
+
+    test('leaves out input blocks without a variable name and blocks that are not inputs', () => {
+        assert.deepStrictEqual(
+            inputsOf(
+                block('code', 'code', 'a0'),
+                block('unnamed', 'input-text', 'a1', { deepnote_variable_name: '' }),
+                block('named', 'input-text', 'a2', { deepnote_variable_name: 'city' })
+            ),
+            [{ blockId: 'named', name: 'city', type: 'input-text', value: '' }]
+        );
+    });
+
+    test('lists the inputs in sortingKey order, comparing keys by code unit', () => {
+        const names = inputsOf(
+            block('third', 'input-text', 'a1', { deepnote_variable_name: 'third' }),
+            block('second', 'input-text', 'a0', { deepnote_variable_name: 'second' }),
+            block('first', 'input-text', 'Z', { deepnote_variable_name: 'first' })
+        )?.map((input) => input.name);
+
+        assert.deepStrictEqual(names, ['first', 'second', 'third']);
     });
 });

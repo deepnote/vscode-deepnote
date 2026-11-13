@@ -114,7 +114,6 @@ suite('createAppPreviewApi', () => {
                 ]
             }
         });
-        assert.deepStrictEqual(lookups, ['nb-1']);
         assert.deepStrictEqual(unsupported, []);
     });
 

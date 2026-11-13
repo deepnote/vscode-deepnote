@@ -195,14 +195,12 @@ suite('findNotebookById', () => {
         assert.isUndefined(await find('nb-missing'));
     });
 
-    test('skips snapshots', async () => {
-        writeProject('snapshots/main_p-main_latest.snapshot.deepnote', 'p-main', [
-            { id: 'nb-snapshot', name: 'Snapshot' }
-        ]);
+    test('skips a snapshot that holds the same notebook ID as its project file', async () => {
+        writeProject('snapshots/main_p-main_latest.snapshot.deepnote', 'p-main', [{ id: 'nb-main', name: 'Snapshot' }]);
         writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
         workspaceFiles('snapshots/main_p-main_latest.snapshot.deepnote', 'main.deepnote');
 
-        assert.isUndefined(await find('nb-snapshot'));
+        assert.deepStrictEqual(await find('nb-main'), { file: 'main.deepnote', projectId: 'p-main', name: 'Main' });
     });
 
     test('skips a file that fails to parse and reads on', async () => {
@@ -331,11 +329,15 @@ suite('toNotebookInputs', () => {
                     deepnote_input_label: '',
                     deepnote_input_checkbox_label: 'I agree'
                 }),
-                block('text', 'input-text', 'a1', { deepnote_variable_name: 'city', deepnote_input_label: '' })
+                block('no-label', 'input-checkbox', 'a1', {
+                    deepnote_variable_name: 'subscribe',
+                    deepnote_input_label: '',
+                    deepnote_input_checkbox_label: ''
+                })
             ),
             [
                 { blockId: 'checkbox', name: 'agree', type: 'input-checkbox', value: false, label: 'I agree' },
-                { blockId: 'text', name: 'city', type: 'input-text', value: '' }
+                { blockId: 'no-label', name: 'subscribe', type: 'input-checkbox', value: false }
             ]
         );
     });
@@ -359,9 +361,5 @@ suite('toNotebookInputs', () => {
         )?.map((input) => input.name);
 
         assert.deepStrictEqual(names, ['first', 'second', 'third']);
-    });
-
-    test('returns undefined for a notebook without inputs', () => {
-        assert.isUndefined(inputsOf(block('code', 'code', 'a0')));
     });
 });

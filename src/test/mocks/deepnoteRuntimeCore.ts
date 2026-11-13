@@ -46,7 +46,6 @@ function makeFakeProcess(id: number): ChildProcess {
     } as unknown as ChildProcess;
 }
 
-/** A fake engine that records what it was given and does what `__setExecutionEngineBehavior` says. */
 export class ExecutionEngine implements Pick<RealExecutionEngine, 'runProject' | 'start' | 'stop'> {
     /** Each `runProject` call, with a deep copy of the file as it was when the call started. */
     public readonly runProjectCalls: { file: DeepnoteFile; options: ExecutionOptions }[] = [];

@@ -60,7 +60,7 @@ function projectFile(notebooks: DeepnoteNotebook[], initNotebookId?: string): De
     });
 }
 
-/** runtime-core 0.8.0's order: each notebook's executable blocks, sorted with `localeCompare`. */
+/** The order runtime-core 0.8.0 runs a file's blocks in. */
 function executionOrder(file: DeepnoteFile): DeepnoteBlock[] {
     return file.project.notebooks.flatMap((notebook) =>
         [...notebook.blocks]
@@ -70,9 +70,8 @@ function executionOrder(file: DeepnoteFile): DeepnoteBlock[] {
 }
 
 /**
- * Runs a file as runtime-core 0.8.0 does: it sets the inputs on the file's input blocks in place, runs the executable
- * blocks in its order, reports each through `onBlockDone`, and stops at the first failure. Each block's result comes
- * from `results`, and is a success without outputs by default.
+ * A `runProject` that behaves like runtime-core 0.8.0's: it writes the inputs into the file's input blocks in place
+ * and stops at the first failure.
  */
 function runtimeCoreLike(results: Record<string, BlockResult> = {}) {
     return async (file: DeepnoteFile, options: ExecutionOptions): Promise<ExecutionSummary> => {

@@ -77,8 +77,8 @@ function internalError(message: string): AppPreviewRunOutcome {
 }
 
 /**
- * A copy of `file` that holds only a copy of `notebook`, with its blocks re-keyed `000000`, `000001`, … in Deepnote's
- * order. runtime-core sorts blocks with `localeCompare`, which would run Deepnote's key `a0` before `Z0j`.
+ * A copy of `file` holding only `notebook`, its blocks re-keyed in Deepnote's order: runtime-core sorts blocks with
+ * `localeCompare`, which would run Deepnote's key `a0` before `Z0j`.
  */
 function runCopy(file: DeepnoteFile, notebook: DeepnoteNotebook): DeepnoteFile {
     const copy = structuredClone({ ...file, project: { ...file.project, notebooks: [notebook] } });
@@ -112,7 +112,7 @@ async function runNotebook(
     return { failure: summary.failedBlocks > 0 ? failure : undefined, outputs };
 }
 
-/** The run's copy of the notebook, input overrides included, with the outputs of this run. */
+/** After a run, `file`'s input blocks hold the run's input values: runtime-core writes them in place. */
 function snapshotBlocksOf(file: DeepnoteFile, outputs: Map<string, IOutput[]>): SnapshotBlock[] {
     return file.project.notebooks[0].blocks.map((block) => ({
         id: block.id,
@@ -124,11 +124,6 @@ function snapshotBlocksOf(file: DeepnoteFile, outputs: Map<string, IOutput[]>): 
     }));
 }
 
-/**
- * Runs a workspace notebook for the app preview's `run()` the way Deepnote runs one for an app: in a fresh kernel, the
- * init notebook first with its saved inputs, then the notebook with the page's inputs. The kernel is a session of its
- * own on the toolkit server the extension runs for the notebook's `.deepnote` file.
- */
 @injectable()
 export class AppPreviewRunner implements IAppPreviewRunner {
     constructor(

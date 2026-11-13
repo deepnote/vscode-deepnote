@@ -127,7 +127,7 @@ Run `Deepnote: Preview App` from the Command Palette, or right-click a folder in
   - Like a run in Deepnote, it is not read-only: what its code writes, such as files or stored dataframes, is written.
   - A run keeps going until its notebook finishes, even after you close the preview. Reloading or closing the VS Code window stops it.
   - For a legacy `.deepnote` file that holds several notebooks, the first run shows the prompt to split the file, as opening the file does.
-- The page's other calls to Deepnote reach a local stand-in that does not support them yet: `appData()` rejects with a message saying so, and VS Code shows a warning the first time the app calls it.
+- `appData()` answers from that notebook's newest successful `run()` in the preview: the first JSON object the run displayed (an `application/json` output), the first agent block's answer, and when the run started. Until a run succeeds, it rejects with Deepnote's message. The preview keeps run results in memory, so reloading or closing the VS Code window clears them.
 - Previewing needs a trusted workspace and the desktop app.
 
 ### Database integrations

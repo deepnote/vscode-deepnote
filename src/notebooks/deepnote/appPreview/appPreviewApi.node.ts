@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'crypto';
 import express, { type NextFunction, type Request, type Response, type Router } from 'express';
 
+import { logger } from '../../../platform/logging';
 import { blocksInNotebookOrder, toNotebookInputs, type WorkspaceNotebook } from './appPreviewWorkspace.node';
 
 export type AppPreviewOperation = 'appData()' | 'run()' | 'dataframe()';
@@ -15,6 +16,7 @@ export interface AppPreviewApiOptions {
 const UNAUTHORIZED_MESSAGE = 'Unauthorized';
 const NOT_AVAILABLE_MESSAGE = 'This endpoint is not available to app viewer tokens';
 const NOTEBOOK_NOT_FOUND_MESSAGE = 'Notebook not found';
+const INTERNAL_ERROR_MESSAGE = 'Internal server error';
 
 function notSupportedMessage(operation: AppPreviewOperation): string {
     return `${operation} is not supported in the local preview yet.`;
@@ -54,7 +56,7 @@ function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook) {
  * The local stand-in for Deepnote's app viewer API (`/v2`), mounted at `/__deepnote/v2` on the preview server.
  * Requests without the preview's bearer token get 401. `GET /notebooks/:notebookId` answers from the workspace's
  * notebooks, the other routes Deepnote's client calls get 501, and every other route gets 403, as Deepnote answers app
- * viewer tokens.
+ * viewer tokens. A handler that fails is logged and gets a JSON 500.
  */
 export function createAppPreviewApi(options: AppPreviewApiOptions): Router {
     const router = express.Router();
@@ -89,6 +91,11 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): Router {
 
     router.use((_req: Request, res: Response) => {
         res.status(403).json({ message: NOT_AVAILABLE_MESSAGE });
+    });
+    // Express's own handler would answer an HTML page that holds the stack, and log it outside the extension's logger.
+    router.use((error: unknown, req: Request, res: Response, _next: NextFunction) => {
+        logger.error(`AppPreviewApi: ${req.method} ${req.path} failed`, error);
+        res.status(500).json({ message: INTERNAL_ERROR_MESSAGE });
     });
 
     return router;

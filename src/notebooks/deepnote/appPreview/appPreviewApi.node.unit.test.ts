@@ -2,8 +2,10 @@ import { assert } from 'chai';
 import express from 'express';
 import * as http from 'http';
 import type { AddressInfo } from 'net';
+import * as sinon from 'sinon';
 import { Uri } from 'vscode';
 
+import { logger } from '../../../platform/logging';
 import {
     createDeepnoteBlock,
     createDeepnoteFile,
@@ -53,10 +55,12 @@ suite('createAppPreviewApi', () => {
     let baseUrl: string;
     let unsupported: AppPreviewOperation[];
     let lookups: string[];
+    let lookupFailure: Error | undefined;
 
     setup(async () => {
         unsupported = [];
         lookups = [];
+        lookupFailure = undefined;
         const notebooks = new Map<string, WorkspaceNotebook>(
             SALES_FILE.project.notebooks.map((notebook) => [
                 notebook.id,
@@ -70,6 +74,9 @@ suite('createAppPreviewApi', () => {
                 token: TOKEN,
                 findNotebook: async (notebookId) => {
                     lookups.push(notebookId);
+                    if (lookupFailure) {
+                        throw lookupFailure;
+                    }
 
                     return notebooks.get(notebookId);
                 },
@@ -82,6 +89,7 @@ suite('createAppPreviewApi', () => {
     });
 
     teardown(() => {
+        sinon.restore();
         server.closeAllConnections();
         server.close();
     });
@@ -136,6 +144,17 @@ suite('createAppPreviewApi', () => {
     test('GET /notebooks/:notebookId answers 404 for an ID no workspace notebook has', async () => {
         await assertJson(await call('GET', '/notebooks/nb-missing'), 404, { message: 'Notebook not found' });
         assert.deepStrictEqual(unsupported, []);
+    });
+
+    test('answers a JSON 500 without the stack, and logs the error, when the notebook lookup fails', async () => {
+        const logError = sinon.stub(logger, 'error');
+        lookupFailure = new Error('findFiles failed in /home/user/project');
+
+        await assertJson(await call('GET', '/notebooks/nb-1'), 500, { message: 'Internal server error' });
+        assert.deepStrictEqual(
+            logError.getCalls().map((logged) => logged.args[1]),
+            [lookupFailure]
+        );
     });
 
     const stubs: [string, string, AppPreviewOperation][] = [

@@ -1,4 +1,10 @@
-import { isInputBlock, type DeepnoteBlock, type DeepnoteFile, type InputBlock } from '@deepnote/blocks';
+import {
+    deserializeDeepnoteFile,
+    isInputBlock,
+    type DeepnoteBlock,
+    type DeepnoteFile,
+    type InputBlock
+} from '@deepnote/blocks';
 import { FileType, Uri, workspace } from 'vscode';
 
 import { readDeepnoteProjectFile } from '../../../platform/deepnote/deepnoteProjectFileReader';
@@ -29,12 +35,12 @@ export interface NotebookInput {
 }
 
 // Code-unit order, as Deepnote orders its fractional sorting keys: `localeCompare` would put `a0` before `Z`.
-function compareSortingKeys(a: DeepnoteBlock, b: DeepnoteBlock): number {
-    if (a.sortingKey === b.sortingKey) {
+function compareCodeUnits(left: string, right: string): number {
+    if (left === right) {
         return 0;
     }
 
-    return a.sortingKey < b.sortingKey ? -1 : 1;
+    return left < right ? -1 : 1;
 }
 
 async function projectIdsIn(folder: Uri): Promise<Set<string>> {
@@ -97,23 +103,34 @@ function toNotebookInput(block: InputBlock): NotebookInput {
 
 /** The notebook's blocks in the order Deepnote shows them, by `sortingKey`. */
 export function blocksInNotebookOrder(notebook: DeepnoteNotebook): DeepnoteBlock[] {
-    return [...notebook.blocks].sort(compareSortingKeys);
+    return [...notebook.blocks].sort((a, b) => compareCodeUnits(a.sortingKey, b.sortingKey));
 }
 
 /**
- * Finds the notebook with `notebookId` in the workspace's `.deepnote` files, read from disk on every call, and
- * returns it from the first file that has it. Snapshots are skipped, and files that fail to parse are logged and
- * skipped.
+ * Finds the notebook with `notebookId` in the workspace's `.deepnote` files, read from disk on every call. Files
+ * directly in `projectFolder` are searched first and the rest in URI order, so an ID that several files share, as in
+ * a copied project, resolves to the app's own project and to the same file on every call. Snapshots are skipped, and
+ * files that fail to parse are logged and skipped.
  */
-export async function findNotebookById(notebookId: string): Promise<WorkspaceNotebook | undefined> {
-    for (const fileUri of await workspace.findFiles('**/*.deepnote')) {
-        if (isSnapshotFile(fileUri)) {
-            continue;
-        }
+export async function findNotebookById(
+    notebookId: string,
+    projectFolder?: Uri
+): Promise<WorkspaceNotebook | undefined> {
+    const outsideProject = (uri: Uri) => (projectFolder !== undefined && isEqual(dirname(uri), projectFolder) ? 0 : 1);
+    const candidates = (await workspace.findFiles('**/*.deepnote'))
+        .filter((uri) => !isSnapshotFile(uri))
+        .sort((a, b) => outsideProject(a) - outsideProject(b) || compareCodeUnits(a.toString(), b.toString()));
 
+    for (const fileUri of candidates) {
         let file: DeepnoteFile;
         try {
-            file = await readDeepnoteProjectFile(fileUri);
+            const text = new TextDecoder().decode(await workspace.fs.readFile(fileUri));
+            // Notebook IDs need no YAML escaping, so a file that holds the notebook contains its ID as is; skipping the
+            // rest saves their YAML and schema parse on every request.
+            if (!text.includes(notebookId)) {
+                continue;
+            }
+            file = deserializeDeepnoteFile(text);
         } catch (error) {
             logger.warn(`Could not read ${fileUri.fsPath} to find the notebook ${notebookId}`, error);
             continue;

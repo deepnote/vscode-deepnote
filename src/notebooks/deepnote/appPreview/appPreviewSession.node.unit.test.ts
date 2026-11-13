@@ -1,3 +1,4 @@
+import { serializeDeepnoteFile } from '@deepnote/blocks';
 import { assert } from 'chai';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -6,7 +7,9 @@ import { anything, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
 import * as path from '../../../platform/vscode-path/path';
+import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
+import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from '../deepnoteTestHelpers';
 import type { AppPreviewOperation } from './appPreviewApi.node';
 import { AppPreviewSession, type AppPreviewProject } from './appPreviewSession.node';
 
@@ -292,6 +295,35 @@ suite('AppPreviewSession', () => {
             assert.deepStrictEqual(unsupported, ['appData()']);
 
             assert.strictEqual((await request(session, '/__deepnote/v2/notebooks/nb-1/app-data')).status, 401);
+        });
+
+        test("answers a notebook that two files share from the session's current project folder", async () => {
+            for (const copy of ['a', 'b']) {
+                const notebook = createDeepnoteNotebook({ id: 'nb-1', name: `Copy ${copy}` });
+                const file = createDeepnoteFile({ project: createDeepnoteProject({ notebooks: [notebook] }) });
+                write(`${copy}/main.deepnote`, serializeDeepnoteFile(file), tmp);
+            }
+            stubWorkspaceFsOnDisk();
+            when(mockedVSCodeNamespaces.workspace.findFiles('**/*.deepnote')).thenCall(async () => [
+                Uri.file(path.join(tmp, 'a', 'main.deepnote')),
+                Uri.file(path.join(tmp, 'b', 'main.deepnote'))
+            ]);
+            write('page.html', `<script src="${HOSTED}"></script>`);
+            const session = await startSession({ project: { id: 'project-1', folder: Uri.file(path.join(tmp, 'b')) } });
+            const token = tokenOf(await getText(session, '/page.html'));
+            const notebookName = async () => {
+                const response = await request(session, '/__deepnote/v2/notebooks/nb-1', {
+                    headers: { authorization: `Bearer ${token}` }
+                });
+
+                return JSON.parse(response.body.toString()).notebook.name;
+            };
+
+            assert.strictEqual(await notebookName(), 'Copy b');
+
+            session.setProject({ id: 'project-1', folder: Uri.file(path.join(tmp, 'a')) });
+
+            assert.strictEqual(await notebookName(), 'Copy a');
         });
     });
 

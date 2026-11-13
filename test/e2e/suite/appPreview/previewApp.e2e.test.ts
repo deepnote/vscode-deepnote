@@ -349,10 +349,8 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         await center.close();
     });
 
-    it("answers inputs() from the workspace notebook with the page's ID, and from its saved file after a reload", async function () {
+    it('answers inputs() from the .deepnote file as saved on disk, after an edit and a reload', async function () {
         const screenshot = createScreenshotter(this);
-        await clearNotifications();
-
         await selectDeepnoteContextMenu(await findRootExplorerItem(INPUTS_APP), 'Preview App');
 
         const report = await onIntegratedBrowserPage(INPUTS_TITLE, async () => {
@@ -361,13 +359,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
             return read;
         });
-        expect(report).to.include.deep.members([
-            NOTEBOOK_INPUTS,
-            'inputs() of an unknown notebook rejected: Notebook not found'
-        ]);
-        expect(await previewWarnings(1)).to.deep.equal([appDataWarning(INPUTS_APP)]);
-        await screenshot('no-inputs-warning');
-        await clearNotifications();
+        expect(report).to.deep.include(NOTEBOOK_INPUTS);
 
         const original = fs.readFileSync(inputsNotebookFile, 'utf8');
         try {

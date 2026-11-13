@@ -1,5 +1,15 @@
-import type { AgentBlock } from '@deepnote/blocks';
-import type { AgentBlockContext, ServerExit, ServerInfo, ServerOptions } from '@deepnote/runtime-core';
+import type { AgentBlock, DeepnoteFile } from '@deepnote/blocks';
+import type {
+    AgentBlockContext,
+    ExecutionEngine as RealExecutionEngine,
+    ExecutionEngineOptions,
+    ExecutionOptions,
+    ExecutionSummary,
+    RuntimeConfig,
+    ServerExit,
+    ServerInfo,
+    ServerOptions
+} from '@deepnote/runtime-core';
 import type { ChildProcess } from 'child_process';
 
 /**
@@ -16,6 +26,19 @@ const stopServerCalls: ServerInfo[] = [];
 let nextServerId = 0;
 let startServerImpl: RuntimeCore['startServer'] | null = null;
 let stopServerImpl: RuntimeCore['stopServer'] | null = null;
+const executionEngines: ExecutionEngine[] = [];
+let executionEngineBehavior: ExecutionEngineBehavior = {};
+
+/**
+ * What the fake engines do; each defaults to resolving at once, and `runProject` to an empty summary. `stopped`
+ * settles once the engine's `stop()` is called: the real `stop()` fails the block that is executing, and
+ * `runProject` then resolves.
+ */
+export interface ExecutionEngineBehavior {
+    runProject?(file: DeepnoteFile, options: ExecutionOptions, stopped: Promise<void>): Promise<ExecutionSummary>;
+    start?(): Promise<void>;
+    stop?(): Promise<void>;
+}
 
 function makeFakeProcess(id: number): ChildProcess {
     // Partial stand-in: only the members DeepnoteServerStarter touches.
@@ -25,6 +48,43 @@ function makeFakeProcess(id: number): ChildProcess {
         stderr: { on() {}, off() {} },
         kill() {}
     } as unknown as ChildProcess;
+}
+
+export class ExecutionEngine implements Pick<RealExecutionEngine, 'runProject' | 'start' | 'stop'> {
+    /** Each `runProject` call, with a deep copy of the file as it was when the call started. */
+    public readonly runProjectCalls: { file: DeepnoteFile; options: ExecutionOptions }[] = [];
+    public startCalls = 0;
+    public stopCalls = 0;
+    private markStopped: () => void = () => undefined;
+    private readonly stopped = new Promise<void>((resolve) => {
+        this.markStopped = resolve;
+    });
+
+    constructor(
+        public readonly config: RuntimeConfig,
+        public readonly options?: ExecutionEngineOptions
+    ) {
+        executionEngines.push(this);
+    }
+
+    public async runProject(file: DeepnoteFile, options: ExecutionOptions = {}): Promise<ExecutionSummary> {
+        this.runProjectCalls.push({ file: structuredClone(file), options });
+
+        return executionEngineBehavior.runProject
+            ? executionEngineBehavior.runProject(file, options, this.stopped)
+            : { totalBlocks: 0, executedBlocks: 0, failedBlocks: 0, totalDurationMs: 0 };
+    }
+
+    public async start(): Promise<void> {
+        this.startCalls++;
+        await executionEngineBehavior.start?.();
+    }
+
+    public async stop(): Promise<void> {
+        this.stopCalls++;
+        this.markStopped();
+        await executionEngineBehavior.stop?.();
+    }
 }
 
 export const executeAgentBlock: RuntimeCore['executeAgentBlock'] = async (block, context) => {
@@ -77,6 +137,14 @@ export const stopServer: RuntimeCore['stopServer'] = async (info) => {
 };
 
 // Test-only helpers (prefixed with __ to signal they are not part of the real API).
+export function __getExecutionEngines(): ExecutionEngine[] {
+    return executionEngines;
+}
+
+export function __setExecutionEngineBehavior(behavior: ExecutionEngineBehavior): void {
+    executionEngineBehavior = behavior;
+}
+
 export function __getExecuteAgentBlockCalls(): { block: AgentBlock; context: AgentBlockContext }[] {
     return executeAgentBlockCalls;
 }
@@ -109,4 +177,6 @@ export function __resetRuntimeCoreMock(): void {
     nextServerId = 0;
     startServerImpl = null;
     stopServerImpl = null;
+    executionEngines.length = 0;
+    executionEngineBehavior = {};
 }

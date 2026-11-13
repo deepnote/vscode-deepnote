@@ -22,6 +22,7 @@ import {
 } from 'vscode-extension-tester';
 
 import {
+    KERNEL_CONNECT_TIMEOUT,
     QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
@@ -34,15 +35,19 @@ import {
 } from '../../helpers';
 
 const FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview');
+const RUNS_FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview-runs');
 const INPUTS_NOTEBOOK_FIXTURE = 'app-preview-inputs.deepnote';
+const RUNS_NOTEBOOK_FIXTURES = ['app-preview-runs.deepnote', 'app-preview-runs-init.deepnote'];
 const SYNCED_PROJECT_FIXTURE = 'hello-world.deepnote';
 const RELOAD_APP = 'reload-app';
 const RELOAD_TITLE = 'Reload fixture';
 const INPUTS_APP = 'inputs-app';
 const INPUTS_TITLE = 'Inputs fixture';
+const RUNS_TITLE = 'Runs fixture';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
 const NOT_SUPPORTED = 'which the local preview does not support yet.';
 const INPUTS_RESOLVED = 'inputs() resolved: ';
+const RUN_RESULT = ' result(): ';
 
 const NO_PROJECT_DATAFRAME =
     "dataframe() rejected: This app folder is not next to or inside the folder of a Deepnote project's .deepnote files, so it has no stored dataframes. After adding one, run Deepnote: Preview App again.";
@@ -95,7 +100,7 @@ function appDataWarning(folderName: string): string {
     return `The app in ${folderName} called appData(), which the local preview does not support yet.`;
 }
 
-async function readReport(): Promise<unknown[]> {
+async function readReport(timeout = WORKBENCH_TIMEOUT): Promise<unknown[]> {
     const driver = VSBrowser.instance.driver;
     let report: string[] = [];
     try {
@@ -109,7 +114,7 @@ async function readReport(): Promise<unknown[]> {
 
                 return report.length > 0 && report.every((line) => !line.endsWith('pending'));
             },
-            WORKBENCH_TIMEOUT,
+            timeout,
             'the preview page did not finish its client calls'
         );
     } catch (error) {
@@ -296,6 +301,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         // Kept out of every app folder and the folders above them, so no app resolves to this project.
         fs.mkdirSync(path.join(workspaceDir, 'notebooks'));
         inputsNotebookFile = copyFixtureIntoDir(path.join(workspaceDir, 'notebooks'), INPUTS_NOTEBOOK_FIXTURE);
+        RUNS_NOTEBOOK_FIXTURES.forEach((fixture) => copyFixtureIntoDir(path.join(workspaceDir, 'notebooks'), fixture));
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(workspaceDir);
@@ -398,6 +404,47 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         } finally {
             fs.writeFileSync(inputsNotebookFile, original);
         }
+    });
+
+    it('runs the workspace notebook for run(), after its init notebook, and reports its result or its error', async function () {
+        const screenshot = createScreenshotter(this);
+        await clearNotifications();
+        const folder = `runs-app-${attempt++}`;
+        fs.cpSync(RUNS_FIXTURE_APP, path.join(workspaceDir, folder), { recursive: true });
+
+        await selectDeepnoteContextMenu(await findRootExplorerItem(folder), 'Preview App');
+
+        // The first run starts the notebook file's toolkit server and a kernel.
+        const report = await onIntegratedBrowserPage(RUNS_TITLE, async () => {
+            const read = await readReport(KERNEL_CONNECT_TIMEOUT);
+            await screenshot('run-results');
+
+            return read;
+        });
+        expect(
+            report.map((line) => {
+                const text = String(line);
+                const at = text.indexOf(RUN_RESULT);
+
+                return at === -1 ? text : [text.slice(0, at), JSON.parse(text.slice(at + RUN_RESULT.length))];
+            })
+        ).to.deep.equal([
+            'Sales runs',
+            'run({ unknown: \'x\' }) rejected: Input "unknown" is not defined for this notebook',
+            "run({ region: 'Asia' }): success",
+            ["run({ region: 'Asia' })", { region: 'Asia', init_region: false }],
+            "run({ region: '' }): error, ValueError: Choose a region first",
+            // The notebook displays its result before the block that raises, in Deepnote's block order.
+            ["run({ region: '' })", { region: '', init_region: false }]
+        ]);
+
+        const center = await new Workbench().openNotificationsCenter();
+        const messages = await Promise.all(
+            (await center.getNotifications(NotificationType.Warning)).map((notification) => notification.getMessage())
+        );
+        expect(messages.filter((message) => message.endsWith(NOT_SUPPORTED))).to.deep.equal([]);
+        await screenshot('no-run-warning');
+        await center.close();
     });
 
     it('renders a synced app in the Simple Browser, with the project of the .deepnote file next to its .files folder', async function () {

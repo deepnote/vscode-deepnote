@@ -14,6 +14,7 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-m
 import { serializeProjectFile } from '../deepnoteTestHelpers';
 import { AppPreviewCommandHandler } from './appPreviewCommandHandler.node';
 import { AppPreviewSession } from './appPreviewSession.node';
+import type { IAppPreviewRunner } from './types';
 
 const HOSTED = 'https://deepnote.com/static/app-client/v1.js';
 
@@ -114,7 +115,7 @@ suite('AppPreviewCommandHandler', () => {
         const context = mock<IExtensionContext>();
         when(context.subscriptions).thenReturn([]);
         when(context.extensionUri).thenReturn(Uri.file(path.join(tmp, 'extension')));
-        new AppPreviewCommandHandler(instance(context), disposables).activate();
+        new AppPreviewCommandHandler(instance(context), disposables, instance(mock<IAppPreviewRunner>())).activate();
     });
 
     teardown(async () => {
@@ -226,12 +227,12 @@ suite('AppPreviewCommandHandler', () => {
 
         assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
         assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
-        assert.strictEqual((await api('/runs', 'POST')).status, 501);
-        assert.strictEqual((await api('/runs/run-1')).status, 501);
+        assert.strictEqual((await api('/projects/project-1/dataframes/sales')).status, 501);
+        assert.strictEqual((await api('/projects/project-1/dataframes/sales')).status, 501);
 
         assert.deepStrictEqual(warnings, [
             'The app in app called appData(), which the local preview does not support yet.',
-            'The app in app called run(), which the local preview does not support yet.'
+            'The app in app called dataframe(), which the local preview does not support yet.'
         ]);
     });
 });

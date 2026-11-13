@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Runs fixture</title>
+        <script src="https://deepnote.com/static/app-client/v1.js"></script>
+    </head>
+    <body>
+        <h1>Sales runs</h1>
+        <ul>
+            <li id="unknown-input">run({ unknown: 'x' }): pending</li>
+            <li id="asia-status">run({ region: 'Asia' }): pending</li>
+            <li id="asia-result">run({ region: 'Asia' }) result(): pending</li>
+            <li id="empty-status">run({ region: '' }): pending</li>
+            <li id="empty-result">run({ region: '' }) result(): pending</li>
+        </ul>
+        <script src="app.js"></script>
+    </body>
+</html>

@@ -33,7 +33,7 @@ import {
     WINDOWS_INIT_BLOCK
 } from '../deepnoteTestHelpers';
 import { AppPreviewRunner } from './appPreviewRunner.node';
-import type { AppPreviewRunOutcome, AppPreviewRunRequest } from './types';
+import type { AppPreviewRunRequest } from './types';
 
 const INTERPRETER: PythonEnvironment = { id: 'venv', uri: Uri.file('/venv/bin/python') };
 const SERVER = { url: 'http://127.0.0.1:8888', jupyterPort: 8888, lspPort: 8889 } as DeepnoteServerInfo;
@@ -102,6 +102,28 @@ function runtimeCoreLike(results: Record<string, BlockResult> = {}) {
         }
 
         return { totalBlocks: blocks.length, executedBlocks, failedBlocks: 0, totalDurationMs: 1 };
+    };
+}
+
+/** A run whose block executes until the engine is stopped, then fails as runtime-core reports it. */
+function failWhenStopped(blockId: string) {
+    return async (
+        _file: DeepnoteFile,
+        options: ExecutionOptions,
+        stopped: Promise<void>
+    ): Promise<ExecutionSummary> => {
+        await stopped;
+        await options.onBlockDone?.({
+            blockId,
+            blockType: 'code',
+            success: false,
+            outputs: [],
+            executionCount: null,
+            durationMs: 1,
+            error: new Error('Kernel client disconnected while an execution was in flight.')
+        });
+
+        return { totalBlocks: 1, executedBlocks: 1, failedBlocks: 1, totalDurationMs: 1 };
     };
 }
 
@@ -216,6 +238,22 @@ suite('AppPreviewRunner', () => {
             await run(fileUri, 'nb-1');
 
             assert.deepStrictEqual(notebookIdsPerCall(), [['nb-init'], ['nb-1']]);
+        });
+
+        test("gives the project's integrations to the init notebook's run and the notebook's run", async () => {
+            const integrations = [{ id: 'pg', name: 'Postgres', type: 'pgsql' }];
+            const file = projectFile(
+                [notebookOf('nb-1', [createDeepnoteBlock()]), notebookOf('nb-init', [createDeepnoteBlock()])],
+                'nb-init'
+            );
+            const fileUri = write('main.deepnote', { ...file, project: { ...file.project, integrations } });
+
+            await run(fileUri, 'nb-1');
+
+            assert.deepStrictEqual(
+                engine().runProjectCalls.map((runCall) => runCall.options.integrations),
+                [integrations, integrations]
+            );
         });
 
         test("runs the init notebook from a sibling file of the same project when the file doesn't have it", async () => {
@@ -647,35 +685,56 @@ suite('AppPreviewRunner', () => {
             assert.notInclude(steps, 'running');
         });
 
-        test('runs to the end when cancelled once the kernel is running', async () => {
-            __setExecutionEngineBehavior({
-                runProject: async (file, options) => {
+        const cancelCounts: [string, number][] = [
+            ['once', 1],
+            ['twice', 2]
+        ];
+        for (const [times, count] of cancelCounts) {
+            test(`stops the kernel once, and ends stopped, when cancelled ${times} while a block runs`, async () => {
+                __setExecutionEngineBehavior({ runProject: failWhenStopped('block-1') });
+
+                const outcome = run(fileUri, 'nb-1');
+                await waitFor(() => __getExecutionEngines()[0]?.runProjectCalls.length === 1);
+                for (let cancelled = 0; cancelled < count; cancelled++) {
                     cancellation.cancel();
-
-                    return runtimeCoreLike()(file, options);
                 }
+                await waitFor(() => engine().stopCalls > 0);
+
+                assert.deepStrictEqual(await outcome, { status: 'stopped', error: null, snapshotBlocks: null });
+                assert.strictEqual(engine().stopCalls, 1);
             });
+        }
 
-            const outcome: AppPreviewRunOutcome = await run(fileUri, 'nb-1');
+        test('ends stopped, without running the notebook, when cancelled while the init notebook runs', async () => {
+            const withInit = write(
+                'with-init.deepnote',
+                projectFile(
+                    [notebookOf('nb-init', [createDeepnoteBlock({ id: 'setup' })]), notebookOf('nb-1', [])],
+                    'nb-init'
+                )
+            );
+            __setExecutionEngineBehavior({ runProject: failWhenStopped('setup') });
 
-            assert.strictEqual(outcome.status, 'success');
+            const outcome = run(withInit, 'nb-1');
+            await waitFor(() => __getExecutionEngines()[0]?.runProjectCalls.length === 1);
+            cancellation.cancel();
+            await waitFor(() => engine().stopCalls > 0);
+
+            assert.deepStrictEqual(await outcome, { status: 'stopped', error: null, snapshotBlocks: null });
+            assert.deepStrictEqual(notebookIdsPerCall(), [['nb-init']]);
         });
 
-        test('is an internal error when running throws after a cancel once the kernel is running', async () => {
+        test('ends stopped when running throws after a cancel', async () => {
             __setExecutionEngineBehavior({
                 runProject: async () => {
                     cancellation.cancel();
-                    throw new Error('The kernel died');
+                    throw new Error('Kernel client disconnected while an execution was in flight.');
                 }
             });
 
             const outcome = await run(fileUri, 'nb-1');
 
-            assert.deepStrictEqual(outcome, {
-                status: 'internal_error',
-                error: 'The kernel died',
-                snapshotBlocks: null
-            });
+            assert.deepStrictEqual(outcome, { status: 'stopped', error: null, snapshotBlocks: null });
         });
     });
 });

@@ -387,6 +387,52 @@ suite('createAppPreviewApi', () => {
         });
     }
 
+    const unreadableBodies: [string, string, number, string][] = [
+        ['that is not JSON', '{"notebookId":', 400, 'Unexpected end of JSON input'],
+        [
+            'over the JSON size limit',
+            JSON.stringify({ notebookId: 'nb-1', inputs: { region: 'x'.repeat(200_000) } }),
+            413,
+            'request entity too large'
+        ]
+    ];
+    for (const [condition, body, status, message] of unreadableBodies) {
+        test(`POST /runs answers ${status} to a body ${condition}, without starting a run or logging an error`, async () => {
+            const logError = sinon.stub(logger, 'error');
+
+            const response = await fetch(`${baseUrl}/runs`, {
+                method: 'POST',
+                headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+                body
+            });
+
+            await assertJson(response, status, { message });
+            assert.deepStrictEqual(runner.calls, []);
+            sinon.assert.notCalled(logError);
+        });
+    }
+
+    test("forgets the oldest finished runs beyond 20, but never an unfinished run or a notebook's newest success", async () => {
+        const unfinished = await startRun();
+        const finishRun = async (status: 'success' | 'error') => {
+            const runId = await startRun();
+            runner.calls[runner.calls.length - 1].finish({ status, error: null, snapshotBlocks: [] });
+            await waitForStatus(runId, status);
+
+            return runId;
+        };
+        const olderSuccess = await finishRun('success');
+        const newestSuccess = await finishRun('success');
+        const failed: string[] = [];
+        for (let index = 0; index < 21; index++) {
+            failed.push(await finishRun('error'));
+        }
+
+        assert.deepStrictEqual([...api.runs.keys()], [unfinished, newestSuccess, ...failed.slice(1)]);
+        await assertJson(await call('GET', `/runs/${olderSuccess}`), 404, { message: 'Run not found' });
+        assert.strictEqual((await getRun(newestSuccess)).status, 'success');
+    });
+
     const stubs: [string, string, AppPreviewOperation][] = [
         ['GET', '/notebooks/nb-1/app-data', 'appData()'],
         ['GET', '/projects/p-1/dataframes/sales%20by%20month', 'dataframe()']

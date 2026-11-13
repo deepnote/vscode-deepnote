@@ -1,7 +1,7 @@
 import { generateSortingKey, type DeepnoteFile } from '@deepnote/blocks';
 import { ExecutionEngine, type BlockExecutionResult, type IError, type IOutput } from '@deepnote/runtime-core';
 import { inject, injectable } from 'inversify';
-import { workspace, type CancellationToken, type Uri } from 'vscode';
+import { workspace, type CancellationToken, type Disposable, type Uri } from 'vscode';
 
 import {
     DeepnoteToolkitDependencyResponse,
@@ -100,6 +100,7 @@ async function runNotebook(
     let failure: BlockExecutionResult | undefined;
     const summary = await engine.runProject(file, {
         ...(inputs ? { inputs } : {}),
+        integrations: file.project.integrations ?? [],
         onBlockDone: (result) => {
             outputs.set(result.blockId, result.outputs);
             if (!result.success) {
@@ -137,14 +138,10 @@ export class AppPreviewRunner implements IAppPreviewRunner {
         token: CancellationToken,
         onRunning: () => void
     ): Promise<AppPreviewRunOutcome> {
-        let running = false;
         try {
-            return await this.execute(request, token, () => {
-                running = true;
-                onRunning();
-            });
+            return await this.execute(request, token, onRunning);
         } catch (error) {
-            if (!running && token.isCancellationRequested) {
+            if (token.isCancellationRequested) {
                 return STOPPED;
             }
             logger.error(
@@ -201,13 +198,24 @@ export class AppPreviewRunner implements IAppPreviewRunner {
             { pythonEnv: getFilePath(interpreter.uri), workingDirectory: path.dirname(fileUri.fsPath) },
             { server }
         );
+        let stopping: Promise<void> | undefined;
+        // Overlapping stop() calls make runtime-core throw.
+        const stop = () => (stopping ??= engine.stop());
+        let onCancel: Disposable | undefined;
         try {
             await engine.start();
             Cancellation.throwIfCanceled(token);
+            // stop() also fails the block that is executing and shuts the kernel down, so runProject then resolves.
+            onCancel = token.onCancellationRequested(() => {
+                stop().catch((error) => logger.warn('AppPreviewRunner: Could not stop a cancelled run', error));
+            });
             onRunning();
 
             if (initCopy) {
                 const { failure } = await runNotebook(engine, initCopy);
+                if (token.isCancellationRequested) {
+                    return STOPPED;
+                }
                 if (failure) {
                     return {
                         status: 'error',
@@ -218,6 +226,9 @@ export class AppPreviewRunner implements IAppPreviewRunner {
             }
 
             const { failure, outputs } = await runNotebook(engine, targetCopy, inputs);
+            if (token.isCancellationRequested) {
+                return STOPPED;
+            }
 
             return {
                 status: failure ? 'error' : 'success',
@@ -225,7 +236,8 @@ export class AppPreviewRunner implements IAppPreviewRunner {
                 snapshotBlocks: snapshotBlocksOf(targetCopy, outputs)
             };
         } finally {
-            await engine.stop();
+            onCancel?.dispose();
+            await stop();
         }
     }
 }

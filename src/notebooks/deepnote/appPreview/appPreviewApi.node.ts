@@ -33,9 +33,12 @@ export interface PreviewRun {
 
 export interface AppPreviewApi {
     router: Router;
-    /** The preview's runs by ID, kept for the preview's lifetime. */
+    /**
+     * The preview's runs by ID, in the order they started. Besides unfinished runs and each notebook's newest
+     * successful run, it keeps only the newest {@link MAX_FINISHED_RUNS} finished runs.
+     */
     runs: Map<string, PreviewRun>;
-    /** Cancels the token of every unfinished run, which stops only runs whose blocks have not started. */
+    /** Cancels every unfinished run, which stops its kernel once it has one. */
     dispose(): void;
 }
 
@@ -45,6 +48,9 @@ const NOT_AVAILABLE_MESSAGE = 'This endpoint is not available to app viewer toke
 const NOTEBOOK_NOT_FOUND_MESSAGE = 'Notebook not found';
 const RUN_NOT_FOUND_MESSAGE = 'Run not found';
 const INTERNAL_ERROR_MESSAGE = 'Internal server error';
+
+// Each finished run holds all its outputs, and a page may start one on every reload.
+const MAX_FINISHED_RUNS = 20;
 
 const createRunBodySchema = z.strictObject({
     notebookId: z.string().min(1),
@@ -56,8 +62,34 @@ function notSupportedMessage(operation: AppPreviewOperation): string {
     return `${operation} is not supported in the local preview yet.`;
 }
 
+/** The 4xx status of an error body-parser raises for the request itself, such as malformed JSON. */
+function clientErrorStatus(error: unknown): number | undefined {
+    if (typeof error !== 'object' || error === null || !('status' in error) || !('expose' in error)) {
+        return undefined;
+    }
+
+    return typeof error.status === 'number' && error.status < 500 && error.expose === true ? error.status : undefined;
+}
+
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Drops the oldest finished runs beyond {@link MAX_FINISHED_RUNS}. Unfinished runs stay, and so does each notebook's
+ * newest successful run, which `appData()` answers from.
+ */
+function evictFinishedRuns(runs: Map<string, PreviewRun>): void {
+    const newestSuccess = new Map<string, string>();
+    for (const run of runs.values()) {
+        if (run.status === 'success') {
+            newestSuccess.set(run.notebookId, run.runId);
+        }
+    }
+    const removable = [...runs.values()].filter(
+        (run) => run.completedAt !== null && newestSuccess.get(run.notebookId) !== run.runId
+    );
+    removable.slice(0, Math.max(0, removable.length - MAX_FINISHED_RUNS)).forEach((run) => runs.delete(run.runId));
 }
 
 /** The input check Deepnote's `POST /v2/runs` makes before it accepts a run. */
@@ -124,8 +156,8 @@ function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook) {
  * The local stand-in for Deepnote's app viewer API (`/v2`), mounted at `/__deepnote/v2` on the preview server.
  * Requests without the preview's bearer token get 401. `GET /notebooks/:notebookId` answers from the workspace's
  * notebooks, and `POST /runs` runs one with `runner`, which `GET /runs/:runId` then reports on. The other routes
- * Deepnote's client calls get 501, and every other route gets 403, as Deepnote answers app viewer tokens. A handler
- * that fails is logged and gets a JSON 500.
+ * Deepnote's client calls get 501, and every other route gets 403, as Deepnote answers app viewer tokens. A body that
+ * cannot be read, such as malformed JSON, gets its 4xx; any other failure is logged and gets a JSON 500.
  */
 export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewApi {
     const router = express.Router();
@@ -156,6 +188,7 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
                 run.snapshotStatus =
                     outcome.status === 'success' || outcome.status === 'error' ? 'available' : 'unavailable';
                 run.completedAt = new Date().toISOString();
+                evictFinishedRuns(runs);
             })
             .finally(() => {
                 unfinished.delete(cancellation);
@@ -238,6 +271,12 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
     });
     // Express's own handler would answer an HTML page that holds the stack, and log it outside the extension's logger.
     router.use((error: unknown, req: Request, res: Response, _next: NextFunction) => {
+        const status = clientErrorStatus(error);
+        if (status !== undefined) {
+            res.status(status).json({ message: errorMessage(error) });
+
+            return;
+        }
         logger.error(`AppPreviewApi: ${req.method} ${req.path} failed`, error);
         res.status(500).json({ message: INTERNAL_ERROR_MESSAGE });
     });

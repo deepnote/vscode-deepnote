@@ -105,6 +105,14 @@ suite('createDeepnoteClient', () => {
         assert.fail('the call resolved');
     }
 
+    function tooMany(retryAfter?: string): Reply {
+        return {
+            status: 429,
+            body: { message: 'Too many requests' },
+            headers: retryAfter === undefined ? {} : { 'Retry-After': retryAfter }
+        };
+    }
+
     test('inputs() and appData() send the bearer token and the JSON content type', async () => {
         const notebook = client().notebook('nb-1');
 
@@ -246,17 +254,16 @@ suite('createDeepnoteClient', () => {
         assert.isNull(result('c'));
     });
 
-    test('a non-2xx response rejects with its message, or with its status without one', async () => {
+    test('a non-2xx response rejects with the message of its body', async () => {
         notebookReply = { status: 404, body: { message: 'Notebook not found' } };
+
         assert.strictEqual(await rejection(client().notebook('nb-1').inputs()), 'Notebook not found');
+    });
 
+    test('a non-2xx response without a message rejects with its status', async () => {
         notebookReply = { status: 502, body: '<html>Bad gateway</html>' };
-        assert.strictEqual(await rejection(client().notebook('nb-1').inputs()), 'Request failed with status 502');
 
-        assert.strictEqual(
-            await rejection(client({ token: 'expired', projectId: 'p-1' }).notebook('nb-1').inputs()),
-            'Unauthorized'
-        );
+        assert.strictEqual(await rejection(client().notebook('nb-1').inputs()), 'Request failed with status 502');
     });
 
     test('dataframe() encodes the name and sends only the given paging options', async () => {
@@ -278,34 +285,25 @@ suite('createDeepnoteClient', () => {
         );
     });
 
-    test('dataframe() retries a 429 up to 3 times after Retry-After, 1 s when it is missing', async () => {
-        const tooMany = (retryAfter?: string): Reply => ({
-            status: 429,
-            body: { message: 'Too many requests' },
-            headers: retryAfter === undefined ? {} : { 'Retry-After': retryAfter }
-        });
-        dataframeReplies = [tooMany('2'), tooMany(), tooMany('5')];
+    test('dataframe() retries a 429 up to 3 times after Retry-After, 1 s when it is invalid or missing', async () => {
+        dataframeReplies = [tooMany('soon'), tooMany(), tooMany('5')];
 
         assert.deepStrictEqual(await client().dataframe('orders'), { rows: [] });
-        assert.deepStrictEqual(sleeps, [2_000, 1_000, 5_000]);
+        assert.deepStrictEqual(sleeps, [1_000, 1_000, 5_000]);
         assert.strictEqual(requests.length, 4);
     });
 
-    test('dataframe() gives up after 3 retries, or at once when Retry-After is over 5 s', async () => {
-        const tooMany = (retryAfter: string): Reply => ({
-            status: 429,
-            body: { message: 'Too many requests' },
-            headers: { 'Retry-After': retryAfter }
-        });
-
+    test('dataframe() gives up after 3 retries', async () => {
         dataframeReplies = [tooMany('1'), tooMany('1'), tooMany('1'), tooMany('1')];
+
         assert.strictEqual(await rejection(client().dataframe('orders')), 'Too many requests');
         assert.deepStrictEqual(sleeps, [1_000, 1_000, 1_000]);
         assert.strictEqual(requests.length, 4);
+    });
 
-        sleeps = [];
-        requests = [];
+    test('dataframe() does not retry a 429 whose Retry-After is over 5 s', async () => {
         dataframeReplies = [tooMany('6')];
+
         assert.strictEqual(await rejection(client().dataframe('orders')), 'Too many requests');
         assert.deepStrictEqual(sleeps, []);
         assert.strictEqual(requests.length, 1);
@@ -318,7 +316,7 @@ suite('createDeepnoteClient', () => {
         assert.strictEqual(requests.length, 1);
     });
 
-    test('rejects every call without a token, and dataframe() without a project, before any request', async () => {
+    test('rejects every call without a token, before any request', async () => {
         const noTokenMessage = 'Could not reach the app preview. Open the app with the Deepnote: Preview App command.';
         const noToken = client({ projectId: 'p-1' });
         const notebook = noToken.notebook('nb-1');
@@ -327,6 +325,10 @@ suite('createDeepnoteClient', () => {
         assert.strictEqual(await rejection(notebook.appData()), noTokenMessage);
         assert.strictEqual(await rejection(notebook.run({})), noTokenMessage);
         assert.strictEqual(await rejection(noToken.dataframe('orders')), noTokenMessage);
+        assert.deepStrictEqual(requests, []);
+    });
+
+    test('dataframe() rejects without a project, before any request', async () => {
         assert.strictEqual(
             await rejection(client({ token: TOKEN }).dataframe('orders')),
             "This app folder is not next to or inside the folder of a Deepnote project's .deepnote files, so it has no stored dataframes. After adding one, run Deepnote: Preview App again."

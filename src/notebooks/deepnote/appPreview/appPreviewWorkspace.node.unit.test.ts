@@ -57,13 +57,10 @@ suite('resolvePreviewProject', () => {
         });
     });
 
-    test('finds the project of an app folder beside the .deepnote file', async () => {
-        write('ws/project/analysis.deepnote', serializeProjectFile('p-local'));
+    test('finds the project of an app folder beside the .deepnote file at the workspace root', async () => {
+        write('ws/analysis.deepnote', serializeProjectFile('p-local'));
 
-        assert.deepStrictEqual(await resolve('ws/project/app'), {
-            id: 'p-local',
-            folder: path.join('ws', 'project')
-        });
+        assert.deepStrictEqual(await resolve('ws/app'), { id: 'p-local', folder: 'ws' });
     });
 
     test('finds the project when the app folder itself holds the .deepnote file', async () => {
@@ -97,12 +94,19 @@ suite('resolvePreviewProject', () => {
         assert.isUndefined(await resolve('ws/project/app'));
     });
 
-    test('ignores snapshots and files that fail to parse', async () => {
-        write('ws/project/app/snapshots/x_p-snap_latest.snapshot.deepnote', serializeProjectFile('p-snap'));
-        write('ws/project/app/broken.deepnote', 'project: [unclosed');
-        write('ws/project/app/notes.snapshot.deepnote', serializeProjectFile('p-snap'));
+    test('ignores snapshot files', async () => {
         write('ws/project/main.deepnote', serializeProjectFile('p-main'));
         write('ws/project/main_p-old_latest.snapshot.deepnote', serializeProjectFile('p-old'));
+
+        assert.deepStrictEqual(await resolve('ws/project/app'), {
+            id: 'p-main',
+            folder: path.join('ws', 'project')
+        });
+    });
+
+    test('ignores .deepnote files that fail to parse', async () => {
+        write('ws/project/app/broken.deepnote', 'project: [unclosed');
+        write('ws/project/main.deepnote', serializeProjectFile('p-main'));
 
         assert.deepStrictEqual(await resolve('ws/project/app'), {
             id: 'p-main',

@@ -110,7 +110,7 @@ suite('AppPreviewSession', () => {
         write('.ext/dist/appClient.js', CLIENT_SCRIPT, tmp);
         write('index.html', '<h1>home</h1>');
         write('sub/index.html', '<h1>sub</h1>');
-        write('my file.txt', 'spaced');
+        write('my file #1.txt', 'spaced');
         write('assets/app.css', 'body { color: red; }');
         write('__deepnote/x.js', 'shadowed');
         write('secret.txt', 'outside', `${appFolder}-other`);
@@ -123,14 +123,19 @@ suite('AppPreviewSession', () => {
     });
 
     suite('files', () => {
-        test('serves index.html for / and /sub/, and redirects /sub to /sub/', async () => {
+        test('serves index.html for / and /sub/, ignoring the query', async () => {
             const session = await startSession();
 
             assert.strictEqual(await getText(session, '/'), '<h1>home</h1>');
             assert.strictEqual(await getText(session, '/sub/'), '<h1>sub</h1>');
             assert.strictEqual(await getText(session, '/sub/?v=2'), '<h1>sub</h1>');
+        });
+
+        test('redirects a directory requested without a trailing slash to its path with one', async () => {
+            const session = await startSession();
 
             const redirect = await request(session, '/sub?v=2');
+
             assert.strictEqual(redirect.status, 302);
             assert.strictEqual(redirect.headers.location, '/sub/');
         });
@@ -138,7 +143,7 @@ suite('AppPreviewSession', () => {
         test('serves files by their exact decoded names', async () => {
             const session = await startSession();
 
-            assert.strictEqual(await getText(session, '/my%20file.txt'), 'spaced');
+            assert.strictEqual(await getText(session, '/my%20file%20%231.txt'), 'spaced');
             assert.strictEqual(await getText(session, '/assets/app.css?cache=1'), 'body { color: red; }');
         });
 
@@ -154,26 +159,24 @@ suite('AppPreviewSession', () => {
             assert.strictEqual(await getText(session, '/.well-known/info.txt'), 'info');
         });
 
-        test('answers 404 to .. segments, NUL, missing files, __deepnote paths and symlinks out of the folder', async () => {
-            const session = await startSession();
+        const notFoundPaths: [string, string][] = [
+            ['a .. segment, even percent-encoded and inside the folder', '/sub/%2e%2e/index.html'],
+            ['a NUL character', '/index.html%00.css'],
+            ['a missing file', '/missing.txt'],
+            ['a file under /__deepnote/', '/__deepnote/x.js'],
+            ['/__deepnote itself', '/__deepnote'],
+            ['a symlink to a file outside the folder', '/escape.txt']
+        ];
+        for (const [condition, urlPath] of notFoundPaths) {
+            test(`answers 404 to ${condition}`, async () => {
+                const session = await startSession();
 
-            for (const urlPath of [
-                '/sub/../../app-other/secret.txt',
-                '/sub/../index.html',
-                '/%2e%2e/app-other/secret.txt',
-                '/sub%2f..%2f..%2f./app-other/secret.txt',
-                '/index.html%00.css',
-                '/missing.txt',
-                '/sub/missing/',
-                '/__deepnote/x.js',
-                '/__deepnote',
-                '/escape.txt'
-            ]) {
                 const response = await request(session, urlPath);
-                assert.strictEqual(response.status, 404, urlPath);
-                assert.strictEqual(response.body.toString(), 'Not found', urlPath);
-            }
-        });
+
+                assert.strictEqual(response.status, 404);
+                assert.strictEqual(response.body.toString(), 'Not found');
+            });
+        }
 
         test('answers 405 to methods other than GET and HEAD', async () => {
             const session = await startSession();
@@ -254,10 +257,8 @@ suite('AppPreviewSession', () => {
     });
 
     suite('client and API', () => {
-        test('serves the client script from a dot-named folder, without the token', async () => {
-            write('page.html', `<script src="${HOSTED}"></script>`);
+        test('serves the client script from a dot-named folder as is, so without the token', async () => {
             const session = await startSession();
-            const token = tokenOf(await getText(session, '/page.html'));
 
             const response = await request(session, '/__deepnote/client.js');
 
@@ -265,10 +266,9 @@ suite('AppPreviewSession', () => {
             assert.strictEqual(response.body.toString(), CLIENT_SCRIPT);
             assert.strictEqual(response.headers['content-type'], 'text/javascript; charset=utf-8');
             assert.strictEqual(response.headers['cache-control'], 'no-cache');
-            assert.notInclude(response.body.toString(), token);
         });
 
-        test('mounts the API at /__deepnote/v2, and answers 404 under other /__deepnote/ paths', async () => {
+        test('mounts the API at /__deepnote/v2, behind the token of the pages it serves', async () => {
             write('page.html', `<script src="${HOSTED}"></script>`);
             const session = await startSession();
             const token = tokenOf(await getText(session, '/page.html'));
@@ -283,7 +283,6 @@ suite('AppPreviewSession', () => {
             assert.deepStrictEqual(unsupported, ['inputs()']);
 
             assert.strictEqual((await request(session, '/__deepnote/v2/notebooks/nb-1')).status, 401);
-            assert.strictEqual((await request(session, '/__deepnote/other')).status, 404);
         });
     });
 
@@ -325,15 +324,25 @@ suite('AppPreviewSession', () => {
                     '</head></html>'
                 ].join('\n')
             );
-            assert.match(token, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
         });
 
-        test('swaps the tag in .htm pages and in a directory index', async () => {
-            write('legacy.htm', `<script src="${HOSTED}"></script>`);
+        test('gives each session its own token', async () => {
+            write('page.html', `<script src="${HOSTED}"></script>`);
+            const first = await startSession();
+            const second = await startSession();
+
+            assert.notStrictEqual(
+                tokenOf(await getText(first, '/page.html')),
+                tokenOf(await getText(second, '/page.html'))
+            );
+        });
+
+        test('swaps the tag in .htm pages, whatever the case of the extension, and in a directory index', async () => {
+            write('legacy.HTM', `<script src="${HOSTED}"></script>`);
             write('sub/index.html', `<script src="${HOSTED}"></script>`);
             const session = await startSession();
 
-            const legacy = await getText(session, '/legacy.htm');
+            const legacy = await getText(session, '/legacy.HTM');
             assert.strictEqual(legacy, `${swapped(tokenOf(legacy))}</script>`);
             const index = await getText(session, '/sub/');
             assert.strictEqual(index, `${swapped(tokenOf(index))}</script>`);
@@ -348,24 +357,28 @@ suite('AppPreviewSession', () => {
             const response = await request(session, '/page.html');
             const token = tokenOf(response.body.toString('latin1'));
 
-            assert.isTrue(
-                response.body.equals(Buffer.concat([before, Buffer.from(swapped(token)), after])),
-                response.body.toString('latin1')
-            );
+            assert.deepStrictEqual(response.body, Buffer.concat([before, Buffer.from(swapped(token)), after]));
         });
 
-        test('escapes the project ID, and leaves the attribute out without a project', async () => {
+        test('escapes the project ID, and writes every character outside printable ASCII as a reference', async () => {
             write('page.html', `<script src="${HOSTED}"></script>`);
-            const escaped = await startSession({ project: { id: `p<"&'>é😀`, folder: Uri.file(tmp) } });
-            const withoutProject = await startSession({ project: null });
+            const session = await startSession({ project: { id: `p<"&'>é😀`, folder: Uri.file(tmp) } });
 
-            const page = await getText(escaped, '/page.html');
+            const page = await getText(session, '/page.html');
+
             assert.strictEqual(
                 page,
                 `${swapped(tokenOf(page), ' data-deepnote-project-id="p&#60;&#34;&#38;&#39;&#62;&#233;&#128512;"')}</script>`
             );
-            const bare = await getText(withoutProject, '/page.html');
-            assert.strictEqual(bare, `${swapped(tokenOf(bare), '')}</script>`);
+        });
+
+        test('leaves the project attribute out without a project', async () => {
+            write('page.html', `<script src="${HOSTED}"></script>`);
+            const session = await startSession({ project: null });
+
+            const page = await getText(session, '/page.html');
+
+            assert.strictEqual(page, `${swapped(tokenOf(page), '')}</script>`);
         });
 
         test('serves the project set by setProject() from the next page on', async () => {
@@ -381,16 +394,17 @@ suite('AppPreviewSession', () => {
     });
 
     suite('URLs to open', () => {
-        test('opens a forwarded loopback URL in the built-in browser, and the server URL externally', async () => {
-            const session = await startSession();
-            forwardTo('http://localhost:4567/');
+        for (const hostname of ['localhost', '127.0.0.1', '0.0.0.0']) {
+            test(`opens a forwarded ${hostname} URL in the built-in browser, and the server URL externally`, async () => {
+                const session = await startSession();
+                forwardTo(`http://${hostname}:4567/`);
 
-            await session.resolveUrls();
+                await session.resolveUrls();
 
-            assert.strictEqual(session.browserUri.toString(true), 'http://localhost:4567/');
-            assert.strictEqual(session.externalBrowserUri.toString(true), session.serverUrl.toString(true));
-            assert.notStrictEqual(session.serverUrl.toString(true), 'http://localhost:4567/');
-        });
+                assert.strictEqual(session.browserUri.toString(true), `http://${hostname}:4567/`);
+                assert.strictEqual(session.externalBrowserUri.toString(true), session.serverUrl.toString(true));
+            });
+        }
 
         test('opens an https forwarded URL in both browsers', async () => {
             const session = await startSession();

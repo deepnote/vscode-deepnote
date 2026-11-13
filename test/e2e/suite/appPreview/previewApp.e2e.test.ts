@@ -9,15 +9,7 @@ import { expect } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import {
-    EditorView,
-    InputBox,
-    NotificationType,
-    SideBarView,
-    VSBrowser,
-    Workbench,
-    type ViewItem
-} from 'vscode-extension-tester';
+import { EditorView, InputBox, SideBarView, VSBrowser, Workbench, type ViewItem } from 'vscode-extension-tester';
 
 import {
     KERNEL_CONNECT_TIMEOUT,
@@ -34,6 +26,7 @@ import {
 
 const FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview');
 const RUNS_FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview-runs');
+const APP_DATA_FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview-app-data');
 const INPUTS_NOTEBOOK_FIXTURE = 'app-preview-inputs.deepnote';
 const RUNS_NOTEBOOK_FIXTURES = ['app-preview-runs.deepnote', 'app-preview-runs-init.deepnote'];
 const SYNCED_APP = path.join('Sales', '.files', '_deepnote_static');
@@ -42,10 +35,13 @@ const RELOAD_TITLE = 'Reload fixture';
 const REUSE_TITLE = 'Reuse fixture';
 const INPUTS_TITLE = 'Inputs fixture';
 const RUNS_TITLE = 'Runs fixture';
+const APP_DATA_TITLE = 'App data fixture';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
-const NOT_SUPPORTED = 'which the local preview does not support yet.';
 const INPUTS_RESOLVED = 'inputs() resolved: ';
 const RUN_RESULT = ' result(): ';
+const APP_DATA_AFTER_RUN = 'appData() after the run: ';
+
+const NO_RUN_RESULTS = 'You have no run results for this notebook yet. Run the notebook to load them.';
 
 const NOTEBOOK_INPUTS = [
     { blockId: 'e2e-region-input', name: 'region', type: 'input-text', value: 'Europe', label: 'Region' },
@@ -78,8 +74,7 @@ function expectedReport(title: string): unknown[] {
         'logo: 48x48',
         NOTEBOOK_INPUTS,
         'inputs() of an unknown notebook rejected: Notebook not found',
-        'appData() rejected: appData() is not supported in the local preview yet.',
-        'appData() again rejected: appData() is not supported in the local preview yet.',
+        `appData() rejected: ${NO_RUN_RESULTS}`,
         'requests to deepnote.com: 0'
     ];
 }
@@ -88,10 +83,6 @@ function withParsedInputs(report: string[]): unknown[] {
     return report.map((line) =>
         line.startsWith(INPUTS_RESOLVED) ? JSON.parse(line.slice(INPUTS_RESOLVED.length)) : line
     );
-}
-
-function appDataWarning(folderName: string): string {
-    return `The app in ${folderName} called appData(), which the local preview does not support yet.`;
 }
 
 async function readReport(timeout = WORKBENCH_TIMEOUT): Promise<unknown[]> {
@@ -146,36 +137,6 @@ async function onIntegratedBrowserPage<T>(title: string, read: () => Promise<T>)
     } finally {
         await driver.switchTo().window(workbench);
     }
-}
-
-/** Leaves the Notifications Center open, so the next screenshot shows the warnings. */
-async function previewWarnings(count: number): Promise<string[]> {
-    const center = await new Workbench().openNotificationsCenter();
-    let warnings: string[] = [];
-    try {
-        await VSBrowser.instance.driver.wait(
-            async () => {
-                const notifications = await center.getNotifications(NotificationType.Warning).catch(() => []);
-                const messages = await Promise.all(notifications.map((n) => n.getMessage().catch(() => '')));
-                warnings = messages.filter((message) => message.endsWith(NOT_SUPPORTED));
-
-                return warnings.length >= count;
-            },
-            WORKBENCH_TIMEOUT,
-            `fewer than ${count} preview warnings arrived`
-        );
-    } catch (error) {
-        await center.close().catch(() => undefined);
-        throw new Error(`${(error as Error).message}. Seen: ${JSON.stringify(warnings)}`);
-    }
-
-    return warnings;
-}
-
-async function clearNotifications(): Promise<void> {
-    const center = await new Workbench().openNotificationsCenter();
-    await center.clearAllNotifications();
-    await center.close().catch(() => undefined);
 }
 
 async function findRootExplorerItem(label: string): Promise<ViewItem> {
@@ -267,8 +228,8 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
     /**
      * Each test, and each attempt Mocha retries, gets a folder no earlier attempt previewed: the extension keeps one
-     * preview session per folder while it runs, a session warns about each unsupported operation only once, and two
-     * tests edit their page. The page titles tell the integrated browser windows apart.
+     * preview session per folder while it runs, and two tests edit their page. The page titles tell the integrated
+     * browser windows apart.
      */
     function addAppFolder(title: string): string {
         const appDir = fs.mkdtempSync(path.join(workspaceDir, 'app-'));
@@ -308,7 +269,6 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
     it("opens the folder from the Explorer in the integrated browser, with its assets and the bundled copy of Deepnote's client", async function () {
         const screenshot = createScreenshotter(this);
         const appDir = addAppFolder('Preview fixture');
-        await clearNotifications();
 
         await selectDeepnoteContextMenu(await findRootExplorerItem(path.basename(appDir)), 'Preview App');
 
@@ -320,19 +280,13 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         });
         expect(report).to.deep.equal(expectedReport('Sales dashboard'));
         expect(await new EditorView().getOpenEditorTitles()).to.deep.equal(['Preview fixture']);
-
-        expect(await previewWarnings(1)).to.deep.equal([appDataWarning(path.basename(appDir))]);
-        await screenshot('app-data-warning');
     });
 
-    it('shows an edit after a reload, and does not warn again', async function () {
+    it('shows an edit after a reload', async function () {
         const screenshot = createScreenshotter(this);
         const appDir = addAppFolder(RELOAD_TITLE);
-        await clearNotifications();
         await selectDeepnoteContextMenu(await findRootExplorerItem(path.basename(appDir)), 'Preview App');
         await onIntegratedBrowserPage(RELOAD_TITLE, readReport);
-        await previewWarnings(1);
-        await clearNotifications();
 
         const indexFile = path.join(appDir, 'index.html');
         fs.writeFileSync(
@@ -348,10 +302,6 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         });
 
         expect(report).to.deep.equal(expectedReport('Sales dashboard, edited'));
-        const center = await new Workbench().openNotificationsCenter();
-        const warnings = await center.getNotifications(NotificationType.Warning);
-        expect(warnings).to.have.length(0);
-        await center.close();
     });
 
     it('answers inputs() from the .deepnote file as saved on disk, after an edit and a reload', async function () {
@@ -392,7 +342,6 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
     it('runs the workspace notebook for run(), after its init notebook, and reports its result or its error', async function () {
         const screenshot = createScreenshotter(this);
-        await clearNotifications();
         const appDir = fs.mkdtempSync(path.join(workspaceDir, 'runs-app-'));
         fs.cpSync(RUNS_FIXTURE_APP, appDir, { recursive: true });
 
@@ -421,14 +370,35 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
             // The notebook displays its result before the block that raises, in Deepnote's block order.
             ["run({ region: '' })", { region: '', init_region: false }]
         ]);
+    });
 
-        const center = await new Workbench().openNotificationsCenter();
-        const messages = await Promise.all(
-            (await center.getNotifications(NotificationType.Warning)).map((notification) => notification.getMessage())
-        );
-        expect(messages.filter((message) => message.endsWith(NOT_SUPPORTED))).to.deep.equal([]);
-        await screenshot('no-run-warning');
-        await center.close();
+    it("answers appData() from the notebook's newest successful run: none before a run, then its JSON output", async function () {
+        const screenshot = createScreenshotter(this);
+        const appDir = fs.mkdtempSync(path.join(workspaceDir, 'app-data-app-'));
+        fs.cpSync(APP_DATA_FIXTURE_APP, appDir, { recursive: true });
+        const startedAt = Date.now();
+
+        await selectDeepnoteContextMenu(await findRootExplorerItem(path.basename(appDir)), 'Preview App');
+
+        const report = await onIntegratedBrowserPage(APP_DATA_TITLE, async () => {
+            const read = await readReport(KERNEL_CONNECT_TIMEOUT);
+            await screenshot('app-data-after-run');
+
+            return read;
+        });
+        const lines = report.map((line) => {
+            const text = String(line);
+
+            return text.startsWith(APP_DATA_AFTER_RUN) ? JSON.parse(text.slice(APP_DATA_AFTER_RUN.length)) : text;
+        });
+        const createdAt = /, created at (\S+)$/.exec(String(lines[2]))?.[1];
+        expect(lines).to.deep.equal([
+            'Sales results',
+            `appData() before a run rejected: ${NO_RUN_RESULTS}`,
+            `run({ region: 'Asia' }): success, created at ${createdAt}`,
+            { appData: { region: 'Asia', init_region: false }, agentBlockSummary: null, runCreatedAt: createdAt }
+        ]);
+        expect(Date.parse(createdAt ?? ''), `the run's createdAt, ${createdAt}`).to.be.within(startedAt, Date.now());
     });
 
     it('switches to the open tab and reloads it when the same folder is previewed again', async function () {
@@ -467,7 +437,6 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         const screenshot = createScreenshotter(this);
         const syncedDir = fs.mkdtempSync(path.join(workspaceDir, 'synced-'));
         copyRetitledApp(path.join(syncedDir, SYNCED_APP), SYNCED_TITLE);
-        await clearNotifications();
 
         await previewFromCommandPalette(path.join(syncedDir, SYNCED_APP));
 
@@ -479,7 +448,5 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         });
 
         expect(report).to.deep.equal(expectedReport('Sales dashboard'));
-        expect(await previewWarnings(1)).to.deep.equal([appDataWarning('_deepnote_static')]);
-        await screenshot('synced-app-warnings');
     });
 });

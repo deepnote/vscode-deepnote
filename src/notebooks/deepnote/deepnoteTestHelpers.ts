@@ -227,3 +227,21 @@ export function createWorkspaceFolder(uri: Uri, index = 0): WorkspaceFolder {
 export function serializeProjectFile(projectId: string): string {
     return serializeDeepnoteFile(createDeepnoteFile({ project: createDeepnoteProject({ id: projectId }) }));
 }
+
+/** The code block of Deepnote Cloud's default init notebook. */
+export const DEEPNOTE_CLOUD_INIT_BLOCK = `%%bash
+# If your project has a 'requirements.txt' file, we'll install it here.
+if test -f requirements.txt
+  then
+    pip install -r ./requirements.txt
+  else echo "There's no requirements.txt, so nothing to install."
+fi`;
+
+/** The block that runs in place of {@link DEEPNOTE_CLOUD_INIT_BLOCK} on Windows. */
+export const WINDOWS_INIT_BLOCK = `import os, sys, subprocess
+
+if os.path.exists("requirements.txt"):
+    print("Installing requirements.txt")
+    subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], check=False)
+else:
+    print("There's no requirements.txt, so nothing to install.")`;

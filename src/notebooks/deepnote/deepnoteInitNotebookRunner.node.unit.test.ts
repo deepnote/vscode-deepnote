@@ -8,12 +8,14 @@ import { IKernel, IKernelProvider, INotebookKernelExecution } from '../../kernel
 import { IDisposableRegistry } from '../../platform/common/types';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../test/vscode-mock';
 import { IDeepnoteNotebookManager } from '../types';
-import { DeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
+import { adaptInitBlockContent, DeepnoteInitNotebookRunner } from './deepnoteInitNotebookRunner.node';
 import {
     createDeepnoteBlock,
     createDeepnoteFile,
     createDeepnoteNotebook,
-    createDeepnoteProject
+    createDeepnoteProject,
+    DEEPNOTE_CLOUD_INIT_BLOCK,
+    WINDOWS_INIT_BLOCK
 } from './deepnoteTestHelpers';
 
 const PROJECT_ID = '11111111-1111-1111-1111-111111111111';
@@ -424,5 +426,32 @@ suite('DeepnoteInitNotebookRunner', () => {
         finishInitBlock();
         await waited;
         assert.isTrue(resolved);
+    });
+});
+
+suite('adaptInitBlockContent', () => {
+    teardown(() => {
+        sinon.restore();
+    });
+
+    test("replaces Deepnote Cloud's init block with the Python block on Windows, whatever whitespace surrounds it", () => {
+        sinon.stub(process, 'platform').value('win32');
+
+        assert.strictEqual(adaptInitBlockContent(DEEPNOTE_CLOUD_INIT_BLOCK), WINDOWS_INIT_BLOCK);
+        assert.strictEqual(adaptInitBlockContent(`\n  ${DEEPNOTE_CLOUD_INIT_BLOCK}\n\n`), WINDOWS_INIT_BLOCK);
+    });
+
+    test("keeps Deepnote Cloud's init block on Linux", () => {
+        sinon.stub(process, 'platform').value('linux');
+
+        assert.strictEqual(adaptInitBlockContent(DEEPNOTE_CLOUD_INIT_BLOCK), DEEPNOTE_CLOUD_INIT_BLOCK);
+    });
+
+    test('keeps any other block on Windows', () => {
+        sinon.stub(process, 'platform').value('win32');
+        const edited = DEEPNOTE_CLOUD_INIT_BLOCK.replace('./requirements.txt', './requirements-dev.txt');
+
+        assert.strictEqual(adaptInitBlockContent(edited), edited);
+        assert.strictEqual(adaptInitBlockContent('%%bash\necho hi'), '%%bash\necho hi');
     });
 });

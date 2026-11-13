@@ -140,7 +140,6 @@ suite('findNotebookById', () => {
         );
     }
 
-    /** Makes `workspace.findFiles` list these files, in this order. */
     function workspaceFiles(...relativePaths: string[]): void {
         when(mockedVSCodeNamespaces.workspace.findFiles('**/*.deepnote')).thenCall(async () =>
             relativePaths.map((relativePath) => Uri.file(path.join(tmp, relativePath)))

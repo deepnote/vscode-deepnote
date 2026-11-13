@@ -503,13 +503,17 @@ suite('createAppPreviewApi', () => {
             sinon.assert.notCalled(onUnsupported);
         });
 
-        test('answers the first JSON object across blocks and their outputs, skipping a JSON array', async () => {
+        test('answers the first JSON object across blocks and their outputs, skipping a JSON array and null', async () => {
             placeRun({
                 runId: 'run',
                 status: 'success',
                 createdAt: NOW,
                 snapshotBlocks: [
-                    snapshotBlock('regions', 'code', [stdout('loading'), display({ 'application/json': ['north'] })]),
+                    snapshotBlock('regions', 'code', [
+                        stdout('loading'),
+                        { output_type: 'display_data', data: { 'application/json': null }, metadata: {} },
+                        display({ 'application/json': ['north'] })
+                    ]),
                     snapshotBlock('chart', 'code', [
                         display({ 'text/plain': 'chart' }),
                         display({ 'application/json': { total: 3 } }),
@@ -567,6 +571,11 @@ suite('createAppPreviewApi', () => {
                     snapshotBlock('second-agent', 'agent', [display({ 'text/markdown': 'Second answer' })])
                 ],
                 'Sales grew by 5%.'
+            ],
+            [
+                'null when it has neither a markdown nor a stream output',
+                [snapshotBlock('agent', 'agent', [display({ 'text/plain': 'Sales grew.' })])],
+                null
             ],
             [
                 'null when no block is an agent block, though a code block displays markdown',

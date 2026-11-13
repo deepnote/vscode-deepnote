@@ -343,7 +343,6 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         expect(report).to.deep.equal(expectedReport('Sales dashboard'));
         expect(await new EditorView().getOpenEditorTitles()).to.deep.equal(['Preview fixture']);
 
-        // inputs() and appData() are answered, and the page called dataframe() twice, so one warning names dataframe().
         expect(await previewWarnings(1)).to.deep.equal([dataframeWarning(folder)]);
         await screenshot('dataframe-warning');
     });
@@ -388,7 +387,6 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
             return read;
         });
         expect(report).to.deep.include(NOTEBOOK_INPUTS);
-        // No .deepnote file is in or above inputs-app, so dataframe() rejects in the page without a request.
         expect(report).to.include.members([
             `dataframe() rejected: ${NO_PROJECT_DATAFRAME}`,
             `dataframe() again rejected: ${NO_PROJECT_DATAFRAME}`

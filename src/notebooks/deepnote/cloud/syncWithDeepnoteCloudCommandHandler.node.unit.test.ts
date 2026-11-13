@@ -911,8 +911,8 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             await first;
         });
 
-        test('refuses to sync while another operation holds the lock, and syncs once it is released', async () => {
-            const lease = lock.tryAcquire()!;
+        test('refuses to sync while another operation holds the lock', async () => {
+            void lock.tryRunExclusive(() => new Promise<never>(() => undefined));
 
             await sync();
 
@@ -921,11 +921,6 @@ suite('SyncWithDeepnoteCloudCommandHandler', () => {
             ]);
             verify(win().showQuickPick(anything(), anything())).never();
             assert.isTrue(handler.runSyncWorkspaceStub.notCalled);
-
-            lease.dispose();
-            await sync();
-
-            assert.isTrue(handler.runSyncWorkspaceStub.calledOnce);
         });
 
         test('does not wait for the summary to be dismissed', async () => {

@@ -12,7 +12,7 @@ import {
     type WorkspaceSyncResult
 } from '@deepnote/cloud-sync';
 import { inject, injectable } from 'inversify';
-import { commands, Disposable, Progress, ProgressLocation, QuickPickItem, Uri, window, workspace } from 'vscode';
+import { commands, Progress, ProgressLocation, QuickPickItem, Uri, window, workspace } from 'vscode';
 
 import { IExtensionSyncActivationService } from '../../../platform/activation/types';
 import { Commands } from '../../../platform/common/constants';
@@ -243,45 +243,43 @@ export class PublishAppCommandHandler implements IExtensionSyncActivationService
             return undefined;
         });
 
-        let lease: Disposable | undefined;
-        if (syncRoot) {
-            lease = this.operationLock.tryAcquire();
-            if (!lease) {
-                void window.showInformationMessage(DeepnoteCloud.cloudOperationInProgress);
-
-                return;
-            }
-        }
-
         let mirrorIncompleteRoot: string | undefined;
         let savingCreatedProject: Promise<void> | undefined;
-        let outcome: { result: PublishAppResult } | { error: unknown };
-        try {
-            const result = await window.withProgress(
-                { location: ProgressLocation.Notification, title: DeepnoteCloud.publishing(basename(folder)) },
-                (progress) => {
-                    const onEvent = this.progressReporter(progress, {
-                        onMirrorIncomplete: (root) => (mirrorIncompleteRoot = root),
-                        onProjectCreated: (project) => (savingCreatedProject = this.saveSettings(folder, project))
-                    });
+        const publishing = async (): Promise<{ result: PublishAppResult } | { error: unknown }> => {
+            try {
+                const result = await window.withProgress(
+                    { location: ProgressLocation.Notification, title: DeepnoteCloud.publishing(basename(folder)) },
+                    (progress) => {
+                        const onEvent = this.progressReporter(progress, {
+                            onMirrorIncomplete: (root) => (mirrorIncompleteRoot = root),
+                            onProjectCreated: (project) => (savingCreatedProject = this.saveSettings(folder, project))
+                        });
 
-                    return this.runPublishApp({
-                        dir: getFilePath(folder),
-                        ...('projectId' in target
-                            ? { projectId: target.projectId }
-                            : { create: { name: target.newProjectName } }),
-                        baseUrl: getApiEndpoint(folder),
-                        token,
-                        force,
-                        onEvent
-                    });
-                }
-            );
-            outcome = { result };
-        } catch (error) {
-            outcome = { error };
-        } finally {
-            lease?.dispose();
+                        return this.runPublishApp({
+                            dir: getFilePath(folder),
+                            ...('projectId' in target
+                                ? { projectId: target.projectId }
+                                : { create: { name: target.newProjectName } }),
+                            baseUrl: getApiEndpoint(folder),
+                            token,
+                            force,
+                            onEvent
+                        });
+                    }
+                );
+
+                return { result };
+            } catch (error) {
+                return { error };
+            }
+        };
+        const outcome = syncRoot
+            ? await this.operationLock.tryRunExclusive(publishing, () => {
+                  void window.showInformationMessage(DeepnoteCloud.cloudOperationInProgress);
+              })
+            : await publishing();
+        if (!outcome) {
+            return;
         }
 
         // Saved as soon as Deepnote reports the project, even when a later step fails, so publishing again goes to it

@@ -268,18 +268,9 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
     }
 
     private async runOneSyncAtATime<T>(sync: () => Promise<T | undefined>): Promise<T | undefined> {
-        const lease = this.operationLock.tryAcquire();
-        if (!lease) {
+        return this.operationLock.tryRunExclusive(sync, () => {
             void window.showInformationMessage(DeepnoteCloud.cloudOperationInProgress);
-
-            return undefined;
-        }
-
-        try {
-            return await sync();
-        } finally {
-            lease.dispose();
-        }
+        });
     }
 
     private async saveUnsavedNotebooks(): Promise<boolean> {

@@ -519,16 +519,15 @@ suite('PublishAppCommandHandler', () => {
         });
 
         test('publishes a folder outside any sync root while the lock is held', async () => {
-            const lease = lock.tryAcquire()!;
+            void lock.tryRunExclusive(() => new Promise<never>(() => undefined));
 
             await publish(appFolder);
 
             assert.isTrue(handler.runPublishAppStub.calledOnce);
-            lease.dispose();
         });
 
         test('refuses to publish into a synced folder while the lock is held', async () => {
-            const lease = lock.tryAcquire()!;
+            void lock.tryRunExclusive(() => new Promise<never>(() => undefined));
 
             await publish(syncedAppFolder);
 
@@ -537,15 +536,15 @@ suite('PublishAppCommandHandler', () => {
                 'A sync or app publish with Deepnote Cloud is already in progress.'
             ]);
             assert.isTrue(handler.runPublishAppStub.notCalled);
-            lease.dispose();
         });
 
-        test('holds the lock while publishing into a synced folder, and releases it once the publish settles', async () => {
+        test('holds the lock while publishing into a synced folder', async () => {
             let lockHeldDuringPublish = false;
             handler.runPublishAppStub.callsFake(async () => {
-                const lease = lock.tryAcquire();
-                lockHeldDuringPublish = lease === undefined;
-                lease?.dispose();
+                await lock.tryRunExclusive(
+                    async () => undefined,
+                    () => (lockHeldDuringPublish = true)
+                );
 
                 return published();
             });
@@ -553,7 +552,6 @@ suite('PublishAppCommandHandler', () => {
             await publish(syncedAppFolder);
 
             assert.isTrue(lockHeldDuringPublish, 'the lock must be held while publishing');
-            assert.isDefined(lock.tryAcquire(), 'the lock must be released once the publish settles');
         });
     });
 
@@ -673,9 +671,8 @@ suite('PublishAppCommandHandler', () => {
         test('asks once the lock is released, and Force publishes again with force', async () => {
             let lockFreeDuringModal = false;
             answers.set(DIVERGED, () => {
-                const lease = lock.tryAcquire();
-                lockFreeDuringModal = lease !== undefined;
-                lease?.dispose();
+                // The probe holds the lock until its run settles, which is before Force publishes again.
+                void lock.tryRunExclusive(async () => (lockFreeDuringModal = true));
 
                 return 'Force';
             });

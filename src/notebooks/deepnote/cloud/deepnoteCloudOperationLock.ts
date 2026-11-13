@@ -1,5 +1,4 @@
 import { injectable } from 'inversify';
-import { Disposable } from 'vscode';
 
 import { IDeepnoteCloudOperationLock } from './types';
 
@@ -7,15 +6,18 @@ import { IDeepnoteCloudOperationLock } from './types';
 export class DeepnoteCloudOperationLock implements IDeepnoteCloudOperationLock {
     private held = false;
 
-    public tryAcquire(): Disposable | undefined {
+    public async tryRunExclusive<T>(run: () => Promise<T>, onBusy?: () => void): Promise<T | undefined> {
         if (this.held) {
+            onBusy?.();
+
             return undefined;
         }
 
         this.held = true;
-
-        return new Disposable(() => {
+        try {
+            return await run();
+        } finally {
             this.held = false;
-        });
+        }
     }
 }

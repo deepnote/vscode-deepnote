@@ -155,7 +155,6 @@ export class AppPreviewSession implements IDisposable {
         return this.serverUri;
     }
 
-    /** Cancels the preview's unfinished runs, then stops its server. */
     public dispose(): void {
         this.api?.dispose();
         const server = this.server;

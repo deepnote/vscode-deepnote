@@ -83,7 +83,6 @@ suite('AppPreviewSession', () => {
     let unsupported: AppPreviewOperation[];
     let runTokens: CancellationToken[];
 
-    /** Runs that end only once their token is cancelled. */
     const runner: IAppPreviewRunner = {
         run: (_request, token) =>
             new Promise<AppPreviewRunOutcome>((resolve) => {

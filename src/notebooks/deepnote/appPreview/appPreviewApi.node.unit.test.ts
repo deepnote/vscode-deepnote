@@ -75,7 +75,6 @@ interface RunnerCall {
     fail(error: Error): void;
 }
 
-/** A runner whose runs stay unfinished until the test finishes or fails them. */
 class FakeRunner implements IAppPreviewRunner {
     public readonly calls: RunnerCall[] = [];
 
@@ -163,7 +162,6 @@ suite('createAppPreviewApi', () => {
         return (await response.json()).run;
     }
 
-    /** Polls the run until its status is `status`, as the client does. */
     async function waitForStatus(runId: string, status: string): Promise<Record<string, unknown>> {
         const deadline = Date.now() + 2_000;
         for (;;) {

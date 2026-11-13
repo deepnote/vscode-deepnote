@@ -35,7 +35,7 @@ export interface AppPreviewApi {
     router: Router;
     /** The preview's runs by ID, kept for the preview's lifetime. */
     runs: Map<string, PreviewRun>;
-    /** Cancels every run that has not finished. */
+    /** Cancels the token of every unfinished run, which stops only runs whose blocks have not started. */
     dispose(): void;
 }
 
@@ -60,7 +60,7 @@ function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-/** Deepnote's input check: every input names an input block of the notebook, and suits each block of that name. */
+/** The input check Deepnote's `POST /v2/runs` makes before it accepts a run. */
 function inputsError(notebook: DeepnoteNotebook, inputs: Record<string, AppPreviewInputValue>): string | undefined {
     const inputBlocks = notebook.blocks.filter(isInputBlock);
     for (const [name, value] of Object.entries(inputs)) {
@@ -90,7 +90,7 @@ function isAuthorized(authorizationHeader: string | undefined, token: string): b
     return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-/** Deepnote's 400 message for a body that fails its schema: each issue's path and message, a root-level one as is. */
+/** Deepnote's 400 message for a body that fails its schema. */
 function readableErrors(error: z.ZodError): string {
     return error.issues
         .map((issue) =>

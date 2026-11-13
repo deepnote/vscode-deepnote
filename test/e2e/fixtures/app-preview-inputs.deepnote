@@ -1,0 +1,53 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-app-preview-project
+  name: E2E App Preview
+  notebooks:
+    - id: e2e-preview-notebook
+      name: Sales inputs
+      blocks:
+        - id: e2e-region-input
+          blockGroup: e2e-region
+          type: input-text
+          sortingKey: a0
+          metadata:
+            deepnote_variable_name: region
+            deepnote_variable_value: Europe
+            deepnote_input_label: Region
+        - id: e2e-threshold-input
+          blockGroup: e2e-threshold
+          type: input-slider
+          sortingKey: a1
+          metadata:
+            deepnote_variable_name: threshold
+            deepnote_variable_value: '40'
+            deepnote_input_label: Threshold
+            deepnote_slider_min_value: 10
+            deepnote_slider_max_value: 90
+            deepnote_slider_step: 5
+        - id: e2e-products-input
+          blockGroup: e2e-products
+          type: input-select
+          sortingKey: a2
+          metadata:
+            deepnote_variable_name: products
+            deepnote_variable_value:
+              - Chairs
+              - Lamps
+            deepnote_input_label: Products
+            deepnote_variable_options:
+              - Chairs
+              - Desks
+              - Lamps
+            deepnote_allow_multiple_values: true
+        - id: e2e-summary
+          blockGroup: e2e-summary
+          type: code
+          content: print(region, threshold, products)
+          sortingKey: a3
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

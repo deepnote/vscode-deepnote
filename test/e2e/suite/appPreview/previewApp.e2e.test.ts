@@ -24,6 +24,7 @@ import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     clickDialogOkButton,
+    copyFixtureIntoDir,
     createScreenshotter,
     openActivityBarView,
     openFolderViaDialog,
@@ -31,26 +32,64 @@ import {
 } from '../../helpers';
 
 const FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview');
+const INPUTS_NOTEBOOK_FIXTURE = 'app-preview-inputs.deepnote';
 const SYNCED_APP = path.join('Sales', '.files', '_deepnote_static');
 const SYNCED_TITLE = 'Synced fixture';
 const RELOAD_TITLE = 'Reload fixture';
 const REUSE_TITLE = 'Reuse fixture';
+const INPUTS_TITLE = 'Inputs fixture';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
 const NOT_SUPPORTED = 'which the local preview does not support yet.';
+const INPUTS_RESOLVED = 'inputs() resolved: ';
 
-function expectedReport(title: string): string[] {
+const NOTEBOOK_INPUTS = [
+    { blockId: 'e2e-region-input', name: 'region', type: 'input-text', value: 'Europe', label: 'Region' },
+    {
+        blockId: 'e2e-threshold-input',
+        name: 'threshold',
+        type: 'input-slider',
+        value: '40',
+        label: 'Threshold',
+        min: 10,
+        max: 90,
+        step: 5
+    },
+    {
+        blockId: 'e2e-products-input',
+        name: 'products',
+        type: 'input-select',
+        value: ['Chairs', 'Lamps'],
+        label: 'Products',
+        options: ['Chairs', 'Desks', 'Lamps'],
+        multiple: true
+    }
+];
+
+function expectedReport(title: string): unknown[] {
     return [
         title,
         'client: function',
         'styles: rgb(0, 128, 0)',
         'logo: 48x48',
-        'inputs() rejected: inputs() is not supported in the local preview yet.',
-        'inputs() again rejected: inputs() is not supported in the local preview yet.',
+        NOTEBOOK_INPUTS,
+        'inputs() of an unknown notebook rejected: Notebook not found',
+        'appData() rejected: appData() is not supported in the local preview yet.',
+        'appData() again rejected: appData() is not supported in the local preview yet.',
         'requests to deepnote.com: 0'
     ];
 }
 
-async function readReport(): Promise<string[]> {
+function withParsedInputs(report: string[]): unknown[] {
+    return report.map((line) =>
+        line.startsWith(INPUTS_RESOLVED) ? JSON.parse(line.slice(INPUTS_RESOLVED.length)) : line
+    );
+}
+
+function appDataWarning(folderName: string): string {
+    return `The app in ${folderName} called appData(), which the local preview does not support yet.`;
+}
+
+async function readReport(): Promise<unknown[]> {
     const driver = VSBrowser.instance.driver;
     let report: string[] = [];
     try {
@@ -71,7 +110,7 @@ async function readReport(): Promise<string[]> {
         throw new Error(`${(error as Error).message}. Last read: ${JSON.stringify(report)}`);
     }
 
-    return report;
+    return withParsedInputs(report);
 }
 
 async function onIntegratedBrowserPage<T>(title: string, read: () => Promise<T>): Promise<T> {
@@ -219,6 +258,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
     this.timeout(SUITE_TIMEOUT);
 
     let workspaceDir = '';
+    let inputsNotebookFile = '';
 
     /**
      * Each test, and each attempt Mocha retries, gets a folder no earlier attempt previewed: the extension keeps one
@@ -239,6 +279,9 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
             path.join(workspaceDir, '.vscode', 'settings.json'),
             JSON.stringify({ 'explorer.compactFolders': false })
         );
+        // Kept out of every app folder and the folders above them, so no app resolves to this project.
+        fs.mkdirSync(path.join(workspaceDir, 'notebooks'));
+        inputsNotebookFile = copyFixtureIntoDir(path.join(workspaceDir, 'notebooks'), INPUTS_NOTEBOOK_FIXTURE);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(workspaceDir);
@@ -272,10 +315,8 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         expect(report).to.deep.equal(expectedReport('Sales dashboard'));
         expect(await new EditorView().getOpenEditorTitles()).to.deep.equal(['Preview fixture']);
 
-        expect(await previewWarnings(1)).to.deep.equal([
-            `The app in ${path.basename(appDir)} called inputs(), which the local preview does not support yet.`
-        ]);
-        await screenshot('inputs-warning');
+        expect(await previewWarnings(1)).to.deep.equal([appDataWarning(path.basename(appDir))]);
+        await screenshot('app-data-warning');
     });
 
     it('shows an edit after a reload, and does not warn again', async function () {
@@ -305,6 +346,42 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         const warnings = await center.getNotifications(NotificationType.Warning);
         expect(warnings).to.have.length(0);
         await center.close();
+    });
+
+    it('answers inputs() from the .deepnote file as saved on disk, after an edit and a reload', async function () {
+        const screenshot = createScreenshotter(this);
+        const appDir = addAppFolder(INPUTS_TITLE);
+        await selectDeepnoteContextMenu(await findRootExplorerItem(path.basename(appDir)), 'Preview App');
+
+        const report = await onIntegratedBrowserPage(INPUTS_TITLE, async () => {
+            const read = await readReport();
+            await screenshot('rendered-inputs');
+
+            return read;
+        });
+        expect(report).to.deep.include(NOTEBOOK_INPUTS);
+
+        const original = fs.readFileSync(inputsNotebookFile, 'utf8');
+        try {
+            fs.writeFileSync(
+                inputsNotebookFile,
+                original
+                    .replace('deepnote_variable_value: Europe', 'deepnote_variable_value: Asia')
+                    .replace('deepnote_slider_max_value: 90', 'deepnote_slider_max_value: 120')
+            );
+            const edited = await onIntegratedBrowserPage(INPUTS_TITLE, async () => {
+                await VSBrowser.instance.driver.navigate().refresh();
+                const read = await readReport();
+                await screenshot('edited-inputs');
+
+                return read;
+            });
+
+            const [region, threshold, products] = NOTEBOOK_INPUTS;
+            expect(edited).to.deep.include([{ ...region, value: 'Asia' }, { ...threshold, max: 120 }, products]);
+        } finally {
+            fs.writeFileSync(inputsNotebookFile, original);
+        }
     });
 
     it('switches to the open tab and reloads it when the same folder is previewed again', async function () {
@@ -355,9 +432,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         });
 
         expect(report).to.deep.equal(expectedReport('Sales dashboard'));
-        expect(await previewWarnings(1)).to.deep.equal([
-            'The app in _deepnote_static called inputs(), which the local preview does not support yet.'
-        ]);
+        expect(await previewWarnings(1)).to.deep.equal([appDataWarning('_deepnote_static')]);
         await screenshot('synced-app-warnings');
     });
 });

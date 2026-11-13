@@ -120,7 +120,8 @@ Run `Deepnote: Preview App` from the Command Palette, or right-click a folder in
 
 - The folder is served the way Deepnote serves a published app, from a local address. Edit a file and reload the page to see the change.
 - The page's script tag for Deepnote's client (`https://deepnote.com/static/app-client/v1.js`) is replaced with the extension's own client, so the preview works without network access.
-- The page's calls to Deepnote reach a local stand-in that does not support them yet: `inputs()`, `appData()`, `run()` and `dataframe()` reject with a message saying so, and VS Code shows a warning the first time the app calls each of them.
+- `inputs()` returns the input blocks of the notebook with that ID in the workspace's `.deepnote` files, as saved on disk, so save the notebook and reload the page to see a change. An ID that no workspace notebook has rejects with `Notebook not found`.
+- The page's other calls to Deepnote reach a local stand-in that does not support them yet: `appData()`, `run()` and `dataframe()` reject with a message saying so, and VS Code shows a warning the first time the app calls each of them.
 - Previewing needs a trusted workspace and the desktop app.
 
 ### Database integrations

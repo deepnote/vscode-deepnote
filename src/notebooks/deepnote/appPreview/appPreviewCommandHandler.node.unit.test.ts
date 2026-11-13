@@ -224,13 +224,13 @@ suite('AppPreviewCommandHandler', () => {
                 headers: { authorization: `Bearer ${token}` }
             });
 
-        assert.strictEqual((await api('/notebooks/nb-1')).status, 501);
-        assert.strictEqual((await api('/notebooks/nb-1')).status, 501);
+        assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
+        assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
         assert.strictEqual((await api('/runs', 'POST')).status, 501);
         assert.strictEqual((await api('/runs/run-1')).status, 501);
 
         assert.deepStrictEqual(warnings, [
-            'The app in app called inputs(), which the local preview does not support yet.',
+            'The app in app called appData(), which the local preview does not support yet.',
             'The app in app called run(), which the local preview does not support yet.'
         ]);
     });

@@ -357,16 +357,16 @@ suite('AppPreviewSession', () => {
             const session = await startSession();
             const { token } = await requestToken(session);
 
-            const stub = await request(session, '/v2/notebooks/nb-1', {
+            const stub = await request(session, '/v2/notebooks/nb-1/app-data', {
                 headers: { authorization: `Bearer ${token}` }
             });
             assert.strictEqual(stub.status, 501);
             assert.deepStrictEqual(JSON.parse(stub.body.toString()), {
-                message: 'inputs() is not supported in the local preview yet.'
+                message: 'appData() is not supported in the local preview yet.'
             });
-            assert.deepStrictEqual(unsupported, ['inputs()']);
+            assert.deepStrictEqual(unsupported, ['appData()']);
 
-            assert.strictEqual((await request(session, '/v2/notebooks/nb-1')).status, 401);
+            assert.strictEqual((await request(session, '/v2/notebooks/nb-1/app-data')).status, 401);
         });
     });
 

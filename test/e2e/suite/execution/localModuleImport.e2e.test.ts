@@ -13,6 +13,7 @@ import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     copyFixtureToTempDir,
+    createScreenshotter,
     openFolderViaDialog,
     openWorkspaceFile,
     runOnceAndAwaitOutput
@@ -20,6 +21,8 @@ import {
 
 const NOTEBOOK_FILE_NAME = 'local-module-import.deepnote';
 const EXPECTED_OUTPUT = 'local helper imported';
+// Without the legacy variable, the toolkit's set_notebook_path fails at kernel start and logs this with a traceback.
+const STARTUP_FAILURE = /Failed to set notebook path|Traceback/;
 
 describe('Deepnote E2E — import a module next to the `.deepnote` file', function () {
     this.timeout(SUITE_TIMEOUT);
@@ -62,8 +65,13 @@ describe('Deepnote E2E — import a module next to the `.deepnote` file', functi
         }
     });
 
-    it('imports `local_helper` from the notebook folder', async function () {
+    it('imports `local_helper` from the notebook folder, with no startup traceback in the output', async function () {
+        const screenshot = createScreenshotter(this);
+
         const output = await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, EXPECTED_OUTPUT, FIRST_RUN_OUTPUT_TIMEOUT);
+        await screenshot('cell-output');
+
         expect(output).to.contain(EXPECTED_OUTPUT);
+        expect(output).to.not.match(STARTUP_FAILURE);
     });
 });

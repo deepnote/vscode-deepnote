@@ -2,8 +2,9 @@
 /* eslint-disable local-rules/dont-use-fspath */
 
 import { deserializeDeepnoteFile, serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
+import * as fs from 'fs';
 import { anything, instance, mock, when } from 'ts-mockito';
-import { Uri } from 'vscode';
+import { FileType, Uri } from 'vscode';
 
 import { mockedVSCodeNamespaces } from '../vscode-mock';
 
@@ -65,4 +66,21 @@ export function stubDeepnoteFiles(
     });
 
     return writes;
+}
+
+/**
+ * Points the mocked `workspace.fs` namespace's `readDirectory` and `readFile` at the real disk, for tests that lay out
+ * real folders. Call after `resetVSCodeMocks()` — the reset replaces the namespace mocks this stubs.
+ */
+export function stubWorkspaceFsOnDisk(): void {
+    const mockFs = mock<typeof import('vscode').workspace.fs>();
+
+    when(mockFs.readDirectory(anything())).thenCall(async (uri: Uri) =>
+        (await fs.promises.readdir(uri.fsPath, { withFileTypes: true })).map((entry) => [
+            entry.name,
+            entry.isDirectory() ? FileType.Directory : FileType.File
+        ])
+    );
+    when(mockFs.readFile(anything())).thenCall((uri: Uri) => fs.promises.readFile(uri.fsPath));
+    when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
 }

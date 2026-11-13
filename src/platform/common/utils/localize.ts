@@ -1413,6 +1413,14 @@ export namespace DeepnoteCloud {
         );
 }
 
+export namespace DeepnoteAppPreview {
+    export const chooseFolderTitle = l10n.t('Choose the app folder to preview');
+    export const preview = l10n.t('Preview');
+    export const startFailed = (message: string) => l10n.t('Could not start the app preview: {0}', message);
+    export const operationNotSupported = (operation: string, folderName: string) =>
+        l10n.t('The app in {1} called {0}, which the local preview does not support yet.', operation, folderName);
+}
+
 export namespace SelectInputSettings {
     export const title = l10n.t('Select Input Settings');
     export const allowMultipleValues = l10n.t('Allow to select multiple values');

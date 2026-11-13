@@ -264,6 +264,7 @@
     "deepnote.commands.syncWithDeepnoteCloud.title": "Sync with Deepnote Cloud",
     "deepnote.commands.syncNewFolderWithDeepnoteCloud.title": "Sync a New Folder with Deepnote Cloud…",
     "deepnote.commands.publishApp.title": "Publish App…",
+    "deepnote.commands.previewApp.title": "Preview App",
     "deepnote.commands.newProject.title": "New Project",
     "deepnote.commands.importNotebook.title": "Import Notebook",
     "deepnote.commands.importJupyterNotebook.title": "Import Jupyter Notebook",

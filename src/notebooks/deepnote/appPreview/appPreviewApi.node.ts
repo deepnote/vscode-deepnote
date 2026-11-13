@@ -1,16 +1,25 @@
 import { getInputBlockValueOverrideValidationError, isInputBlock } from '@deepnote/blocks';
+import type { IOutput, IStream } from '@deepnote/runtime-core';
 import { timingSafeEqual } from 'crypto';
 import express, { type NextFunction, type Request, type Response, type Router } from 'express';
 import { CancellationTokenSource } from 'vscode';
 import { z } from 'zod';
 
+import { concatMultilineString } from '../../../platform/common/utils';
+import { isObject } from '../../../platform/common/utils/sysTypes';
 import { generateUuid } from '../../../platform/common/uuid';
 import type { DeepnoteNotebook } from '../../../platform/deepnote/deepnoteTypes';
 import { logger } from '../../../platform/logging';
 import { blocksInNotebookOrder, toNotebookInputs, type WorkspaceNotebook } from './appPreviewWorkspace.node';
-import type { AppPreviewInputValue, AppPreviewRunOutcome, AppPreviewRunRequest, IAppPreviewRunner } from './types';
+import type {
+    AppPreviewInputValue,
+    AppPreviewRunOutcome,
+    AppPreviewRunRequest,
+    IAppPreviewRunner,
+    SnapshotBlock
+} from './types';
 
-export type AppPreviewOperation = 'appData()' | 'dataframe()';
+export type AppPreviewOperation = 'dataframe()';
 
 export interface AppPreviewApiOptions {
     token: string;
@@ -46,6 +55,8 @@ export interface AppPreviewApi {
 const UNAUTHORIZED_MESSAGE = 'Unauthorized';
 const NOT_AVAILABLE_MESSAGE = 'This endpoint is not available to app viewer tokens';
 const NOTEBOOK_NOT_FOUND_MESSAGE = 'Notebook not found';
+const NO_RUN_RESULTS_MESSAGE = 'You have no run results for this notebook yet. Run the notebook to load them.';
+const NO_JSON_OUTPUT_MESSAGE = 'Your latest run has no JSON output.';
 const RUN_NOT_FOUND_MESSAGE = 'Run not found';
 const INTERNAL_ERROR_MESSAGE = 'Internal server error';
 
@@ -92,6 +103,35 @@ function evictFinishedRuns(runs: Map<string, PreviewRun>): void {
     removable.slice(0, Math.max(0, removable.length - MAX_FINISHED_RUNS)).forEach((run) => runs.delete(run.runId));
 }
 
+/**
+ * Deepnote's `agentBlockSummary`: the first agent block's first markdown output. runtime-core emits an agent's answer
+ * as stream output instead, so without markdown it is the block's stream text.
+ */
+function firstAgentBlockSummary(blocks: SnapshotBlock[]): string | null {
+    const agent = blocks.find((block) => block.type === 'agent');
+    if (!agent) {
+        return null;
+    }
+
+    const markdown = agent.outputs
+        .map((output) => mimeData(output, 'text/markdown'))
+        .find((data): data is string => typeof data === 'string');
+    if (markdown !== undefined) {
+        return markdown;
+    }
+    const streams = agent.outputs.filter((output): output is IStream => output.output_type === 'stream');
+
+    return streams.length > 0 ? streams.map((output) => concatMultilineString(output.text)).join('') : null;
+}
+
+/** Deepnote's `appData`: the first `application/json` output that is an object, not an array or `null`. */
+function firstJsonObject(blocks: SnapshotBlock[]): Record<string, unknown> | undefined {
+    return blocks
+        .flatMap((block) => block.outputs)
+        .map((output) => mimeData(output, 'application/json'))
+        .find(isJsonObject);
+}
+
 /** The input check Deepnote's `POST /v2/runs` makes before it accepts a run. */
 function inputsError(notebook: DeepnoteNotebook, inputs: Record<string, AppPreviewInputValue>): string | undefined {
     const inputBlocks = notebook.blocks.filter(isInputBlock);
@@ -120,6 +160,32 @@ function isAuthorized(authorizationHeader: string | undefined, token: string): b
     const actual = Buffer.from(authorizationHeader);
 
     return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+// isObject's own guard is `obj is any`, which would switch off type checking where it narrows.
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+    return isObject(value);
+}
+
+function mimeData(output: IOutput, mimeType: string): unknown {
+    const data: unknown = output.data;
+
+    return isJsonObject(data) ? data[mimeType] : undefined;
+}
+
+function newestSuccessfulRun(runs: Map<string, PreviewRun>, notebookId: string): PreviewRun | undefined {
+    let newest: PreviewRun | undefined;
+    for (const run of runs.values()) {
+        if (
+            run.notebookId === notebookId &&
+            run.status === 'success' &&
+            (!newest || run.createdAt >= newest.createdAt)
+        ) {
+            newest = run;
+        }
+    }
+
+    return newest;
 }
 
 /** Deepnote's 400 message for a body that fails its schema. */
@@ -155,8 +221,9 @@ function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook) {
 /**
  * The local stand-in for Deepnote's app viewer API (`/v2`), mounted at `/__deepnote/v2` on the preview server.
  * Requests without the preview's bearer token get 401. `GET /notebooks/:notebookId` answers from the workspace's
- * notebooks, and `POST /runs` runs one with `runner`, which `GET /runs/:runId` then reports on. The other routes
- * Deepnote's client calls get 501, and every other route gets 403, as Deepnote answers app viewer tokens. A body that
+ * notebooks, and `POST /runs` runs one with `runner`, which `GET /runs/:runId` then reports on.
+ * `GET /notebooks/:notebookId/app-data` answers from the notebook's newest successful run. The dataframe route
+ * Deepnote's client calls gets 501, and every other route gets 403, as Deepnote answers app viewer tokens. A body that
  * cannot be read, such as malformed JSON, gets its 4xx; any other failure is logged and gets a JSON 500.
  */
 export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewApi {
@@ -214,7 +281,28 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
         }
         res.json({ notebook: toAppViewerNotebook(found) });
     });
-    router.get('/notebooks/:notebookId/app-data', unsupported('appData()'));
+    router.get('/notebooks/:notebookId/app-data', async (req: Request<{ notebookId: string }>, res: Response) => {
+        const { notebookId } = req.params;
+        if (!(await options.findNotebook(notebookId))) {
+            res.status(404).json({ message: NOTEBOOK_NOT_FOUND_MESSAGE });
+
+            return;
+        }
+        const run = newestSuccessfulRun(runs, notebookId);
+        if (!run) {
+            res.status(404).json({ message: NO_RUN_RESULTS_MESSAGE });
+
+            return;
+        }
+        const blocks = run.snapshotBlocks ?? [];
+        const appData = firstJsonObject(blocks);
+        if (!appData) {
+            res.status(404).json({ message: NO_JSON_OUTPUT_MESSAGE });
+
+            return;
+        }
+        res.json({ appData, agentBlockSummary: firstAgentBlockSummary(blocks), runCreatedAt: run.createdAt });
+    });
     router.post('/runs', express.json(), async (req: Request, res: Response) => {
         const parsed = createRunBodySchema.safeParse(req.body, {
             // Deepnote's error map, so a missing field reads `is required`.

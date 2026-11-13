@@ -1,3 +1,4 @@
+import type { IDisplayData, IOutput, IStream } from '@deepnote/runtime-core';
 import { assert } from 'chai';
 import express from 'express';
 import * as http from 'http';
@@ -13,7 +14,12 @@ import {
     createDeepnoteNotebook,
     createDeepnoteProject
 } from '../deepnoteTestHelpers';
-import { createAppPreviewApi, type AppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
+import {
+    createAppPreviewApi,
+    type AppPreviewApi,
+    type AppPreviewOperation,
+    type PreviewRun
+} from './appPreviewApi.node';
 import type { WorkspaceNotebook } from './appPreviewWorkspace.node';
 import type { AppPreviewRunOutcome, AppPreviewRunRequest, IAppPreviewRunner, SnapshotBlock } from './types';
 
@@ -95,6 +101,18 @@ const CHART_SNAPSHOT: SnapshotBlock[] = [
         outputTail: null
     }
 ];
+
+function snapshotBlock(id: string, type: string, outputs: IOutput[]): SnapshotBlock {
+    return { id, type, outputs, metadata: {}, outputHead: null, outputTail: null };
+}
+
+function display(data: IDisplayData['data']): IDisplayData {
+    return { output_type: 'display_data', data, metadata: {} };
+}
+
+function stdout(text: string): IStream {
+    return { output_type: 'stream', name: 'stdout', text };
+}
 
 suite('createAppPreviewApi', () => {
     let server: http.Server;
@@ -433,8 +451,209 @@ suite('createAppPreviewApi', () => {
         assert.strictEqual((await getRun(newestSuccess)).status, 'success');
     });
 
+    suite('GET /notebooks/:notebookId/app-data', () => {
+        const NO_RUN_RESULTS = {
+            message: 'You have no run results for this notebook yet. Run the notebook to load them.'
+        };
+
+        function placeRun(
+            run: Pick<PreviewRun, 'runId' | 'status' | 'createdAt' | 'snapshotBlocks'> & Partial<PreviewRun>
+        ): void {
+            api.runs.set(run.runId, {
+                notebookId: 'nb-1',
+                snapshotStatus: 'available',
+                error: null,
+                completedAt: '2026-01-02T09:00:00.000Z',
+                ...run
+            });
+        }
+
+        function jsonSnapshot(json: Record<string, number>): SnapshotBlock[] {
+            return [snapshotBlock('chart', 'code', [display({ 'application/json': json })])];
+        }
+
+        function getAppData(notebookId = 'nb-1'): Promise<Response> {
+            return call('GET', `/notebooks/${notebookId}/app-data`);
+        }
+
+        test('answers 404 before the notebook has run, without a warning', async () => {
+            await assertJson(await getAppData(), 404, NO_RUN_RESULTS);
+            assert.deepStrictEqual(unsupported, []);
+        });
+
+        test("answers 404 when none of the notebook's runs succeeded, though another notebook's run did", async () => {
+            placeRun({ runId: 'failed', status: 'error', createdAt: NOW, snapshotBlocks: jsonSnapshot({ total: 1 }) });
+            placeRun({
+                runId: 'other-notebook',
+                notebookId: 'nb-limits',
+                status: 'success',
+                createdAt: NOW,
+                snapshotBlocks: jsonSnapshot({ total: 2 })
+            });
+
+            await assertJson(await getAppData(), 404, NO_RUN_RESULTS);
+        });
+
+        test("answers the newest successful run's JSON object and creation time, past a later failed run", async () => {
+            placeRun({
+                runId: 'older',
+                status: 'success',
+                createdAt: '2026-01-02T03:04:05.000Z',
+                snapshotBlocks: jsonSnapshot({ total: 1 })
+            });
+            placeRun({
+                runId: 'newer',
+                status: 'success',
+                createdAt: '2026-01-02T03:05:05.000Z',
+                snapshotBlocks: jsonSnapshot({ total: 2 })
+            });
+            placeRun({
+                runId: 'failed',
+                status: 'error',
+                createdAt: '2026-01-02T03:06:05.000Z',
+                snapshotBlocks: jsonSnapshot({ total: 3 })
+            });
+
+            await assertJson(await getAppData(), 200, {
+                appData: { total: 2 },
+                agentBlockSummary: null,
+                runCreatedAt: '2026-01-02T03:05:05.000Z'
+            });
+            assert.deepStrictEqual(unsupported, []);
+        });
+
+        test('answers the newest started successful run, not the last one to finish, past a run still in flight', async () => {
+            const clock = sinon.useFakeTimers({ now: Date.parse(NOW), toFake: ['Date'] });
+            const older = await startRun();
+            clock.tick(60_000);
+            const newer = await startRun();
+            clock.tick(60_000);
+            await startRun();
+
+            runner.calls[1].finish({ status: 'success', error: null, snapshotBlocks: jsonSnapshot({ total: 2 }) });
+            await waitForStatus(newer, 'success');
+            clock.tick(60_000);
+            runner.calls[0].finish({ status: 'success', error: null, snapshotBlocks: jsonSnapshot({ total: 1 }) });
+            await waitForStatus(older, 'success');
+
+            await assertJson(await getAppData(), 200, {
+                appData: { total: 2 },
+                agentBlockSummary: null,
+                runCreatedAt: '2026-01-02T03:05:05.000Z'
+            });
+        });
+
+        test('answers the first JSON object across blocks and their outputs, skipping a JSON array and null', async () => {
+            placeRun({
+                runId: 'run',
+                status: 'success',
+                createdAt: NOW,
+                snapshotBlocks: [
+                    snapshotBlock('regions', 'code', [
+                        stdout('loading'),
+                        { output_type: 'display_data', data: { 'application/json': null }, metadata: {} },
+                        display({ 'application/json': ['north'] })
+                    ]),
+                    snapshotBlock('chart', 'code', [
+                        display({ 'text/plain': 'chart' }),
+                        display({ 'application/json': { total: 3 } }),
+                        display({ 'application/json': { total: 4 } })
+                    ]),
+                    ...jsonSnapshot({ total: 5 })
+                ]
+            });
+
+            await assertJson(await getAppData(), 200, {
+                appData: { total: 3 },
+                agentBlockSummary: null,
+                runCreatedAt: NOW
+            });
+        });
+
+        test('answers 404 when the newest successful run has no JSON object, though an older one has', async () => {
+            placeRun({
+                runId: 'older',
+                status: 'success',
+                createdAt: '2026-01-02T03:04:05.000Z',
+                snapshotBlocks: jsonSnapshot({ total: 1 })
+            });
+            placeRun({
+                runId: 'newer',
+                status: 'success',
+                createdAt: '2026-01-02T03:05:05.000Z',
+                snapshotBlocks: [
+                    snapshotBlock('chart', 'code', [
+                        stdout('{"total": 2}'),
+                        display({ 'text/plain': '{"total": 2}', 'application/json': ['total'] })
+                    ])
+                ]
+            });
+
+            await assertJson(await getAppData(), 404, { message: 'Your latest run has no JSON output.' });
+        });
+
+        const agentSummaries: [string, SnapshotBlock[], string | null][] = [
+            [
+                'its first markdown output, ahead of its stream text',
+                [
+                    snapshotBlock('agent', 'agent', [
+                        stdout('Looking at sales'),
+                        display({ 'text/markdown': '**Sales grew.**' }),
+                        display({ 'text/markdown': 'More detail' })
+                    ])
+                ],
+                '**Sales grew.**'
+            ],
+            [
+                "its stream text when it has no markdown output, not a later agent block's markdown",
+                [
+                    snapshotBlock('agent', 'agent', [stdout('Sales grew '), stdout('by 5%.')]),
+                    snapshotBlock('second-agent', 'agent', [display({ 'text/markdown': 'Second answer' })])
+                ],
+                'Sales grew by 5%.'
+            ],
+            [
+                'null when it has neither a markdown nor a stream output',
+                [snapshotBlock('agent', 'agent', [display({ 'text/plain': 'Sales grew.' })])],
+                null
+            ],
+            [
+                'null when no block is an agent block, though a code block displays markdown',
+                [snapshotBlock('notes', 'code', [display({ 'text/markdown': '# Notes' })])],
+                null
+            ]
+        ];
+        for (const [condition, blocks, summary] of agentSummaries) {
+            test(`summarizes the first agent block as ${condition}`, async () => {
+                placeRun({
+                    runId: 'run',
+                    status: 'success',
+                    createdAt: NOW,
+                    snapshotBlocks: [...blocks, ...jsonSnapshot({ total: 3 })]
+                });
+
+                await assertJson(await getAppData(), 200, {
+                    appData: { total: 3 },
+                    agentBlockSummary: summary,
+                    runCreatedAt: NOW
+                });
+            });
+        }
+
+        test('answers 404 for an ID no workspace notebook has, even with runs of it in the store', async () => {
+            placeRun({
+                runId: 'run',
+                notebookId: 'nb-deleted',
+                status: 'success',
+                createdAt: NOW,
+                snapshotBlocks: jsonSnapshot({ total: 1 })
+            });
+
+            await assertJson(await getAppData('nb-deleted'), 404, { message: 'Notebook not found' });
+        });
+    });
+
     const stubs: [string, string, AppPreviewOperation][] = [
-        ['GET', '/notebooks/nb-1/app-data', 'appData()'],
         ['GET', '/projects/p-1/dataframes/sales%20by%20month', 'dataframe()']
     ];
     for (const [method, path, operation] of stubs) {

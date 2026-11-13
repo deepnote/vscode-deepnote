@@ -297,16 +297,19 @@ suite('AppPreviewSession', () => {
             const session = await startSession();
             const token = tokenOf(await getText(session, '/page.html'));
 
-            const stub = await request(session, '/__deepnote/v2/notebooks/nb-1/app-data', {
+            const stub = await request(session, '/__deepnote/v2/projects/project-1/dataframes/sales', {
                 headers: { authorization: `Bearer ${token}` }
             });
             assert.strictEqual(stub.status, 501);
             assert.deepStrictEqual(JSON.parse(stub.body.toString()), {
-                message: 'appData() is not supported in the local preview yet.'
+                message: 'dataframe() is not supported in the local preview yet.'
             });
-            assert.deepStrictEqual(unsupported, ['appData()']);
+            assert.deepStrictEqual(unsupported, ['dataframe()']);
 
-            assert.strictEqual((await request(session, '/__deepnote/v2/notebooks/nb-1/app-data')).status, 401);
+            assert.strictEqual(
+                (await request(session, '/__deepnote/v2/projects/project-1/dataframes/sales')).status,
+                401
+            );
         });
 
         test("answers a notebook that two files share from the session's current project folder", async () => {

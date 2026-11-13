@@ -1,3 +1,8 @@
 #title {
     color: rgb(0, 128, 0);
 }
+
+#inputs-form label {
+    display: block;
+    margin: 8px 0;
+}

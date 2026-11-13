@@ -88,17 +88,16 @@ export class PublishAppCommandHandler implements IExtensionSyncActivationService
     }
 
     private async chooseFolder(): Promise<Uri | undefined> {
-        const [folder] =
-            (await window.showOpenDialog({
-                canSelectFolders: true,
-                canSelectFiles: false,
-                canSelectMany: false,
-                defaultUri: workspace.workspaceFolders?.[0]?.uri,
-                title: DeepnoteCloud.chooseAppFolderTitle,
-                openLabel: DeepnoteCloud.publish
-            })) ?? [];
+        const folders = await window.showOpenDialog({
+            canSelectFolders: true,
+            canSelectFiles: false,
+            canSelectMany: false,
+            defaultUri: workspace.workspaceFolders?.[0]?.uri,
+            title: DeepnoteCloud.chooseAppFolderTitle,
+            openLabel: DeepnoteCloud.publish
+        });
 
-        return folder;
+        return folders?.at(0);
     }
 
     private async chooseProject(

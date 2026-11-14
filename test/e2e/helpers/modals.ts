@@ -55,3 +55,19 @@ export async function confirmModalDialog(
 
     await driver.actions().move({ origin: button }).click().perform();
 }
+
+/**
+ * Dismisses every open `{modal:true}` dialog with its close button, as Escape would. A key press goes to whatever has
+ * focus, which need not be the dialog.
+ */
+export async function closeModalDialogs(): Promise<void> {
+    const driver = VSBrowser.instance.driver;
+    for (const close of await driver.findElements(By.css('.monaco-dialog-box .codicon-dialog-close'))) {
+        await driver
+            .actions()
+            .move({ origin: close })
+            .click()
+            .perform()
+            .catch(() => undefined);
+    }
+}

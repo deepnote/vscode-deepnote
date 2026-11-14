@@ -20,3 +20,20 @@ export interface IDeepnoteApiTokenService {
      */
     getOrPromptToken(resource: Uri): Promise<string | undefined>;
 }
+
+export const IDeepnoteCloudOperationLock = Symbol('IDeepnoteCloudOperationLock');
+export interface IDeepnoteCloudOperationLock {
+    /**
+     * Runs `run` as the one sync, or publish into a synced folder, in this window, and resolves or rejects as it does.
+     * The lock is free again by the time the returned promise settles. When one is already running, calls `onBusy`
+     * instead of `run` and resolves to `undefined`.
+     */
+    tryRunExclusive<T>(run: () => Promise<T>, onBusy?: () => void): Promise<T | undefined>;
+}
+
+/** The argument of `deepnote.syncWithDeepnoteCloud` that syncs `root` without asking for a folder. */
+export interface SyncWithDeepnoteCloudTarget {
+    root: Uri;
+    /** Also sync each project's working files, such as app files. */
+    allFiles: boolean;
+}

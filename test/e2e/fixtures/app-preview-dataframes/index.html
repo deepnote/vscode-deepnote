@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Customers</title>
+        <script src="https://deepnote.com/static/app-client/v1.js"></script>
+        <style>
+            :root {
+                --background: #f5f6f8;
+                --surface: #ffffff;
+                --border: #e2e5ea;
+                --text: #16181d;
+                --muted: #6a7180;
+                --accent: #3a5bd9;
+                --stripe: #fafbfc;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                margin: 0;
+                background: var(--background);
+                color: var(--text);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+            main {
+                max-width: 1160px;
+                margin: 0 auto;
+                padding: 32px 24px;
+            }
+            h1 {
+                margin: 0 0 4px;
+                font-size: 22px;
+            }
+            .summary {
+                margin: 0 0 20px;
+                color: var(--muted);
+                font-size: 14px;
+            }
+            .card {
+                overflow: hidden;
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                background: var(--surface);
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            th,
+            td {
+                padding: 9px 14px;
+                border-bottom: 1px solid var(--border);
+                text-align: left;
+                white-space: nowrap;
+            }
+            th {
+                background: var(--stripe);
+                font-weight: 600;
+            }
+            th .type {
+                display: block;
+                color: var(--muted);
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 11px;
+                font-weight: 400;
+            }
+            td.number {
+                text-align: right;
+                font-variant-numeric: tabular-nums;
+            }
+            td.missing {
+                color: var(--muted);
+            }
+            tbody tr:nth-child(even) {
+                background: var(--stripe);
+            }
+            nav {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px 14px;
+                font-size: 13px;
+            }
+            nav .indicator {
+                min-width: 150px;
+                text-align: center;
+            }
+            nav .spacer {
+                flex: 1;
+            }
+            button,
+            input {
+                padding: 6px 12px;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                background: var(--surface);
+                color: var(--text);
+                font: inherit;
+            }
+            button {
+                cursor: pointer;
+            }
+            button:disabled {
+                color: var(--muted);
+                cursor: default;
+            }
+            button.primary {
+                border-color: var(--accent);
+                background: var(--accent);
+                color: #ffffff;
+            }
+            input {
+                width: 96px;
+            }
+            .error {
+                color: #b42318;
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <h1>Customers</h1>
+            <p class="summary" id="summary">Loading the stored dataframe…</p>
+            <div class="card">
+                <table aria-label="Customers">
+                    <thead>
+                        <tr id="columns"></tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+                <nav aria-label="Pages">
+                    <button id="first">First</button>
+                    <button id="previous">Previous</button>
+                    <span class="indicator" id="indicator" role="status"></span>
+                    <button id="next">Next</button>
+                    <button id="last">Last</button>
+                    <span class="spacer"></span>
+                    <label>Page <input id="page-number" type="number" min="1" /></label>
+                    <button class="primary" id="go">Go</button>
+                </nav>
+            </div>
+            <p class="error" id="error" role="alert" hidden></p>
+        </main>
+        <script>
+            const FRAME_NAME = 'customers';
+            const PAGE_SIZE = 10;
+            const NUMBER_TYPES = new Set(['integer', 'int64', 'float', 'decimal', 'duration']);
+
+            const deepnote = window.Deepnote.connect();
+            const counts = new Intl.NumberFormat('en-US');
+            const elements = Object.fromEntries(
+                [
+                    'summary',
+                    'columns',
+                    'rows',
+                    'indicator',
+                    'first',
+                    'previous',
+                    'next',
+                    'last',
+                    'page-number',
+                    'go',
+                    'error'
+                ].map((id) => [id, document.getElementById(id)])
+            );
+            let pageIndex = 0;
+            let pageCount = 1;
+
+            function headerCell(column) {
+                const cell = document.createElement('th');
+                const type = document.createElement('span');
+                type.className = 'type';
+                type.textContent = column.type;
+                cell.append(column.name, type);
+                return cell;
+            }
+
+            function valueCell(value, column) {
+                const cell = document.createElement('td');
+                if (value === null) {
+                    cell.className = 'missing';
+                    cell.textContent = '—';
+                    return cell;
+                }
+                if (NUMBER_TYPES.has(column.type)) {
+                    cell.className = 'number';
+                }
+                cell.textContent = String(value);
+                return cell;
+            }
+
+            function render(page) {
+                pageIndex = page.pageIndex;
+                pageCount = page.pageCount;
+                elements.summary.textContent = `${counts.format(page.rowCount)} rows · ${page.columnCount} columns · stored as "${FRAME_NAME}"`;
+                elements.columns.replaceChildren(...page.columns.map(headerCell));
+                elements.rows.replaceChildren(
+                    ...page.rows.map((values) => {
+                        const row = document.createElement('tr');
+                        row.append(...values.map((value, index) => valueCell(value, page.columns[index])));
+                        return row;
+                    })
+                );
+                elements.indicator.textContent = `Page ${counts.format(pageIndex + 1)} of ${counts.format(pageCount)}`;
+                elements['page-number'].max = String(pageCount);
+            }
+
+            function setLoading(isLoading) {
+                elements.first.disabled = isLoading || pageIndex === 0;
+                elements.previous.disabled = isLoading || pageIndex === 0;
+                elements.next.disabled = isLoading || pageIndex >= pageCount - 1;
+                elements.last.disabled = isLoading || pageIndex >= pageCount - 1;
+                elements.go.disabled = isLoading;
+            }
+
+            async function showPage(requestedIndex) {
+                setLoading(true);
+                elements.error.hidden = true;
+                try {
+                    render(await deepnote.dataframe(FRAME_NAME, { pageIndex: requestedIndex, pageSize: PAGE_SIZE }));
+                } catch (error) {
+                    elements.error.textContent = error.message;
+                    elements.error.hidden = false;
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            elements.first.addEventListener('click', () => showPage(0));
+            elements.previous.addEventListener('click', () => showPage(pageIndex - 1));
+            elements.next.addEventListener('click', () => showPage(pageIndex + 1));
+            elements.last.addEventListener('click', () => showPage(pageCount - 1));
+            elements.go.addEventListener('click', () => showPage(Number(elements['page-number'].value) - 1));
+
+            showPage(0);
+        </script>
+    </body>
+</html>

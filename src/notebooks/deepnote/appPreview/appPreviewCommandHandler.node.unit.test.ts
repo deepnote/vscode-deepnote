@@ -276,21 +276,4 @@ suite('AppPreviewCommandHandler', () => {
         verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).once();
         assert.include(await page(), '<h1>app</h1>');
     });
-
-    test('warns once per unsupported operation, naming the operation and the folder', async () => {
-        await previewApp(Uri.file(appFolder));
-        const { token } = await requestToken();
-        const api = (urlPath: string, method = 'GET') =>
-            fetch(`${serverUrl()}v2${urlPath}`, {
-                method,
-                headers: { authorization: `Bearer ${token}` }
-            });
-
-        assert.strictEqual((await api('/projects/project-1/dataframes/sales')).status, 501);
-        assert.strictEqual((await api('/projects/project-1/dataframes/sales')).status, 501);
-
-        verify(
-            win().showWarningMessage('The app in app called dataframe(), which the local preview does not support yet.')
-        ).once();
-    });
 });

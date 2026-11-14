@@ -9,7 +9,16 @@ import { expect } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { By, EditorView, InputBox, SideBarView, VSBrowser, Workbench, type ViewItem } from 'vscode-extension-tester';
+import {
+    By,
+    EditorView,
+    InputBox,
+    SideBarView,
+    VSBrowser,
+    Workbench,
+    type TreeItem,
+    type ViewItem
+} from 'vscode-extension-tester';
 
 import {
     KERNEL_CONNECT_TIMEOUT,
@@ -27,8 +36,10 @@ import {
 const FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview');
 const RUNS_FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview-runs');
 const APP_DATA_FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview-app-data');
+const DATAFRAMES_FIXTURE = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview-dataframes');
 const INPUTS_NOTEBOOK_FIXTURE = 'app-preview-inputs.deepnote';
 const RUNS_NOTEBOOK_FIXTURES = ['app-preview-runs.deepnote', 'app-preview-runs-init.deepnote'];
+const PROJECT_FIXTURE = 'hello-world.deepnote';
 const SYNCED_APP = path.join('Sales', '.files', '_deepnote_static');
 const SYNCED_TITLE = 'Synced fixture';
 const RELOAD_TITLE = 'Reload fixture';
@@ -36,11 +47,15 @@ const REUSE_TITLE = 'Reuse fixture';
 const INPUTS_TITLE = 'Inputs fixture';
 const RUNS_TITLE = 'Runs fixture';
 const APP_DATA_TITLE = 'App data fixture';
+const DATAFRAMES_APP = 'app';
+const DATAFRAMES_TITLE = 'Customers';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
 const INPUTS_RESOLVED = 'inputs() resolved: ';
 const APP_DATA_AFTER_RUN = 'appData() after the run: ';
 
 const NO_RUN_RESULTS = 'You have no run results for this notebook yet. Run the notebook to load them.';
+const NO_PROJECT_DATAFRAME =
+    "This app folder is not next to or inside the folder of a Deepnote project's .deepnote files, so it has no stored dataframes. After adding one, run Deepnote: Preview App again.";
 
 const NOTEBOOK_INPUTS = [
     { blockId: 'e2e-region-input', name: 'region', type: 'input-text', value: 'Europe', label: 'Region' },
@@ -65,6 +80,35 @@ const NOTEBOOK_INPUTS = [
     }
 ];
 
+const FRAME_NAME = 'customers';
+const FRAME_FILE = '3f2b8c1e-6d4a-4e9b-9a7c-0d5e1f2a3b4c.arrow';
+const FIRST_ROW = [
+    '0',
+    'customer-000039',
+    '58.88',
+    'silver',
+    'false',
+    '2025-01-01T00:00:04.000',
+    'left voicemail (ticket 34)'
+];
+const LAST_ROW = [
+    '199999',
+    'customer-000167',
+    '68.8',
+    'diamond',
+    'true',
+    '2025-01-06T19:13:25.000',
+    'called back (ticket 33)'
+];
+
+interface DataframeSitePage {
+    error: string;
+    indicator: string;
+    isNextDisabled: boolean;
+    rows: string[][];
+    summary: string;
+}
+
 function expectedReport(title: string): unknown[] {
     return [
         title,
@@ -74,6 +118,7 @@ function expectedReport(title: string): unknown[] {
         NOTEBOOK_INPUTS,
         'inputs() of an unknown notebook rejected: Notebook not found',
         `appData() rejected: ${NO_RUN_RESULTS}`,
+        `dataframe() rejected: ${NO_PROJECT_DATAFRAME}`,
         'requests to deepnote.com: 0'
     ];
 }
@@ -106,6 +151,42 @@ async function readReport(timeout = WORKBENCH_TIMEOUT): Promise<unknown[]> {
     }
 
     return withParsedInputs(report);
+}
+
+function consecutiveIds(first: number, count: number): string[] {
+    return Array.from({ length: count }, (_, offset) => String(first + offset));
+}
+
+async function readDataframePage(indicator: string): Promise<DataframeSitePage> {
+    const driver = VSBrowser.instance.driver;
+    let page: DataframeSitePage | undefined;
+    try {
+        await driver.wait(
+            async () => {
+                page = await driver
+                    .executeScript<DataframeSitePage>(
+                        `return {
+                            error: document.querySelector('[role="alert"]').textContent,
+                            indicator: document.querySelector('[role="status"]').textContent,
+                            isNextDisabled: document.getElementById('next').disabled,
+                            rows: Array.from(document.querySelectorAll('tbody tr'), (row) =>
+                                Array.from(row.cells, (cell) => cell.textContent)
+                            ),
+                            summary: document.getElementById('summary').textContent
+                        };`
+                    )
+                    .catch(() => undefined);
+
+                return page?.indicator === indicator;
+            },
+            WORKBENCH_TIMEOUT,
+            `the dataframe site did not show "${indicator}"`
+        );
+    } catch (error) {
+        throw new Error(`${(error as Error).message}. Last read: ${JSON.stringify(page)}`);
+    }
+
+    return page!;
 }
 
 async function onIntegratedBrowserPage<T>(title: string, read: () => Promise<T>): Promise<T> {
@@ -172,6 +253,23 @@ async function findRootExplorerItem(label: string): Promise<ViewItem> {
         },
         WORKBENCH_TIMEOUT,
         `"${label}" did not appear in the file explorer`
+    );
+
+    return found!;
+}
+
+/** Looks the parent up again on every try, so a row the Explorer has re-rendered is not held stale. */
+async function findExplorerChildItem(parentLabel: string, label: string): Promise<TreeItem> {
+    let found: TreeItem | undefined;
+    await VSBrowser.instance.driver.wait(
+        async () => {
+            const parent = (await findRootExplorerItem(parentLabel)) as TreeItem;
+            found = await parent.findChildItem(label).catch(() => undefined);
+
+            return found !== undefined;
+        },
+        WORKBENCH_TIMEOUT,
+        `"${label}" did not appear under "${parentLabel}" in the file explorer`
     );
 
     return found!;
@@ -257,6 +355,31 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         copyRetitledApp(appDir, title);
 
         return appDir;
+    }
+
+    /** Lays the stored frame out as deepnote-toolkit's `store_dataframe` writes it. */
+    function addDataframesProject(): string {
+        const project = fs.mkdtempSync(path.join(workspaceDir, 'dataframes-'));
+        const frameDir = path.join(project, 'deepnote_dataframes', FRAME_NAME);
+        fs.mkdirSync(frameDir, { recursive: true });
+        fs.copyFileSync(path.join(DATAFRAMES_FIXTURE, FRAME_FILE), path.join(frameDir, FRAME_FILE));
+        fs.writeFileSync(
+            path.join(frameDir, 'manifest.json'),
+            JSON.stringify({
+                version: 1,
+                file: FRAME_FILE,
+                previous: null,
+                written_at: '2026-09-25T09:14:03Z',
+                rows: 200_000,
+                batch_rows: [65_536, 65_536, 65_536, 3_392],
+                toolkit_version: '2.9.0'
+            })
+        );
+        fs.mkdirSync(path.join(project, DATAFRAMES_APP));
+        fs.copyFileSync(path.join(DATAFRAMES_FIXTURE, 'index.html'), path.join(project, DATAFRAMES_APP, 'index.html'));
+        copyFixtureIntoDir(project, PROJECT_FIXTURE);
+
+        return path.basename(project);
     }
 
     before(async function () {
@@ -411,6 +534,43 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
             { appData: { region: 'Asia', init_region: false }, agentBlockSummary: null, runCreatedAt: createdAt }
         ]);
         expect(Date.parse(createdAt ?? ''), `the run's createdAt, ${createdAt}`).to.be.within(startedAt, Date.now());
+    });
+
+    it("pages through a dataframe stored in the app's project folder, across its record batches", async function () {
+        const screenshot = createScreenshotter(this);
+        const folder = addDataframesProject();
+        await selectDeepnoteContextMenu(await findExplorerChildItem(folder, DATAFRAMES_APP), 'Preview App');
+
+        await onIntegratedBrowserPage(DATAFRAMES_TITLE, async () => {
+            const driver = VSBrowser.instance.driver;
+            const clickButton = (name: string) =>
+                driver.findElement(By.xpath(`//button[normalize-space()='${name}']`)).click();
+            const ids = (page: DataframeSitePage) => page.rows.map(([id]) => id);
+
+            const first = await readDataframePage('Page 1 of 20,000');
+            expect(first.summary).to.include('200,000 rows · 7 columns');
+            expect(first.rows[0]).to.deep.equal(FIRST_ROW);
+            expect(ids(first)).to.deep.equal(consecutiveIds(0, 10));
+            await screenshot('first-page');
+
+            await clickButton('Next');
+            expect(ids(await readDataframePage('Page 2 of 20,000'))).to.deep.equal(consecutiveIds(10, 10));
+            await screenshot('next-page');
+
+            // Rows 65,530 to 65,539 straddle the end of the first record batch, at row 65,536.
+            const pageNumber = driver.findElement(By.css('input[type="number"]'));
+            await pageNumber.clear();
+            await pageNumber.sendKeys('6554');
+            await clickButton('Go');
+            expect(ids(await readDataframePage('Page 6,554 of 20,000'))).to.deep.equal(consecutiveIds(65_530, 10));
+            await screenshot('across-record-batches');
+
+            await clickButton('Last');
+            const last = await readDataframePage('Page 20,000 of 20,000');
+            expect(last.rows.at(-1)).to.deep.equal(LAST_ROW);
+            expect(last.isNextDisabled).to.equal(true);
+            await screenshot('last-page');
+        });
     });
 
     it('switches to the open tab and reloads it when the same folder is previewed again', async function () {

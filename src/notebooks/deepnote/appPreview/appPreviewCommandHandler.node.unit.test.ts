@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as sinon from 'sinon';
 import { anything, capture, instance, mock, when } from 'ts-mockito';
-import { Uri, ViewColumn, type WorkspaceFolder } from 'vscode';
+import { Uri, ViewColumn, type WorkspaceConfiguration, type WorkspaceFolder } from 'vscode';
 
 import { Commands } from '../../../platform/common/constants';
 import { IDisposable, IExtensionContext } from '../../../platform/common/types';
@@ -25,6 +25,9 @@ suite('AppPreviewCommandHandler', () => {
     let forwarded: string[];
     let externalUriRequests: string[];
     let opened: { uri: string; options: unknown }[];
+    let openedInIntegratedBrowser: unknown[];
+    let commandIds: string[];
+    let useIntegratedBrowser: { registered: boolean; value?: boolean };
     let openedExternally: string[];
     let browserFailure: Error | undefined;
     let warnings: string[];
@@ -86,6 +89,30 @@ suite('AppPreviewCommandHandler', () => {
                 opened.push({ uri: uri.toString(true), options });
             }
         );
+        openedInIntegratedBrowser = [];
+        when(mockedVSCodeNamespaces.commands.executeCommand('workbench.action.browser.open', anything())).thenCall(
+            async (_command: string, options: unknown) => {
+                if (browserFailure) {
+                    throw browserFailure;
+                }
+                openedInIntegratedBrowser.push(options);
+            }
+        );
+        commandIds = [];
+        when(mockedVSCodeNamespaces.commands.getCommands(anything())).thenCall(async () => commandIds);
+        useIntegratedBrowser = { registered: false };
+        const simpleBrowserConfig = mock<WorkspaceConfiguration>();
+        when(simpleBrowserConfig.inspect('useIntegratedBrowser')).thenCall(() => ({
+            key: 'simpleBrowser.useIntegratedBrowser',
+            defaultValue: useIntegratedBrowser.registered ? true : undefined,
+            globalValue: useIntegratedBrowser.value
+        }));
+        when(simpleBrowserConfig.get('useIntegratedBrowser', anything())).thenCall(
+            (_section: string, defaultValue: boolean) => useIntegratedBrowser.value ?? defaultValue
+        );
+        when(mockedVSCodeNamespaces.workspace.getConfiguration('simpleBrowser')).thenReturn(
+            instance(simpleBrowserConfig)
+        );
         openedExternally = [];
         when(mockedVSCodeNamespaces.env.openExternal(anything())).thenCall(async (uri: Uri) => {
             openedExternally.push(uri.toString(true));
@@ -124,7 +151,9 @@ suite('AppPreviewCommandHandler', () => {
         await fs.promises.rm(tmp, { recursive: true, force: true });
     });
 
-    test('previews the folder from the Explorer in the built-in browser, beside the editor', async () => {
+    test('previews the folder from the Explorer in the Simple Browser beside the editor, where there is no integrated browser', async () => {
+        commandIds = ['simpleBrowser.api.open'];
+
         await previewApp(Uri.file(appFolder));
 
         assert.strictEqual(opened.length, 1);
@@ -132,6 +161,39 @@ suite('AppPreviewCommandHandler', () => {
         assert.strictEqual(opened[0].uri, externalUriRequests[0]);
         assert.include(await page(), '<h1>app</h1>');
         assert.deepStrictEqual(openedExternally, []);
+    });
+
+    test('previews the folder in the integrated browser, in the tab already showing its server if there is one', async () => {
+        commandIds = ['simpleBrowser.api.open', 'workbench.action.browser.open'];
+        forwardTo('http://localhost:1111/');
+
+        await previewApp(Uri.file(appFolder));
+
+        assert.deepStrictEqual(openedInIntegratedBrowser, [
+            { url: 'http://localhost:1111/', reuseUrlFilter: 'http://localhost:1111/**' }
+        ]);
+        assert.deepStrictEqual(opened, []);
+        assert.include(await page(), '<h1>app</h1>');
+    });
+
+    test('previews the folder in the Simple Browser when simpleBrowser.useIntegratedBrowser is off', async () => {
+        commandIds = ['simpleBrowser.api.open', 'workbench.action.browser.open'];
+        useIntegratedBrowser = { registered: true, value: false };
+
+        await previewApp(Uri.file(appFolder));
+
+        assert.deepStrictEqual(openedInIntegratedBrowser, []);
+        assert.strictEqual(opened.length, 1);
+    });
+
+    test('ignores a simpleBrowser.useIntegratedBrowser left in the settings by a VS Code version that registered it', async () => {
+        commandIds = ['simpleBrowser.api.open', 'workbench.action.browser.open'];
+        useIntegratedBrowser = { registered: false, value: false };
+
+        await previewApp(Uri.file(appFolder));
+
+        assert.strictEqual(openedInIntegratedBrowser.length, 1);
+        assert.deepStrictEqual(opened, []);
     });
 
     test('asks for the folder when the command has none', async () => {
@@ -196,6 +258,15 @@ suite('AppPreviewCommandHandler', () => {
         await previewApp(Uri.file(appFolder));
 
         assert.deepStrictEqual(opened, []);
+        assert.deepStrictEqual(openedExternally, [externalUriRequests[0]]);
+    });
+
+    test('opens the server URL in the system browser when the integrated browser rejects', async () => {
+        commandIds = ['simpleBrowser.api.open', 'workbench.action.browser.open'];
+        browserFailure = new Error('the integrated browser failed');
+
+        await previewApp(Uri.file(appFolder));
+
         assert.deepStrictEqual(openedExternally, [externalUriRequests[0]]);
     });
 

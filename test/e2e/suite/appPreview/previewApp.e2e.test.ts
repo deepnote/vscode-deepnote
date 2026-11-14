@@ -1,8 +1,8 @@
 /**
- * VS Code opens `simpleBrowser.api.open` in its integrated browser, an Electron view the driver lists as a window of its
- * own, so the page is read and captured from that window. The Simple Browser routes there whenever
- * `workbench.action.browser.open` exists, as it always does in desktop VS Code, so its webview, which editors without an
- * integrated browser get, is not covered here.
+ * The preview opens in VS Code's integrated browser, an Electron view the driver lists as a window of its own, so the
+ * page is read and captured from that window. The extension uses it whenever `workbench.action.browser.open` exists, as
+ * it always does in desktop VS Code, so the Simple Browser's webview, which editors without an integrated browser get,
+ * is not covered here.
  */
 
 import { expect } from 'chai';
@@ -37,6 +37,8 @@ const SYNCED_APP = path.join('synced', 'Sales', '.files', '_deepnote_static');
 const SYNCED_TITLE = 'Synced fixture';
 const RELOAD_APP = 'reload-app';
 const RELOAD_TITLE = 'Reload fixture';
+const REUSE_APP = 'reuse-app';
+const REUSE_TITLE = 'Reuse fixture';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
 const NOT_SUPPORTED = 'which the local preview does not support yet.';
 
@@ -191,6 +193,26 @@ function copyRetitledApp(appDir: string, title: string): void {
     );
 }
 
+async function waitForEditors(titles: string[], active: string): Promise<void> {
+    let seen: string[] = [];
+    let seenActive: string | undefined;
+    try {
+        await VSBrowser.instance.driver.wait(
+            async () => {
+                const editors = new EditorView();
+                seen = await editors.getOpenEditorTitles().catch(() => []);
+                seenActive = await (await editors.getActiveTab().catch(() => undefined))?.getTitle().catch(() => '');
+
+                return seenActive === active && JSON.stringify(seen) === JSON.stringify(titles);
+            },
+            WORKBENCH_TIMEOUT,
+            `the editors are not ${JSON.stringify(titles)} with "${active}" active`
+        );
+    } catch (error) {
+        throw new Error(`${(error as Error).message}. Seen: ${JSON.stringify(seen)}, "${seenActive}" active`);
+    }
+}
+
 /** EditorView.closeAllEditors cannot find the close button of the integrated browser's tab. */
 async function closeAllEditors(): Promise<void> {
     await new Workbench().executeCommand('View: Close All Editors');
@@ -217,6 +239,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         // Their own folders, so each preview session warns once whatever ran before, and their own page titles, so each
         // integrated browser window is told apart.
         copyRetitledApp(path.join(workspaceDir, RELOAD_APP), RELOAD_TITLE);
+        copyRetitledApp(path.join(workspaceDir, REUSE_APP), REUSE_TITLE);
         copyRetitledApp(path.join(workspaceDir, SYNCED_APP), SYNCED_TITLE);
         copyFixtureIntoDir(path.join(workspaceDir, 'synced', 'Sales'), SYNCED_PROJECT_FIXTURE);
 
@@ -284,6 +307,36 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         const warnings = await center.getNotifications(NotificationType.Warning);
         expect(warnings).to.have.length(0);
         await center.close();
+    });
+
+    it('switches to the open tab and reloads it when the same folder is previewed again', async function () {
+        const screenshot = createScreenshotter(this);
+        const driver = VSBrowser.instance.driver;
+        const preview = async () => selectDeepnoteContextMenu(await findRootExplorerItem(REUSE_APP), 'Preview App');
+        await preview();
+        await onIntegratedBrowserPage(REUSE_TITLE, readReport);
+        await new Workbench().executeCommand('File: New Untitled Text File');
+        await waitForEditors([REUSE_TITLE, 'Untitled-1'], 'Untitled-1');
+        const indexFile = path.join(workspaceDir, REUSE_APP, 'index.html');
+        fs.writeFileSync(
+            indexFile,
+            fs.readFileSync(indexFile, 'utf8').replace('Sales dashboard', 'Sales dashboard, edited')
+        );
+
+        await preview();
+
+        await waitForEditors([REUSE_TITLE, 'Untitled-1'], REUSE_TITLE);
+        await onIntegratedBrowserPage(REUSE_TITLE, () =>
+            driver.wait(
+                async () =>
+                    (await driver
+                        .executeScript<string>("return document.querySelector('h1')?.textContent")
+                        .catch(() => '')) === 'Sales dashboard, edited',
+                WORKBENCH_TIMEOUT,
+                'the reused tab did not reload'
+            )
+        );
+        await screenshot('reused-tab');
     });
 
     it('previews a synced app from the Command Palette, with the project of the .deepnote file next to its .files folder', async function () {

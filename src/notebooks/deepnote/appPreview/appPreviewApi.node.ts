@@ -10,7 +10,14 @@ import { isObject } from '../../../platform/common/utils/sysTypes';
 import { generateUuid } from '../../../platform/common/uuid';
 import type { DeepnoteNotebook } from '../../../platform/deepnote/deepnoteTypes';
 import { logger } from '../../../platform/logging';
+import type { AppPreviewProject } from './appPreviewSession.node';
 import { blocksInNotebookOrder, toNotebookInputs, type WorkspaceNotebook } from './appPreviewWorkspace.node';
+import {
+    DATAFRAME_NAME_PATTERN,
+    DATAFRAME_NOT_FOUND_MESSAGE,
+    DataframePageError,
+    readStoredDataframePage
+} from './storedDataframePage.node';
 import type {
     AppPreviewInputValue,
     AppPreviewRunOutcome,
@@ -19,12 +26,11 @@ import type {
     SnapshotBlock
 } from './types';
 
-export type AppPreviewOperation = 'dataframe()';
-
 export interface AppPreviewApiOptions {
     token: string;
     findNotebook(notebookId: string): Promise<WorkspaceNotebook | undefined>;
-    onUnsupported(operation: AppPreviewOperation): void;
+    /** The project the previewed app belongs to, read again on every dataframe request. */
+    getProject(): AppPreviewProject | undefined;
     runner: IAppPreviewRunner;
 }
 
@@ -62,16 +68,22 @@ const INTERNAL_ERROR_MESSAGE = 'Internal server error';
 
 // Each finished run holds all its outputs, and a page may start one on every reload.
 const MAX_FINISHED_RUNS = 20;
+const MAX_DATAFRAME_PAGE_SIZE = 1000;
 
 const createRunBodySchema = z.strictObject({
     notebookId: z.string().min(1),
     inputs: z.record(z.string().min(1), z.union([z.string(), z.boolean(), z.array(z.string())])).optional(),
     detachedRunStorageMode: z.enum(['read_write', 'readonly']).optional()
 });
-
-function notSupportedMessage(operation: AppPreviewOperation): string {
-    return `${operation} is not supported in the local preview yet.`;
-}
+// Deepnote also requires a UUID `projectId`, but a `.deepnote` file's project id can be any string.
+const dataframeParamsSchema = z.object({
+    projectId: z.string(),
+    name: z.string().regex(DATAFRAME_NAME_PATTERN)
+});
+const dataframeQuerySchema = z.strictObject({
+    pageIndex: z.coerce.number().int().min(0).default(0),
+    pageSize: z.coerce.number().int().min(1).max(MAX_DATAFRAME_PAGE_SIZE).default(10)
+});
 
 /** The 4xx status of an error body-parser raises for the request itself, such as malformed JSON. */
 function clientErrorStatus(error: unknown): number | undefined {
@@ -222,19 +234,15 @@ function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook) {
  * The local stand-in for Deepnote's app viewer API (`/v2`), mounted at `/__deepnote/v2` on the preview server.
  * Requests without the preview's bearer token get 401. `GET /notebooks/:notebookId` answers from the workspace's
  * notebooks, and `POST /runs` runs one with `runner`, which `GET /runs/:runId` then reports on.
- * `GET /notebooks/:notebookId/app-data` answers from the notebook's newest successful run. The dataframe route
- * Deepnote's client calls gets 501, and every other route gets 403, as Deepnote answers app viewer tokens. A body that
- * cannot be read, such as malformed JSON, gets its 4xx; any other failure is logged and gets a JSON 500.
+ * `GET /notebooks/:notebookId/app-data` answers from the notebook's newest successful run, and
+ * `GET /projects/:projectId/dataframes/:name` from the dataframes stored in the folder of `getProject()`'s project.
+ * Every other route gets 403, as Deepnote answers app viewer tokens. A body that cannot be read, such as malformed
+ * JSON, gets its 4xx; any other failure is logged and gets a JSON 500.
  */
 export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewApi {
     const router = express.Router();
     const runs = new Map<string, PreviewRun>();
     const unfinished = new Set<CancellationTokenSource>();
-
-    const unsupported = (operation: AppPreviewOperation) => (_req: Request, res: Response) => {
-        options.onUnsupported(operation);
-        res.status(501).json({ message: notSupportedMessage(operation) });
-    };
 
     const startRun = (run: PreviewRun, request: AppPreviewRunRequest) => {
         const cancellation = new CancellationTokenSource();
@@ -352,7 +360,35 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
         }
         res.json({ run: { ...run, snapshotExpiresAt: null, snapshotContent: null, snapshotDownloadUrl: null } });
     });
-    router.get('/projects/:projectId/dataframes/:name', unsupported('dataframe()'));
+    router.get('/projects/:projectId/dataframes/:name', async (req: Request, res: Response) => {
+        const params = dataframeParamsSchema.safeParse(req.params);
+        if (!params.success) {
+            res.status(400).json({ message: readableErrors(params.error) });
+
+            return;
+        }
+        const query = dataframeQuerySchema.safeParse(req.query);
+        if (!query.success) {
+            res.status(400).json({ message: readableErrors(query.error) });
+
+            return;
+        }
+        const project = options.getProject();
+        if (!project || project.id !== params.data.projectId) {
+            res.status(404).json({ message: DATAFRAME_NOT_FOUND_MESSAGE });
+
+            return;
+        }
+
+        try {
+            res.json(await readStoredDataframePage(project.folder, params.data.name, query.data));
+        } catch (error) {
+            if (!(error instanceof DataframePageError)) {
+                throw error;
+            }
+            res.status(error.status).json({ message: error.message });
+        }
+    });
 
     router.use((_req: Request, res: Response) => {
         res.status(403).json({ message: NOT_AVAILABLE_MESSAGE });

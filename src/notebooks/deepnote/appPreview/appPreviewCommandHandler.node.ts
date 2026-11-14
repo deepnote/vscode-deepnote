@@ -6,8 +6,6 @@ import { Commands } from '../../../platform/common/constants';
 import { IDisposableRegistry, IExtensionContext } from '../../../platform/common/types';
 import { DeepnoteAppPreview } from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
-import { basename } from '../../../platform/vscode-path/resources';
-import type { AppPreviewOperation } from './appPreviewApi.node';
 import { AppPreviewSession } from './appPreviewSession.node';
 import { resolvePreviewProject } from './appPreviewWorkspace.node';
 import { IAppPreviewRunner } from './types';
@@ -107,7 +105,6 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
     }
 
     private async startSession(folder: Uri): Promise<AppPreviewSession> {
-        const warned = new Set<AppPreviewOperation>();
         const session = new AppPreviewSession({
             folder,
             project: await resolvePreviewProject(folder),
@@ -121,13 +118,6 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
                     'appPreview',
                     'appClient.js'
                 )
-            },
-            onUnsupported: (operation) => {
-                if (warned.has(operation)) {
-                    return;
-                }
-                warned.add(operation);
-                void window.showWarningMessage(DeepnoteAppPreview.operationNotSupported(operation, basename(folder)));
             }
         });
 

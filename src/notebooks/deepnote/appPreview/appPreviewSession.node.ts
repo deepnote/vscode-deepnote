@@ -7,7 +7,7 @@ import { IDisposable } from '../../../platform/common/types';
 import { generateUuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import { extname, extUri } from '../../../platform/vscode-path/resources';
-import { createAppPreviewApi, type AppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
+import { createAppPreviewApi, type AppPreviewApi } from './appPreviewApi.node';
 import { findNotebookById } from './appPreviewWorkspace.node';
 import type { IAppPreviewRunner } from './types';
 
@@ -21,7 +21,6 @@ export interface AppPreviewSessionOptions {
     project: AppPreviewProject | undefined;
     runner: IAppPreviewRunner;
     scripts: { appClient: Uri };
-    onUnsupported(operation: AppPreviewOperation): void;
 }
 
 const LOOPBACK_HOSTNAMES = ['127.0.0.1', 'localhost', '[::1]'];
@@ -244,7 +243,7 @@ export class AppPreviewSession implements IDisposable {
         this.api = createAppPreviewApi({
             token: this.token,
             findNotebook: (notebookId) => findNotebookById(notebookId, this.project?.folder),
-            onUnsupported: (operation) => this.options.onUnsupported(operation),
+            getProject: () => this.project,
             runner: this.options.runner
         });
         app.use('/__deepnote/v2', this.api.router);

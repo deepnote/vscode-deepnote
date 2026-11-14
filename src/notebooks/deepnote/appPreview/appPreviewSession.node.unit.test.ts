@@ -7,10 +7,10 @@ import { anything, when } from 'ts-mockito';
 import { Uri, type CancellationToken } from 'vscode';
 
 import * as path from '../../../platform/vscode-path/path';
+import { EXTENSION_ROOT_DIR_FOR_TESTS } from '../../../test/constants.node';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from '../deepnoteTestHelpers';
-import type { AppPreviewOperation } from './appPreviewApi.node';
 import { AppPreviewSession, type AppPreviewProject } from './appPreviewSession.node';
 import type { AppPreviewRunOutcome, IAppPreviewRunner } from './types';
 
@@ -80,7 +80,6 @@ suite('AppPreviewSession', () => {
     let appFolder: string;
     let clientScript: string;
     let sessions: AppPreviewSession[];
-    let unsupported: AppPreviewOperation[];
     let runTokens: CancellationToken[];
 
     const runner: IAppPreviewRunner = {
@@ -99,8 +98,7 @@ suite('AppPreviewSession', () => {
             folder: Uri.file(options.folder ?? appFolder),
             project: project ?? undefined,
             runner,
-            scripts: { appClient: Uri.file(clientScript) },
-            onUnsupported: (operation) => unsupported.push(operation)
+            scripts: { appClient: Uri.file(clientScript) }
         });
         sessions.push(session);
         await session.start();
@@ -116,7 +114,6 @@ suite('AppPreviewSession', () => {
 
     setup(() => {
         resetVSCodeMocks();
-        unsupported = [];
         runTokens = [];
         sessions = [];
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-'));
@@ -297,19 +294,40 @@ suite('AppPreviewSession', () => {
             const session = await startSession();
             const token = tokenOf(await getText(session, '/page.html'));
 
-            const stub = await request(session, '/__deepnote/v2/projects/project-1/dataframes/sales', {
+            const missingRun = await request(session, '/__deepnote/v2/runs/run-1', {
                 headers: { authorization: `Bearer ${token}` }
             });
-            assert.strictEqual(stub.status, 501);
-            assert.deepStrictEqual(JSON.parse(stub.body.toString()), {
-                message: 'dataframe() is not supported in the local preview yet.'
-            });
-            assert.deepStrictEqual(unsupported, ['dataframe()']);
+            assert.strictEqual(missingRun.status, 404);
+            assert.deepStrictEqual(JSON.parse(missingRun.body.toString()), { message: 'Run not found' });
 
-            assert.strictEqual(
-                (await request(session, '/__deepnote/v2/projects/project-1/dataframes/sales')).status,
-                401
+            assert.strictEqual((await request(session, '/__deepnote/v2/runs/run-1')).status, 401);
+        });
+
+        test("answers dataframes from the session's current project folder", async () => {
+            const projectId = '5b0d4a8e-2f1c-4e3b-9a6d-7c8e9f0a1b2c';
+            const framesFolder = Uri.joinPath(
+                Uri.file(EXTENSION_ROOT_DIR_FOR_TESTS),
+                'src',
+                'test',
+                'testFiles',
+                'appPreview',
+                'frames'
             );
+            write('page.html', `<script src="${HOSTED}"></script>`);
+            const session = await startSession({ project: { id: projectId, folder: framesFolder } });
+            const token = tokenOf(await getText(session, '/page.html'));
+            const dataframeStatus = async () =>
+                (
+                    await request(session, `/__deepnote/v2/projects/${projectId}/dataframes/toolkit_frame`, {
+                        headers: { authorization: `Bearer ${token}` }
+                    })
+                ).status;
+
+            assert.strictEqual(await dataframeStatus(), 200);
+
+            session.setProject({ id: projectId, folder: Uri.file(tmp) });
+
+            assert.strictEqual(await dataframeStatus(), 404);
         });
 
         test("answers a notebook that two files share from the session's current project folder", async () => {

@@ -28,7 +28,6 @@ suite('AppPreviewCommandHandler', () => {
     let opened: { uri: string; options: unknown }[];
     let openedExternally: string[];
     let browserFailure: Error | undefined;
-    let warnings: string[];
     let errors: string[];
 
     const win = () => mockedVSCodeNamespaces.window;
@@ -42,13 +41,6 @@ suite('AppPreviewCommandHandler', () => {
         const response = await fetch(`${externalUriRequests[externalUriRequests.length - 1]}${urlPath.slice(1)}`);
 
         return response.text();
-    }
-
-    function tokenOf(html: string): string {
-        const match = /data-deepnote-token="([^"]+)"/.exec(html);
-        assert.isNotNull(match, 'the page carries no token');
-
-        return match[1];
     }
 
     setup(async () => {
@@ -94,11 +86,7 @@ suite('AppPreviewCommandHandler', () => {
             return true;
         });
 
-        warnings = [];
         errors = [];
-        when(win().showWarningMessage(anything())).thenCall(async (message: string) => {
-            warnings.push(message);
-        });
         when(win().showErrorMessage(anything())).thenCall(async (message: string) => {
             errors.push(message);
         });
@@ -214,22 +202,5 @@ suite('AppPreviewCommandHandler', () => {
 
         assert.strictEqual(opened.length, 1);
         assert.include(await page(), '<h1>app</h1>');
-    });
-
-    test('warns once per unsupported operation, naming the operation and the folder', async () => {
-        await previewApp(Uri.file(appFolder));
-        const token = tokenOf(await page());
-        const api = (urlPath: string, method = 'GET') =>
-            fetch(`${externalUriRequests[0]}__deepnote/v2${urlPath}`, {
-                method,
-                headers: { authorization: `Bearer ${token}` }
-            });
-
-        assert.strictEqual((await api('/projects/project-1/dataframes/sales')).status, 501);
-        assert.strictEqual((await api('/projects/project-1/dataframes/sales')).status, 501);
-
-        assert.deepStrictEqual(warnings, [
-            'The app in app called dataframe(), which the local preview does not support yet.'
-        ]);
     });
 });

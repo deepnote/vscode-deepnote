@@ -309,18 +309,4 @@ suite('AppPreviewCommandHandler', () => {
         verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).once();
         assert.include(await page(), '<h1>app</h1>');
     });
-
-    test('warns once per unsupported operation, naming the operation and the folder', async () => {
-        await previewApp(Uri.file(appFolder));
-        const { token } = await requestToken();
-        const api = (urlPath: string) =>
-            fetch(`${serverUrl()}v2${urlPath}`, { headers: { authorization: `Bearer ${token}` } });
-        const dataframe = () => api('/projects/project-1/dataframes/sales');
-
-        assert.strictEqual((await dataframe()).status, 501);
-        // A repeated call must not warn again.
-        assert.strictEqual((await dataframe()).status, 501);
-
-        verify(win().showWarningMessage(DeepnoteAppPreview.operationNotSupported('dataframe()', 'app'))).once();
-    });
 });

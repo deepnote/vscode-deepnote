@@ -2,15 +2,20 @@ import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
 import type { IDisplayData, IOutput, IStream } from '@deepnote/runtime-core';
 import { assert } from 'chai';
 import express from 'express';
+import * as fs from 'fs';
 import * as http from 'http';
 import type { AddressInfo } from 'net';
+import * as os from 'os';
 import * as sinon from 'sinon';
 import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 import { Uri } from 'vscode';
+import zlib from 'zlib';
 
 import { createDeferred, type Deferred } from '../../../platform/common/utils/async';
 import { isUUID } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
+import * as path from '../../../platform/vscode-path/path';
+import { EXTENSION_ROOT_DIR_FOR_TESTS } from '../../../test/constants.node';
 import {
     createDeepnoteBlock,
     createDeepnoteFile,
@@ -24,13 +29,12 @@ import {
     NO_RUN_RESULTS_MESSAGE,
     NOT_AVAILABLE_MESSAGE,
     NOTEBOOK_NOT_FOUND_MESSAGE,
-    notSupportedMessage,
     PREVIEW_STOPPED_MESSAGE,
     RUN_NOT_FOUND_MESSAGE,
-    UNAUTHORIZED_MESSAGE,
-    type AppPreviewUnsupportedOperation
+    UNAUTHORIZED_MESSAGE
 } from './appPreviewApi.node';
 import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
+import type { AppPreviewProject } from './appPreviewSession.node';
 import type { WorkspaceNotebook } from './appPreviewWorkspace.node';
 import type { AppPreviewApi, AppPreviewRunOutcome, IAppPreviewRunner, SnapshotBlock } from './types';
 
@@ -137,7 +141,7 @@ suite('createAppPreviewApi', () => {
     let runner: IAppPreviewRunner;
     let runFiles: AppPreviewRunFiles;
     let findNotebook: sinon.SinonStub<[string], Promise<WorkspaceNotebook | undefined>>;
-    let onUnsupported: sinon.SinonStub<[AppPreviewUnsupportedOperation], void>;
+    let getProject: sinon.SinonStub<[], AppPreviewProject | undefined>;
 
     setup(async () => {
         runner = mock<IAppPreviewRunner>();
@@ -151,7 +155,7 @@ suite('createAppPreviewApi', () => {
         findNotebook = sinon
             .stub<[string], Promise<WorkspaceNotebook | undefined>>()
             .callsFake(async (notebookId) => notebooks.get(notebookId));
-        onUnsupported = sinon.stub<[AppPreviewUnsupportedOperation], void>();
+        getProject = sinon.stub<[], AppPreviewProject | undefined>();
         runFiles = mock(AppPreviewRunFiles);
         when(runFiles.write(anything(), anything())).thenResolve(true);
         when(runFiles.read(anything())).thenResolve(RUN_FILE);
@@ -160,7 +164,7 @@ suite('createAppPreviewApi', () => {
         api = createAppPreviewApi({
             token: TOKEN,
             findNotebook,
-            onUnsupported,
+            getProject,
             runFiles: instance(runFiles),
             runner: instance(runner)
         });
@@ -251,7 +255,6 @@ suite('createAppPreviewApi', () => {
                 ]
             }
         });
-        sinon.assert.notCalled(onUnsupported);
     });
 
     test('GET /notebooks/:notebookId leaves inputs out for a notebook without any, and marks the init notebook', async () => {
@@ -272,7 +275,6 @@ suite('createAppPreviewApi', () => {
 
     test('GET /notebooks/:notebookId answers 404 for an ID no workspace notebook has', async () => {
         await assertJson(await call('GET', '/notebooks/nb-missing'), 404, { message: NOTEBOOK_NOT_FOUND_MESSAGE });
-        sinon.assert.notCalled(onUnsupported);
     });
 
     test('answers a JSON 500 without the stack, and logs the error, when the notebook lookup fails', async () => {
@@ -308,7 +310,6 @@ suite('createAppPreviewApi', () => {
             notebookId: 'nb-1',
             inputs: { region: 'Asia' }
         });
-        sinon.assert.notCalled(onUnsupported);
     });
 
     test('POST /runs runs the notebook without inputs when the body has none', async () => {
@@ -361,7 +362,6 @@ suite('createAppPreviewApi', () => {
         });
         verify(runFiles.write(runId, RUN_FILE)).once();
         verify(runFiles.updateLatest('nb-1', runId, NOW)).once();
-        sinon.assert.notCalled(onUnsupported);
     });
 
     const outcomes: [AppPreviewRunOutcome, string, SnapshotBlock[] | null, number][] = [
@@ -606,7 +606,6 @@ suite('createAppPreviewApi', () => {
                 agentBlockSummary: null,
                 runCreatedAt: LATEST_STARTED_AT
             });
-            sinon.assert.notCalled(onUnsupported);
         });
 
         test('answers the first JSON object across blocks and their outputs, skipping a JSON array and null', async () => {
@@ -704,15 +703,145 @@ suite('createAppPreviewApi', () => {
         });
     });
 
-    const stubs: [string, string, AppPreviewUnsupportedOperation][] = [
-        ['GET', '/projects/p-1/dataframes/sales%20by%20month', 'dataframe()']
-    ];
-    for (const [method, path, operation] of stubs) {
-        test(`${method} ${path} answers 501 for ${operation}`, async () => {
-            await assertJson(await call(method, path), 501, { message: notSupportedMessage(operation) });
-            sinon.assert.calledOnceWithExactly(onUnsupported, operation);
+    suite('GET /projects/:projectId/dataframes/:name', () => {
+        const PROJECT_ID = '5b0d4a8e-2f1c-4e3b-9a6d-7c8e9f0a1b2c';
+        const NOT_FOUND = { message: 'Dataframe not found' };
+        // Holds deepnote_dataframes/toolkit_frame, three rows that deepnote-toolkit 2.9.1 stored.
+        const FRAMES_PROJECT: AppPreviewProject = {
+            id: PROJECT_ID,
+            folder: Uri.joinPath(
+                Uri.file(EXTENSION_ROOT_DIR_FOR_TESTS),
+                'src',
+                'test',
+                'testFiles',
+                'appPreview',
+                'frames'
+            )
+        };
+        let emptyFolder: string;
+
+        setup(() => {
+            emptyFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-api-'));
+            getProject.returns(FRAMES_PROJECT);
         });
-    }
+
+        teardown(() => {
+            fs.rmSync(emptyFolder, { recursive: true, force: true });
+        });
+
+        function getDataframe(query = '', projectId = PROJECT_ID): Promise<Response> {
+            return call('GET', `/projects/${projectId}/dataframes/toolkit_frame${query}`);
+        }
+
+        test("answers a page of the frame stored in the project's folder, in Deepnote's shape and key order", async () => {
+            const response = await getDataframe('?pageIndex=1&pageSize=2');
+
+            assert.strictEqual(response.status, 200);
+            const body = await response.json();
+            assert.deepStrictEqual(Object.keys(body), [
+                'referenceId',
+                'rowCount',
+                'columnCount',
+                'pageIndex',
+                'pageSize',
+                'pageCount',
+                'columns',
+                'rows'
+            ]);
+            assert.deepStrictEqual(body, {
+                referenceId: '937dcee4-b07d-4ee0-9ee9-4793acaaf0a7',
+                rowCount: 3,
+                columnCount: 4,
+                pageIndex: 1,
+                pageSize: 2,
+                pageCount: 2,
+                columns: [
+                    { name: 'id', type: 'int64', timezone: null },
+                    { name: 'score', type: 'float', timezone: null },
+                    { name: 'seen_at', type: 'timestamp', timezone: 'Europe/Prague' },
+                    { name: 'label', type: 'string', timezone: null }
+                ],
+                rows: [['0', -0.25, null, 'žluťoučký']]
+            });
+        });
+
+        test('answers page 0 of 10 rows without a query', async () => {
+            const body = await (await getDataframe()).json();
+
+            assert.deepStrictEqual([body.pageIndex, body.pageSize, body.pageCount, body.rows.length], [0, 10, 1, 3]);
+        });
+
+        const invalidRequests: [string, string, string][] = [
+            ['a pageSize above 1000', '?pageSize=1001', 'pageSize too big: expected number to be <=1000'],
+            [
+                'a pageSize that is not a number',
+                '?pageSize=ten',
+                'pageSize invalid input: expected number, received nan'
+            ],
+            ['a fractional pageIndex', '?pageIndex=0.5', 'pageIndex invalid input: expected int, received number'],
+            ['a fractional pageSize', '?pageSize=2.5', 'pageSize invalid input: expected int, received number'],
+            ['a query key Deepnote does not know', '?pageIndex=0&limit=5', 'Unrecognized key: "limit"'],
+            [
+                'several invalid values',
+                '?pageIndex=-1&pageSize=0',
+                'pageIndex too small: expected number to be >=0; pageSize too small: expected number to be >=1'
+            ],
+            [
+                'a pageIndex past the last page',
+                '?pageIndex=1',
+                'pageIndex 1 is out of range: the dataframe has 1 page(s) of 10 rows.'
+            ]
+        ];
+        for (const [condition, query, message] of invalidRequests) {
+            test(`answers 400 to ${condition}`, async () => {
+                await assertJson(await getDataframe(query), 400, { message });
+            });
+        }
+
+        test('answers 400 to a name outside [A-Za-z0-9_-]', async () => {
+            await assertJson(await call('GET', `/projects/${PROJECT_ID}/dataframes/sales%20by%20month`), 400, {
+                message: 'name invalid string: must match pattern /^[a-za-z0-9_-]{1,128}$/'
+            });
+        });
+
+        test('reads the frames of a project whose ID is not a UUID, as .deepnote files allow', async () => {
+            getProject.returns({ ...FRAMES_PROJECT, id: 'e2e-hello-world-project' });
+
+            assert.strictEqual((await getDataframe('', 'e2e-hello-world-project')).status, 200);
+        });
+
+        test("answers 404 for a project ID other than the previewed app's project", async () => {
+            await assertJson(await getDataframe('', 'a7c3e1f0-9b8d-4c6e-8f2a-1b3c5d7e9f00'), 404, NOT_FOUND);
+        });
+
+        test('answers 404 when the previewed app belongs to no project', async () => {
+            getProject.returns(undefined);
+
+            await assertJson(await getDataframe(), 404, NOT_FOUND);
+        });
+
+        test('asks for the project again on every request', async () => {
+            getProject.returns(undefined);
+            await assertJson(await getDataframe(), 404, NOT_FOUND);
+
+            getProject.returns(FRAMES_PROJECT);
+            assert.strictEqual((await getDataframe()).status, 200);
+
+            getProject.returns({ id: PROJECT_ID, folder: Uri.file(emptyFolder) });
+            await assertJson(await getDataframe(), 404, NOT_FOUND);
+        });
+
+        test("answers the reader's 422 with its message, without logging an error", async () => {
+            const logError = sinon.stub(logger, 'error');
+            sinon.stub(zlib, 'zstdDecompressSync').value(undefined);
+
+            await assertJson(await getDataframe(), 422, {
+                message:
+                    "The editor's Node.js cannot decompress the stored dataframe, which is compressed with zstd. Update the editor to read it."
+            });
+            sinon.assert.notCalled(logError);
+        });
+    });
 
     const rejectedAuthorizations: [string, string | null][] = [
         ['no authorization header', null],
@@ -727,7 +856,6 @@ suite('createAppPreviewApi', () => {
             });
             await assertJson(await call('POST', '/runs', authorization), 401, { message: UNAUTHORIZED_MESSAGE });
             sinon.assert.notCalled(findNotebook);
-            sinon.assert.notCalled(onUnsupported);
         });
     }
 
@@ -736,6 +864,5 @@ suite('createAppPreviewApi', () => {
         await assertJson(await call('GET', '/projects/p-1'), 403, notAvailable);
         await assertJson(await call('DELETE', '/runs/run-1'), 403, notAvailable);
         await assertJson(await call('POST', '/notebooks/nb-1'), 403, notAvailable);
-        sinon.assert.notCalled(onUnsupported);
     });
 });

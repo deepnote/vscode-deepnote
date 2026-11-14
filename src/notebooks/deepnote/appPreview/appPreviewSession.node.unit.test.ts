@@ -3,16 +3,16 @@ import { assert } from 'chai';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as os from 'os';
-import * as sinon from 'sinon';
 import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
 import { createDeferred } from '../../../platform/common/utils/async';
 import * as path from '../../../platform/vscode-path/path';
+import { EXTENSION_ROOT_DIR_FOR_TESTS } from '../../../test/constants.node';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from '../deepnoteTestHelpers';
-import { notSupportedMessage, type AppPreviewUnsupportedOperation } from './appPreviewApi.node';
+import { RUN_NOT_FOUND_MESSAGE } from './appPreviewApi.node';
 import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import { AppPreviewSession, type AppPreviewProject } from './appPreviewSession.node';
 import type { AppPreviewRunOutcome, IAppPreviewRunner } from './types';
@@ -94,7 +94,6 @@ suite('AppPreviewSession', () => {
     let appFolder: string;
     let clientScript: string;
     let sessions: AppPreviewSession[];
-    let onUnsupported: sinon.SinonStub<[AppPreviewUnsupportedOperation], void>;
     let runner: IAppPreviewRunner;
 
     async function startSession(
@@ -106,8 +105,7 @@ suite('AppPreviewSession', () => {
             project: project ?? undefined,
             runFiles: instance(mock(AppPreviewRunFiles)),
             runner: instance(runner),
-            scripts: { appClient: Uri.file(clientScript) },
-            onUnsupported
+            scripts: { appClient: Uri.file(clientScript) }
         });
         sessions.push(session);
         await session.start();
@@ -123,7 +121,6 @@ suite('AppPreviewSession', () => {
 
     setup(() => {
         resetVSCodeMocks();
-        onUnsupported = sinon.stub<[AppPreviewUnsupportedOperation], void>();
         runner = mock<IAppPreviewRunner>();
         sessions = [];
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-'));
@@ -368,14 +365,39 @@ suite('AppPreviewSession', () => {
             const session = await startSession();
             const { token } = await requestToken(session);
 
-            const stub = await request(session, '/v2/projects/project-1/dataframes/sales', {
+            const missingRun = await request(session, '/v2/runs/run-1', {
                 headers: { authorization: `Bearer ${token}` }
             });
-            assert.strictEqual(stub.status, 501);
-            assert.deepStrictEqual(JSON.parse(stub.body.toString()), { message: notSupportedMessage('dataframe()') });
-            sinon.assert.calledOnceWithExactly(onUnsupported, 'dataframe()');
+            assert.strictEqual(missingRun.status, 404);
+            assert.deepStrictEqual(JSON.parse(missingRun.body.toString()), { message: RUN_NOT_FOUND_MESSAGE });
 
-            assert.strictEqual((await request(session, '/v2/projects/project-1/dataframes/sales')).status, 401);
+            assert.strictEqual((await request(session, '/v2/runs/run-1')).status, 401);
+        });
+
+        test("answers dataframes from the session's current project folder", async () => {
+            const projectId = '5b0d4a8e-2f1c-4e3b-9a6d-7c8e9f0a1b2c';
+            const framesFolder = Uri.joinPath(
+                Uri.file(EXTENSION_ROOT_DIR_FOR_TESTS),
+                'src',
+                'test',
+                'testFiles',
+                'appPreview',
+                'frames'
+            );
+            const session = await startSession({ project: { id: projectId, folder: framesFolder } });
+            const { token } = await requestToken(session);
+            const dataframeStatus = async () =>
+                (
+                    await request(session, `/v2/projects/${projectId}/dataframes/toolkit_frame`, {
+                        headers: { authorization: `Bearer ${token}` }
+                    })
+                ).status;
+
+            assert.strictEqual(await dataframeStatus(), 200);
+
+            session.setProject({ id: projectId, folder: Uri.file(tmp) });
+
+            assert.strictEqual(await dataframeStatus(), 404);
         });
 
         test("answers a notebook that two files share from the session's current project folder", async () => {

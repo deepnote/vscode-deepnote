@@ -33,11 +33,9 @@ import {
 
 const FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview');
 const SYNCED_PROJECT_FIXTURE = 'hello-world.deepnote';
-const SYNCED_APP = path.join('synced', 'Sales', '.files', '_deepnote_static');
+const SYNCED_APP = path.join('Sales', '.files', '_deepnote_static');
 const SYNCED_TITLE = 'Synced fixture';
-const RELOAD_APP = 'reload-app';
 const RELOAD_TITLE = 'Reload fixture';
-const REUSE_APP = 'reuse-app';
 const REUSE_TITLE = 'Reuse fixture';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
 const NOT_SUPPORTED = 'which the local preview does not support yet.';
@@ -228,6 +226,18 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
     let workspaceDir = '';
 
+    /**
+     * Each test, and each attempt Mocha retries, gets a folder no earlier attempt previewed: the extension keeps one
+     * preview session per folder while it runs, a session warns about each unsupported operation only once, and two
+     * tests edit their page. The page titles tell the integrated browser windows apart.
+     */
+    function addAppFolder(title: string): string {
+        const appDir = fs.mkdtempSync(path.join(workspaceDir, 'app-'));
+        copyRetitledApp(appDir, title);
+
+        return appDir;
+    }
+
     before(async function () {
         workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-e2e-preview-'));
         fs.mkdirSync(path.join(workspaceDir, '.vscode'));
@@ -235,13 +245,9 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
             path.join(workspaceDir, '.vscode', 'settings.json'),
             JSON.stringify({ 'explorer.compactFolders': false })
         );
-        fs.cpSync(FIXTURE_APP, path.join(workspaceDir, 'app'), { recursive: true });
-        // Their own folders, so each preview session warns once whatever ran before, and their own page titles, so each
-        // integrated browser window is told apart.
-        copyRetitledApp(path.join(workspaceDir, RELOAD_APP), RELOAD_TITLE);
-        copyRetitledApp(path.join(workspaceDir, REUSE_APP), REUSE_TITLE);
-        copyRetitledApp(path.join(workspaceDir, SYNCED_APP), SYNCED_TITLE);
-        copyFixtureIntoDir(path.join(workspaceDir, 'synced', 'Sales'), SYNCED_PROJECT_FIXTURE);
+        // A project beside, not above, the app folders, which must not be taken for theirs.
+        fs.mkdirSync(path.join(workspaceDir, 'other-project'));
+        copyFixtureIntoDir(path.join(workspaceDir, 'other-project'), SYNCED_PROJECT_FIXTURE);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(workspaceDir);
@@ -261,9 +267,10 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
     it('opens the folder from the Explorer in the integrated browser, with its assets and the extension client', async function () {
         const screenshot = createScreenshotter(this);
+        const appDir = addAppFolder('Preview fixture');
         await clearNotifications();
 
-        await selectDeepnoteContextMenu(await findRootExplorerItem('app'), 'Preview App');
+        await selectDeepnoteContextMenu(await findRootExplorerItem(path.basename(appDir)), 'Preview App');
 
         const report = await onIntegratedBrowserPage('Preview fixture', async () => {
             const read = await readReport();
@@ -276,20 +283,21 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
         // The page called inputs() twice and dataframe() never reached the server, so one warning names inputs().
         expect(await previewWarnings(1)).to.deep.equal([
-            'The app in app called inputs(), which the local preview does not support yet.'
+            `The app in ${path.basename(appDir)} called inputs(), which the local preview does not support yet.`
         ]);
         await screenshot('inputs-warning');
     });
 
     it('shows an edit after a reload, and does not warn again', async function () {
         const screenshot = createScreenshotter(this);
+        const appDir = addAppFolder(RELOAD_TITLE);
         await clearNotifications();
-        await selectDeepnoteContextMenu(await findRootExplorerItem(RELOAD_APP), 'Preview App');
+        await selectDeepnoteContextMenu(await findRootExplorerItem(path.basename(appDir)), 'Preview App');
         await onIntegratedBrowserPage(RELOAD_TITLE, readReport);
         await previewWarnings(1);
         await clearNotifications();
 
-        const indexFile = path.join(workspaceDir, RELOAD_APP, 'index.html');
+        const indexFile = path.join(appDir, 'index.html');
         fs.writeFileSync(
             indexFile,
             fs.readFileSync(indexFile, 'utf8').replace('Sales dashboard', 'Sales dashboard, edited')
@@ -312,12 +320,14 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
     it('switches to the open tab and reloads it when the same folder is previewed again', async function () {
         const screenshot = createScreenshotter(this);
         const driver = VSBrowser.instance.driver;
-        const preview = async () => selectDeepnoteContextMenu(await findRootExplorerItem(REUSE_APP), 'Preview App');
+        const appDir = addAppFolder(REUSE_TITLE);
+        const preview = async () =>
+            selectDeepnoteContextMenu(await findRootExplorerItem(path.basename(appDir)), 'Preview App');
         await preview();
         await onIntegratedBrowserPage(REUSE_TITLE, readReport);
         await new Workbench().executeCommand('File: New Untitled Text File');
         await waitForEditors([REUSE_TITLE, 'Untitled-1'], 'Untitled-1');
-        const indexFile = path.join(workspaceDir, REUSE_APP, 'index.html');
+        const indexFile = path.join(appDir, 'index.html');
         fs.writeFileSync(
             indexFile,
             fs.readFileSync(indexFile, 'utf8').replace('Sales dashboard', 'Sales dashboard, edited')
@@ -341,9 +351,12 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
     it('previews a synced app from the Command Palette, with the project of the .deepnote file next to its .files folder', async function () {
         const screenshot = createScreenshotter(this);
+        const syncedDir = fs.mkdtempSync(path.join(workspaceDir, 'synced-'));
+        copyRetitledApp(path.join(syncedDir, SYNCED_APP), SYNCED_TITLE);
+        copyFixtureIntoDir(path.join(syncedDir, 'Sales'), SYNCED_PROJECT_FIXTURE);
         await clearNotifications();
 
-        await previewFromCommandPalette(path.join(workspaceDir, SYNCED_APP));
+        await previewFromCommandPalette(path.join(syncedDir, SYNCED_APP));
 
         const report = await onIntegratedBrowserPage(SYNCED_TITLE, async () => {
             const read = await readReport();

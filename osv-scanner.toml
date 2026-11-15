@@ -3,8 +3,8 @@
 
 [[IgnoredVulns]]
 id = "GHSA-3g3m-2fjr-6pw4"
-ignoreUntil = 2026-11-15
-reason = "CVE-2026-118773 (glob): dev-only copies under mocha, rimraf, vsce, test-cli, c8 and extest; none that runs passes a signal; no parent admits 14.x. See .nsprc."
+ignoreUntil = 2026-12-06
+reason = "CVE-2026-118773 (glob): dev-only copies under mocha, rimraf, vsce, test-cli, c8 and extest; none that runs passes a signal; 13.0.7 backports the fix but stays in the advisory range; no parent but rimraf 6 admits 14.x. See .nsprc."
 
 [[IgnoredVulns]]
 id = "GHSA-848j-6mx2-7j84"
@@ -13,5 +13,5 @@ reason = "CVE-2025-14505 (elliptic): dev-only, via node-stdlib-browser; no patch
 
 [[IgnoredVulns]]
 id = "GHSA-g3hv-75wg-m249"
-ignoreUntil = 2026-11-15
+ignoreUntil = 2026-12-06
 reason = "CVE-2026-118764 (minimatch): crafted-pattern DoS; shipped copies lack the code, dev copies get repo patterns only; fix only in 11.x. See .nsprc."

@@ -36,17 +36,16 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
     }
 
     private async chooseFolder(): Promise<Uri | undefined> {
-        const [folder] =
-            (await window.showOpenDialog({
-                canSelectFolders: true,
-                canSelectFiles: false,
-                canSelectMany: false,
-                defaultUri: workspace.workspaceFolders?.[0]?.uri,
-                title: DeepnoteAppPreview.chooseFolderTitle,
-                openLabel: DeepnoteAppPreview.preview
-            })) ?? [];
+        const folders = await window.showOpenDialog({
+            canSelectFolders: true,
+            canSelectFiles: false,
+            canSelectMany: false,
+            defaultUri: workspace.workspaceFolders?.[0]?.uri,
+            title: DeepnoteAppPreview.chooseFolderTitle,
+            openLabel: DeepnoteAppPreview.preview
+        });
 
-        return folder;
+        return folders?.at(0);
     }
 
     /**

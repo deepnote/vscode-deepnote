@@ -30,7 +30,7 @@ suite('createAppPreviewApi', () => {
     });
 
     function call(method: string, path: string, authorization: string | null = `Bearer ${TOKEN}`): Promise<Response> {
-        return fetch(`${baseUrl}${path}`, { method, headers: authorization === null ? {} : { authorization } });
+        return fetch(`${baseUrl}${path}`, { method, headers: authorization == null ? {} : { authorization } });
     }
 
     async function assertJson(response: Response, status: number, body: unknown): Promise<void> {

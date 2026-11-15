@@ -129,14 +129,21 @@ suite('AppPreviewSession', () => {
             assert.strictEqual(await getText(session, '/sub/?v=2'), '<h1>sub</h1>');
         });
 
-        test('redirects a directory requested without a trailing slash to its path with one', async () => {
-            const session = await startSession();
+        const directoryRedirects: [string, string, string][] = [
+            ['adding no query when it has none', '/sub', '/sub/'],
+            // Re-serializing the parsed query writes `a+b` (URLSearchParams) or a bare `~` (querystring).
+            ['keeping the query as sent', '/sub?region=EU&q=a%20b%7E', '/sub/?region=EU&q=a%20b%7E']
+        ];
+        for (const [condition, urlPath, location] of directoryRedirects) {
+            test(`redirects a directory requested without a trailing slash to its path with one, ${condition}`, async () => {
+                const session = await startSession();
 
-            const redirect = await request(session, '/sub?v=2');
+                const redirect = await request(session, urlPath);
 
-            assert.strictEqual(redirect.status, 302);
-            assert.strictEqual(redirect.headers.location, '/sub/');
-        });
+                assert.strictEqual(redirect.status, 302);
+                assert.strictEqual(redirect.headers.location, location);
+            });
+        }
 
         test('serves files by their exact decoded names', async () => {
             const session = await startSession();

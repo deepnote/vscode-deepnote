@@ -297,7 +297,11 @@ export class AppPreviewSession implements IDisposable {
 
             const stat = await fs.stat(realPath);
             if (stat.isDirectory() && !isDirectoryPath) {
-                res.redirect(302, `/${segments.map(encodeURIComponent).join('/')}/`);
+                // Raw, as Deepnote keeps it: re-serializing `req.query` would change the client's encoding.
+                const queryStart = req.originalUrl.indexOf('?');
+                const query = queryStart === -1 ? '' : req.originalUrl.slice(queryStart);
+
+                res.redirect(302, `/${segments.map(encodeURIComponent).join('/')}/${query}`);
 
                 return;
             }

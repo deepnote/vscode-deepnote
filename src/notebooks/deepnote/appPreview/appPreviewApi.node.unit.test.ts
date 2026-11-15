@@ -16,12 +16,12 @@ suite('createAppPreviewApi', () => {
         unsupported = [];
         const app = express();
         app.use(
-            '/__deepnote/v2',
+            '/v2',
             createAppPreviewApi({ token: TOKEN, onUnsupported: (operation) => unsupported.push(operation) })
         );
         server = http.createServer(app);
         await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-        baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/__deepnote/v2`;
+        baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v2`;
     });
 
     teardown(() => {

@@ -46,11 +46,15 @@ suite('AppPreviewCommandHandler', () => {
         return response.text();
     }
 
-    function tokenOf(html: string): string {
-        const match = /data-deepnote-token="([^"]+)"/.exec(html);
-        assert.isNotNull(match, 'the page carries no token');
+    async function requestToken(): Promise<{ token: string; projectId?: string }> {
+        const url = externalUriRequests[externalUriRequests.length - 1];
+        const response = await fetch(`${url}__deepnote/api-token`, {
+            method: 'POST',
+            headers: { origin: new URL(url).origin }
+        });
+        assert.strictEqual(response.status, 200);
 
-        return match[1];
+        return (await response.json()) as { token: string; projectId?: string };
     }
 
     setup(async () => {
@@ -63,9 +67,9 @@ suite('AppPreviewCommandHandler', () => {
             path.join(appFolder, 'index.html'),
             `<h1>app</h1><script src="${HOSTED}"></script>`
         );
-        const extensionDist = path.join(tmp, 'extension', 'dist', 'webviews', 'webview-side', 'appPreview');
-        await fs.promises.mkdir(extensionDist, { recursive: true });
-        await fs.promises.writeFile(path.join(extensionDist, 'appClient.js'), '/* client */');
+        const extensionResources = path.join(tmp, 'extension', 'resources', 'appPreview');
+        await fs.promises.mkdir(extensionResources, { recursive: true });
+        await fs.promises.writeFile(path.join(extensionResources, 'v1.js'), '/* client */');
 
         const workspaceFolder: WorkspaceFolder = { uri: Uri.file(tmp), name: 'tmp', index: 0 };
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
@@ -227,11 +231,19 @@ suite('AppPreviewCommandHandler', () => {
         assert.deepStrictEqual(openedExternally, []);
     });
 
+    test('starts the session with the project of the .deepnote file in a folder above the app', async () => {
+        await fs.promises.writeFile(path.join(tmp, 'project', 'analysis.deepnote'), serializeProjectFile('p-first'));
+
+        await previewApp(Uri.file(appFolder));
+
+        assert.strictEqual((await requestToken()).projectId, 'p-first');
+    });
+
     test('reuses the session on a second run, with the project and forwarded URL resolved again', async () => {
         forwardTo('http://localhost:1111/', 'http://localhost:2222/');
         await previewApp(Uri.file(appFolder));
         const server = externalUriRequests[0];
-        assert.notInclude(await page(), 'data-deepnote-project-id');
+        assert.notProperty(await requestToken(), 'projectId');
 
         await fs.promises.writeFile(path.join(tmp, 'project', 'analysis.deepnote'), serializeProjectFile('p-added'));
         await previewApp(Uri.file(appFolder));
@@ -241,7 +253,7 @@ suite('AppPreviewCommandHandler', () => {
             opened.map(({ uri }) => uri),
             ['http://localhost:1111/', 'http://localhost:2222/']
         );
-        assert.include(await page(), 'data-deepnote-project-id="p-added"');
+        assert.strictEqual((await requestToken()).projectId, 'p-added');
     });
 
     test('starts one server when the command runs again while the first run is starting', async () => {
@@ -288,9 +300,9 @@ suite('AppPreviewCommandHandler', () => {
 
     test('warns once per unsupported operation, naming the operation and the folder', async () => {
         await previewApp(Uri.file(appFolder));
-        const token = tokenOf(await page());
+        const { token } = await requestToken();
         const api = (urlPath: string, method = 'GET') =>
-            fetch(`${externalUriRequests[0]}__deepnote/v2${urlPath}`, {
+            fetch(`${externalUriRequests[0]}v2${urlPath}`, {
                 method,
                 headers: { authorization: `Bearer ${token}` }
             });

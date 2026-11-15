@@ -211,8 +211,6 @@ function createConfig(
 ): SameShape<BuildOptions, BuildOptions> {
     const inject: string[] = [];
     const isWebTestSource = source.endsWith(path.join('web', 'index.ts'));
-    // App pages load the preview client as a classic script, where an ESM bundle's top-level names would become globals.
-    const isAppPreviewClient = source.endsWith(path.join('appPreview', 'appClient.ts'));
     const plugins: Plugin[] = [];
     let define: SameShape<BuildOptions, BuildOptions>['define'] = undefined;
     if (target === 'web') {
@@ -295,7 +293,7 @@ function createConfig(
         bundle: true,
         external,
         alias,
-        format: target === 'desktop' ? 'cjs' : isAppPreviewClient ? 'iife' : 'esm',
+        format: target === 'desktop' ? 'cjs' : 'esm',
         metafile: isDevbuild && !watch,
         define,
         target: target === 'desktop' ? 'node18' : 'es2018',
@@ -447,11 +445,6 @@ async function buildAll() {
         build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'bigNumberComparisonSettings', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'bigNumberComparisonSettings', 'index.js'),
-            { target: 'web', watch: watchAll }
-        ),
-        build(
-            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'appPreview', 'appClient.ts'),
-            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'appPreview', 'appClient.js'),
             { target: 'web', watch: watchAll }
         ),
         // Notebook renderers (integrated from jupyter-renderers)

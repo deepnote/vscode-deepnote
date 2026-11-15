@@ -11,8 +11,16 @@ import type { AppPreviewOperation } from './appPreviewApi.node';
 import { AppPreviewSession, type AppPreviewProject } from './appPreviewSession.node';
 
 const CSP = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:";
-const CLIENT_SCRIPT = '/* the extension client */\n';
+const CLIENT_SCRIPT = '/* the bundled client */\n';
 const HOSTED = 'https://deepnote.com/static/app-client/v1.js';
+const SWAPPED = '<script src="/__deepnote/client.js">';
+
+interface TokenReply {
+    token: string;
+    apiOrigin: string;
+    expiresAtSeconds: number;
+    projectId?: string;
+}
 
 interface RawResponse {
     status: number;
@@ -64,11 +72,14 @@ function forwardTo(url: string): void {
     when(mockedVSCodeNamespaces.env.asExternalUri(anything())).thenCall(() => Promise.resolve(Uri.parse(url)));
 }
 
-function tokenOf(page: string): string {
-    const match = /data-deepnote-token="([^"]+)"/.exec(page);
-    assert.isNotNull(match, 'the page carries no token');
+async function requestToken(session: AppPreviewSession): Promise<TokenReply> {
+    const response = await request(session, '/__deepnote/api-token', {
+        method: 'POST',
+        headers: { origin: 'http://127.0.0.1:1234' }
+    });
+    assert.strictEqual(response.status, 200);
 
-    return match![1];
+    return JSON.parse(response.body.toString()) as TokenReply;
 }
 
 suite('AppPreviewSession', () => {
@@ -106,8 +117,8 @@ suite('AppPreviewSession', () => {
         sessions = [];
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-'));
         appFolder = path.join(tmp, 'app');
-        clientScript = path.join(tmp, '.ext', 'dist', 'appClient.js');
-        write('.ext/dist/appClient.js', CLIENT_SCRIPT, tmp);
+        clientScript = path.join(tmp, '.ext', 'v1.js');
+        write('.ext/v1.js', CLIENT_SCRIPT, tmp);
         write('index.html', '<h1>home</h1>');
         write('sub/index.html', '<h1>sub</h1>');
         write('my file #1.txt', 'spaced');
@@ -273,7 +284,7 @@ suite('AppPreviewSession', () => {
     });
 
     suite('client and API', () => {
-        test('serves the client script from a dot-named folder as is, so without the token', async () => {
+        test('serves the client script from a dot-named folder', async () => {
             const session = await startSession();
 
             const response = await request(session, '/__deepnote/client.js');
@@ -284,12 +295,69 @@ suite('AppPreviewSession', () => {
             assert.strictEqual(response.headers['cache-control'], 'no-cache');
         });
 
-        test('mounts the API at /__deepnote/v2, behind the token of the pages it serves', async () => {
-            write('page.html', `<script src="${HOSTED}"></script>`);
+        test("hands the client the session's token and project, with the page's origin as the API origin", async () => {
             const session = await startSession();
-            const token = tokenOf(await getText(session, '/page.html'));
+            const nowSeconds = Date.now() / 1000;
 
-            const stub = await request(session, '/__deepnote/v2/notebooks/nb-1', {
+            const response = await request(session, '/__deepnote/api-token', {
+                method: 'POST',
+                headers: { origin: 'https://abc-4567.app.github.dev' }
+            });
+
+            assert.strictEqual(response.status, 200);
+            assert.strictEqual(response.headers['cache-control'], 'no-store');
+            const { token, expiresAtSeconds, ...rest } = JSON.parse(response.body.toString()) as TokenReply;
+            assert.deepStrictEqual(rest, { apiOrigin: 'https://abc-4567.app.github.dev', projectId: 'project-1' });
+            assert.isNotEmpty(token);
+            // In seconds, and further ahead than the minute before expiry at which the client asks again.
+            assert.isAbove(expiresAtSeconds, nowSeconds + 60);
+            assert.isBelow(expiresAtSeconds, nowSeconds + 24 * 60 * 60);
+        });
+
+        test('leaves the project ID out without a project', async () => {
+            const session = await startSession({ project: null });
+
+            assert.notProperty(await requestToken(session), 'projectId');
+        });
+
+        test('hands out the project setProject() sets from the next token request on', async () => {
+            const session = await startSession({ project: null });
+
+            session.setProject({ id: 'project-2', folder: Uri.file(tmp) });
+
+            assert.strictEqual((await requestToken(session)).projectId, 'project-2');
+        });
+
+        test('answers 403 to a token request without an Origin', async () => {
+            const session = await startSession();
+
+            assert.strictEqual((await request(session, '/__deepnote/api-token', { method: 'POST' })).status, 403);
+        });
+
+        test('answers 403 to a token request from a Host that is neither loopback nor the forwarded URL', async () => {
+            const session = await startSession();
+
+            const response = await request(session, '/__deepnote/api-token', {
+                method: 'POST',
+                host: 'evil.example',
+                headers: { origin: 'http://evil.example' }
+            });
+
+            assert.strictEqual(response.status, 403);
+        });
+
+        test('gives each session its own token', async () => {
+            const first = await startSession();
+            const second = await startSession();
+
+            assert.notStrictEqual((await requestToken(first)).token, (await requestToken(second)).token);
+        });
+
+        test("mounts the API at /v2, behind the session's token", async () => {
+            const session = await startSession();
+            const { token } = await requestToken(session);
+
+            const stub = await request(session, '/v2/notebooks/nb-1', {
                 headers: { authorization: `Bearer ${token}` }
             });
             assert.strictEqual(stub.status, 501);
@@ -298,14 +366,11 @@ suite('AppPreviewSession', () => {
             });
             assert.deepStrictEqual(unsupported, ['inputs()']);
 
-            assert.strictEqual((await request(session, '/__deepnote/v2/notebooks/nb-1')).status, 401);
+            assert.strictEqual((await request(session, '/v2/notebooks/nb-1')).status, 401);
         });
     });
 
     suite('client script swap', () => {
-        const swapped = (token: string, projectAttribute = ' data-deepnote-project-id="project-1"') =>
-            `<script src="/__deepnote/client.js" data-deepnote-token="${token}"${projectAttribute}>`;
-
         test('swaps every tag that loads the hosted client, whatever its host, query, quotes or attributes', async () => {
             const page = [
                 '<!doctype html><html><head>',
@@ -323,15 +388,14 @@ suite('AppPreviewSession', () => {
             const session = await startSession();
 
             const served = await getText(session, '/page.html');
-            const token = tokenOf(served);
 
             assert.strictEqual(
                 served,
                 [
                     '<!doctype html><html><head>',
-                    `${swapped(token)}</script>`,
-                    `${swapped(token)}</script>`,
-                    `${swapped(token)}</SCRIPT>`,
+                    `${SWAPPED}</script>`,
+                    `${SWAPPED}</script>`,
+                    `${SWAPPED}</SCRIPT>`,
                     '<script src="https://cdn.example.com/lib.js"></script>',
                     '<script src="https://deepnote.com/static/app-client/v2.js"></script>',
                     `<script data-src="${HOSTED}" src="main.js" onload="if (a > b) run()"></script>`,
@@ -347,9 +411,7 @@ suite('AppPreviewSession', () => {
             write('page.html', `<script data-note=it's src="${HOSTED}">${rest}`);
             const session = await startSession();
 
-            const served = await getText(session, '/page.html');
-
-            assert.strictEqual(served, `${swapped(tokenOf(served))}${rest}`);
+            assert.strictEqual(await getText(session, '/page.html'), `${SWAPPED}${rest}`);
         });
 
         test('leaves a custom element whose name starts with script alone', async () => {
@@ -360,26 +422,13 @@ suite('AppPreviewSession', () => {
             assert.strictEqual(await getText(session, '/page.html'), page);
         });
 
-        test('gives each session its own token', async () => {
-            write('page.html', `<script src="${HOSTED}"></script>`);
-            const first = await startSession();
-            const second = await startSession();
-
-            assert.notStrictEqual(
-                tokenOf(await getText(first, '/page.html')),
-                tokenOf(await getText(second, '/page.html'))
-            );
-        });
-
         test('swaps the tag in .htm pages, whatever the case of the extension, and in a directory index', async () => {
             write('legacy.HTM', `<script src="${HOSTED}"></script>`);
             write('sub/index.html', `<script src="${HOSTED}"></script>`);
             const session = await startSession();
 
-            const legacy = await getText(session, '/legacy.HTM');
-            assert.strictEqual(legacy, `${swapped(tokenOf(legacy))}</script>`);
-            const index = await getText(session, '/sub/');
-            assert.strictEqual(index, `${swapped(tokenOf(index))}</script>`);
+            assert.strictEqual(await getText(session, '/legacy.HTM'), `${SWAPPED}</script>`);
+            assert.strictEqual(await getText(session, '/sub/'), `${SWAPPED}</script>`);
         });
 
         test('sends the bytes outside the tag back unchanged', async () => {
@@ -389,41 +438,8 @@ suite('AppPreviewSession', () => {
             const session = await startSession();
 
             const response = await request(session, '/page.html');
-            const token = tokenOf(response.body.toString('latin1'));
 
-            assert.deepStrictEqual(response.body, Buffer.concat([before, Buffer.from(swapped(token)), after]));
-        });
-
-        test('escapes the project ID, and writes every character outside printable ASCII as a reference', async () => {
-            write('page.html', `<script src="${HOSTED}"></script>`);
-            const session = await startSession({ project: { id: `p<"&'>é😀`, folder: Uri.file(tmp) } });
-
-            const page = await getText(session, '/page.html');
-
-            assert.strictEqual(
-                page,
-                `${swapped(tokenOf(page), ' data-deepnote-project-id="p&#60;&#34;&#38;&#39;&#62;&#233;&#128512;"')}</script>`
-            );
-        });
-
-        test('leaves the project attribute out without a project', async () => {
-            write('page.html', `<script src="${HOSTED}"></script>`);
-            const session = await startSession({ project: null });
-
-            const page = await getText(session, '/page.html');
-
-            assert.strictEqual(page, `${swapped(tokenOf(page), '')}</script>`);
-        });
-
-        test('serves the project set by setProject() from the next page on', async () => {
-            write('page.html', `<script src="${HOSTED}"></script>`);
-            const session = await startSession({ project: null });
-            assert.notInclude(await getText(session, '/page.html'), 'data-deepnote-project-id');
-
-            session.setProject({ id: 'project-2', folder: Uri.file(tmp) });
-
-            const page = await getText(session, '/page.html');
-            assert.strictEqual(page, `${swapped(tokenOf(page), ' data-deepnote-project-id="project-2"')}</script>`);
+            assert.deepStrictEqual(response.body, Buffer.concat([before, Buffer.from(SWAPPED), after]));
         });
     });
 

@@ -28,7 +28,6 @@ const notebook = connection.notebook('e2e-preview-notebook');
 (async () => {
     await call('inputs', 'inputs()', () => notebook.inputs());
     await call('inputs-again', 'inputs() again', () => notebook.inputs());
-    await call('dataframe', 'dataframe()', () => connection.dataframe('sales'));
     const deepnoteRequests = performance
         .getEntriesByType('resource')
         .filter((entry) => new URL(entry.name).hostname.endsWith('deepnote.com'));

@@ -24,7 +24,6 @@ import {
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     clickDialogOkButton,
-    copyFixtureIntoDir,
     createScreenshotter,
     openActivityBarView,
     openFolderViaDialog,
@@ -32,7 +31,6 @@ import {
 } from '../../helpers';
 
 const FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview');
-const SYNCED_PROJECT_FIXTURE = 'hello-world.deepnote';
 const SYNCED_APP = path.join('Sales', '.files', '_deepnote_static');
 const SYNCED_TITLE = 'Synced fixture';
 const RELOAD_TITLE = 'Reload fixture';
@@ -40,10 +38,7 @@ const REUSE_TITLE = 'Reuse fixture';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
 const NOT_SUPPORTED = 'which the local preview does not support yet.';
 
-const NO_PROJECT_DATAFRAME =
-    "dataframe() rejected: This app folder is not next to or inside the folder of a Deepnote project's .deepnote files, so it has no stored dataframes. After adding one, run Deepnote: Preview App again.";
-
-function expectedReport(title: string, dataframe: string): string[] {
+function expectedReport(title: string): string[] {
     return [
         title,
         'client: function',
@@ -51,7 +46,6 @@ function expectedReport(title: string, dataframe: string): string[] {
         'logo: 48x48',
         'inputs() rejected: inputs() is not supported in the local preview yet.',
         'inputs() again rejected: inputs() is not supported in the local preview yet.',
-        dataframe,
         'requests to deepnote.com: 0'
     ];
 }
@@ -245,9 +239,6 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
             path.join(workspaceDir, '.vscode', 'settings.json'),
             JSON.stringify({ 'explorer.compactFolders': false })
         );
-        // A project beside, not above, the app folders, which must not be taken for theirs.
-        fs.mkdirSync(path.join(workspaceDir, 'other-project'));
-        copyFixtureIntoDir(path.join(workspaceDir, 'other-project'), SYNCED_PROJECT_FIXTURE);
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(workspaceDir);
@@ -265,7 +256,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         }
     });
 
-    it('opens the folder from the Explorer in the integrated browser, with its assets and the extension client', async function () {
+    it("opens the folder from the Explorer in the integrated browser, with its assets and the bundled copy of Deepnote's client", async function () {
         const screenshot = createScreenshotter(this);
         const appDir = addAppFolder('Preview fixture');
         await clearNotifications();
@@ -278,10 +269,9 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
             return read;
         });
-        expect(report).to.deep.equal(expectedReport('Sales dashboard', NO_PROJECT_DATAFRAME));
+        expect(report).to.deep.equal(expectedReport('Sales dashboard'));
         expect(await new EditorView().getOpenEditorTitles()).to.deep.equal(['Preview fixture']);
 
-        // The page called inputs() twice and dataframe() never reached the server, so one warning names inputs().
         expect(await previewWarnings(1)).to.deep.equal([
             `The app in ${path.basename(appDir)} called inputs(), which the local preview does not support yet.`
         ]);
@@ -310,7 +300,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
             return read;
         });
 
-        expect(report).to.deep.equal(expectedReport('Sales dashboard, edited', NO_PROJECT_DATAFRAME));
+        expect(report).to.deep.equal(expectedReport('Sales dashboard, edited'));
         const center = await new Workbench().openNotificationsCenter();
         const warnings = await center.getNotifications(NotificationType.Warning);
         expect(warnings).to.have.length(0);
@@ -349,11 +339,10 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         await screenshot('reused-tab');
     });
 
-    it('previews a synced app from the Command Palette, with the project of the .deepnote file next to its .files folder', async function () {
+    it('previews a folder chosen from the Command Palette, inside a dot-named .files folder', async function () {
         const screenshot = createScreenshotter(this);
         const syncedDir = fs.mkdtempSync(path.join(workspaceDir, 'synced-'));
         copyRetitledApp(path.join(syncedDir, SYNCED_APP), SYNCED_TITLE);
-        copyFixtureIntoDir(path.join(syncedDir, 'Sales'), SYNCED_PROJECT_FIXTURE);
         await clearNotifications();
 
         await previewFromCommandPalette(path.join(syncedDir, SYNCED_APP));
@@ -365,15 +354,9 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
             return read;
         });
 
-        expect(report).to.deep.equal(
-            expectedReport(
-                'Sales dashboard',
-                'dataframe() rejected: dataframe() is not supported in the local preview yet.'
-            )
-        );
-        expect(await previewWarnings(2)).to.have.members([
-            'The app in _deepnote_static called inputs(), which the local preview does not support yet.',
-            'The app in _deepnote_static called dataframe(), which the local preview does not support yet.'
+        expect(report).to.deep.equal(expectedReport('Sales dashboard'));
+        expect(await previewWarnings(1)).to.deep.equal([
+            'The app in _deepnote_static called inputs(), which the local preview does not support yet.'
         ]);
         await screenshot('synced-app-warnings');
     });

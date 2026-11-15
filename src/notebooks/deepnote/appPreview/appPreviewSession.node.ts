@@ -33,6 +33,9 @@ const FILE_HEADERS = {
 };
 
 const HOSTED_CLIENT_PATH = '/static/app-client/v1.js';
+const CLIENT_SCRIPT_TAG = '<script src="/__deepnote/client.js">';
+// The token is valid for the whole session; when this runs out, the client asks again and gets the same token.
+const TOKEN_LIFETIME_SECONDS = 60 * 60;
 // As in HTML, a quote opens a value only right after `=`; the lookahead and backreference consume a quoted value
 // atomically, so a `>` inside it does not end the tag and nothing backtracks into it.
 const SCRIPT_OPEN_TAG = /<script(?=[\s/>])((?:[^>="']|["']|=(?=(\s*(?:"[^"]*"|'[^']*')?))\2)*)>/gi;
@@ -85,36 +88,21 @@ function isHostedClientUrl(src: string): boolean {
     return src.trim().split(/[?#]/, 1)[0].endsWith(HOSTED_CLIENT_PATH);
 }
 
-/** Escapes everything outside printable ASCII as well, so the value survives the page's latin1 round trip. */
-function escapeAttribute(value: string): string {
-    let escaped = '';
-    for (const character of value) {
-        const codePoint = character.codePointAt(0)!;
-        const isPlainAscii = codePoint >= 0x20 && codePoint <= 0x7e && !'&<>"\''.includes(character);
-        escaped += isPlainAscii ? character : `&#${codePoint};`;
-    }
-
-    return escaped;
-}
-
 /**
  * `page` is the page's bytes decoded as latin1, so everything outside the swapped tags keeps its bytes whatever the
  * encoding.
  */
-function swapClientScriptTags(page: string, token: string, projectId: string | undefined): string {
-    const projectAttribute = projectId === undefined ? '' : ` data-deepnote-project-id="${escapeAttribute(projectId)}"`;
-    const replacement = `<script src="/__deepnote/client.js" data-deepnote-token="${escapeAttribute(token)}"${projectAttribute}>`;
-
+function swapClientScriptTags(page: string): string {
     return page.replace(SCRIPT_OPEN_TAG, (tag: string, attributes: string) => {
         const src = srcAttribute(attributes);
 
-        return src !== undefined && isHostedClientUrl(src) ? replacement : tag;
+        return src !== undefined && isHostedClientUrl(src) ? CLIENT_SCRIPT_TAG : tag;
     });
 }
 
 /**
- * Serves one data app folder on a loopback port the way Deepnote serves a published app, with the extension's
- * Deepnote client in place of the hosted one and a local API under `/__deepnote/v2`.
+ * Serves one data app folder on a loopback port the way Deepnote serves a published app, with the extension's copy of
+ * Deepnote's client in place of the hosted one, the token endpoint the client asks first, and a local API at `/v2`.
  */
 export class AppPreviewSession implements IDisposable {
     private project: AppPreviewProject | undefined;
@@ -236,14 +224,15 @@ export class AppPreviewSession implements IDisposable {
                 onSendError(res)(error);
             });
         });
+        app.post('/__deepnote/api-token', (req, res) => this.sendToken(req, res));
+        app.use('/__deepnote', (_req, res) => notFound(res));
         app.use(
-            '/__deepnote/v2',
+            '/v2',
             createAppPreviewApi({
                 token: this.token,
                 onUnsupported: (operation) => this.options.onUnsupported(operation)
             })
         );
-        app.use('/__deepnote', (_req, res) => notFound(res));
         app.use((req, res) => this.serveFolder(req, res));
 
         return app;
@@ -259,11 +248,32 @@ export class AppPreviewSession implements IDisposable {
 
     private async sendPage(res: Response, requested: Uri, realPath: string): Promise<void> {
         const page = (await fs.readFile(realPath)).toString('latin1');
-        const swapped = swapClientScriptTags(page, this.token, this.project?.id);
 
         res.set({ ...FILE_HEADERS, 'Cache-Control': 'no-store' });
         res.type(extname(requested));
-        res.send(Buffer.from(swapped, 'latin1'));
+        res.send(Buffer.from(swapClientScriptTags(page), 'latin1'));
+    }
+
+    /**
+     * Answers the client as Deepnote answers it for a public app. The client calls the API on `apiOrigin`, which must
+     * be the page's origin as the browser sees it, and a forwarded URL can make that differ from the server's own.
+     */
+    private sendToken(req: Request, res: Response): void {
+        const pageOrigin = req.get('origin');
+        if (!pageOrigin) {
+            res.status(403).type('text/plain').send('Forbidden');
+
+            return;
+        }
+
+        res.set('Cache-Control', 'no-store');
+        res.json({
+            token: this.token,
+            apiOrigin: pageOrigin,
+            expiresAtSeconds: Math.floor(Date.now() / 1000) + TOKEN_LIFETIME_SECONDS,
+            // The bundled client ignores this; the version that adds `dataframe()` will read the project from here.
+            ...(this.project ? { projectId: this.project.id } : {})
+        });
     }
 
     private async serveFolder(req: Request, res: Response): Promise<void> {

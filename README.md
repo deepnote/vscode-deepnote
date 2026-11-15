@@ -119,8 +119,8 @@ Run `Deepnote: Publish App…` from the Command Palette, or right-click a folder
 Run `Deepnote: Preview App` from the Command Palette, or right-click a folder in the file explorer and choose `Preview App`, to see the app before you publish it. The page opens in the editor's built-in browser, or in your system browser when the editor has none. In recent versions of VS Code's integrated browser, previewing the same folder again reloads the page in the tab already showing it.
 
 - The folder is served the way Deepnote serves a published app, from a local address. Edit a file and reload the page to see the change.
-- The page's script tag for Deepnote's client (`https://deepnote.com/static/app-client/v1.js`) is replaced with the extension's own client, so the preview works without network access.
-- The page's calls to Deepnote reach a local stand-in that does not support them yet: `inputs()`, `appData()`, `run()` and `dataframe()` reject with a message saying so, and VS Code shows a warning the first time the app calls each of them.
+- The page's script tag for Deepnote's client (`https://deepnote.com/static/app-client/v1.js`) loads a copy of that client bundled with the extension instead, so the preview works without network access.
+- The page's calls to Deepnote reach a local stand-in that does not support them yet: `inputs()`, `appData()` and `run()` reject with a message saying so, and VS Code shows a warning the first time the app calls each of them.
 - Previewing needs a trusted workspace and the desktop app.
 
 ### Database integrations

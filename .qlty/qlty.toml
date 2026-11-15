@@ -10,6 +10,7 @@ exclude_patterns = [
   "**/coverage/**",
   "**/*.min.js",
   "**/*.min.css",
+  "resources/appPreview/v1.js",
   "**/*.d.ts",
 ]
 

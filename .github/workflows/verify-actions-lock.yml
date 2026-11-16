@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6.1.0
+      - uses: actions/checkout@v7.0.1
       - run: gh extension install github/gh-actions-lock --pin v0.4.1 && gh actions-lock --verify
         env:
           GH_TOKEN: ${{ github.token }}

@@ -13,8 +13,10 @@ project:
           blockGroup: e2e-group
           type: code
           content: |-
+            import os
             import local_helper
             print(local_helper.MARKER)
+            print('DEEPNOTE_PROJECT_ID=' + str(os.environ.get('DEEPNOTE_PROJECT_ID')))
           sortingKey: a0
           metadata: {}
       executionMode: block

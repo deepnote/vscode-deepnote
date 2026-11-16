@@ -1,6 +1,6 @@
 /**
- * Covers the kernel's `sys.path`: the toolkit strips the notebook's folder from it when the server is started with
- * the legacy `DEEPNOTE_PROJECT_ID`.
+ * Covers the kernel's `sys.path` and `DEEPNOTE_PROJECT_ID`: the toolkit strips the notebook's folder from `sys.path`
+ * when the server is started with that variable, so the kernel gets it from the integration env endpoint instead.
  */
 
 import { expect } from 'chai';
@@ -21,7 +21,11 @@ import {
 
 const NOTEBOOK_FILE_NAME = 'local-module-import.deepnote';
 const EXPECTED_OUTPUT = 'local helper imported';
-// Without the legacy variable, the toolkit's set_notebook_path fails at kernel start and logs this with a traceback.
+// The cell prints this label last, so once it appears the whole output has rendered.
+const PROJECT_ID_LABEL = 'DEEPNOTE_PROJECT_ID=';
+const PROJECT_ID = 'e2e-local-module-import-project';
+// Without the legacy variable in the spawn env, the toolkit's set_notebook_path fails at kernel start and logs this
+// with a traceback.
 const STARTUP_FAILURE = /Failed to set notebook path|Traceback/;
 
 describe('Deepnote E2E — import a module next to the `.deepnote` file', function () {
@@ -65,13 +69,14 @@ describe('Deepnote E2E — import a module next to the `.deepnote` file', functi
         }
     });
 
-    it('imports `local_helper` from the notebook folder, with no startup traceback in the output', async function () {
+    it('imports `local_helper` beside the notebook and sees DEEPNOTE_PROJECT_ID, with no startup traceback', async function () {
         const screenshot = createScreenshotter(this);
 
-        const output = await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, EXPECTED_OUTPUT, FIRST_RUN_OUTPUT_TIMEOUT);
+        const output = await runOnceAndAwaitOutput(NOTEBOOK_FILE_NAME, PROJECT_ID_LABEL, FIRST_RUN_OUTPUT_TIMEOUT);
         await screenshot('cell-output');
 
         expect(output).to.contain(EXPECTED_OUTPUT);
+        expect(output).to.contain(`${PROJECT_ID_LABEL}${PROJECT_ID}`);
         expect(output).to.not.match(STARTUP_FAILURE);
     });
 });

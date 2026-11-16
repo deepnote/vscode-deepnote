@@ -51,3 +51,12 @@ export function copySnapshotIntoDir(tempDir: string, snapshotName: string): stri
 
     return target;
 }
+
+/** Deletes everything in `dir` except the entries named in `keep`, so tests can share one open workspace folder. */
+export function emptyDir(dir: string, keep: string[] = []): void {
+    for (const name of fs.readdirSync(dir)) {
+        if (!keep.includes(name)) {
+            fs.rmSync(path.join(dir, name), { recursive: true, force: true });
+        }
+    }
+}

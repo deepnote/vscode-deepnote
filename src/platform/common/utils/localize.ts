@@ -1314,7 +1314,7 @@ export namespace DeepnoteCloud {
     export const errorWithDetail = (message: string, detail: string) => l10n.t('{0}: {1}', message, detail);
     export const syncing = l10n.t('Syncing with Deepnote Cloud…');
     export const syncFailed = l10n.t('Sync with Deepnote Cloud failed');
-    export const syncInProgress = l10n.t('A sync with Deepnote Cloud is already in progress.');
+    export const cloudOperationInProgress = l10n.t('A sync or app publish with Deepnote Cloud is already in progress.');
     export const chooseSyncFolder = l10n.t('Choose the folder to sync with Deepnote Cloud');
     export const noSyncedFolder = l10n.t('No folder in this workspace is synced with Deepnote Cloud yet.');
     export const syncNewFolder = l10n.t('Sync a New Folder…');
@@ -1359,6 +1359,58 @@ export namespace DeepnoteCloud {
     export const conflictUntrackedLocalDirectory = (project: string, dir: string) =>
         l10n.t('{1} already exists locally and differs from the Deepnote project "{0}".', project, dir);
     export const conflictUntrackedLocalDirectoryOverride = l10n.t('Replace Local Files with Deepnote Version');
+    export const andMore = (count: number) => l10n.t('…and {0} more', count);
+    export const chooseAppFolderTitle = l10n.t('Choose the app folder to publish');
+    export const publish = l10n.t('Publish');
+    export const loadingProjects = l10n.t('Loading Deepnote projects…');
+    export const loadProjectsFailed = l10n.t('Could not load Deepnote projects');
+    export const chooseProject = l10n.t('Choose the data app to publish to');
+    export const currentChoice = l10n.t('Current choice');
+    export const newDataApp = l10n.t('New Data App…');
+    export const newDataAppDescription = l10n.t('Create a data app project and publish to it');
+    export const newDataAppPrompt = l10n.t('Name of the data app project to create');
+    export const newDataAppNameRequired = l10n.t('Enter a name for the data app.');
+    export const publishSavedPrompt = (folder: string, project: string) =>
+        l10n.t('Publish {0} to {1}?', folder, project);
+    export const changeSettings = l10n.t('Change Settings…');
+    export const publishing = (folder: string) => l10n.t('Publishing {0} to Deepnote…', folder);
+    export const publishProgress = (uploaded: number, total: number) =>
+        l10n.t('{0} of {1} files uploaded', uploaded, total);
+    export const publishFailed = l10n.t('Publishing the app failed');
+    export const publishPartiallyFailed = (count: number) =>
+        l10n.t(
+            '{0} operation(s) failed while publishing the app. If it was already published, it now serves the files that uploaded, and the ones that failed may be missing or out of date. See the log for details.',
+            count
+        );
+    export const publishSucceeded = (url: string) => l10n.t('App published: {0}', url);
+    export const open = l10n.t('Open');
+    export const copy = l10n.t('Copy');
+    export const copiedToClipboard = l10n.t('App URL copied');
+    export const publishMirrorIncomplete = (syncRoot: string) =>
+        l10n.t(
+            'The app was published, but the synced copy in {0} could not be fully updated. Sync again to refresh it.',
+            syncRoot
+        );
+    export const publishDiverged = (count: number, paths: string) =>
+        l10n.t('{0} app file(s) changed in Deepnote since the last sync: {1}', count, paths);
+    export const publishDivergedDetail = l10n.t(
+        "Sync First syncs the whole synced folder, including the working files of every project, so you can merge Deepnote's versions into your app. It replaces the local copy of every working file that changed in Deepnote. Force overwrites the changed app files in Deepnote."
+    );
+    export const publishDivergedInFilesDetail = l10n.t(
+        "Sync First is not offered because this folder is in, or contains, a project's .files folder, where syncing would replace your files with Deepnote's versions. To merge Deepnote's changes, publish the app from a folder outside .files. Force overwrites the changed app files in Deepnote."
+    );
+    export const syncFirst = l10n.t('Sync First');
+    export const force = l10n.t('Force');
+    export const publishSyncedChanges = (folder: string) =>
+        l10n.t(
+            "Deepnote's versions of the changed app files are now in {0}. Merge them into your app, then publish again.",
+            folder
+        );
+    export const publishSyncMissedAppFiles = (project: string) =>
+        l10n.t(
+            "The sync did not download Deepnote's changed app files for {0}, and nothing was published. Fix any errors or skipped conflicts the sync reported, then publish again and choose Sync First.",
+            project
+        );
 }
 
 export namespace SelectInputSettings {

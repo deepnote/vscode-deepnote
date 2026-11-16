@@ -1,3 +1,5 @@
+import { getWorkspace } from '@deepnote/cloud';
+import { HttpError, startMockDeepnoteCloud } from '@deepnote/cloud-mock';
 import { ApiError } from '@deepnote/cloud-sync';
 import { assert } from 'chai';
 import { anything, verify, when } from 'ts-mockito';
@@ -16,6 +18,26 @@ suite('cloudErrors', () => {
     suite('isRejectedTokenError', () => {
         test('is true for an ApiError with status 401', () => {
             assert.isTrue(isRejectedTokenError(new ApiError(401, 'Unauthorized')));
+        });
+
+        // `@deepnote/cloud` throws the `ApiError` that `@deepnote/cloud-sync` exports only while both resolve the same
+        // copy of `@deepnote/database-integrations`.
+        test('is true for a 401 from the @deepnote/cloud HTTP client', async () => {
+            const cloud = await startMockDeepnoteCloud({
+                onRequest: () => {
+                    throw new HttpError(401, 'Invalid token');
+                }
+            });
+            try {
+                const error = await getWorkspace(cloud.url, 'revoked-token').then(
+                    () => undefined,
+                    (e: unknown) => e
+                );
+
+                assert.isTrue(isRejectedTokenError(error));
+            } finally {
+                await cloud.stop();
+            }
         });
 
         test('is false for an ApiError with another status, including 403', () => {

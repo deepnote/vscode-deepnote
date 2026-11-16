@@ -33,7 +33,7 @@ import { logger } from '../../../platform/logging';
 import { dirname, extUriBiasedIgnorePathCase, isEqual } from '../../../platform/vscode-path/resources';
 import { getApiEndpoint } from '../importClient.node';
 import { showCloudError } from './cloudErrors.node';
-import { IDeepnoteApiTokenService } from './types';
+import { IDeepnoteApiTokenService, IDeepnoteCloudOperationLock, SyncWithDeepnoteCloudTarget } from './types';
 
 interface RootPickItem extends QuickPickItem {
     root: Uri;
@@ -63,6 +63,19 @@ function unsavedDeepnoteDocuments(): (NotebookDocument | TextDocument)[] {
             (document) => document.isDirty && document.uri.scheme === 'file' && document.uri.path.endsWith('.deepnote')
         )
     ];
+}
+
+function asSyncTarget(arg: unknown): SyncWithDeepnoteCloudTarget | undefined {
+    if (
+        arg != null &&
+        arg instanceof Object &&
+        'root' in arg &&
+        arg.root instanceof Uri &&
+        'allFiles' in arg &&
+        typeof arg.allFiles === 'boolean'
+    ) {
+        return { root: arg.root, allFiles: arg.allFiles };
+    }
 }
 
 function logSyncEvent(event: SyncEvent): void {
@@ -100,10 +113,9 @@ async function askOverride(question: string, overrideLabel: string): Promise<Syn
 
 @injectable()
 export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActivationService {
-    private syncInProgress = false;
-
     constructor(
         @inject(IDeepnoteApiTokenService) private readonly apiTokenService: IDeepnoteApiTokenService,
+        @inject(IDeepnoteCloudOperationLock) private readonly operationLock: IDeepnoteCloudOperationLock,
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext
     ) {}
 
@@ -135,11 +147,14 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
                     DeepnoteCloud.conflictUntrackedLocalDirectory(conflict.projectName, conflict.projectDir),
                     DeepnoteCloud.conflictUntrackedLocalDirectoryOverride
                 );
-            // Only `deleteMissingNotebooks` and `allFiles` produce these, and this command sets neither.
+            // Sync raises this only with `deleteMissingNotebooks`, which is never set.
             case 'empty-local-directory':
-            case 'working-files-changed':
                 logger.warn(`Skipped an unexpected ${conflict.kind} conflict for "${conflict.projectName}"`);
 
+                return Promise.resolve('skip');
+            // Sync raises this only with `allFiles`, where `override` would upload local files over Deepnote's. On a
+            // skip, sync warns which files it kept.
+            case 'working-files-changed':
                 return Promise.resolve('skip');
             default:
                 conflict satisfies never;
@@ -201,7 +216,7 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
             .sort((a, b) => workspaceRelativeUri(a).localeCompare(workspaceRelativeUri(b)));
 
         if (roots.length === 0) {
-            // Not awaited, so the in-progress flag is clear by the time the offer's button runs the other command.
+            // Not awaited, so the lock is released by the time the offer's button runs the other command.
             void offerToSyncNewFolder();
 
             return undefined;
@@ -252,19 +267,10 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         return inner && dirname(inner);
     }
 
-    private async runOneSyncAtATime(sync: () => Promise<void>): Promise<void> {
-        if (this.syncInProgress) {
-            void window.showInformationMessage(DeepnoteCloud.syncInProgress);
-
-            return;
-        }
-
-        this.syncInProgress = true;
-        try {
-            await sync();
-        } finally {
-            this.syncInProgress = false;
-        }
+    private async runOneSyncAtATime<T>(sync: () => Promise<T | undefined>): Promise<T | undefined> {
+        return this.operationLock.tryRunExclusive(sync, () => {
+            void window.showInformationMessage(DeepnoteCloud.cloudOperationInProgress);
+        });
     }
 
     private async saveUnsavedNotebooks(): Promise<boolean> {
@@ -324,7 +330,7 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
         }
     }
 
-    private async syncFolder(root: Uri): Promise<void> {
+    private async syncFolder(root: Uri, allFiles: boolean): Promise<WorkspaceSyncResult | undefined> {
         const target = await this.checkSyncTarget(root).catch(reportSyncFailure);
         if (!target) {
             return;
@@ -351,6 +357,7 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
                         rootDir: getFilePath(root),
                         baseUrl: getApiEndpoint(root),
                         token,
+                        allFiles,
                         onConflict: (conflict) => this.askConflict(conflict),
                         onEvent: logSyncEvent
                     })
@@ -361,25 +368,28 @@ export class SyncWithDeepnoteCloudCommandHandler implements IExtensionSyncActiva
             return;
         }
 
-        // Not awaited, so a summary left on screen does not hold the in-progress flag.
+        // Not awaited, so a summary left on screen does not hold the lock.
         void this.showSummary(result);
+
+        return result;
     }
 
     private async syncNewFolderWithDeepnoteCloud(): Promise<void> {
         await this.runOneSyncAtATime(async () => {
             const root = await this.chooseNewRoot().catch(reportSyncFailure);
             if (root != null) {
-                await this.syncFolder(root);
+                await this.syncFolder(root, false);
             }
         });
     }
 
-    private async syncWithDeepnoteCloud(): Promise<void> {
-        await this.runOneSyncAtATime(async () => {
-            const root = await this.chooseSyncedRoot().catch(reportSyncFailure);
-            if (root != null) {
-                await this.syncFolder(root);
-            }
+    private async syncWithDeepnoteCloud(arg?: unknown): Promise<WorkspaceSyncResult | undefined> {
+        const target = asSyncTarget(arg);
+
+        return this.runOneSyncAtATime(async () => {
+            const root = target?.root ?? (await this.chooseSyncedRoot().catch(reportSyncFailure));
+
+            return root != null ? this.syncFolder(root, target?.allFiles === true) : undefined;
         });
     }
 }

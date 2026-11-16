@@ -3,22 +3,25 @@ import { expect } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { By, EditorView, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
+import { EditorView, InputBox, VSBrowser, Workbench } from 'vscode-extension-tester';
 
 import {
+    API_TOKEN,
     QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
     clickDialogOkButton,
+    closeModalDialogs,
     confirmModalDialog,
     copyFixtureIntoDir,
     dismissAllNotifications,
+    emptyDir,
     openFolderViaDialog,
     openWorkspaceFile,
+    setApiToken,
     waitForNotification
 } from '../../helpers';
 
-const API_TOKEN = 'e2e_mock_token';
 const SYNC = 'Deepnote: Sync with Deepnote Cloud';
 const SYNC_NEW_FOLDER = 'Deepnote: Sync a New Folder with Deepnote Cloud…';
 
@@ -60,26 +63,6 @@ async function sync(command: string, answerPrompts: () => Promise<void>): Promis
     return message;
 }
 
-async function setApiToken(): Promise<string> {
-    await dismissAllNotifications();
-    await new Workbench().executeCommand('Deepnote: Set API Token');
-    const input = await InputBox.create(QUICK_PICK_TIMEOUT);
-    await input.setText(API_TOKEN);
-    await input.confirm();
-
-    const outcome = await waitForNotification(
-        /^(Signed in to the Deepnote workspace|Deepnote API token saved|Deepnote rejected|Could not check|Could not save)/,
-        WORKBENCH_TIMEOUT,
-        true
-    );
-    const message = (await outcome?.getMessage()) ?? '';
-    if (/^(Deepnote rejected|Could not)/.test(message)) {
-        throw new Error(message);
-    }
-
-    return message;
-}
-
 async function clearApiToken(): Promise<void> {
     await dismissAllNotifications();
     await new Workbench().executeCommand('Deepnote: Clear API Token');
@@ -106,16 +89,8 @@ async function closeLeftoverPrompts(): Promise<void> {
     const driver = VSBrowser.instance.driver;
     await driver
         .wait(async () => {
-            // A key press goes to whatever has focus, which need not be the dialog, so click its close button.
             // Sync asks about one conflict at a time, so closing one dialog can open the next.
-            for (const close of await driver.findElements(By.css('.monaco-dialog-box .codicon-dialog-close'))) {
-                await driver
-                    .actions()
-                    .move({ origin: close })
-                    .click()
-                    .perform()
-                    .catch(() => undefined);
-            }
+            await closeModalDialogs();
             await new InputBox().cancel().catch(() => undefined);
 
             return hasSyncEnded();
@@ -185,14 +160,6 @@ function readNotebookFiles(dir: string): Record<string, string> {
             .sort()
             .map((name) => [name, fs.readFileSync(path.join(dir, name), 'utf8')])
     );
-}
-
-function emptyDir(dir: string, keep: string[] = []): void {
-    for (const name of fs.readdirSync(dir)) {
-        if (!keep.includes(name)) {
-            fs.rmSync(path.join(dir, name), { recursive: true, force: true });
-        }
-    }
 }
 
 describe('Deepnote Cloud — syncing folders with the mock Deepnote Cloud', function () {

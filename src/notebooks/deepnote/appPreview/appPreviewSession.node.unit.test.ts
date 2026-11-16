@@ -417,6 +417,25 @@ suite('AppPreviewSession', () => {
             );
         });
 
+        test('keeps an unquoted attribute value whole when it holds quotes or equals signs', async () => {
+            const page = [
+                `<script src="${HOSTED}" onload=start("src")></script>`,
+                `<script onload=start('src') src="${HOSTED}"></script>`,
+                `<script src=${HOSTED}?v=3></script>`
+            ].join('\n');
+            write('page.html', page);
+            const session = await startSession();
+
+            assert.strictEqual(
+                await getText(session, '/page.html'),
+                [
+                    `<script src="/__deepnote/client.js" onload=start("src")></script>`,
+                    `<script onload=start('src') src="/__deepnote/client.js"></script>`,
+                    `${SWAPPED}</script>`
+                ].join('\n')
+            );
+        });
+
         test('leaves a custom element whose name starts with script alone', async () => {
             const page = `<script-loader src="${HOSTED}"></script-loader>`;
             write('page.html', page);

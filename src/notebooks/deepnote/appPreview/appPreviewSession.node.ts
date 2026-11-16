@@ -39,7 +39,8 @@ const TOKEN_LIFETIME_SECONDS = 60 * 60;
 // As in HTML, a quote opens a value only right after `=`; the lookahead and backreference consume a quoted value
 // atomically, so a `>` inside it does not end the tag and nothing backtracks into it.
 const SCRIPT_OPEN_TAG = /<script(?=[\s/>])((?:[^>="']|["']|=(?=(\s*(?:"[^"]*"|'[^']*')?))\2)*)>/gi;
-const TAG_ATTRIBUTE = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+// Browsers end an unquoted value only at whitespace or `>`, keeping any quote or `=` inside it.
+const TAG_ATTRIBUTE = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
 const HTML_PAGE = /\.html?$/i;
 
 function notFound(res: Response): void {

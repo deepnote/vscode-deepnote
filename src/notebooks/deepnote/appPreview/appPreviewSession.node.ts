@@ -33,7 +33,7 @@ const FILE_HEADERS = {
 };
 
 const HOSTED_CLIENT_PATH = '/static/app-client/v1.js';
-const CLIENT_SCRIPT_TAG = '<script src="/__deepnote/client.js">';
+const CLIENT_SRC_ATTRIBUTE = 'src="/__deepnote/client.js"';
 // The token is valid for the whole session; when this runs out, the client asks again and gets the same token.
 const TOKEN_LIFETIME_SECONDS = 60 * 60;
 // As in HTML, a quote opens a value only right after `=`; the lookahead and backreference consume a quoted value
@@ -88,6 +88,18 @@ function isHostedClientUrl(src: string): boolean {
     return src.trim().split(/[?#]/, 1)[0].endsWith(HOSTED_CLIENT_PATH);
 }
 
+/** `integrity` is a hash of the hosted file, which the bundled copy need not match. */
+function clientAttribute(attribute: string, name: string): string {
+    switch (name.toLowerCase()) {
+        case 'src':
+            return CLIENT_SRC_ATTRIBUTE;
+        case 'integrity':
+            return '';
+        default:
+            return attribute;
+    }
+}
+
 /**
  * `page` is the page's bytes decoded as latin1, so everything outside the swapped tags keeps its bytes whatever the
  * encoding.
@@ -96,7 +108,9 @@ function swapClientScriptTags(page: string): string {
     return page.replace(SCRIPT_OPEN_TAG, (tag: string, attributes: string) => {
         const src = srcAttribute(attributes);
 
-        return src !== undefined && isHostedClientUrl(src) ? CLIENT_SCRIPT_TAG : tag;
+        return src !== undefined && isHostedClientUrl(src)
+            ? `<script${attributes.replace(TAG_ATTRIBUTE, clientAttribute)}>`
+            : tag;
     });
 }
 

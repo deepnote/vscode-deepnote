@@ -371,12 +371,12 @@ suite('AppPreviewSession', () => {
     });
 
     suite('client script swap', () => {
-        test('swaps every tag that loads the hosted client, whatever its host, query, quotes or attributes', async () => {
+        test('points every tag that loads the hosted client at the bundled copy, keeping every attribute except integrity', async () => {
             const page = [
                 '<!doctype html><html><head>',
                 `<script src="${HOSTED}"></script>`,
                 `<script src='https://deepnote.example.org/static/app-client/v1.js?v=3#top'></script>`,
-                `<SCRIPT async SRC=${HOSTED} integrity="sha384-abc" crossorigin=anonymous></SCRIPT>`,
+                `<SCRIPT async SRC=${HOSTED} integrity="sha384-abc" crossorigin=anonymous onload="start()"></SCRIPT>`,
                 '<script src="https://cdn.example.com/lib.js"></script>',
                 '<script src="https://deepnote.com/static/app-client/v2.js"></script>',
                 `<script data-src="${HOSTED}" src="main.js" onload="if (a > b) run()"></script>`,
@@ -395,7 +395,7 @@ suite('AppPreviewSession', () => {
                     '<!doctype html><html><head>',
                     `${SWAPPED}</script>`,
                     `${SWAPPED}</script>`,
-                    `${SWAPPED}</SCRIPT>`,
+                    '<script async src="/__deepnote/client.js"  crossorigin=anonymous onload="start()"></SCRIPT>',
                     '<script src="https://cdn.example.com/lib.js"></script>',
                     '<script src="https://deepnote.com/static/app-client/v2.js"></script>',
                     `<script data-src="${HOSTED}" src="main.js" onload="if (a > b) run()"></script>`,
@@ -407,11 +407,14 @@ suite('AppPreviewSession', () => {
         });
 
         test('swaps only the opening tag when a quote sits inside an unquoted attribute value', async () => {
-            const rest = '</script>\n<p>Don\'t panic</p>\n<script src="app.js"></script>';
+            const rest = '</script>\n<script src="app.js"></script>\n<p>Don\'t panic</p>';
             write('page.html', `<script data-note=it's src="${HOSTED}">${rest}`);
             const session = await startSession();
 
-            assert.strictEqual(await getText(session, '/page.html'), `${SWAPPED}${rest}`);
+            assert.strictEqual(
+                await getText(session, '/page.html'),
+                `<script data-note=it's src="/__deepnote/client.js">${rest}`
+            );
         });
 
         test('leaves a custom element whose name starts with script alone', async () => {

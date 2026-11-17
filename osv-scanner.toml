@@ -12,6 +12,11 @@ ignoreUntil = 2026-12-06
 reason = "CVE-2025-14505 (elliptic): dev-only, via node-stdlib-browser; no patched release. See .nsprc."
 
 [[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+ignoreUntil = 2026-12-06
+reason = "CVE-2026-112366 (picomatch): crafted-pattern ReDoS; no patched release; no copy ships, the rest get repo patterns only. See .nsprc."
+
+[[IgnoredVulns]]
 id = "GHSA-g3hv-75wg-m249"
 ignoreUntil = 2026-12-06
 reason = "CVE-2026-118764 (minimatch): crafted-pattern DoS; shipped copies lack the code, dev copies get repo patterns only; fix only in 11.x. See .nsprc."

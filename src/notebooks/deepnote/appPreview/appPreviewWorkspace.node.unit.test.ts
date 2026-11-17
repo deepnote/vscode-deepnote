@@ -151,19 +151,19 @@ suite('findNotebookById', () => {
     async function find(
         notebookId: string,
         projectFolder?: string
-    ): Promise<{ file: string; projectId: string; name: string } | undefined> {
+    ): Promise<{ file: string; projectId: string; name: string } | null> {
         const found = await findNotebookById(
             notebookId,
-            projectFolder === undefined ? undefined : Uri.file(path.join(tmp, projectFolder))
+            projectFolder == null ? undefined : Uri.file(path.join(tmp, projectFolder))
         );
 
-        return (
-            found && {
-                file: path.relative(tmp, found.fileUri.fsPath),
-                projectId: found.file.project.id,
-                name: found.notebook.name
-            }
-        );
+        return found != null
+            ? {
+                  file: path.relative(tmp, found.fileUri.fsPath),
+                  projectId: found.file.project.id,
+                  name: found.notebook.name
+              }
+            : null;
     }
 
     setup(() => {
@@ -231,7 +231,7 @@ suite('findNotebookById', () => {
         writeProject('main.deepnote', 'p-main', [{ id: 'nb-main', name: 'Main' }]);
         workspaceFiles('main.deepnote');
 
-        assert.isUndefined(await find('nb-missing'));
+        assert.isNull(await find('nb-missing'));
     });
 
     test('skips a snapshot that holds the same notebook ID as its project file', async () => {

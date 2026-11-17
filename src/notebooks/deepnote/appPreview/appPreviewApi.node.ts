@@ -1,3 +1,6 @@
+// TODO: Import from `@deepnote/cloud` once it exports the API's generated types. The mock package is only a
+// devDependency, which is fine for a type-only import because the build erases it.
+import type { operations } from '@deepnote/cloud-mock';
 import { timingSafeEqual } from 'crypto';
 import express, { type NextFunction, type Request, type Response, type Router } from 'express';
 
@@ -18,6 +21,8 @@ const NOT_AVAILABLE_MESSAGE = 'This endpoint is not available to app viewer toke
 const NOTEBOOK_NOT_FOUND_MESSAGE = 'Notebook not found';
 const INTERNAL_ERROR_MESSAGE = 'Internal server error';
 
+type AppViewerNotebook = operations['getNotebook']['responses'][200]['content']['application/json']['notebook'];
+
 function notSupportedMessage(operation: AppPreviewOperation): string {
     return `${operation} is not supported in the local preview yet.`;
 }
@@ -37,7 +42,7 @@ function isAuthorized(authorizationHeader: string | undefined, token: string): b
  * The `notebook` of Deepnote's `GET /v2/notebooks/:notebookId` answer. Notebooks carry no timestamps in a `.deepnote`
  * file, so `createdAt` is the file's, and a local notebook has no Deepnote schedule or runs.
  */
-function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook) {
+function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook): AppViewerNotebook {
     return {
         id: notebook.id,
         projectId: file.project.id,

@@ -34,8 +34,7 @@ export interface NotebookInput {
     value: InputBlock['metadata']['deepnote_variable_value'];
 }
 
-// Code-unit order, as Deepnote orders its fractional sorting keys: `localeCompare` would put `a0` before `Z`.
-function compareCodeUnits(left: string, right: string): number {
+function bySortingKey(left: string, right: string): number {
     if (left === right) {
         return 0;
     }
@@ -103,7 +102,7 @@ function toNotebookInput(block: InputBlock): NotebookInput {
 
 /** The notebook's blocks in the order Deepnote shows them, by `sortingKey`. */
 export function blocksInNotebookOrder(notebook: DeepnoteNotebook): DeepnoteBlock[] {
-    return [...notebook.blocks].sort((a, b) => compareCodeUnits(a.sortingKey, b.sortingKey));
+    return [...notebook.blocks].sort((a, b) => bySortingKey(a.sortingKey, b.sortingKey));
 }
 
 /**
@@ -119,7 +118,7 @@ export async function findNotebookById(
     const outsideProject = (uri: Uri) => (projectFolder !== undefined && isEqual(dirname(uri), projectFolder) ? 0 : 1);
     const candidates = (await workspace.findFiles('**/*.deepnote'))
         .filter((uri) => !isSnapshotFile(uri))
-        .sort((a, b) => outsideProject(a) - outsideProject(b) || compareCodeUnits(a.toString(), b.toString()));
+        .sort((a, b) => outsideProject(a) - outsideProject(b) || a.toString().localeCompare(b.toString()));
 
     for (const fileUri of candidates) {
         let file: DeepnoteFile;

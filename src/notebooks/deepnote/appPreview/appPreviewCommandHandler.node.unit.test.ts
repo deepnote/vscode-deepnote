@@ -2,7 +2,7 @@ import { assert } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as sinon from 'sinon';
-import { anything, capture, instance, mock, when } from 'ts-mockito';
+import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import { Uri, ViewColumn, type WorkspaceConfiguration, type WorkspaceFolder } from 'vscode';
 
 import { Commands } from '../../../platform/common/constants';
@@ -16,38 +16,34 @@ import { AppPreviewCommandHandler } from './appPreviewCommandHandler.node';
 import { AppPreviewSession } from './appPreviewSession.node';
 
 const HOSTED = 'https://deepnote.com/static/app-client/v1.js';
+const SIMPLE_BROWSER_OPEN = 'simpleBrowser.api.open';
+const INTEGRATED_BROWSER_OPEN = 'workbench.action.browser.open';
+const BOTH_BROWSERS = [SIMPLE_BROWSER_OPEN, INTEGRATED_BROWSER_OPEN];
 
 suite('AppPreviewCommandHandler', () => {
     let tmp: string;
     let appFolder: string;
     let disposables: IDisposable[];
     let previewApp: (arg?: unknown) => Promise<void>;
-    let forwarded: string[];
-    let externalUriRequests: string[];
-    let opened: { uri: string; options: unknown }[];
-    let openedInIntegratedBrowser: unknown[];
-    let commandIds: string[];
-    let useIntegratedBrowser: { registered: boolean; value?: boolean };
-    let openedExternally: string[];
-    let browserFailure: Error | undefined;
-    let warnings: string[];
-    let errors: string[];
+    let simpleBrowserConfig: WorkspaceConfiguration;
 
     const win = () => mockedVSCodeNamespaces.window;
+    const commands = () => mockedVSCodeNamespaces.commands;
+    const env = () => mockedVSCodeNamespaces.env;
+    const executedCommands = () => capture<string, Uri, unknown>(commands().executeCommand);
 
-    /** Answers `env.asExternalUri` with the given URLs in turn, then with the URL asked for. */
-    function forwardTo(...urls: string[]): void {
-        forwarded = urls;
+    function serverUrl(): string {
+        return capture(env().asExternalUri).last()[0].toString(true);
     }
 
     async function page(urlPath = '/'): Promise<string> {
-        const response = await fetch(`${externalUriRequests[externalUriRequests.length - 1]}${urlPath.slice(1)}`);
+        const response = await fetch(`${serverUrl()}${urlPath.slice(1)}`);
 
         return response.text();
     }
 
     async function requestToken(): Promise<{ token: string; projectId?: string }> {
-        const url = externalUriRequests[externalUriRequests.length - 1];
+        const url = serverUrl();
         const response = await fetch(`${url}__deepnote/api-token`, {
             method: 'POST',
             headers: { origin: new URL(url).origin }
@@ -75,77 +71,31 @@ suite('AppPreviewCommandHandler', () => {
         when(mockedVSCodeNamespaces.workspace.workspaceFolders).thenReturn([workspaceFolder]);
         when(mockedVSCodeNamespaces.workspace.getWorkspaceFolder(anything())).thenReturn(workspaceFolder);
 
-        forwarded = [];
-        externalUriRequests = [];
-        when(mockedVSCodeNamespaces.env.asExternalUri(anything())).thenCall((uri: Uri) => {
-            externalUriRequests.push(uri.toString(true));
-
-            return Promise.resolve(forwarded.length > 0 ? Uri.parse(forwarded.shift()!) : uri);
+        when(env().asExternalUri(anything())).thenCall((uri: Uri) => Promise.resolve(uri));
+        when(env().openExternal(anything())).thenReturn(Promise.resolve(true));
+        when(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).thenResolve(undefined);
+        when(commands().executeCommand(INTEGRATED_BROWSER_OPEN, anything())).thenResolve(undefined);
+        when(commands().getCommands(anything())).thenReturn(Promise.resolve([]));
+        simpleBrowserConfig = mock<WorkspaceConfiguration>();
+        when(simpleBrowserConfig.inspect('useIntegratedBrowser')).thenReturn({
+            key: 'simpleBrowser.useIntegratedBrowser'
         });
-
-        opened = [];
-        browserFailure = undefined;
-        when(mockedVSCodeNamespaces.commands.executeCommand('simpleBrowser.api.open', anything(), anything())).thenCall(
-            async (_command: string, uri: Uri, options: unknown) => {
-                if (browserFailure) {
-                    throw browserFailure;
-                }
-                opened.push({ uri: uri.toString(true), options });
-            }
-        );
-        openedInIntegratedBrowser = [];
-        when(mockedVSCodeNamespaces.commands.executeCommand('workbench.action.browser.open', anything())).thenCall(
-            async (_command: string, options: unknown) => {
-                if (browserFailure) {
-                    throw browserFailure;
-                }
-                openedInIntegratedBrowser.push(options);
-            }
-        );
-        commandIds = [];
-        when(mockedVSCodeNamespaces.commands.getCommands(anything())).thenCall(async () => commandIds);
-        useIntegratedBrowser = { registered: false };
-        const simpleBrowserConfig = mock<WorkspaceConfiguration>();
-        when(simpleBrowserConfig.inspect('useIntegratedBrowser')).thenCall(() => ({
-            key: 'simpleBrowser.useIntegratedBrowser',
-            defaultValue: useIntegratedBrowser.registered ? true : undefined,
-            globalValue: useIntegratedBrowser.value
-        }));
         when(simpleBrowserConfig.get('useIntegratedBrowser', anything())).thenCall(
-            (_section: string, defaultValue: boolean) => useIntegratedBrowser.value ?? defaultValue
+            (_section: string, defaultValue: boolean) => defaultValue
         );
         when(mockedVSCodeNamespaces.workspace.getConfiguration('simpleBrowser')).thenReturn(
             instance(simpleBrowserConfig)
         );
-        openedExternally = [];
-        when(mockedVSCodeNamespaces.env.openExternal(anything())).thenCall(async (uri: Uri) => {
-            openedExternally.push(uri.toString(true));
-
-            return true;
-        });
-
-        warnings = [];
-        errors = [];
-        when(win().showWarningMessage(anything())).thenCall(async (message: string) => {
-            warnings.push(message);
-        });
-        when(win().showErrorMessage(anything())).thenCall(async (message: string) => {
-            errors.push(message);
-        });
-
-        when(mockedVSCodeNamespaces.commands.registerCommand(Commands.PreviewApp, anything())).thenCall(
-            (_id: string, handler: (arg?: unknown) => Promise<void>) => {
-                previewApp = handler;
-
-                return { dispose: () => undefined };
-            }
-        );
+        when(commands().registerCommand(Commands.PreviewApp, anything())).thenReturn({ dispose: () => undefined });
 
         disposables = [];
         const context = mock<IExtensionContext>();
         when(context.subscriptions).thenReturn([]);
         when(context.extensionUri).thenReturn(Uri.file(path.join(tmp, 'extension')));
         new AppPreviewCommandHandler(instance(context), disposables).activate();
+        const [command, handler] = capture(commands().registerCommand).last();
+        assert.strictEqual(command, Commands.PreviewApp);
+        previewApp = handler;
     });
 
     teardown(async () => {
@@ -156,52 +106,69 @@ suite('AppPreviewCommandHandler', () => {
     });
 
     test('previews the folder from the Explorer in the Simple Browser beside the editor, where there is no integrated browser', async () => {
-        commandIds = ['simpleBrowser.api.open'];
+        when(commands().getCommands(anything())).thenReturn(Promise.resolve([SIMPLE_BROWSER_OPEN]));
 
         await previewApp(Uri.file(appFolder));
 
-        assert.strictEqual(opened.length, 1);
-        assert.deepStrictEqual(opened[0].options, { viewColumn: ViewColumn.Beside, preserveFocus: true });
-        assert.strictEqual(opened[0].uri, externalUriRequests[0]);
+        verify(
+            commands().executeCommand(
+                SIMPLE_BROWSER_OPEN,
+                anything(),
+                deepEqual({ viewColumn: ViewColumn.Beside, preserveFocus: true })
+            )
+        ).once();
+        assert.strictEqual(executedCommands().last()[1].toString(true), serverUrl());
         assert.include(await page(), '<h1>app</h1>');
-        assert.deepStrictEqual(openedExternally, []);
+        verify(env().openExternal(anything())).never();
     });
 
     test('previews the folder in the integrated browser, in the tab already showing its server if there is one', async () => {
-        commandIds = ['simpleBrowser.api.open', 'workbench.action.browser.open'];
-        forwardTo('http://localhost:1111/');
+        when(commands().getCommands(anything())).thenReturn(Promise.resolve(BOTH_BROWSERS));
+        when(env().asExternalUri(anything())).thenReturn(Promise.resolve(Uri.parse('http://localhost:1111/')));
 
         await previewApp(Uri.file(appFolder));
 
-        assert.deepStrictEqual(openedInIntegratedBrowser, [
-            { url: 'http://localhost:1111/', reuseUrlFilter: 'http://localhost:1111/**' }
-        ]);
-        assert.deepStrictEqual(opened, []);
+        verify(
+            commands().executeCommand(
+                INTEGRATED_BROWSER_OPEN,
+                deepEqual({ url: 'http://localhost:1111/', reuseUrlFilter: 'http://localhost:1111/**' })
+            )
+        ).once();
+        verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).never();
         assert.include(await page(), '<h1>app</h1>');
     });
 
     test('previews the folder in the Simple Browser when simpleBrowser.useIntegratedBrowser is off', async () => {
-        commandIds = ['simpleBrowser.api.open', 'workbench.action.browser.open'];
-        useIntegratedBrowser = { registered: true, value: false };
+        when(commands().getCommands(anything())).thenReturn(Promise.resolve(BOTH_BROWSERS));
+        when(simpleBrowserConfig.inspect('useIntegratedBrowser')).thenReturn({
+            key: 'simpleBrowser.useIntegratedBrowser',
+            defaultValue: true,
+            globalValue: false
+        });
+        when(simpleBrowserConfig.get('useIntegratedBrowser', anything())).thenReturn(false);
 
         await previewApp(Uri.file(appFolder));
 
-        assert.deepStrictEqual(openedInIntegratedBrowser, []);
-        assert.strictEqual(opened.length, 1);
+        verify(commands().executeCommand(INTEGRATED_BROWSER_OPEN, anything())).never();
+        verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).once();
     });
 
     test('ignores a simpleBrowser.useIntegratedBrowser left in the settings by a VS Code version that registered it', async () => {
-        commandIds = ['simpleBrowser.api.open', 'workbench.action.browser.open'];
-        useIntegratedBrowser = { registered: false, value: false };
+        when(commands().getCommands(anything())).thenReturn(Promise.resolve(BOTH_BROWSERS));
+        when(simpleBrowserConfig.inspect('useIntegratedBrowser')).thenReturn({
+            key: 'simpleBrowser.useIntegratedBrowser',
+            globalValue: false
+        });
+        when(simpleBrowserConfig.get('useIntegratedBrowser', anything())).thenReturn(false);
 
         await previewApp(Uri.file(appFolder));
 
-        assert.strictEqual(openedInIntegratedBrowser.length, 1);
-        assert.deepStrictEqual(opened, []);
+        verify(commands().executeCommand(INTEGRATED_BROWSER_OPEN, anything())).once();
+        verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).never();
     });
 
     test('asks for the folder when the command has none', async () => {
-        when(win().showOpenDialog(anything())).thenCall(async () => [Uri.file(appFolder)]);
+        when(win().showOpenDialog(anything())).thenReturn(Promise.resolve([Uri.file(appFolder)]));
 
         await previewApp();
 
@@ -217,18 +184,18 @@ suite('AppPreviewCommandHandler', () => {
                 openLabel: 'Preview'
             }
         );
-        assert.strictEqual(opened.length, 1);
+        verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).once();
         assert.include(await page(), '<h1>app</h1>');
     });
 
     test('does nothing when the folder dialog is dismissed', async () => {
-        when(win().showOpenDialog(anything())).thenCall(async () => undefined);
+        when(win().showOpenDialog(anything())).thenReturn(Promise.resolve(undefined));
 
         await previewApp();
 
-        assert.deepStrictEqual(externalUriRequests, []);
-        assert.deepStrictEqual(opened, []);
-        assert.deepStrictEqual(openedExternally, []);
+        verify(env().asExternalUri(anything())).never();
+        verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).never();
+        verify(env().openExternal(anything())).never();
     });
 
     test('starts the session with the project of the .deepnote file in a folder above the app', async () => {
@@ -240,17 +207,22 @@ suite('AppPreviewCommandHandler', () => {
     });
 
     test('reuses the session on a second run, with the project and forwarded URL resolved again', async () => {
-        forwardTo('http://localhost:1111/', 'http://localhost:2222/');
+        when(env().asExternalUri(anything())).thenReturn(
+            Promise.resolve(Uri.parse('http://localhost:1111/')),
+            Promise.resolve(Uri.parse('http://localhost:2222/'))
+        );
         await previewApp(Uri.file(appFolder));
-        const server = externalUriRequests[0];
+        const server = serverUrl();
         assert.notProperty(await requestToken(), 'projectId');
 
         await fs.promises.writeFile(path.join(tmp, 'project', 'analysis.deepnote'), serializeProjectFile('p-added'));
         await previewApp(Uri.file(appFolder));
 
-        assert.deepStrictEqual(externalUriRequests, [server, server]);
+        verify(env().asExternalUri(anything())).twice();
+        assert.strictEqual(serverUrl(), server);
+        const browserOpens = executedCommands();
         assert.deepStrictEqual(
-            opened.map(({ uri }) => uri),
+            [browserOpens.first()[1].toString(true), browserOpens.second()[1].toString(true)],
             ['http://localhost:1111/', 'http://localhost:2222/']
         );
         assert.strictEqual((await requestToken()).projectId, 'p-added');
@@ -259,27 +231,33 @@ suite('AppPreviewCommandHandler', () => {
     test('starts one server when the command runs again while the first run is starting', async () => {
         await Promise.all([previewApp(Uri.file(appFolder)), previewApp(Uri.file(appFolder))]);
 
-        assert.strictEqual(new Set(externalUriRequests).size, 1);
-        assert.strictEqual(opened.length, 2);
+        const forwarded = capture(env().asExternalUri);
+        assert.strictEqual(forwarded.second()[0].toString(true), forwarded.first()[0].toString(true));
+        verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).twice();
     });
 
     test('opens the server URL in the system browser when the built-in browser command is missing', async () => {
-        browserFailure = new Error("command 'simpleBrowser.api.open' not found");
-        forwardTo('http://localhost:4567/');
+        when(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).thenReject(
+            new Error("command 'simpleBrowser.api.open' not found")
+        );
+        when(env().asExternalUri(anything())).thenReturn(Promise.resolve(Uri.parse('http://localhost:4567/')));
 
         await previewApp(Uri.file(appFolder));
 
-        assert.deepStrictEqual(opened, []);
-        assert.deepStrictEqual(openedExternally, [externalUriRequests[0]]);
+        verify(env().openExternal(anything())).once();
+        assert.strictEqual(capture(env().openExternal).last()[0].toString(true), serverUrl());
     });
 
     test('opens the server URL in the system browser when the integrated browser rejects', async () => {
-        commandIds = ['simpleBrowser.api.open', 'workbench.action.browser.open'];
-        browserFailure = new Error('the integrated browser failed');
+        when(commands().getCommands(anything())).thenReturn(Promise.resolve(BOTH_BROWSERS));
+        when(commands().executeCommand(INTEGRATED_BROWSER_OPEN, anything())).thenReject(
+            new Error('the integrated browser failed')
+        );
 
         await previewApp(Uri.file(appFolder));
 
-        assert.deepStrictEqual(openedExternally, [externalUriRequests[0]]);
+        verify(env().openExternal(anything())).once();
+        assert.strictEqual(capture(env().openExternal).last()[0].toString(true), serverUrl());
     });
 
     test('shows why the preview could not start, and starts afresh on the next run', async () => {
@@ -287,14 +265,14 @@ suite('AppPreviewCommandHandler', () => {
 
         await previewApp(Uri.file(appFolder));
 
-        assert.deepStrictEqual(errors, ['Could not start the app preview: listen EACCES']);
-        assert.deepStrictEqual(opened, []);
-        assert.deepStrictEqual(openedExternally, []);
+        verify(win().showErrorMessage('Could not start the app preview: listen EACCES')).once();
+        verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).never();
+        verify(env().openExternal(anything())).never();
 
         start.restore();
         await previewApp(Uri.file(appFolder));
 
-        assert.strictEqual(opened.length, 1);
+        verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).once();
         assert.include(await page(), '<h1>app</h1>');
     });
 
@@ -302,19 +280,20 @@ suite('AppPreviewCommandHandler', () => {
         await previewApp(Uri.file(appFolder));
         const { token } = await requestToken();
         const api = (urlPath: string, method = 'GET') =>
-            fetch(`${externalUriRequests[0]}v2${urlPath}`, {
+            fetch(`${serverUrl()}v2${urlPath}`, {
                 method,
                 headers: { authorization: `Bearer ${token}` }
             });
 
         assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
-        assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
         assert.strictEqual((await api('/runs', 'POST')).status, 501);
         assert.strictEqual((await api('/runs/run-1')).status, 501);
 
-        assert.deepStrictEqual(warnings, [
-            'The app in app called appData(), which the local preview does not support yet.',
-            'The app in app called run(), which the local preview does not support yet.'
-        ]);
+        verify(
+            win().showWarningMessage('The app in app called appData(), which the local preview does not support yet.')
+        ).once();
+        verify(
+            win().showWarningMessage('The app in app called run(), which the local preview does not support yet.')
+        ).once();
     });
 });

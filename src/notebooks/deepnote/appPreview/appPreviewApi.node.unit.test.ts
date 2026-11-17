@@ -53,36 +53,22 @@ const SALES_FILE = createDeepnoteFile({
 suite('createAppPreviewApi', () => {
     let server: http.Server;
     let baseUrl: string;
-    let unsupported: AppPreviewOperation[];
-    let lookups: string[];
-    let lookupFailure: Error | undefined;
+    let findNotebook: sinon.SinonStub<[string], Promise<WorkspaceNotebook | undefined>>;
+    let onUnsupported: sinon.SinonStub<[AppPreviewOperation], void>;
 
     setup(async () => {
-        unsupported = [];
-        lookups = [];
-        lookupFailure = undefined;
         const notebooks = new Map<string, WorkspaceNotebook>(
             SALES_FILE.project.notebooks.map((notebook) => [
                 notebook.id,
                 { file: SALES_FILE, fileUri: Uri.file('/workspace/sales.deepnote'), notebook }
             ])
         );
+        findNotebook = sinon
+            .stub<[string], Promise<WorkspaceNotebook | undefined>>()
+            .callsFake(async (notebookId) => notebooks.get(notebookId));
+        onUnsupported = sinon.stub<[AppPreviewOperation], void>();
         const app = express();
-        app.use(
-            '/v2',
-            createAppPreviewApi({
-                token: TOKEN,
-                findNotebook: async (notebookId) => {
-                    lookups.push(notebookId);
-                    if (lookupFailure) {
-                        throw lookupFailure;
-                    }
-
-                    return notebooks.get(notebookId);
-                },
-                onUnsupported: (operation) => unsupported.push(operation)
-            })
-        );
+        app.use('/v2', createAppPreviewApi({ token: TOKEN, findNotebook, onUnsupported }));
         server = http.createServer(app);
         await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
         baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v2`;
@@ -122,7 +108,7 @@ suite('createAppPreviewApi', () => {
                 ]
             }
         });
-        assert.deepStrictEqual(unsupported, []);
+        sinon.assert.notCalled(onUnsupported);
     });
 
     test('GET /notebooks/:notebookId leaves inputs out for a notebook without any, and marks the init notebook', async () => {
@@ -143,12 +129,13 @@ suite('createAppPreviewApi', () => {
 
     test('GET /notebooks/:notebookId answers 404 for an ID no workspace notebook has', async () => {
         await assertJson(await call('GET', '/notebooks/nb-missing'), 404, { message: 'Notebook not found' });
-        assert.deepStrictEqual(unsupported, []);
+        sinon.assert.notCalled(onUnsupported);
     });
 
     test('answers a JSON 500 without the stack, and logs the error, when the notebook lookup fails', async () => {
         const logError = sinon.stub(logger, 'error');
-        lookupFailure = new Error('findFiles failed in /home/user/project');
+        const lookupFailure = new Error('findFiles failed in /home/user/project');
+        findNotebook.rejects(lookupFailure);
 
         await assertJson(await call('GET', '/notebooks/nb-1'), 500, { message: 'Internal server error' });
         assert.deepStrictEqual(
@@ -168,7 +155,7 @@ suite('createAppPreviewApi', () => {
             await assertJson(await call(method, path), 501, {
                 message: `${operation} is not supported in the local preview yet.`
             });
-            assert.deepStrictEqual(unsupported, [operation]);
+            sinon.assert.calledOnceWithExactly(onUnsupported, operation);
         });
     }
 
@@ -182,8 +169,8 @@ suite('createAppPreviewApi', () => {
         test(`answers 401 to ${condition}, without reaching a handler`, async () => {
             await assertJson(await call('GET', '/notebooks/nb-1', authorization), 401, { message: 'Unauthorized' });
             await assertJson(await call('POST', '/runs', authorization), 401, { message: 'Unauthorized' });
-            assert.deepStrictEqual(lookups, []);
-            assert.deepStrictEqual(unsupported, []);
+            sinon.assert.notCalled(findNotebook);
+            sinon.assert.notCalled(onUnsupported);
         });
     }
 
@@ -192,6 +179,6 @@ suite('createAppPreviewApi', () => {
         await assertJson(await call('GET', '/projects/p-1'), 403, notAvailable);
         await assertJson(await call('DELETE', '/runs/run-1'), 403, notAvailable);
         await assertJson(await call('POST', '/notebooks/nb-1'), 403, notAvailable);
-        assert.deepStrictEqual(unsupported, []);
+        sinon.assert.notCalled(onUnsupported);
     });
 });

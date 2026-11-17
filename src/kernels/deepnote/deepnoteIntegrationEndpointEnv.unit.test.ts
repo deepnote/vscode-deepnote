@@ -47,7 +47,7 @@ suite('applyIntegrationEndpointEnv', () => {
             DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE: 'true',
             DEEPNOTE_RUNTIME__WEBAPP_URL: baseUrl,
             DEEPNOTE_RUNTIME__PROJECT_SECRET: 'endpoint-token',
-            DEEPNOTE_PROJECT_ID: 'the-project-id'
+            DEEPNOTE_RUNTIME__PROJECT_ID: 'the-project-id'
         });
         // The enabled path must resolve the project id from the file.
         verify(mockFs.readFile(anything())).once();

@@ -1,3 +1,6 @@
 # Ignore the pythonEnvironments/ folder because we use ESLint there instead
 src/platform/pythonEnvironments/*
 src/test/pythonEnvironments/*
+
+# A byte-identical copy of https://deepnote.com/static/app-client/v1.js
+resources/appPreview/v1.js

@@ -278,6 +278,7 @@ export namespace Commands {
     export const SyncWithDeepnoteCloud = 'deepnote.syncWithDeepnoteCloud';
     export const SyncNewFolderWithDeepnoteCloud = 'deepnote.syncNewFolderWithDeepnoteCloud';
     export const PublishApp = 'deepnote.publishApp';
+    export const PreviewApp = 'deepnote.previewApp';
     export const ExportAsPythonScript = 'deepnote.exportAsPythonScript';
     export const ExportToHTML = 'deepnote.exportToHTML';
     export const ExportToPDF = 'deepnote.exportToPDF';

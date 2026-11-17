@@ -77,7 +77,24 @@ suite('UserpodApiEndpoints', () => {
         const body = await response.json();
         assert.deepStrictEqual(body, [
             { name: 'FOO', value: 'bar' },
-            { name: 'BAZ', value: 'qux' }
+            { name: 'BAZ', value: 'qux' },
+            { name: 'DEEPNOTE_PROJECT_ID', value: 'project-1' }
+        ]);
+    });
+
+    test('serves DEEPNOTE_PROJECT_ID as the requested project, over a provider value of the same name', async () => {
+        when(provider.getEnvironmentVariables(anything())).thenResolve({
+            FOO: 'bar',
+            DEEPNOTE_PROJECT_ID: 'from-provider'
+        });
+
+        const baseUrl = await startWith(createNotebook('project-1', Uri.file('/ws/app.deepnote')));
+
+        const response = await authedFetch(envVarsUrl(baseUrl, 'project-1'), 'project-1');
+
+        assert.deepStrictEqual(await response.json(), [
+            { name: 'FOO', value: 'bar' },
+            { name: 'DEEPNOTE_PROJECT_ID', value: 'project-1' }
         ]);
     });
 
@@ -93,7 +110,10 @@ suite('UserpodApiEndpoints', () => {
         const response = await authedFetch(envVarsUrl(baseUrl, 'project-two'), 'project-two');
         const body = await response.json();
 
-        assert.deepStrictEqual(body, [{ name: 'FROM', value: 'two' }]);
+        assert.deepStrictEqual(body, [
+            { name: 'FROM', value: 'two' },
+            { name: 'DEEPNOTE_PROJECT_ID', value: 'project-two' }
+        ]);
         // The endpoint must resolve env vars for the matching notebook's uri, not the other project's.
         verify(provider.getEnvironmentVariables(anything())).once();
         const [uriArg] = capture(provider.getEnvironmentVariables).last();

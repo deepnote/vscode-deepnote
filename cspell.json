@@ -34,6 +34,7 @@
         "cpython",
         "clickhouse",
         "dataframe",
+        "dataframes",
         "datascience",
         "dateutil",
         "dbname",

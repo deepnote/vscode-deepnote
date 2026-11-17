@@ -68,11 +68,16 @@ Serves the credentials the toolkit fetches.
 - Requires a per-project bearer token, compared in constant time
 - Resolves values through `ISqlIntegrationEnvVarsProvider.getEnvironmentVariables()`, which merges SecretStorage
   with `.deepnote.env.yaml` (the file wins)
+- Adds `DEEPNOTE_PROJECT_ID`, which user code reads as it does in Deepnote Cloud. It can't be set at spawn time
+  until the toolkit is fixed: there it makes `set_notebook_path` drop the notebook's folder from `sys.path`, while the
+  endpoint's response is applied after that step. The value is always the requested project, because once served,
+  the toolkit builds its `userpod-api` URLs from it. Like the `SQL_*` variables, it is unset at the start of each
+  refresh, so a failed refresh leaves the kernel without it until the next successful one
 
 The endpoint URL and token reach the kernel via `applyIntegrationEndpointEnv()`
 (`src/kernels/deepnote/deepnoteIntegrationEndpointEnv.ts`), which sets `DEEPNOTE_RUNTIME__WEBAPP_URL`,
 `DEEPNOTE_RUNTIME__PROJECT_SECRET`, `DEEPNOTE_RUNTIME__ENV_INTEGRATION_ENABLED`,
-`DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE` and `DEEPNOTE_PROJECT_ID` at spawn time.
+`DEEPNOTE_RUNTIME__RUNNING_IN_DETACHED_MODE` and `DEEPNOTE_RUNTIME__PROJECT_ID` at spawn time.
 
 ## Flow
 

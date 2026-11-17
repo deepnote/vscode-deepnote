@@ -153,6 +153,10 @@ export class UserpodApiEndpoints implements IUserpodApiEndpoints, IExtensionSync
                     }
                 }
 
+                // Served here, not at spawn, until the toolkit's set_notebook_path stops breaking sys.path if it's set.
+                // Always the URL's project: once served, the toolkit builds its userpod-api URLs from it.
+                merged.set('DEEPNOTE_PROJECT_ID', projectId);
+
                 const payload = [...merged].map(([name, value]) => ({ name, value }));
 
                 res.json(payload);

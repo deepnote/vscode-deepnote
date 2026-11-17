@@ -124,8 +124,8 @@ export async function findNotebookById(
         let file: DeepnoteFile;
         try {
             const text = new TextDecoder().decode(await workspace.fs.readFile(fileUri));
-            // Notebook IDs need no YAML escaping, so a file that holds the notebook contains its ID as is; skipping the
-            // rest saves their YAML and schema parse on every request.
+            // Deepnote's notebook IDs are UUIDs or hex strings, which YAML writes unescaped, so a file that holds the
+            // notebook contains its ID as is; skipping the rest saves their YAML and schema parse on every request.
             if (!text.includes(notebookId)) {
                 continue;
             }

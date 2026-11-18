@@ -45,11 +45,13 @@ import {
 import { assert } from 'chai';
 import * as fs from 'fs';
 import fsPromises from 'fs/promises';
-import * as os from 'os';
+import { syncBuiltinESMExports } from 'module';
+import os from 'os';
 import * as sinon from 'sinon';
 import { Uri } from 'vscode';
 import zlib from 'zlib';
 
+import { platformUtils } from '../../../platform/common/utils/platform.node';
 import * as path from '../../../platform/vscode-path/path';
 import { EXTENSION_ROOT_DIR_FOR_TESTS } from '../../../test/constants.node';
 import { DataframePageError, readStoredDataframePage } from './storedDataframePage.node';
@@ -117,18 +119,30 @@ async function rejection(promise: Promise<unknown>): Promise<{ status: number; m
 
 suite('readStoredDataframePage', () => {
     let projectFolder: string;
+    let home: string;
+    let getEnvironmentVariable: sinon.SinonStub;
 
     setup(() => {
         projectFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-stored-dataframe-'));
+        home = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-stored-dataframe-home-'));
+        getEnvironmentVariable = sinon.stub(platformUtils, 'getEnvironmentVariable').callThrough();
+        getEnvironmentVariable.withArgs('HOME').returns(home);
     });
 
     teardown(() => {
         sinon.restore();
+        syncBuiltinESMExports();
         fs.rmSync(projectFolder, { recursive: true, force: true });
+        fs.rmSync(home, { recursive: true, force: true });
     });
 
     function frameDirectory(name: string): string {
         return path.join(projectFolder, 'deepnote_dataframes', name);
+    }
+
+    function moveFramesToHome(): void {
+        fs.mkdirSync(path.join(home, 'work'));
+        fs.renameSync(path.join(projectFolder, 'deepnote_dataframes'), path.join(home, 'work', 'deepnote_dataframes'));
     }
 
     function writeManifest(name: string, manifest: unknown): void {
@@ -729,6 +743,46 @@ suite('readStoredDataframePage', () => {
                 });
             });
         }
+
+        test('reads a frame stored under $HOME/work when the project folder has none under its name', async () => {
+            writeFrame('frame', [numbers(1, 2)]);
+            moveFramesToHome();
+
+            const page = await read('frame');
+
+            assert.deepStrictEqual([page.referenceId, page.rows], [REFERENCE_ID, [[1], [2]]]);
+        });
+
+        test('reads a frame stored under the home folder Node reports when HOME is unset, as it usually is on Windows', async () => {
+            getEnvironmentVariable.withArgs('HOME').returns(undefined);
+            sinon.stub(os, 'homedir').returns(home);
+            // The reader's named import of homedir follows os.homedir only once synced, here and after the restore.
+            syncBuiltinESMExports();
+            writeFrame('frame', [numbers(1, 2)]);
+            moveFramesToHome();
+
+            const page = await read('frame');
+
+            assert.deepStrictEqual([page.referenceId, page.rows], [REFERENCE_ID, [[1], [2]]]);
+        });
+
+        test("reads the project folder's frame over one of the same name under $HOME/work", async () => {
+            writeFrame('frame', [numbers(1)], { referenceId: OTHER_REFERENCE_ID });
+            moveFramesToHome();
+            writeFrame('frame', [numbers(2)]);
+
+            const page = await read('frame');
+
+            assert.deepStrictEqual([page.referenceId, page.rows], [REFERENCE_ID, [[2]]]);
+        });
+
+        test('answers 404 for an invalid manifest in the project folder, even when $HOME/work has the frame', async () => {
+            writeFrame('frame', [numbers(1)]);
+            moveFramesToHome();
+            writeManifest('frame', '{"file":');
+
+            assert.deepStrictEqual(await rejection(read('frame')), { status: 404, message: 'Dataframe not found' });
+        });
 
         test('answers 404 for a name that is not a single safe path segment', async () => {
             writeFrame('frame', [numbers(1)]);

@@ -12,6 +12,7 @@ import { Uri } from 'vscode';
 import zlib from 'zlib';
 
 import { createDeferred, type Deferred } from '../../../platform/common/utils/async';
+import { platformUtils } from '../../../platform/common/utils/platform.node';
 import { isUUID } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import * as path from '../../../platform/vscode-path/path';
@@ -723,6 +724,8 @@ suite('createAppPreviewApi', () => {
         setup(() => {
             emptyFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-api-'));
             getProject.returns(FRAMES_PROJECT);
+            // The reader falls back to $HOME/work, which must not hold the developer's own frames here.
+            sinon.stub(platformUtils, 'getEnvironmentVariable').callThrough().withArgs('HOME').returns(emptyFolder);
         });
 
         teardown(() => {

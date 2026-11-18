@@ -20,12 +20,14 @@ import {
     type Timestamp
 } from 'apache-arrow';
 import fs, { type FileHandle } from 'fs/promises';
+import { homedir } from 'os';
 import { Uri } from 'vscode';
 import zlib from 'zlib';
 import { z } from 'zod';
 
 import { isFileNotFoundError } from '../../../platform/common/platform/errors';
 import { DeepnoteAppPreview } from '../../../platform/common/utils/localize';
+import { getEnvironmentVariable } from '../../../platform/common/utils/platform.node';
 
 export type DataframeColumnType =
     | 'null'
@@ -81,7 +83,7 @@ const DATE_OUT_OF_RANGE_MESSAGE =
     'The page holds a date or timestamp outside the years 0 to 9999, which the server cannot format.';
 const LZ4_MESSAGE = 'The stored dataframe is compressed with lz4, which the server cannot decode.';
 
-// deepnote-toolkit's FRAMES_DIR, relative to the project folder.
+// deepnote-toolkit's FRAMES_DIR, relative to the folder it stores frames under.
 const DATAFRAMES_DIRECTORY = 'deepnote_dataframes';
 const MANIFEST_FILE = 'manifest.json';
 const FRAME_EXTENSION = '.arrow';
@@ -310,6 +312,26 @@ function formatUuid(bytes: Uint8Array): string {
         .replace(/^(\w{8})(\w{4})(\w{4})(\w{4})(\w{12})$/, '$1-$2-$3-$4-$5');
 }
 
+/**
+ * Falls back to `$HOME/work` because deepnote-toolkit 2.9.1 stores frames there when nothing sets its notebook root,
+ * and the extension's servers set none. Drop the fallback once the toolkit reads a storage root the extension sets.
+ * HOME comes first, as in the toolkit, because Node's homedir() reads USERPROFILE on Windows.
+ */
+async function frameDirectory(projectFolder: Uri, name: string): Promise<Uri> {
+    const inProject = Uri.joinPath(projectFolder, DATAFRAMES_DIRECTORY, name);
+    try {
+        await fs.stat(Uri.joinPath(inProject, MANIFEST_FILE).fsPath);
+
+        return inProject;
+    } catch (error) {
+        if (!isFileNotFoundError(error)) {
+            throw error;
+        }
+    }
+
+    return Uri.joinPath(Uri.file(getEnvironmentVariable('HOME') || homedir()), 'work', DATAFRAMES_DIRECTORY, name);
+}
+
 function isBinary(type: DataType): boolean {
     return BINARY_TYPES.has(type.typeId);
 }
@@ -474,7 +496,8 @@ function withInt64Times(data: Data): Data {
 }
 
 /**
- * Reads one page of the dataframe that deepnote-toolkit's `store_dataframe` stored under `name` in `projectFolder`:
+ * Reads one page of the dataframe that deepnote-toolkit's `store_dataframe` stored under `name` in `projectFolder`, or,
+ * when that folder holds no manifest for `name`, in `$HOME/work`, where the toolkit stores frames by default:
  * `deepnote_dataframes/<name>/manifest.json` names an Arrow IPC file beside it, of which only the record batches the
  * page overlaps are decoded. Throws a {@link DataframePageError}: 400 for a `pageIndex` past the last page, 404 for a
  * `name` outside {@link DATAFRAME_NAME_PATTERN} or a missing or invalid manifest or frame file, and 422 for a frame or
@@ -492,7 +515,7 @@ export async function readStoredDataframePage(
     compressionRegistry.set(CompressionType.ZSTD, { decode: decompressZstd });
     compressionRegistry.set(CompressionType.LZ4_FRAME, { decode: refuseLz4 });
 
-    const directory = Uri.joinPath(projectFolder, DATAFRAMES_DIRECTORY, name);
+    const directory = await frameDirectory(projectFolder, name);
     // A newer store may have replaced the frame, deleting its file, between reading the manifest and opening the file.
     const found = (await readCurrentFrame(directory, page)) ?? (await readCurrentFrame(directory, page));
     if (!found) {

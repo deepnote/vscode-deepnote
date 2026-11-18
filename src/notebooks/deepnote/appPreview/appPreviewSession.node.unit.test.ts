@@ -3,9 +3,11 @@ import { assert } from 'chai';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as os from 'os';
+import * as sinon from 'sinon';
 import { anything, when } from 'ts-mockito';
 import { Uri, type CancellationToken } from 'vscode';
 
+import { platformUtils } from '../../../platform/common/utils/platform.node';
 import * as path from '../../../platform/vscode-path/path';
 import { EXTENSION_ROOT_DIR_FOR_TESTS } from '../../../test/constants.node';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
@@ -143,6 +145,7 @@ suite('AppPreviewSession', () => {
     });
 
     teardown(() => {
+        sinon.restore();
         sessions.forEach((session) => session.dispose());
         fs.rmSync(tmp, { recursive: true, force: true });
     });
@@ -407,6 +410,8 @@ suite('AppPreviewSession', () => {
                 'appPreview',
                 'frames'
             );
+            // The reader falls back to $HOME/work, which must not hold the developer's own frames here.
+            sinon.stub(platformUtils, 'getEnvironmentVariable').callThrough().withArgs('HOME').returns(tmp);
             const session = await startSession({ project: { id: projectId, folder: framesFolder } });
             const { token } = await requestToken(session);
             const dataframeStatus = async () =>

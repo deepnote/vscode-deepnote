@@ -6,6 +6,7 @@
  */
 
 import { expect } from 'chai';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -32,6 +33,7 @@ import {
     openFolderViaDialog,
     selectDeepnoteContextMenu
 } from '../../helpers';
+import { venvPython } from '../../helpers/venv';
 
 const FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview');
 const RUNS_FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview-runs');
@@ -81,8 +83,16 @@ const NOTEBOOK_INPUTS = [
     }
 ];
 
-const FRAME_NAME = 'customers';
+// The frame is stored in the developer's own home folder on a local run, so under a name no notebook of theirs uses.
+const FRAME_NAME = 'app_preview_e2e_customers';
 const FRAME_FILE = '3f2b8c1e-6d4a-4e9b-9a7c-0d5e1f2a3b4c.arrow';
+const STORE_FRAME_SCRIPT = [
+    'import sys',
+    'import pyarrow as pa',
+    'from deepnote_toolkit.artifacts import store_dataframe',
+    'store_dataframe(pa.ipc.open_file(sys.argv[1]).read_all().to_pandas(), sys.argv[2])'
+].join('\n');
+const STORE_FRAME_TIMEOUT = 60_000;
 const FIRST_ROW = [
     '0',
     'customer-000039',
@@ -318,6 +328,39 @@ async function closeAllEditors(): Promise<void> {
     );
 }
 
+/**
+ * Stores the fixture frame with the venv's deepnote-toolkit, which puts it under `$HOME/work`, as it does for a
+ * notebook on the extension's servers. Returns the function that removes the frame and the folders the store created.
+ */
+function storeFrameWithToolkit(): () => void {
+    const work = path.join(process.env.HOME || os.homedir(), 'work');
+    const frames = path.join(work, 'deepnote_dataframes');
+    const created = [frames, work].filter((folder) => !fs.existsSync(folder));
+    const removeFrame = () => {
+        fs.rmSync(path.join(frames, FRAME_NAME), { recursive: true, force: true });
+        // Only while empty: a kernel of another test may have written to them since.
+        for (const folder of created.filter((candidate) => fs.existsSync(candidate))) {
+            try {
+                fs.rmdirSync(folder);
+            } catch (error) {
+                console.warn(`[deepnote-e2e] kept ${folder}:`, error);
+            }
+        }
+    };
+    try {
+        execFileSync(
+            venvPython(),
+            ['-I', '-c', STORE_FRAME_SCRIPT, path.join(DATAFRAMES_FIXTURE, FRAME_FILE), FRAME_NAME],
+            { timeout: STORE_FRAME_TIMEOUT }
+        );
+    } catch (error) {
+        removeFrame();
+        throw error;
+    }
+
+    return removeFrame;
+}
+
 describe('Deepnote: Preview App — serve a data app folder in the built-in browser', function () {
     this.timeout(SUITE_TIMEOUT);
 
@@ -336,24 +379,8 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         return appDir;
     }
 
-    /** Lays the stored frame out as deepnote-toolkit's `store_dataframe` writes it. */
     function addDataframesProject(): string {
         const project = fs.mkdtempSync(path.join(workspaceDir, 'dataframes-'));
-        const frameDir = path.join(project, 'deepnote_dataframes', FRAME_NAME);
-        fs.mkdirSync(frameDir, { recursive: true });
-        fs.copyFileSync(path.join(DATAFRAMES_FIXTURE, FRAME_FILE), path.join(frameDir, FRAME_FILE));
-        fs.writeFileSync(
-            path.join(frameDir, 'manifest.json'),
-            JSON.stringify({
-                version: 1,
-                file: FRAME_FILE,
-                previous: null,
-                written_at: '2026-09-25T09:14:03Z',
-                rows: 200_000,
-                batch_rows: [65_536, 65_536, 65_536, 3_392],
-                toolkit_version: '2.9.0'
-            })
-        );
         fs.mkdirSync(path.join(project, DATAFRAMES_APP));
         fs.copyFileSync(path.join(DATAFRAMES_FIXTURE, 'index.html'), path.join(project, DATAFRAMES_APP, 'index.html'));
         copyFixtureIntoDir(project, PROJECT_FIXTURE);
@@ -524,41 +551,46 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         expect(Date.parse(createdAt ?? ''), `the run's createdAt, ${createdAt}`).to.be.within(startedAt, Date.now());
     });
 
-    it("pages through a dataframe stored in the app's project folder, across its record batches", async function () {
+    it('pages through a dataframe deepnote-toolkit stored under $HOME/work, its default, across its record batches', async function () {
         const screenshot = createScreenshotter(this);
-        const folder = addDataframesProject();
-        await selectDeepnoteContextMenu(await findExplorerChildItem(folder, DATAFRAMES_APP), 'Preview App');
+        const removeFrame = storeFrameWithToolkit();
+        try {
+            const folder = addDataframesProject();
+            await selectDeepnoteContextMenu(await findExplorerChildItem(folder, DATAFRAMES_APP), 'Preview App');
 
-        await onIntegratedBrowserPage(DATAFRAMES_TITLE, async () => {
-            const driver = VSBrowser.instance.driver;
-            const clickButton = (name: string) =>
-                driver.findElement(By.xpath(`//button[normalize-space()='${name}']`)).click();
-            const ids = (page: DataframeSitePage) => page.rows.map(([id]) => id);
+            await onIntegratedBrowserPage(DATAFRAMES_TITLE, async () => {
+                const driver = VSBrowser.instance.driver;
+                const clickButton = (name: string) =>
+                    driver.findElement(By.xpath(`//button[normalize-space()='${name}']`)).click();
+                const ids = (page: DataframeSitePage) => page.rows.map(([id]) => id);
 
-            const first = await readDataframePage('Page 1 of 20,000');
-            expect(first.summary).to.include('200,000 rows · 7 columns');
-            expect(first.rows[0]).to.deep.equal(FIRST_ROW);
-            expect(ids(first)).to.deep.equal(consecutiveIds(0, 10));
-            await screenshot('first-page');
+                const first = await readDataframePage('Page 1 of 20,000');
+                expect(first.summary).to.include('200,000 rows · 7 columns');
+                expect(first.rows[0]).to.deep.equal(FIRST_ROW);
+                expect(ids(first)).to.deep.equal(consecutiveIds(0, 10));
+                await screenshot('first-page');
 
-            await clickButton('Next');
-            expect(ids(await readDataframePage('Page 2 of 20,000'))).to.deep.equal(consecutiveIds(10, 10));
-            await screenshot('next-page');
+                await clickButton('Next');
+                expect(ids(await readDataframePage('Page 2 of 20,000'))).to.deep.equal(consecutiveIds(10, 10));
+                await screenshot('next-page');
 
-            // Rows 65,530 to 65,539 straddle the end of the first record batch, at row 65,536.
-            const pageNumber = driver.findElement(By.css('input[type="number"]'));
-            await pageNumber.clear();
-            await pageNumber.sendKeys('6554');
-            await clickButton('Go');
-            expect(ids(await readDataframePage('Page 6,554 of 20,000'))).to.deep.equal(consecutiveIds(65_530, 10));
-            await screenshot('across-record-batches');
+                // deepnote-toolkit caps a record batch at 65,536 rows, so rows 65,530 to 65,539 straddle two batches.
+                const pageNumber = driver.findElement(By.css('input[type="number"]'));
+                await pageNumber.clear();
+                await pageNumber.sendKeys('6554');
+                await clickButton('Go');
+                expect(ids(await readDataframePage('Page 6,554 of 20,000'))).to.deep.equal(consecutiveIds(65_530, 10));
+                await screenshot('across-record-batches');
 
-            await clickButton('Last');
-            const last = await readDataframePage('Page 20,000 of 20,000');
-            expect(last.rows.at(-1)).to.deep.equal(LAST_ROW);
-            expect(last.isNextDisabled).to.equal(true);
-            await screenshot('last-page');
-        });
+                await clickButton('Last');
+                const last = await readDataframePage('Page 20,000 of 20,000');
+                expect(last.rows.at(-1)).to.deep.equal(LAST_ROW);
+                expect(last.isNextDisabled).to.equal(true);
+                await screenshot('last-page');
+            });
+        } finally {
+            removeFrame();
+        }
     });
 
     it('switches to the open tab and reloads it when the same folder is previewed again', async function () {

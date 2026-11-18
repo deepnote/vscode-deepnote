@@ -19,7 +19,7 @@ const SETTINGS_SOURCE = path.join(REPO_ROOT, 'test', 'e2e', 'settings.json');
 const SETTINGS_TARGET = path.join(REPO_ROOT, 'test', 'e2e', 'settings.generated.json');
 
 /** The interpreter inside the pre-baked venv. Suites run against it as the active interpreter. */
-function venvPython(): string {
+export function venvPython(): string {
     return process.platform === 'win32'
         ? path.join(VENV_DIR, 'Scripts', 'python.exe')
         : path.join(VENV_DIR, 'bin', 'python');

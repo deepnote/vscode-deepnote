@@ -3,8 +3,10 @@ import express from 'express';
 import * as http from 'http';
 import type { AddressInfo } from 'net';
 import * as sinon from 'sinon';
-import { Uri, type CancellationToken } from 'vscode';
+import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
+import { Uri } from 'vscode';
 
+import { createDeferred, type Deferred } from '../../../platform/common/utils/async';
 import { isUUID } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import {
@@ -15,7 +17,7 @@ import {
 } from '../deepnoteTestHelpers';
 import { createAppPreviewApi, type AppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
 import type { WorkspaceNotebook } from './appPreviewWorkspace.node';
-import type { AppPreviewRunOutcome, AppPreviewRunRequest, IAppPreviewRunner, SnapshotBlock } from './types';
+import type { AppPreviewRunOutcome, IAppPreviewRunner, SnapshotBlock } from './types';
 
 const TOKEN = 'preview-token';
 const SALES_FILE_URI = Uri.file('/workspace/sales.deepnote');
@@ -67,24 +69,6 @@ const SALES_FILE = createDeepnoteFile({
     })
 });
 
-interface RunnerCall {
-    request: AppPreviewRunRequest;
-    token: CancellationToken;
-    onRunning(): void;
-    finish(outcome: AppPreviewRunOutcome): void;
-    fail(error: Error): void;
-}
-
-class FakeRunner implements IAppPreviewRunner {
-    public readonly calls: RunnerCall[] = [];
-
-    public run(request: AppPreviewRunRequest, token: CancellationToken, onRunning: () => void) {
-        return new Promise<AppPreviewRunOutcome>((finish, fail) =>
-            this.calls.push({ request, token, onRunning, finish, fail })
-        );
-    }
-}
-
 const CHART_SNAPSHOT: SnapshotBlock[] = [
     {
         id: 'chart',
@@ -100,12 +84,13 @@ suite('createAppPreviewApi', () => {
     let server: http.Server;
     let baseUrl: string;
     let api: AppPreviewApi;
-    let runner: FakeRunner;
+    let runner: IAppPreviewRunner;
     let findNotebook: sinon.SinonStub<[string], Promise<WorkspaceNotebook | undefined>>;
     let onUnsupported: sinon.SinonStub<[AppPreviewOperation], void>;
 
     setup(async () => {
-        runner = new FakeRunner();
+        runner = mock<IAppPreviewRunner>();
+        when(runner.run(anything(), anything(), anything())).thenReturn(createDeferred<AppPreviewRunOutcome>().promise);
         const notebooks = new Map<string, WorkspaceNotebook>(
             SALES_FILE.project.notebooks.map((notebook) => [
                 notebook.id,
@@ -116,7 +101,7 @@ suite('createAppPreviewApi', () => {
             .stub<[string], Promise<WorkspaceNotebook | undefined>>()
             .callsFake(async (notebookId) => notebooks.get(notebookId));
         onUnsupported = sinon.stub<[AppPreviewOperation], void>();
-        api = createAppPreviewApi({ token: TOKEN, findNotebook, onUnsupported, runner });
+        api = createAppPreviewApi({ token: TOKEN, findNotebook, onUnsupported, runner: instance(runner) });
         const app = express();
         app.use('/v2', api.router);
         server = http.createServer(app);
@@ -163,11 +148,13 @@ suite('createAppPreviewApi', () => {
         }
     }
 
-    async function startRun(): Promise<string> {
+    async function startRun(): Promise<{ runId: string; outcome: Deferred<AppPreviewRunOutcome> }> {
+        const outcome = createDeferred<AppPreviewRunOutcome>();
+        when(runner.run(anything(), anything(), anything())).thenReturn(outcome.promise);
         const response = await createRun({ notebookId: 'nb-1', inputs: { region: 'Asia' } });
         assert.strictEqual(response.status, 202);
 
-        return (await response.json()).runId;
+        return { runId: (await response.json()).runId, outcome };
     }
 
     async function assertJson(response: Response, status: number, body: unknown): Promise<void> {
@@ -243,25 +230,29 @@ suite('createAppPreviewApi', () => {
         const body = await response.json();
         assert.isTrue(isUUID(body.runId), `${body.runId} is not a UUID`);
         assert.deepStrictEqual(body, { runId: body.runId, status: 'pending', createdAt: NOW });
-        assert.deepStrictEqual(
-            runner.calls.map((runCall) => runCall.request),
-            [{ fileUri: SALES_FILE_URI, notebookId: 'nb-1', inputs: { region: 'Asia' } }]
-        );
+        verify(runner.run(anything(), anything(), anything())).once();
+        assert.deepStrictEqual(capture(runner.run).last()[0], {
+            fileUri: SALES_FILE_URI,
+            notebookId: 'nb-1',
+            inputs: { region: 'Asia' }
+        });
         sinon.assert.notCalled(onUnsupported);
     });
 
     test('POST /runs runs the notebook without inputs when the body has none', async () => {
         assert.strictEqual((await createRun({ notebookId: 'nb-init' })).status, 202);
 
-        assert.deepStrictEqual(
-            runner.calls.map((runCall) => runCall.request),
-            [{ fileUri: SALES_FILE_URI, notebookId: 'nb-init', inputs: {} }]
-        );
+        verify(runner.run(anything(), anything(), anything())).once();
+        assert.deepStrictEqual(capture(runner.run).last()[0], {
+            fileUri: SALES_FILE_URI,
+            notebookId: 'nb-init',
+            inputs: {}
+        });
     });
 
     test("GET /runs/:runId reports the run as pending, running, and then finished, in Deepnote's shape", async () => {
         const clock = sinon.useFakeTimers({ now: Date.parse(NOW), toFake: ['Date'] });
-        const runId = await startRun();
+        const { runId, outcome } = await startRun();
         const pending = {
             runId,
             notebookId: 'nb-1',
@@ -277,11 +268,12 @@ suite('createAppPreviewApi', () => {
         };
         assert.deepStrictEqual(await getRun(runId), pending);
 
-        runner.calls[0].onRunning();
+        const [, , onRunning] = capture(runner.run).last();
+        onRunning();
         assert.deepStrictEqual(await getRun(runId), { ...pending, status: 'running' });
 
         clock.tick(65_000);
-        runner.calls[0].finish({ status: 'success', error: null, snapshotBlocks: CHART_SNAPSHOT });
+        outcome.resolve({ status: 'success', error: null, snapshotBlocks: CHART_SNAPSHOT });
         assert.deepStrictEqual(await waitForStatus(runId, 'success'), {
             ...pending,
             status: 'success',
@@ -299,22 +291,22 @@ suite('createAppPreviewApi', () => {
     ];
     for (const [outcome, snapshotStatus] of outcomes) {
         test(`GET /runs/:runId reports a run that ended as ${outcome.status} with its snapshot ${snapshotStatus}`, async () => {
-            const runId = await startRun();
+            const run = await startRun();
 
-            runner.calls[0].finish(outcome);
+            run.outcome.resolve(outcome);
 
-            const run = await waitForStatus(runId, outcome.status);
-            assert.deepInclude(run, { ...outcome, snapshotStatus });
-            assert.isString(run.completedAt);
+            const finished = await waitForStatus(run.runId, outcome.status);
+            assert.deepInclude(finished, { ...outcome, snapshotStatus });
+            assert.isString(finished.completedAt);
         });
     }
 
     test('GET /runs/:runId reports a runner that rejects as an internal error, and logs it', async () => {
         const logError = sinon.stub(logger, 'error');
-        const runId = await startRun();
+        const { runId, outcome } = await startRun();
         const failure = new Error('runner bug');
 
-        runner.calls[0].fail(failure);
+        outcome.reject(failure);
 
         assert.deepInclude(await waitForStatus(runId, 'internal_error'), {
             error: 'runner bug',
@@ -332,19 +324,19 @@ suite('createAppPreviewApi', () => {
     });
 
     test('dispose() cancels the unfinished runs, and records how the runner ended them', async () => {
-        const stoppedRunId = await startRun();
-        const finishedRunId = await startRun();
-        runner.calls[1].finish({ status: 'success', error: null, snapshotBlocks: [] });
-        await waitForStatus(finishedRunId, 'success');
+        const stopped = await startRun();
+        const finished = await startRun();
+        finished.outcome.resolve({ status: 'success', error: null, snapshotBlocks: [] });
+        await waitForStatus(finished.runId, 'success');
 
         api.dispose();
 
-        assert.deepStrictEqual(
-            runner.calls.map((runCall) => runCall.token.isCancellationRequested === true),
-            [true, false]
-        );
-        runner.calls[0].finish({ status: 'stopped', error: null, snapshotBlocks: null });
-        assert.deepInclude(await waitForStatus(stoppedRunId, 'stopped'), { snapshotStatus: 'unavailable' });
+        const [, stoppedToken] = capture(runner.run).first();
+        const [, finishedToken] = capture(runner.run).second();
+        assert.isTrue(stoppedToken.isCancellationRequested);
+        assert.isNotTrue(finishedToken.isCancellationRequested);
+        stopped.outcome.resolve({ status: 'stopped', error: null, snapshotBlocks: null });
+        assert.deepInclude(await waitForStatus(stopped.runId, 'stopped'), { snapshotStatus: 'unavailable' });
     });
 
     const invalidBodies: [string, unknown, string][] = [
@@ -372,7 +364,7 @@ suite('createAppPreviewApi', () => {
     for (const [condition, body, message] of invalidBodies) {
         test(`POST /runs answers 400 to a body ${condition}, without starting a run`, async () => {
             await assertJson(await createRun(body), 400, { message });
-            assert.deepStrictEqual(runner.calls, []);
+            verify(runner.run(anything(), anything(), anything())).never();
         });
     }
 
@@ -396,16 +388,16 @@ suite('createAppPreviewApi', () => {
             });
 
             await assertJson(response, status, { message });
-            assert.deepStrictEqual(runner.calls, []);
+            verify(runner.run(anything(), anything(), anything())).never();
             sinon.assert.notCalled(logError);
         });
     }
 
     test("forgets the oldest finished runs beyond 20, but never an unfinished run or a notebook's newest success", async () => {
-        const unfinished = await startRun();
+        const { runId: unfinished } = await startRun();
         const finishRun = async (status: 'success' | 'error') => {
-            const runId = await startRun();
-            runner.calls[runner.calls.length - 1].finish({ status, error: null, snapshotBlocks: [] });
+            const { runId, outcome } = await startRun();
+            outcome.resolve({ status, error: null, snapshotBlocks: [] });
             await waitForStatus(runId, status);
 
             return runId;

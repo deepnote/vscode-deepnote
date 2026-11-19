@@ -14,6 +14,7 @@ import {
     type IDeepnoteToolkitDependencyService
 } from '../../../kernels/deepnote/types';
 import type { DeepnoteNotebook } from '../../../platform/deepnote/deepnoteTypes';
+import { logger } from '../../../platform/logging';
 import type { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import * as path from '../../../platform/vscode-path/path';
 import {
@@ -423,6 +424,35 @@ suite('AppPreviewRunner', () => {
                 ]
             });
             assert.strictEqual(engine().stopCalls, 1);
+        });
+
+        test('succeeds before the kernel has shut down', async () => {
+            __setExecutionEngineBehavior({
+                runProject: runtimeCoreLike(),
+                stop: () => new Promise<void>(() => undefined)
+            });
+
+            const outcome = await run(fileUri, 'nb-1');
+
+            assert.strictEqual(outcome.status, 'success');
+            assert.strictEqual(engine().stopCalls, 1);
+        });
+
+        test('succeeds when the kernel fails to shut down, and logs the failure', async () => {
+            const warn = sinon.stub(logger, 'warn');
+            const failure = new Error('The kernel did not shut down');
+            __setExecutionEngineBehavior({
+                runProject: runtimeCoreLike(),
+                stop: async () => {
+                    throw failure;
+                }
+            });
+
+            const outcome = await run(fileUri, 'nb-1');
+
+            assert.strictEqual(outcome.status, 'success');
+            await waitFor(() => warn.called);
+            sinon.assert.calledWithMatch(warn, sinon.match.string, failure);
         });
 
         const failures: [string, BlockResult, string][] = [

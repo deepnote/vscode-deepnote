@@ -109,7 +109,8 @@ async function runNotebook(
         }
     });
 
-    // A failed code block an agent added does not stop the run, so only a run that stopped has failed.
+    // runtime-core reports a failed block an agent added without stopping the run or counting it in failedBlocks.
+    // A counted failure stops the run, so the last failure reported is the one that stopped it.
     return { failure: summary.failedBlocks > 0 ? failure : undefined, outputs };
 }
 
@@ -200,15 +201,17 @@ export class AppPreviewRunner implements IAppPreviewRunner {
         );
         let stopping: Promise<void> | undefined;
         // Overlapping stop() calls make runtime-core throw.
-        const stop = () => (stopping ??= engine.stop());
+        const stop = () => {
+            stopping ??= engine
+                .stop()
+                .catch((error) => logger.warn('AppPreviewRunner: Could not stop the kernel', error));
+        };
         let onCancel: Disposable | undefined;
         try {
             await engine.start();
             Cancellation.throwIfCanceled(token);
             // stop() also fails the block that is executing and shuts the kernel down, so runProject then resolves.
-            onCancel = token.onCancellationRequested(() => {
-                stop().catch((error) => logger.warn('AppPreviewRunner: Could not stop a cancelled run', error));
-            });
+            onCancel = token.onCancellationRequested(() => stop());
             onRunning();
 
             if (initCopy) {
@@ -237,7 +240,8 @@ export class AppPreviewRunner implements IAppPreviewRunner {
             };
         } finally {
             onCancel?.dispose();
-            await stop();
+            // Not awaited, so the outcome isn't held back while the kernel shuts down.
+            stop();
         }
     }
 }

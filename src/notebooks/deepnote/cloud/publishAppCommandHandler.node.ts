@@ -32,9 +32,6 @@ const MAX_LISTED_PATHS = 10;
 type PublishAppSettings = { projectId: string; projectName: string };
 type PublishTarget = PublishAppSettings | { newProjectName: string };
 
-/** `listAllProjects` passes the API's `projectType` through, but `SyncProject` does not declare it. */
-export type ListedProject = SyncProject & { projectType?: string };
-
 interface ProjectPickItem extends QuickPickItem {
     projectId?: string;
 }
@@ -68,7 +65,7 @@ export class PublishAppCommandHandler implements IExtensionSyncActivationService
     }
 
     /** Seam for tests, which never reach the network. */
-    protected listProjects(baseUrl: string, token: string): Promise<ListedProject[]> {
+    protected listProjects(baseUrl: string, token: string): Promise<SyncProject[]> {
         return listAllProjects(baseUrl, token);
     }
 
@@ -105,7 +102,7 @@ export class PublishAppCommandHandler implements IExtensionSyncActivationService
         token: string,
         current: PublishAppSettings | undefined
     ): Promise<PublishTarget | undefined> {
-        let projects: ListedProject[];
+        let projects: SyncProject[];
         try {
             projects = await window.withProgress(
                 { location: ProgressLocation.Notification, title: DeepnoteCloud.loadingProjects },

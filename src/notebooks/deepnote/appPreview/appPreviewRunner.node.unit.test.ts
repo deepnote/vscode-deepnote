@@ -4,7 +4,7 @@ import { assert } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as sinon from 'sinon';
-import { anything, instance, mock, when } from 'ts-mockito';
+import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { CancellationError, CancellationTokenSource, Uri } from 'vscode';
 
 import {
@@ -40,6 +40,8 @@ const INTERPRETER: PythonEnvironment = { id: 'venv', uri: Uri.file('/venv/bin/py
 const SERVER = { url: 'http://127.0.0.1:8888', jupyterPort: 8888, lspPort: 8889 } as DeepnoteServerInfo;
 
 type BlockResult = Partial<Pick<BlockExecutionResult, 'success' | 'outputs' | 'error'>>;
+
+type Step = 'open' | 'resolve' | 'ensureToolkit' | 'startServer' | 'start' | 'running';
 
 function textInput(id: string, name: string, value: string, sortingKey = 'a0'): DeepnoteBlock {
     return {
@@ -141,7 +143,7 @@ function engine() {
 
 suite('AppPreviewRunner', () => {
     let tmp: string;
-    let steps: string[];
+    let steps: Step[];
     let interpreters: IDeepnoteNotebookInterpreters;
     let toolkit: IDeepnoteToolkitDependencyService;
     let serverStarter: IDeepnoteServerStarter;
@@ -168,8 +170,8 @@ suite('AppPreviewRunner', () => {
         steps = [];
         cancellation = new CancellationTokenSource();
 
-        when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenCall(async (uri: Uri) => {
-            steps.push(`open ${path.basename(uri.fsPath)}`);
+        when(mockedVSCodeNamespaces.workspace.openNotebookDocument(anything())).thenCall(async () => {
+            steps.push('open');
         });
         interpreters = mock<IDeepnoteNotebookInterpreters>();
         when(interpreters.resolve(anything())).thenCall(async () => {
@@ -211,14 +213,8 @@ suite('AppPreviewRunner', () => {
 
             await run(fileUri, 'nb-1');
 
-            assert.deepStrictEqual(steps, [
-                'open main.deepnote',
-                'resolve',
-                'ensureToolkit',
-                'startServer',
-                'start',
-                'running'
-            ]);
+            assert.deepStrictEqual(steps, ['open', 'resolve', 'ensureToolkit', 'startServer', 'start', 'running']);
+            verify(mockedVSCodeNamespaces.workspace.openNotebookDocument(fileUri)).once();
             assert.deepStrictEqual(engine().config, { pythonEnv: '/venv/bin/python', workingDirectory: tmp });
             assert.strictEqual(engine().options?.server, SERVER);
         });
@@ -628,7 +624,7 @@ suite('AppPreviewRunner', () => {
             fileUri = write('main.deepnote', projectFile([notebookOf('nb-1', [createDeepnoteBlock()])]));
         });
 
-        const stoppedSteps: [string, () => void, string[]][] = [
+        const stoppedSteps: [string, () => void, Step[]][] = [
             [
                 'the notebook opens',
                 () =>
@@ -647,7 +643,7 @@ suite('AppPreviewRunner', () => {
 
                         return INTERPRETER;
                     }),
-                ['open main.deepnote', 'resolve']
+                ['open', 'resolve']
             ],
             [
                 'the toolkit install is checked',
@@ -658,7 +654,7 @@ suite('AppPreviewRunner', () => {
 
                         return DeepnoteToolkitDependencyResponse.cancel;
                     }),
-                ['open main.deepnote', 'resolve', 'ensureToolkit']
+                ['open', 'resolve', 'ensureToolkit']
             ],
             [
                 'the server starts',
@@ -669,7 +665,7 @@ suite('AppPreviewRunner', () => {
 
                         return SERVER;
                     }),
-                ['open main.deepnote', 'resolve', 'ensureToolkit', 'startServer']
+                ['open', 'resolve', 'ensureToolkit', 'startServer']
             ],
             [
                 'the server starts, which then throws',
@@ -679,7 +675,7 @@ suite('AppPreviewRunner', () => {
                         cancellation.cancel();
                         throw new CancellationError();
                     }),
-                ['open main.deepnote', 'resolve', 'ensureToolkit', 'startServer']
+                ['open', 'resolve', 'ensureToolkit', 'startServer']
             ]
         ];
         for (const [step, arrange, expectedSteps] of stoppedSteps) {

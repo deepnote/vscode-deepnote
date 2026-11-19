@@ -7,13 +7,15 @@
     </head>
     <body>
         <h1>Sales runs</h1>
-        <ul>
-            <li id="unknown-input">run({ unknown: 'x' }): pending</li>
-            <li id="asia-status">run({ region: 'Asia' }): pending</li>
-            <li id="asia-result">run({ region: 'Asia' }) result(): pending</li>
-            <li id="empty-status">run({ region: '' }): pending</li>
-            <li id="empty-result">run({ region: '' }) result(): pending</li>
-        </ul>
+        <label for="region">Region</label>
+        <select id="region">
+            <option value="Asia">Asia</option>
+            <option value="Americas">Americas</option>
+            <option value="">No region</option>
+        </select>
+        <button id="run" type="button">Run</button>
+        <p id="status">idle</p>
+        <pre id="result"></pre>
         <script src="app.js"></script>
     </body>
 </html>

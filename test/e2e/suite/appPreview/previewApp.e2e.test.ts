@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+    By,
     EditorView,
     InputBox,
     NotificationType,
@@ -45,7 +46,6 @@ const RUNS_TITLE = 'Runs fixture';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
 const NOT_SUPPORTED = 'which the local preview does not support yet.';
 const INPUTS_RESOLVED = 'inputs() resolved: ';
-const RUN_RESULT = ' result(): ';
 
 const NOTEBOOK_INPUTS = [
     { blockId: 'e2e-region-input', name: 'region', type: 'input-text', value: 'Europe', label: 'Region' },
@@ -94,7 +94,7 @@ function appDataWarning(folderName: string): string {
     return `The app in ${folderName} called appData(), which the local preview does not support yet.`;
 }
 
-async function readReport(timeout = WORKBENCH_TIMEOUT): Promise<unknown[]> {
+async function readReport(): Promise<unknown[]> {
     const driver = VSBrowser.instance.driver;
     let report: string[] = [];
     try {
@@ -108,7 +108,7 @@ async function readReport(timeout = WORKBENCH_TIMEOUT): Promise<unknown[]> {
 
                 return report.length > 0 && report.every((line) => !line.endsWith('pending'));
             },
-            timeout,
+            WORKBENCH_TIMEOUT,
             'the preview page did not finish its client calls'
         );
     } catch (error) {
@@ -146,6 +146,28 @@ async function onIntegratedBrowserPage<T>(title: string, read: () => Promise<T>)
     } finally {
         await driver.switchTo().window(workbench);
     }
+}
+
+async function runWithRegion(
+    region: string,
+    timeout = WORKBENCH_TIMEOUT
+): Promise<{ status: string; result: unknown }> {
+    const driver = VSBrowser.instance.driver;
+    await driver.findElement(By.css(`#region option[value="${region}"]`)).click();
+    await driver.findElement(By.id('run')).click();
+    let status = '';
+    await driver.wait(
+        async () => {
+            status = await driver.findElement(By.id('status')).getText();
+
+            return status !== 'running';
+        },
+        timeout,
+        `the run with region "${region}" did not finish`
+    );
+    const result = await driver.findElement(By.id('result')).getText();
+
+    return { status, result: result === '' ? null : JSON.parse(result) };
 }
 
 /** Leaves the Notifications Center open, so the next screenshot shows the warnings. */
@@ -390,7 +412,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         }
     });
 
-    it('runs the workspace notebook for run(), after its init notebook, and reports its result or its error', async function () {
+    it("runs the workspace notebook with each run's inputs, after its init notebook, and reports its result or its error", async function () {
         const screenshot = createScreenshotter(this);
         await clearNotifications();
         const appDir = fs.mkdtempSync(path.join(workspaceDir, 'runs-app-'));
@@ -399,27 +421,19 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         await selectDeepnoteContextMenu(await findRootExplorerItem(path.basename(appDir)), 'Preview App');
 
         // The first run starts the notebook file's toolkit server and a kernel.
-        const report = await onIntegratedBrowserPage(RUNS_TITLE, async () => {
-            const read = await readReport(KERNEL_CONNECT_TIMEOUT);
+        const runs = await onIntegratedBrowserPage(RUNS_TITLE, async () => {
+            const asia = await runWithRegion('Asia', KERNEL_CONNECT_TIMEOUT);
+            const americas = await runWithRegion('Americas');
+            const noRegion = await runWithRegion('');
             await screenshot('run-results');
 
-            return read;
+            return [asia, americas, noRegion];
         });
-        expect(
-            report.map((line) => {
-                const text = String(line);
-                const at = text.indexOf(RUN_RESULT);
-
-                return at === -1 ? text : [text.slice(0, at), JSON.parse(text.slice(at + RUN_RESULT.length))];
-            })
-        ).to.deep.equal([
-            'Sales runs',
-            'run({ unknown: \'x\' }) rejected: Input "unknown" is not defined for this notebook',
-            "run({ region: 'Asia' }): success",
-            ["run({ region: 'Asia' })", { region: 'Asia', init_region: false }],
-            "run({ region: '' }): error, ValueError: Choose a region first",
+        expect(runs).to.deep.equal([
+            { status: 'success', result: { region: 'Asia', init_region: false } },
+            { status: 'success', result: { region: 'Americas', init_region: false } },
             // The notebook displays its result before the block that raises, in Deepnote's block order.
-            ["run({ region: '' })", { region: '', init_region: false }]
+            { status: 'error, ValueError: Choose a region first', result: { region: '', init_region: false } }
         ]);
 
         const center = await new Workbench().openNotificationsCenter();

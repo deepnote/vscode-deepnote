@@ -124,9 +124,8 @@ Run `Deepnote: Preview App` from the Command Palette, or right-click a folder in
 - `run()` runs that notebook, as saved on disk, in a new kernel on the Deepnote server the extension runs for its `.deepnote` file: the project's init notebook first, then the notebook with the page's input values.
   - It uses the notebook's Python interpreter. Its SQL blocks use the integrations configured in VS Code, except BigQuery integrations that use Google OAuth.
   - Agent blocks run only when the model provider's API key, such as `OPENAI_API_KEY`, is set in VS Code's own environment. The key saved for agent cells is not used.
-  - Like a run in Deepnote, it is not read-only: what its code writes, such as files or stored dataframes, is written.
+  - Its code can write files and store dataframes, and what it writes is kept after the run.
   - A run keeps going until its notebook finishes, even after you close the preview. Reloading or closing the VS Code window stops it.
-  - For a legacy `.deepnote` file that holds several notebooks, the first run shows the prompt to split the file, as opening the file does.
 - The page's other calls to Deepnote reach a local stand-in that does not support them yet: `appData()` rejects with a message saying so, and VS Code shows a warning the first time the app calls it.
 - Previewing needs a trusted workspace and the desktop app.
 

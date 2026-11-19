@@ -1,10 +1,17 @@
 import { isExecutableBlock, isInputBlock, type DeepnoteBlock, type DeepnoteFile } from '@deepnote/blocks';
-import type { BlockExecutionResult, ExecutionOptions, ExecutionSummary } from '@deepnote/runtime-core';
+import type {
+    BlockExecutionResult,
+    ExecutionEngine,
+    ExecutionEngineOptions,
+    ExecutionOptions,
+    ExecutionSummary,
+    RuntimeConfig
+} from '@deepnote/runtime-core';
 import { assert } from 'chai';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as sinon from 'sinon';
-import { anything, instance, mock, verify, when } from 'ts-mockito';
+import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 import { CancellationError, CancellationTokenSource, Uri } from 'vscode';
 
 import {
@@ -13,15 +20,12 @@ import {
     type IDeepnoteServerStarter,
     type IDeepnoteToolkitDependencyService
 } from '../../../kernels/deepnote/types';
+import { createDeferred, type Deferred } from '../../../platform/common/utils/async';
 import type { DeepnoteNotebook } from '../../../platform/deepnote/deepnoteTypes';
 import { logger } from '../../../platform/logging';
 import type { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
 import * as path from '../../../platform/vscode-path/path';
-import {
-    __getExecutionEngines,
-    __resetRuntimeCoreMock,
-    __setExecutionEngineBehavior
-} from '../../../test/mocks/deepnoteRuntimeCore';
+import { __resetRuntimeCoreMock, __useExecutionEngine } from '../../../test/mocks/deepnoteRuntimeCore';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import type { IDeepnoteNotebookInterpreters } from '../deepnoteNotebookInterpreters';
@@ -109,12 +113,9 @@ function runtimeCoreLike(results: Record<string, BlockResult> = {}) {
 }
 
 /** A run whose block executes until the engine is stopped, then fails as runtime-core reports it. */
-function failWhenStopped(blockId: string) {
-    return async (
-        _file: DeepnoteFile,
-        options: ExecutionOptions,
-        stopped: Promise<void>
-    ): Promise<ExecutionSummary> => {
+function failWhenStopped(blockId: string, stopped: Promise<void>, running: Deferred<void>) {
+    return async (_file: DeepnoteFile, options: ExecutionOptions): Promise<ExecutionSummary> => {
+        running.resolve();
         await stopped;
         await options.onBlockDone?.({
             blockId,
@@ -130,23 +131,15 @@ function failWhenStopped(blockId: string) {
     };
 }
 
-function notebookIdsPerCall(): string[][] {
-    return engine().runProjectCalls.map((runCall) => runCall.file.project.notebooks.map((notebook) => notebook.id));
-}
-
-function engine() {
-    const engines = __getExecutionEngines();
-    assert.strictEqual(engines.length, 1, 'the run should create exactly one engine');
-
-    return engines[0];
-}
-
 suite('AppPreviewRunner', () => {
     let tmp: string;
     let steps: Step[];
     let interpreters: IDeepnoteNotebookInterpreters;
     let toolkit: IDeepnoteToolkitDependencyService;
     let serverStarter: IDeepnoteServerStarter;
+    let engine: ExecutionEngine;
+    let createEngine: sinon.SinonStub<[RuntimeConfig, ExecutionEngineOptions?], ExecutionEngine>;
+    let stopped: Deferred<void>;
     let cancellation: CancellationTokenSource;
     let runner: AppPreviewRunner;
 
@@ -160,6 +153,17 @@ suite('AppPreviewRunner', () => {
 
     function run(fileUri: Uri, notebookId: string, inputs: AppPreviewRunRequest['inputs'] = {}) {
         return runner.run({ fileUri, notebookId, inputs }, cancellation.token, () => steps.push('running'));
+    }
+
+    function runProjectCalls(count: number) {
+        verify(engine.runProject(anything(), anything())).times(count);
+        const runProject = capture(engine.runProject);
+
+        return Array.from({ length: count }, (_, index) => runProject.byCallIndex(index));
+    }
+
+    function notebookIdsPerCall(count: number): string[][] {
+        return runProjectCalls(count).map(([file]) => file.project.notebooks.map((notebook) => notebook.id));
     }
 
     setup(() => {
@@ -191,12 +195,17 @@ suite('AppPreviewRunner', () => {
 
             return SERVER;
         });
-        __setExecutionEngineBehavior({
-            start: async () => {
-                steps.push('start');
-            },
-            runProject: runtimeCoreLike()
+        engine = mock<ExecutionEngine>();
+        stopped = createDeferred<void>();
+        when(engine.start()).thenCall(async () => {
+            steps.push('start');
         });
+        when(engine.runProject(anything(), anything())).thenCall(runtimeCoreLike());
+        when(engine.stop()).thenCall(async () => stopped.resolve());
+        createEngine = sinon
+            .stub<[RuntimeConfig, ExecutionEngineOptions?], ExecutionEngine>()
+            .returns(instance(engine));
+        __useExecutionEngine(createEngine);
 
         runner = new AppPreviewRunner(instance(interpreters), instance(serverStarter), instance(toolkit));
     });
@@ -215,11 +224,14 @@ suite('AppPreviewRunner', () => {
 
             assert.deepStrictEqual(steps, ['open', 'resolve', 'ensureToolkit', 'startServer', 'start', 'running']);
             verify(mockedVSCodeNamespaces.workspace.openNotebookDocument(fileUri)).once();
-            assert.deepStrictEqual(engine().config, { pythonEnv: '/venv/bin/python', workingDirectory: tmp });
-            assert.strictEqual(engine().options?.server, SERVER);
+            sinon.assert.calledOnceWithExactly(
+                createEngine,
+                { pythonEnv: '/venv/bin/python', workingDirectory: tmp },
+                { server: SERVER }
+            );
         });
 
-        test('runs the init notebook of the same file first, then the notebook, each on its own', async () => {
+        test('runs the init notebook of the same file first, then the notebook, as separate runs on one kernel', async () => {
             const fileUri = write(
                 'main.deepnote',
                 projectFile(
@@ -234,7 +246,8 @@ suite('AppPreviewRunner', () => {
 
             await run(fileUri, 'nb-1');
 
-            assert.deepStrictEqual(notebookIdsPerCall(), [['nb-init'], ['nb-1']]);
+            assert.deepStrictEqual(notebookIdsPerCall(2), [['nb-init'], ['nb-1']]);
+            sinon.assert.calledOnce(createEngine);
         });
 
         test("gives the project's integrations to the init notebook's run and the notebook's run", async () => {
@@ -248,7 +261,7 @@ suite('AppPreviewRunner', () => {
             await run(fileUri, 'nb-1');
 
             assert.deepStrictEqual(
-                engine().runProjectCalls.map((runCall) => runCall.options.integrations),
+                runProjectCalls(2).map(([, options]) => options?.integrations),
                 [integrations, integrations]
             );
         });
@@ -265,8 +278,8 @@ suite('AppPreviewRunner', () => {
 
             await run(fileUri, 'nb-1');
 
-            assert.deepStrictEqual(notebookIdsPerCall(), [['nb-init'], ['nb-1']]);
-            assert.deepInclude(engine().runProjectCalls[0].file.project.notebooks[0].blocks[0], {
+            assert.deepStrictEqual(notebookIdsPerCall(2), [['nb-init'], ['nb-1']]);
+            assert.deepInclude(capture(engine.runProject).first()[0].project.notebooks[0].blocks[0], {
                 id: 'setup',
                 content: 'import os'
             });
@@ -286,7 +299,7 @@ suite('AppPreviewRunner', () => {
                 const outcome = await run(fileUri, 'nb-1');
 
                 assert.strictEqual(outcome.status, 'success');
-                assert.deepStrictEqual(notebookIdsPerCall(), [['nb-1']]);
+                assert.deepStrictEqual(notebookIdsPerCall(1), [['nb-1']]);
             });
         }
 
@@ -311,12 +324,12 @@ suite('AppPreviewRunner', () => {
 
             await run(fileUri, 'nb-1', { x: 'hello' });
 
-            const [initCall, notebookCall] = engine().runProjectCalls;
-            assert.isUndefined(initCall.options.inputs);
-            assert.deepInclude(initCall.file.project.notebooks[0].blocks[0].metadata, {
+            const [[initFile, initOptions], [, notebookOptions]] = runProjectCalls(2);
+            assert.isUndefined(initOptions?.inputs);
+            assert.deepInclude(initFile.project.notebooks[0].blocks[0].metadata, {
                 deepnote_variable_value: false
             });
-            assert.deepStrictEqual(notebookCall.options.inputs, { x: 'hello' });
+            assert.deepStrictEqual(notebookOptions?.inputs, { x: 'hello' });
             assert.strictEqual(fs.readFileSync(fileUri.fsPath, 'utf8'), onDisk);
         });
 
@@ -335,7 +348,7 @@ suite('AppPreviewRunner', () => {
             const outcome = await run(fileUri, 'nb-1');
 
             assert.deepStrictEqual(
-                executionOrder(engine().runProjectCalls[0].file).map((block) => block.id),
+                executionOrder(capture(engine.runProject).first()[0]).map((block) => block.id),
                 ['first', 'upper', 'lower']
             );
             assert.deepStrictEqual(
@@ -362,8 +375,8 @@ suite('AppPreviewRunner', () => {
 
             await run(fileUri, 'nb-1');
 
-            const contents = engine().runProjectCalls.map((runCall) =>
-                runCall.file.project.notebooks[0].blocks.map((block) => (block.type === 'code' ? block.content : ''))
+            const contents = runProjectCalls(2).map(([file]) =>
+                file.project.notebooks[0].blocks.map((block) => (block.type === 'code' ? block.content : ''))
             );
             assert.deepStrictEqual(contents, [[WINDOWS_INIT_BLOCK], [DEEPNOTE_CLOUD_INIT_BLOCK]]);
             assert.strictEqual(fs.readFileSync(fileUri.fsPath, 'utf8'), onDisk);
@@ -391,7 +404,9 @@ suite('AppPreviewRunner', () => {
         const errorOutput = { output_type: 'error', ename: 'ValueError', evalue: 'no data', traceback: [] };
 
         test('succeeds with every block of the notebook and its outputs, and stops the kernel', async () => {
-            __setExecutionEngineBehavior({ runProject: runtimeCoreLike({ chart: { outputs: [chartOutput] } }) });
+            when(engine.runProject(anything(), anything())).thenCall(
+                runtimeCoreLike({ chart: { outputs: [chartOutput] } })
+            );
 
             const outcome = await run(fileUri, 'nb-1', { region: 'Asia' });
 
@@ -419,30 +434,22 @@ suite('AppPreviewRunner', () => {
                     { id: 'notes', type: 'markdown', outputs: [], metadata: {}, outputHead: null, outputTail: null }
                 ]
             });
-            assert.strictEqual(engine().stopCalls, 1);
+            verify(engine.stop()).once();
         });
 
         test('succeeds before the kernel has shut down', async () => {
-            __setExecutionEngineBehavior({
-                runProject: runtimeCoreLike(),
-                stop: () => new Promise<void>(() => undefined)
-            });
+            when(engine.stop()).thenReturn(createDeferred<void>().promise);
 
             const outcome = await run(fileUri, 'nb-1');
 
             assert.strictEqual(outcome.status, 'success');
-            assert.strictEqual(engine().stopCalls, 1);
+            verify(engine.stop()).once();
         });
 
         test('succeeds when the kernel fails to shut down, and logs the failure', async () => {
             const warn = sinon.stub(logger, 'warn');
             const failure = new Error('The kernel did not shut down');
-            __setExecutionEngineBehavior({
-                runProject: runtimeCoreLike(),
-                stop: async () => {
-                    throw failure;
-                }
-            });
+            when(engine.stop()).thenReject(failure);
 
             const outcome = await run(fileUri, 'nb-1');
 
@@ -462,9 +469,9 @@ suite('AppPreviewRunner', () => {
         ];
         for (const [condition, tableResult, message] of failures) {
             test(`fails with the block's message for ${condition}, keeping the outputs so far`, async () => {
-                __setExecutionEngineBehavior({
-                    runProject: runtimeCoreLike({ chart: { outputs: [chartOutput] }, table: tableResult })
-                });
+                when(engine.runProject(anything(), anything())).thenCall(
+                    runtimeCoreLike({ chart: { outputs: [chartOutput] }, table: tableResult })
+                );
 
                 const outcome = await run(fileUri, 'nb-1');
 
@@ -479,13 +486,13 @@ suite('AppPreviewRunner', () => {
                         ['notes', []]
                     ]
                 );
-                assert.strictEqual(engine().stopCalls, 1);
+                verify(engine.stop()).once();
             });
         }
 
         test('succeeds when only a block an agent added failed, as runtime-core carries on then', async () => {
-            __setExecutionEngineBehavior({
-                runProject: async (_file, options) => {
+            when(engine.runProject(anything(), anything())).thenCall(
+                async (_file: DeepnoteFile, options: ExecutionOptions): Promise<ExecutionSummary> => {
                     await options.onBlockDone?.({
                         blockId: 'agent-added',
                         blockType: 'code',
@@ -497,7 +504,7 @@ suite('AppPreviewRunner', () => {
 
                     return { totalBlocks: 1, executedBlocks: 1, failedBlocks: 0, totalDurationMs: 1 };
                 }
-            });
+            );
 
             const outcome = await run(fileUri, 'nb-1');
 
@@ -516,9 +523,9 @@ suite('AppPreviewRunner', () => {
                     'nb-init'
                 )
             );
-            __setExecutionEngineBehavior({
-                runProject: runtimeCoreLike({ setup: { success: false, outputs: [errorOutput] } })
-            });
+            when(engine.runProject(anything(), anything())).thenCall(
+                runtimeCoreLike({ setup: { success: false, outputs: [errorOutput] } })
+            );
 
             const outcome = await run(withInit, 'nb-1');
 
@@ -529,8 +536,8 @@ suite('AppPreviewRunner', () => {
                     { id: 'chart', type: 'code', outputs: [], metadata: {}, outputHead: null, outputTail: null }
                 ]
             });
-            assert.deepStrictEqual(notebookIdsPerCall(), [['nb-init']]);
-            assert.strictEqual(engine().stopCalls, 1);
+            assert.deepStrictEqual(notebookIdsPerCall(1), [['nb-init']]);
+            verify(engine.stop()).once();
         });
 
         test('is an internal error, without a kernel, when the notebook has no interpreter', async () => {
@@ -543,7 +550,7 @@ suite('AppPreviewRunner', () => {
                 error: 'No Python interpreter is selected for the notebook. Select one in VS Code, then run the app again.',
                 snapshotBlocks: null
             });
-            assert.deepStrictEqual(__getExecutionEngines(), []);
+            sinon.assert.notCalled(createEngine);
         });
 
         const declined = [
@@ -578,27 +585,14 @@ suite('AppPreviewRunner', () => {
                 error: 'The server exited',
                 snapshotBlocks: null
             });
-            assert.deepStrictEqual(__getExecutionEngines(), []);
+            sinon.assert.notCalled(createEngine);
         });
 
         const engineFailures: [string, () => void][] = [
-            [
-                'the kernel fails to start',
-                () =>
-                    __setExecutionEngineBehavior({
-                        start: async () => {
-                            throw new Error('The kernel died');
-                        }
-                    })
-            ],
+            ['the kernel fails to start', () => when(engine.start()).thenReject(new Error('The kernel died'))],
             [
                 'running the notebook throws',
-                () =>
-                    __setExecutionEngineBehavior({
-                        runProject: async () => {
-                            throw new Error('The kernel died');
-                        }
-                    })
+                () => when(engine.runProject(anything(), anything())).thenReject(new Error('The kernel died'))
             ]
         ];
         for (const [condition, arrange] of engineFailures) {
@@ -612,7 +606,7 @@ suite('AppPreviewRunner', () => {
                     error: 'The kernel died',
                     snapshotBlocks: null
                 });
-                assert.strictEqual(engine().stopCalls, 1);
+                verify(engine.stop()).once();
             });
         }
     });
@@ -686,28 +680,27 @@ suite('AppPreviewRunner', () => {
 
                 assert.deepStrictEqual(outcome, { status: 'stopped', error: null, snapshotBlocks: null });
                 assert.deepStrictEqual(steps, expectedSteps);
-                assert.deepStrictEqual(__getExecutionEngines(), []);
+                sinon.assert.notCalled(createEngine);
             });
         }
 
         test('stops without running, and stops the kernel, when cancelled while the kernel starts', async () => {
-            let kernelStarted: () => void = () => undefined;
-            __setExecutionEngineBehavior({
-                start: () =>
-                    new Promise<void>((resolve) => {
-                        kernelStarted = resolve;
-                    }),
-                runProject: runtimeCoreLike()
+            const kernelStarting = createDeferred<void>();
+            const kernelStarted = createDeferred<void>();
+            when(engine.start()).thenCall(() => {
+                kernelStarting.resolve();
+
+                return kernelStarted.promise;
             });
 
             const outcome = run(fileUri, 'nb-1');
-            await waitFor(() => __getExecutionEngines()[0]?.startCalls === 1);
+            await kernelStarting.promise;
             cancellation.cancel();
-            kernelStarted();
+            kernelStarted.resolve();
 
             assert.deepStrictEqual(await outcome, { status: 'stopped', error: null, snapshotBlocks: null });
-            assert.deepStrictEqual(engine().runProjectCalls, []);
-            assert.strictEqual(engine().stopCalls, 1);
+            verify(engine.runProject(anything(), anything())).never();
+            verify(engine.stop()).once();
             assert.notInclude(steps, 'running');
         });
 
@@ -717,17 +710,20 @@ suite('AppPreviewRunner', () => {
         ];
         for (const [times, count] of cancelCounts) {
             test(`stops the kernel once, and ends stopped, when cancelled ${times} while a block runs`, async () => {
-                __setExecutionEngineBehavior({ runProject: failWhenStopped('block-1') });
+                const blockRunning = createDeferred<void>();
+                when(engine.runProject(anything(), anything())).thenCall(
+                    failWhenStopped('block-1', stopped.promise, blockRunning)
+                );
 
                 const outcome = run(fileUri, 'nb-1');
-                await waitFor(() => __getExecutionEngines()[0]?.runProjectCalls.length === 1);
+                await blockRunning.promise;
                 for (let cancelled = 0; cancelled < count; cancelled++) {
                     cancellation.cancel();
                 }
-                await waitFor(() => engine().stopCalls > 0);
+                await stopped.promise;
 
                 assert.deepStrictEqual(await outcome, { status: 'stopped', error: null, snapshotBlocks: null });
-                assert.strictEqual(engine().stopCalls, 1);
+                verify(engine.stop()).once();
             });
         }
 
@@ -739,23 +735,24 @@ suite('AppPreviewRunner', () => {
                     'nb-init'
                 )
             );
-            __setExecutionEngineBehavior({ runProject: failWhenStopped('setup') });
+            const blockRunning = createDeferred<void>();
+            when(engine.runProject(anything(), anything())).thenCall(
+                failWhenStopped('setup', stopped.promise, blockRunning)
+            );
 
             const outcome = run(withInit, 'nb-1');
-            await waitFor(() => __getExecutionEngines()[0]?.runProjectCalls.length === 1);
+            await blockRunning.promise;
             cancellation.cancel();
-            await waitFor(() => engine().stopCalls > 0);
+            await stopped.promise;
 
             assert.deepStrictEqual(await outcome, { status: 'stopped', error: null, snapshotBlocks: null });
-            assert.deepStrictEqual(notebookIdsPerCall(), [['nb-init']]);
+            assert.deepStrictEqual(notebookIdsPerCall(1), [['nb-init']]);
         });
 
         test('ends stopped when running throws after a cancel', async () => {
-            __setExecutionEngineBehavior({
-                runProject: async () => {
-                    cancellation.cancel();
-                    throw new Error('Kernel client disconnected while an execution was in flight.');
-                }
+            when(engine.runProject(anything(), anything())).thenCall(async () => {
+                cancellation.cancel();
+                throw new Error('Kernel client disconnected while an execution was in flight.');
             });
 
             const outcome = await run(fileUri, 'nb-1');

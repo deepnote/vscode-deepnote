@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+    By,
     EditorView,
     InputBox,
     NotificationType,
@@ -20,6 +21,7 @@ import {
 } from 'vscode-extension-tester';
 
 import {
+    KERNEL_CONNECT_TIMEOUT,
     QUICK_PICK_TIMEOUT,
     SUITE_TIMEOUT,
     WORKBENCH_TIMEOUT,
@@ -32,12 +34,15 @@ import {
 } from '../../helpers';
 
 const FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview');
+const RUNS_FIXTURE_APP = path.resolve(process.cwd(), 'test', 'e2e', 'fixtures', 'app-preview-runs');
 const INPUTS_NOTEBOOK_FIXTURE = 'app-preview-inputs.deepnote';
+const RUNS_NOTEBOOK_FIXTURES = ['app-preview-runs.deepnote', 'app-preview-runs-init.deepnote'];
 const SYNCED_APP = path.join('Sales', '.files', '_deepnote_static');
 const SYNCED_TITLE = 'Synced fixture';
 const RELOAD_TITLE = 'Reload fixture';
 const REUSE_TITLE = 'Reuse fixture';
 const INPUTS_TITLE = 'Inputs fixture';
+const RUNS_TITLE = 'Runs fixture';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
 const NOT_SUPPORTED = 'which the local preview does not support yet.';
 const INPUTS_RESOLVED = 'inputs() resolved: ';
@@ -141,6 +146,28 @@ async function onIntegratedBrowserPage<T>(title: string, read: () => Promise<T>)
     } finally {
         await driver.switchTo().window(workbench);
     }
+}
+
+async function runWithRegion(
+    region: string,
+    timeout = WORKBENCH_TIMEOUT
+): Promise<{ status: string; result: unknown }> {
+    const driver = VSBrowser.instance.driver;
+    await driver.findElement(By.css(`#region option[value="${region}"]`)).click();
+    await driver.findElement(By.id('run')).click();
+    let status = '';
+    await driver.wait(
+        async () => {
+            status = await driver.findElement(By.id('status')).getText();
+
+            return status !== 'running';
+        },
+        timeout,
+        `the run with region "${region}" did not finish`
+    );
+    const result = await driver.findElement(By.id('result')).getText();
+
+    return { status, result: result === '' ? null : JSON.parse(result) };
 }
 
 /** Leaves the Notifications Center open, so the next screenshot shows the warnings. */
@@ -282,6 +309,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         // Kept out of every app folder and the folders above them, so no app resolves to this project.
         fs.mkdirSync(path.join(workspaceDir, 'notebooks'));
         inputsNotebookFile = copyFixtureIntoDir(path.join(workspaceDir, 'notebooks'), INPUTS_NOTEBOOK_FIXTURE);
+        RUNS_NOTEBOOK_FIXTURES.forEach((fixture) => copyFixtureIntoDir(path.join(workspaceDir, 'notebooks'), fixture));
 
         await VSBrowser.instance.waitForWorkbench(WORKBENCH_TIMEOUT);
         await openFolderViaDialog(workspaceDir);
@@ -382,6 +410,39 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         } finally {
             fs.writeFileSync(inputsNotebookFile, original);
         }
+    });
+
+    it("runs the workspace notebook with each run's inputs, after its init notebook, and reports its result or its error", async function () {
+        const screenshot = createScreenshotter(this);
+        await clearNotifications();
+        const appDir = fs.mkdtempSync(path.join(workspaceDir, 'runs-app-'));
+        fs.cpSync(RUNS_FIXTURE_APP, appDir, { recursive: true });
+
+        await selectDeepnoteContextMenu(await findRootExplorerItem(path.basename(appDir)), 'Preview App');
+
+        // The first run starts the notebook file's toolkit server and a kernel.
+        const runs = await onIntegratedBrowserPage(RUNS_TITLE, async () => {
+            const asia = await runWithRegion('Asia', KERNEL_CONNECT_TIMEOUT);
+            const americas = await runWithRegion('Americas');
+            const noRegion = await runWithRegion('');
+            await screenshot('run-results');
+
+            return [asia, americas, noRegion];
+        });
+        expect(runs).to.deep.equal([
+            { status: 'success', result: { region: 'Asia', init_region: false } },
+            { status: 'success', result: { region: 'Americas', init_region: false } },
+            // The notebook displays its result before the block that raises, in Deepnote's block order.
+            { status: 'error, ValueError: Choose a region first', result: { region: '', init_region: false } }
+        ]);
+
+        const center = await new Workbench().openNotificationsCenter();
+        const messages = await Promise.all(
+            (await center.getNotifications(NotificationType.Warning)).map((notification) => notification.getMessage())
+        );
+        expect(messages.filter((message) => message.endsWith(NOT_SUPPORTED))).to.deep.equal([]);
+        await screenshot('no-run-warning');
+        await center.close();
     });
 
     it('switches to the open tab and reloads it when the same folder is previewed again', async function () {

@@ -9,6 +9,7 @@ import { logger } from '../../../platform/logging';
 import { extname, extUri } from '../../../platform/vscode-path/resources';
 import { createAppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
 import { findNotebookById } from './appPreviewWorkspace.node';
+import type { AppPreviewApi, IAppPreviewRunner } from './types';
 
 export interface AppPreviewProject {
     id: string;
@@ -18,6 +19,7 @@ export interface AppPreviewProject {
 export interface AppPreviewSessionOptions {
     folder: Uri;
     project: AppPreviewProject | undefined;
+    runner: IAppPreviewRunner;
     scripts: { appClient: Uri };
     onUnsupported(operation: AppPreviewOperation): void;
 }
@@ -121,6 +123,7 @@ function swapClientScriptTags(page: string): string {
  * Deepnote's client in place of the hosted one, the token endpoint the client asks first, and a local API at `/v2`.
  */
 export class AppPreviewSession implements IDisposable {
+    private api: AppPreviewApi | undefined;
     private project: AppPreviewProject | undefined;
     private server: http.Server | undefined;
     private serverUri: Uri | undefined;
@@ -156,6 +159,7 @@ export class AppPreviewSession implements IDisposable {
     }
 
     public dispose(): void {
+        this.api?.dispose();
         const server = this.server;
         this.server = undefined;
         if (!server) {
@@ -242,14 +246,13 @@ export class AppPreviewSession implements IDisposable {
         });
         app.post('/__deepnote/api-token', (req, res) => this.sendToken(req, res));
         app.use('/__deepnote', (_req, res) => notFound(res));
-        app.use(
-            '/v2',
-            createAppPreviewApi({
-                token: this.token,
-                findNotebook: (notebookId) => findNotebookById(notebookId, this.project?.folder),
-                onUnsupported: (operation) => this.options.onUnsupported(operation)
-            })
-        );
+        this.api = createAppPreviewApi({
+            token: this.token,
+            findNotebook: (notebookId) => findNotebookById(notebookId, this.project?.folder),
+            onUnsupported: (operation) => this.options.onUnsupported(operation),
+            runner: this.options.runner
+        });
+        app.use('/v2', this.api.router);
         app.use((req, res) => this.serveFolder(req, res));
 
         return app;

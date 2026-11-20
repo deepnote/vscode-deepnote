@@ -10,6 +10,7 @@ import { basename } from '../../../platform/vscode-path/resources';
 import type { AppPreviewOperation } from './appPreviewApi.node';
 import { AppPreviewSession } from './appPreviewSession.node';
 import { resolvePreviewProject } from './appPreviewWorkspace.node';
+import { IAppPreviewRunner } from './types';
 
 const INTEGRATED_BROWSER_OPEN_COMMAND = 'workbench.action.browser.open';
 const SIMPLE_BROWSER_OPEN_COMMAND = 'simpleBrowser.api.open';
@@ -24,7 +25,8 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
+        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
+        @inject(IAppPreviewRunner) private readonly runner: IAppPreviewRunner
     ) {}
 
     public activate(): void {
@@ -136,6 +138,7 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
         const session = new AppPreviewSession({
             folder,
             project: await resolvePreviewProject(folder),
+            runner: this.runner,
             // A copy of https://deepnote.com/static/app-client/v1.js, so that previews work offline.
             scripts: {
                 appClient: Uri.joinPath(this.extensionContext.extensionUri, 'resources', 'appPreview', 'v1.js')

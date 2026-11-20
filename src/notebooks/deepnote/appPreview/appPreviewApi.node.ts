@@ -1,30 +1,88 @@
+import { getInputBlockValueOverrideValidationError, isInputBlock } from '@deepnote/blocks';
 // TODO: Import from `@deepnote/cloud` once it exports the API's generated types. The mock package is only a
 // devDependency, which is fine for a type-only import because the build erases it.
 import type { operations } from '@deepnote/cloud-mock';
 import { timingSafeEqual } from 'crypto';
-import express, { type NextFunction, type Request, type Response, type Router } from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
+import { CancellationTokenSource } from 'vscode';
+import { z } from 'zod';
 
+import { generateUuid } from '../../../platform/common/uuid';
+import type { DeepnoteNotebook } from '../../../platform/deepnote/deepnoteTypes';
 import { logger } from '../../../platform/logging';
 import { blocksInNotebookOrder, toNotebookInputs, type WorkspaceNotebook } from './appPreviewWorkspace.node';
+import { PreviewRuns } from './previewRuns';
+import type {
+    AppPreviewApi,
+    AppPreviewInputValue,
+    AppPreviewRunOutcome,
+    AppPreviewRunRequest,
+    IAppPreviewRunner,
+    PreviewRun
+} from './types';
 
-export type AppPreviewOperation = 'appData()' | 'run()' | 'dataframe()';
+export type AppPreviewOperation = 'appData()' | 'dataframe()';
 
 export interface AppPreviewApiOptions {
     token: string;
     findNotebook(notebookId: string): Promise<WorkspaceNotebook | undefined>;
     onUnsupported(operation: AppPreviewOperation): void;
+    runner: IAppPreviewRunner;
 }
 
 // Protocol strings: app code receives them, so they stay English like Deepnote's API messages.
 const UNAUTHORIZED_MESSAGE = 'Unauthorized';
 const NOT_AVAILABLE_MESSAGE = 'This endpoint is not available to app viewer tokens';
 const NOTEBOOK_NOT_FOUND_MESSAGE = 'Notebook not found';
+const RUN_NOT_FOUND_MESSAGE = 'Run not found';
+const PREVIEW_STOPPED_MESSAGE = 'The app preview has stopped';
 const INTERNAL_ERROR_MESSAGE = 'Internal server error';
 
 type AppViewerNotebook = operations['getNotebook']['responses'][200]['content']['application/json']['notebook'];
 
+// Each finished run holds all its outputs, and a page may start one on every reload.
+const MAX_FINISHED_RUNS = 20;
+
+const createRunBodySchema = z.strictObject({
+    notebookId: z.string().min(1),
+    inputs: z.record(z.string().min(1), z.union([z.string(), z.boolean(), z.array(z.string())])).optional(),
+    detachedRunStorageMode: z.enum(['read_write', 'readonly']).optional()
+});
+
 function notSupportedMessage(operation: AppPreviewOperation): string {
     return `${operation} is not supported in the local preview yet.`;
+}
+
+/** The 4xx status of an error body-parser raises for the request itself, such as malformed JSON. */
+function clientErrorStatus(error: unknown): number | undefined {
+    if (typeof error !== 'object' || error === null || !('status' in error) || !('expose' in error)) {
+        return undefined;
+    }
+
+    return typeof error.status === 'number' && error.status < 500 && error.expose === true ? error.status : undefined;
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+/** The input check Deepnote's `POST /v2/runs` makes before it accepts a run. */
+function inputsError(notebook: DeepnoteNotebook, inputs: Record<string, AppPreviewInputValue>): string | undefined {
+    const inputBlocks = notebook.blocks.filter(isInputBlock);
+    for (const [name, value] of Object.entries(inputs)) {
+        const blocks = inputBlocks.filter((block) => block.metadata.deepnote_variable_name === name);
+        if (blocks.length === 0) {
+            return `Input "${name}" is not defined for this notebook`;
+        }
+        for (const block of blocks) {
+            const error = getInputBlockValueOverrideValidationError(block, value);
+            if (error) {
+                return `Input "${name}" ${error}`;
+            }
+        }
+    }
+
+    return undefined;
 }
 
 function isAuthorized(authorizationHeader: string | undefined, token: string): boolean {
@@ -36,6 +94,17 @@ function isAuthorized(authorizationHeader: string | undefined, token: string): b
     const actual = Buffer.from(authorizationHeader);
 
     return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+/** Deepnote's 400 message for a body that fails its schema. */
+function readableErrors(error: z.ZodError): string {
+    return error.issues
+        .map((issue) =>
+            issue.path.length === 0
+                ? issue.message
+                : `${issue.path.map(String).join('.')} ${issue.message.toLowerCase()}`
+        )
+        .join('; ');
 }
 
 /**
@@ -60,15 +129,48 @@ function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook): AppViewerNo
 /**
  * The local stand-in for Deepnote's app viewer API, mounted at `/v2` on the preview server.
  * Requests without the preview's bearer token get 401. `GET /notebooks/:notebookId` answers from the workspace's
- * notebooks, the other routes Deepnote's client calls or is about to call get 501, and every other route gets 403, as
- * Deepnote answers app viewer tokens. A handler that fails is logged and gets a JSON 500.
+ * notebooks, and `POST /runs` runs one with `runner`, which `GET /runs/:runId` then reports on. The other routes
+ * Deepnote's client calls or is about to call get 501, and every other route gets 403, as Deepnote answers app viewer
+ * tokens. A body that cannot be read, such as malformed JSON, gets its 4xx; any other failure is logged and gets a JSON
+ * 500.
  */
-export function createAppPreviewApi(options: AppPreviewApiOptions): Router {
+export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewApi {
     const router = express.Router();
+    const runs = new PreviewRuns(MAX_FINISHED_RUNS);
+    const unfinished = new Set<CancellationTokenSource>();
+    let isDisposed = false;
 
     const unsupported = (operation: AppPreviewOperation) => (_req: Request, res: Response) => {
         options.onUnsupported(operation);
         res.status(501).json({ message: notSupportedMessage(operation) });
+    };
+
+    const startRun = (run: PreviewRun, request: AppPreviewRunRequest) => {
+        const cancellation = new CancellationTokenSource();
+        unfinished.add(cancellation);
+        void options.runner
+            .run(request, cancellation.token, () => {
+                run.status = 'running';
+            })
+            .catch((error): AppPreviewRunOutcome => {
+                logger.error(`AppPreviewApi: Run ${run.runId} failed`, error);
+
+                return { status: 'internal_error', error: errorMessage(error), snapshotBlocks: null };
+            })
+            .then((outcome) => {
+                run.status = outcome.status;
+                run.error = outcome.error;
+                run.snapshotBlocks = outcome.snapshotBlocks;
+                run.snapshotStatus =
+                    outcome.status === 'success' || outcome.status === 'error' ? 'available' : 'unavailable';
+                run.completedAt = new Date().toISOString();
+                // LRUCache trims only on set.
+                runs.set(run.runId, run);
+            })
+            .finally(() => {
+                unfinished.delete(cancellation);
+                cancellation.dispose();
+            });
     };
 
     router.use((req: Request, res: Response, next: NextFunction) => {
@@ -90,8 +192,63 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): Router {
         res.json({ notebook: toAppViewerNotebook(found) });
     });
     router.get('/notebooks/:notebookId/app-data', unsupported('appData()'));
-    router.post('/runs', unsupported('run()'));
-    router.get('/runs/:runId', unsupported('run()'));
+    router.post('/runs', express.json(), async (req: Request, res: Response) => {
+        const parsed = createRunBodySchema.safeParse(req.body, {
+            // Deepnote's error map, so a missing field reads `is required`.
+            error: (issue) => (issue.code === 'invalid_type' && issue.input === undefined ? 'is required' : undefined)
+        });
+        if (!parsed.success) {
+            res.status(400).json({ message: readableErrors(parsed.error) });
+
+            return;
+        }
+
+        const { notebookId, inputs = {} } = parsed.data;
+        const found = await options.findNotebook(notebookId);
+        // Closing the server does not stop this handler, and a run started now would have nothing left to cancel it.
+        if (isDisposed) {
+            res.status(503).json({ message: PREVIEW_STOPPED_MESSAGE });
+
+            return;
+        }
+        // Unlike its GET routes, Deepnote answers 400 here.
+        if (!found) {
+            res.status(400).json({ message: NOTEBOOK_NOT_FOUND_MESSAGE });
+
+            return;
+        }
+        const inputError = inputsError(found.notebook, inputs);
+        if (inputError) {
+            res.status(400).json({ message: inputError });
+
+            return;
+        }
+
+        const run: PreviewRun = {
+            runId: generateUuid(),
+            notebookId,
+            status: 'pending',
+            snapshotStatus: 'pending',
+            snapshotBlocks: null,
+            error: null,
+            createdAt: new Date().toISOString(),
+            completedAt: null
+        };
+        runs.set(run.runId, run);
+        // Run the revision `inputs` were checked against: runtime-core doesn't reject an input no block declares, it
+        // sets it as a plain variable.
+        startRun(run, { file: found.file, fileUri: found.fileUri, notebookId, inputs });
+        res.status(202).json({ runId: run.runId, status: run.status, createdAt: run.createdAt });
+    });
+    router.get('/runs/:runId', (req: Request<{ runId: string }>, res: Response) => {
+        const run = runs.get(req.params.runId);
+        if (!run) {
+            res.status(404).json({ message: RUN_NOT_FOUND_MESSAGE });
+
+            return;
+        }
+        res.json({ run: { ...run, snapshotExpiresAt: null, snapshotContent: null, snapshotDownloadUrl: null } });
+    });
     router.get('/projects/:projectId/dataframes/:name', unsupported('dataframe()'));
 
     router.use((_req: Request, res: Response) => {
@@ -99,9 +256,22 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): Router {
     });
     // Express's own handler would answer an HTML page that holds the stack, and log it outside the extension's logger.
     router.use((error: unknown, req: Request, res: Response, _next: NextFunction) => {
+        const status = clientErrorStatus(error);
+        if (status !== undefined) {
+            res.status(status).json({ message: errorMessage(error) });
+
+            return;
+        }
         logger.error(`AppPreviewApi: ${req.method} ${req.path} failed`, error);
         res.status(500).json({ message: INTERNAL_ERROR_MESSAGE });
     });
 
-    return router;
+    return {
+        router,
+        runs,
+        dispose: () => {
+            isDisposed = true;
+            unfinished.forEach((cancellation) => cancellation.cancel());
+        }
+    };
 }

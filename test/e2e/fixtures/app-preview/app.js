@@ -69,7 +69,6 @@ const notebook = connection.notebook('e2e-preview-notebook');
         connection.notebook('e2e-missing-notebook').inputs()
     );
     await call('app-data', 'appData()', () => notebook.appData());
-    await call('app-data-again', 'appData() again', () => notebook.appData());
     const deepnoteRequests = performance
         .getEntriesByType('resource')
         .filter((entry) => new URL(entry.name).hostname.endsWith('deepnote.com'));

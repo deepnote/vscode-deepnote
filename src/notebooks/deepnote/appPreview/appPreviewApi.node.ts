@@ -83,9 +83,9 @@ function errorMessage(error: unknown): string {
 }
 
 /**
- * Runs by ID. Unfinished runs stay, and so does each notebook's success that started last, which `appData()` answers
- * from. Of the other runs it keeps the ones set or read last, up to {@link LRUCache.limit}, so a long run is still
- * there for the page to poll once it finishes.
+ * Keeps unfinished runs, and each notebook's success that started last, which `appData()` answers from. Of the other
+ * finished runs it keeps the {@link LRUCache.limit} that finished last, so a long run is still there for the page to
+ * poll once it finishes.
  */
 class PreviewRuns extends LRUCache<string, PreviewRun> {
     protected override checkTrim(): void {
@@ -96,9 +96,9 @@ class PreviewRuns extends LRUCache<string, PreviewRun> {
                 newestSuccess.set(run.notebookId, run);
             }
         }
-        const removable = [...this.values()].filter(
-            (run) => run.completedAt !== null && newestSuccess.get(run.notebookId) !== run
-        );
+        const removable = [...this.values()]
+            .filter((run) => run.completedAt !== null && newestSuccess.get(run.notebookId) !== run)
+            .sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''));
         removable.slice(0, Math.max(0, removable.length - this.limit)).forEach((run) => this.delete(run.runId));
     }
 }
@@ -201,7 +201,7 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
                 run.snapshotStatus =
                     outcome.status === 'success' || outcome.status === 'error' ? 'available' : 'unavailable';
                 run.completedAt = new Date().toISOString();
-                // Setting the finished run again marks it as used last, and trims the runs.
+                // LRUCache trims only on set.
                 runs.set(run.runId, run);
             })
             .finally(() => {

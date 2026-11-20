@@ -450,17 +450,18 @@ suite('createAppPreviewApi', () => {
         await assertJson(await call('GET', `/runs/${failed[0]}`), 404, { message: 'Run not found' });
     });
 
-    test('keeps a finished run the page read since, and forgets the one finished or read longest ago', async () => {
+    test('forgets the run that finished first, even when the page read it since', async () => {
+        const clock = sinon.useFakeTimers({ now: Date.parse(NOW), toFake: ['Date'] });
         const failed: string[] = [];
         for (let index = 0; index < 20; index++) {
             failed.push(await finishRun('error'));
+            clock.tick(1);
         }
 
         await getRun(failed[0]);
         await finishRun('error');
 
-        assert.strictEqual((await getRun(failed[0])).status, 'error');
-        await assertJson(await call('GET', `/runs/${failed[1]}`), 404, { message: 'Run not found' });
+        await assertJson(await call('GET', `/runs/${failed[0]}`), 404, { message: 'Run not found' });
     });
 
     test("keeps the notebook's success that started last, which appData() answers from, though an older one finished after it", async () => {
@@ -470,6 +471,7 @@ suite('createAppPreviewApi', () => {
         const newer = await finishRun('success');
         outcome.resolve({ status: 'success', error: null, snapshotBlocks: [] });
         await waitForStatus(older, 'success');
+        clock.tick(1);
         for (let index = 0; index < 20; index++) {
             await finishRun('error');
         }

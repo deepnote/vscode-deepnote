@@ -148,13 +148,21 @@ suite('createAppPreviewApi', () => {
         }
     }
 
-    async function startRun(): Promise<{ runId: string; outcome: Deferred<AppPreviewRunOutcome> }> {
+    async function startRun(notebookId = 'nb-1'): Promise<{ runId: string; outcome: Deferred<AppPreviewRunOutcome> }> {
         const outcome = createDeferred<AppPreviewRunOutcome>();
         when(runner.run(anything(), anything(), anything())).thenReturn(outcome.promise);
-        const response = await createRun({ notebookId: 'nb-1', inputs: { region: 'Asia' } });
+        const response = await createRun({ notebookId });
         assert.strictEqual(response.status, 202);
 
         return { runId: (await response.json()).runId, outcome };
+    }
+
+    async function finishRun(status: 'success' | 'error', notebookId?: string): Promise<string> {
+        const { runId, outcome } = await startRun(notebookId);
+        outcome.resolve({ status, error: null, snapshotBlocks: [] });
+        await waitForStatus(runId, status);
+
+        return runId;
     }
 
     async function assertJson(response: Response, status: number, body: unknown): Promise<void> {
@@ -393,15 +401,9 @@ suite('createAppPreviewApi', () => {
         });
     }
 
-    test("forgets the oldest finished runs beyond 20, but never an unfinished run or a notebook's newest success", async () => {
+    test("forgets the oldest finished runs beyond 20, but never an unfinished run or each notebook's newest success", async () => {
         const { runId: unfinished } = await startRun();
-        const finishRun = async (status: 'success' | 'error') => {
-            const { runId, outcome } = await startRun();
-            outcome.resolve({ status, error: null, snapshotBlocks: [] });
-            await waitForStatus(runId, status);
-
-            return runId;
-        };
+        const otherNotebookSuccess = await finishRun('success', 'nb-init');
         const olderSuccess = await finishRun('success');
         const newestSuccess = await finishRun('success');
         const failed: string[] = [];
@@ -409,9 +411,51 @@ suite('createAppPreviewApi', () => {
             failed.push(await finishRun('error'));
         }
 
-        assert.deepStrictEqual([...api.runs.keys()], [unfinished, newestSuccess, ...failed.slice(1)]);
+        assert.sameMembers([...api.runs.keys()], [unfinished, otherNotebookSuccess, newestSuccess, ...failed.slice(1)]);
         await assertJson(await call('GET', `/runs/${olderSuccess}`), 404, { message: 'Run not found' });
         assert.strictEqual((await getRun(newestSuccess)).status, 'success');
+        assert.strictEqual((await getRun(otherNotebookSuccess)).status, 'success');
+    });
+
+    test('forgets the run that finished first, not a long run that finishes after 20 runs started later', async () => {
+        const { runId: longRun, outcome: longOutcome } = await startRun();
+        const failed: string[] = [];
+        for (let index = 0; index < 20; index++) {
+            failed.push(await finishRun('error'));
+        }
+
+        longOutcome.resolve({ status: 'error', error: 'ZeroDivisionError: division by zero', snapshotBlocks: [] });
+
+        assert.strictEqual((await waitForStatus(longRun, 'error')).error, 'ZeroDivisionError: division by zero');
+        await assertJson(await call('GET', `/runs/${failed[0]}`), 404, { message: 'Run not found' });
+    });
+
+    test('keeps a finished run the page read since, and forgets the one finished or read longest ago', async () => {
+        const failed: string[] = [];
+        for (let index = 0; index < 20; index++) {
+            failed.push(await finishRun('error'));
+        }
+
+        await getRun(failed[0]);
+        await finishRun('error');
+
+        assert.strictEqual((await getRun(failed[0])).status, 'error');
+        await assertJson(await call('GET', `/runs/${failed[1]}`), 404, { message: 'Run not found' });
+    });
+
+    test("keeps the notebook's success that started last, which appData() answers from, though an older one finished after it", async () => {
+        const clock = sinon.useFakeTimers({ now: Date.parse(NOW), toFake: ['Date'] });
+        const { runId: older, outcome } = await startRun();
+        clock.tick(1);
+        const newer = await finishRun('success');
+        outcome.resolve({ status: 'success', error: null, snapshotBlocks: [] });
+        await waitForStatus(older, 'success');
+        for (let index = 0; index < 20; index++) {
+            await finishRun('error');
+        }
+
+        assert.strictEqual((await getRun(newer)).status, 'success');
+        await assertJson(await call('GET', `/runs/${older}`), 404, { message: 'Run not found' });
     });
 
     const stubs: [string, string, AppPreviewOperation][] = [

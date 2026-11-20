@@ -641,7 +641,7 @@ export class LRUCache<K, V> extends LinkedMap<K, V> {
         return this;
     }
 
-    private checkTrim() {
+    protected checkTrim() {
         if (this.size > this._limit) {
             this.trimOld(Math.round(this._limit * this._ratio));
         }

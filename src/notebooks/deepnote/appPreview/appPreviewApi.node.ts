@@ -7,6 +7,7 @@ import express, { type NextFunction, type Request, type Response, type Router } 
 import { CancellationTokenSource } from 'vscode';
 import { z } from 'zod';
 
+import { LRUCache } from '../../../platform/common/utils/map';
 import { generateUuid } from '../../../platform/common/uuid';
 import type { DeepnoteNotebook } from '../../../platform/deepnote/deepnoteTypes';
 import { logger } from '../../../platform/logging';
@@ -36,10 +37,7 @@ export interface PreviewRun {
 
 export interface AppPreviewApi {
     router: Router;
-    /**
-     * The preview's runs by ID, in the order they started. Besides unfinished runs and each notebook's newest
-     * successful run, it keeps only the newest {@link MAX_FINISHED_RUNS} finished runs.
-     */
+    /** The preview's runs by ID, trimmed as {@link PreviewRuns} describes. */
     runs: Map<string, PreviewRun>;
     /** Cancels every unfinished run, which stops its kernel once it has one. */
     dispose(): void;
@@ -81,20 +79,24 @@ function errorMessage(error: unknown): string {
 }
 
 /**
- * Drops the oldest finished runs beyond {@link MAX_FINISHED_RUNS}. Unfinished runs stay, and so does each notebook's
- * newest successful run, which `appData()` answers from.
+ * Runs by ID. Unfinished runs stay, and so does each notebook's success that started last, which `appData()` answers
+ * from. Of the other runs it keeps the ones set or read last, up to {@link LRUCache.limit}, so a long run is still
+ * there for the page to poll once it finishes.
  */
-function evictFinishedRuns(runs: Map<string, PreviewRun>): void {
-    const newestSuccess = new Map<string, string>();
-    for (const run of runs.values()) {
-        if (run.status === 'success') {
-            newestSuccess.set(run.notebookId, run.runId);
+class PreviewRuns extends LRUCache<string, PreviewRun> {
+    protected override checkTrim(): void {
+        const newestSuccess = new Map<string, PreviewRun>();
+        for (const run of this.values()) {
+            const newest = newestSuccess.get(run.notebookId);
+            if (run.status === 'success' && (!newest || run.createdAt >= newest.createdAt)) {
+                newestSuccess.set(run.notebookId, run);
+            }
         }
+        const removable = [...this.values()].filter(
+            (run) => run.completedAt !== null && newestSuccess.get(run.notebookId) !== run
+        );
+        removable.slice(0, Math.max(0, removable.length - this.limit)).forEach((run) => this.delete(run.runId));
     }
-    const removable = [...runs.values()].filter(
-        (run) => run.completedAt !== null && newestSuccess.get(run.notebookId) !== run.runId
-    );
-    removable.slice(0, Math.max(0, removable.length - MAX_FINISHED_RUNS)).forEach((run) => runs.delete(run.runId));
 }
 
 /** The input check Deepnote's `POST /v2/runs` makes before it accepts a run. */
@@ -167,7 +169,7 @@ function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook): AppViewerNo
  */
 export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewApi {
     const router = express.Router();
-    const runs = new Map<string, PreviewRun>();
+    const runs = new PreviewRuns(MAX_FINISHED_RUNS);
     const unfinished = new Set<CancellationTokenSource>();
 
     const unsupported = (operation: AppPreviewOperation) => (_req: Request, res: Response) => {
@@ -194,7 +196,8 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
                 run.snapshotStatus =
                     outcome.status === 'success' || outcome.status === 'error' ? 'available' : 'unavailable';
                 run.completedAt = new Date().toISOString();
-                evictFinishedRuns(runs);
+                // Setting the finished run again marks it as used last, and trims the runs.
+                runs.set(run.runId, run);
             })
             .finally(() => {
                 unfinished.delete(cancellation);

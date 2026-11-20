@@ -1425,6 +1425,9 @@ export namespace DeepnoteAppPreview {
     export const toolkitNotInstalled = l10n.t(
         "deepnote-toolkit is not installed in the notebook's Python interpreter. Install it from VS Code, then run the app again."
     );
+    export const selectDifferentInterpreter = l10n.t(
+        'Open the notebook in VS Code and run Deepnote: Select Interpreter for Notebook, then run the app again.'
+    );
     export const blockFailed = (blockId: string) => l10n.t('Block {0} failed.', blockId);
     export const notebookNotInFile = (notebookId: string) =>
         l10n.t('The notebook {0} is no longer in its .deepnote file.', notebookId);

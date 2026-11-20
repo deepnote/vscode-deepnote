@@ -187,6 +187,10 @@ export class AppPreviewRunner implements IAppPreviewRunner {
 
         const dependency = await this.toolkit.ensureToolkitInstalled(interpreter, fileUri, token);
         Cancellation.throwIfCanceled(token);
+        // No picker from a run the page started: switching pins the notebook's interpreter and rebuilds its kernel.
+        if (dependency === DeepnoteToolkitDependencyResponse.selectDifferentInterpreter) {
+            return internalError(DeepnoteAppPreview.selectDifferentInterpreter);
+        }
         if (dependency !== DeepnoteToolkitDependencyResponse.ok) {
             return internalError(DeepnoteAppPreview.toolkitNotInstalled);
         }

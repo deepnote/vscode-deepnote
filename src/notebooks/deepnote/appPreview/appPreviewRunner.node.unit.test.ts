@@ -553,22 +553,23 @@ suite('AppPreviewRunner', () => {
             sinon.assert.notCalled(createEngine);
         });
 
-        const declined = [
-            DeepnoteToolkitDependencyResponse.cancel,
-            DeepnoteToolkitDependencyResponse.selectDifferentInterpreter,
-            DeepnoteToolkitDependencyResponse.failed
+        const toolkitNotInstalled =
+            "deepnote-toolkit is not installed in the notebook's Python interpreter. Install it from VS Code, then run the app again.";
+        const declined: [DeepnoteToolkitDependencyResponse, string][] = [
+            [DeepnoteToolkitDependencyResponse.cancel, toolkitNotInstalled],
+            [
+                DeepnoteToolkitDependencyResponse.selectDifferentInterpreter,
+                'Open the notebook in VS Code and run Deepnote: Select Interpreter for Notebook, then run the app again.'
+            ],
+            [DeepnoteToolkitDependencyResponse.failed, toolkitNotInstalled]
         ];
-        for (const response of declined) {
+        for (const [response, message] of declined) {
             test(`is an internal error, without a server, when the toolkit install answers ${DeepnoteToolkitDependencyResponse[response]}`, async () => {
                 when(toolkit.ensureToolkitInstalled(anything(), anything(), anything())).thenResolve(response);
 
                 const outcome = await run(fileUri, 'nb-1');
 
-                assert.deepStrictEqual(outcome, {
-                    status: 'internal_error',
-                    error: "deepnote-toolkit is not installed in the notebook's Python interpreter. Install it from VS Code, then run the app again.",
-                    snapshotBlocks: null
-                });
+                assert.deepStrictEqual(outcome, { status: 'internal_error', error: message, snapshotBlocks: null });
                 assert.notInclude(steps, 'startServer');
             });
         }

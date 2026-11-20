@@ -280,15 +280,14 @@ suite('AppPreviewCommandHandler', () => {
     test('warns once per unsupported operation, naming the operation and the folder', async () => {
         await previewApp(Uri.file(appFolder));
         const { token } = await requestToken();
-        const api = (urlPath: string, method = 'GET') =>
-            fetch(`${serverUrl()}v2${urlPath}`, {
-                method,
-                headers: { authorization: `Bearer ${token}` }
-            });
+        const api = (urlPath: string) =>
+            fetch(`${serverUrl()}v2${urlPath}`, { headers: { authorization: `Bearer ${token}` } });
+        const dataframe = () => api('/projects/project-1/dataframes/sales');
 
         assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
-        assert.strictEqual((await api('/projects/project-1/dataframes/sales')).status, 501);
-        assert.strictEqual((await api('/projects/project-1/dataframes/sales')).status, 501);
+        assert.strictEqual((await dataframe()).status, 501);
+        // A repeated call must not warn again.
+        assert.strictEqual((await dataframe()).status, 501);
 
         verify(
             win().showWarningMessage('The app in app called appData(), which the local preview does not support yet.')

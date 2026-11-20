@@ -131,6 +131,25 @@ function failWhenStopped(blockId: string, stopped: Promise<void>, running: Defer
     };
 }
 
+/** A run whose agent block waits on its model until the run's signal aborts, which stopping the kernel doesn't do. */
+function agentUntilAborted(blockId: string, running: Deferred<void>) {
+    return async (_file: DeepnoteFile, options: ExecutionOptions): Promise<ExecutionSummary> => {
+        running.resolve();
+        await new Promise((resolve) => options.signal?.addEventListener('abort', resolve));
+        await options.onBlockDone?.({
+            blockId,
+            blockType: 'agent',
+            success: false,
+            outputs: [],
+            executionCount: null,
+            durationMs: 1,
+            error: new Error('This operation was aborted')
+        });
+
+        return { totalBlocks: 1, executedBlocks: 1, failedBlocks: 1, totalDurationMs: 1 };
+    };
+}
+
 suite('AppPreviewRunner', () => {
     let tmp: string;
     let steps: Step[];
@@ -748,6 +767,18 @@ suite('AppPreviewRunner', () => {
 
             assert.deepStrictEqual(await outcome, { status: 'stopped', error: null, snapshotBlocks: null });
             assert.deepStrictEqual(notebookIdsPerCall(1), [['nb-init']]);
+        });
+
+        test("aborts the agent's model request, and ends stopped, when cancelled while an agent block runs", async () => {
+            const agentRunning = createDeferred<void>();
+            when(engine.runProject(anything(), anything())).thenCall(agentUntilAborted('agent', agentRunning));
+
+            const outcome = run(fileUri, 'nb-1');
+            await agentRunning.promise;
+            cancellation.cancel();
+
+            assert.isTrue(capture(engine.runProject).last()[1]?.signal?.aborted);
+            assert.deepStrictEqual(await outcome, { status: 'stopped', error: null, snapshotBlocks: null });
         });
 
         test('ends stopped when running throws after a cancel', async () => {

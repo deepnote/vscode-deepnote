@@ -94,6 +94,7 @@ function runCopy(file: DeepnoteFile, notebook: DeepnoteNotebook): DeepnoteFile {
 async function runNotebook(
     engine: ExecutionEngine,
     file: DeepnoteFile,
+    signal: AbortSignal,
     inputs?: Record<string, AppPreviewInputValue>
 ): Promise<NotebookRun> {
     const outputs = new Map<string, IOutput[]>();
@@ -106,7 +107,8 @@ async function runNotebook(
             if (!result.success) {
                 failure = result;
             }
-        }
+        },
+        signal
     });
 
     // runtime-core reports a failed block an agent added without stopping the run or counting it in failedBlocks.
@@ -210,16 +212,21 @@ export class AppPreviewRunner implements IAppPreviewRunner {
                 .stop()
                 .catch((error) => logger.warn('AppPreviewRunner: Could not stop the kernel', error));
         };
+        const abortController = new AbortController();
         let onCancel: Disposable | undefined;
         try {
             await engine.start();
             Cancellation.throwIfCanceled(token);
-            // stop() also fails the block that is executing and shuts the kernel down, so runProject then resolves.
-            onCancel = token.onCancellationRequested(() => stop());
+            // stop() fails an executing code block and shuts the kernel down, but an agent block keeps waiting on its
+            // model until the signal aborts. Either way runProject then resolves.
+            onCancel = token.onCancellationRequested(() => {
+                abortController.abort();
+                stop();
+            });
             onRunning();
 
             if (initCopy) {
-                const { failure } = await runNotebook(engine, initCopy);
+                const { failure } = await runNotebook(engine, initCopy, abortController.signal);
                 if (token.isCancellationRequested) {
                     return STOPPED;
                 }
@@ -232,7 +239,7 @@ export class AppPreviewRunner implements IAppPreviewRunner {
                 }
             }
 
-            const { failure, outputs } = await runNotebook(engine, targetCopy, inputs);
+            const { failure, outputs } = await runNotebook(engine, targetCopy, abortController.signal, inputs);
             if (token.isCancellationRequested) {
                 return STOPPED;
             }

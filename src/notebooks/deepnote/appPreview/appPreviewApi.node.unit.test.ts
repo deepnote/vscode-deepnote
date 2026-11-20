@@ -15,9 +15,9 @@ import {
     createDeepnoteNotebook,
     createDeepnoteProject
 } from '../deepnoteTestHelpers';
-import { createAppPreviewApi, type AppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
+import { createAppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
 import type { WorkspaceNotebook } from './appPreviewWorkspace.node';
-import type { AppPreviewRunOutcome, IAppPreviewRunner, SnapshotBlock } from './types';
+import type { AppPreviewApi, AppPreviewRunOutcome, IAppPreviewRunner, SnapshotBlock } from './types';
 
 const TOKEN = 'preview-token';
 const SALES_FILE_URI = Uri.file('/workspace/sales.deepnote');

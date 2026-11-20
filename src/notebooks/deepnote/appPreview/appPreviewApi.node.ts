@@ -3,16 +3,23 @@ import { getInputBlockValueOverrideValidationError, isInputBlock } from '@deepno
 // devDependency, which is fine for a type-only import because the build erases it.
 import type { operations } from '@deepnote/cloud-mock';
 import { timingSafeEqual } from 'crypto';
-import express, { type NextFunction, type Request, type Response, type Router } from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import { CancellationTokenSource } from 'vscode';
 import { z } from 'zod';
 
-import { LRUCache } from '../../../platform/common/utils/map';
 import { generateUuid } from '../../../platform/common/uuid';
 import type { DeepnoteNotebook } from '../../../platform/deepnote/deepnoteTypes';
 import { logger } from '../../../platform/logging';
 import { blocksInNotebookOrder, toNotebookInputs, type WorkspaceNotebook } from './appPreviewWorkspace.node';
-import type { AppPreviewInputValue, AppPreviewRunOutcome, AppPreviewRunRequest, IAppPreviewRunner } from './types';
+import { PreviewRuns } from './previewRuns';
+import type {
+    AppPreviewApi,
+    AppPreviewInputValue,
+    AppPreviewRunOutcome,
+    AppPreviewRunRequest,
+    IAppPreviewRunner,
+    PreviewRun
+} from './types';
 
 export type AppPreviewOperation = 'appData()' | 'dataframe()';
 
@@ -21,29 +28,6 @@ export interface AppPreviewApiOptions {
     findNotebook(notebookId: string): Promise<WorkspaceNotebook | undefined>;
     onUnsupported(operation: AppPreviewOperation): void;
     runner: IAppPreviewRunner;
-}
-
-/** A run as Deepnote's `GET /v2/runs/:runId` answers it, without the snapshot fields a local run never has. */
-export interface PreviewRun {
-    completedAt: string | null;
-    createdAt: string;
-    error: string | null;
-    notebookId: string;
-    runId: string;
-    snapshotBlocks: AppPreviewRunOutcome['snapshotBlocks'];
-    snapshotStatus: 'pending' | 'available' | 'unavailable';
-    status: 'pending' | 'running' | AppPreviewRunOutcome['status'];
-}
-
-export interface AppPreviewApi {
-    router: Router;
-    /** The preview's runs by ID, trimmed as {@link PreviewRuns} describes. */
-    runs: Map<string, PreviewRun>;
-    /**
-     * Cancels every unfinished run, which stops its kernel once it has one. `POST /runs` starts no run from then on and
-     * answers 503 instead, also to a request that was still looking up its notebook.
-     */
-    dispose(): void;
 }
 
 // Protocol strings: app code receives them, so they stay English like Deepnote's API messages.
@@ -80,27 +64,6 @@ function clientErrorStatus(error: unknown): number | undefined {
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
-}
-
-/**
- * Keeps unfinished runs, and each notebook's success that started last, which `appData()` answers from. Of the other
- * finished runs it keeps the {@link LRUCache.limit} that finished last, so a long run is still there for the page to
- * poll once it finishes.
- */
-class PreviewRuns extends LRUCache<string, PreviewRun> {
-    protected override checkTrim(): void {
-        const newestSuccess = new Map<string, PreviewRun>();
-        for (const run of this.values()) {
-            const newest = newestSuccess.get(run.notebookId);
-            if (run.status === 'success' && (!newest || run.createdAt >= newest.createdAt)) {
-                newestSuccess.set(run.notebookId, run);
-            }
-        }
-        const removable = [...this.values()]
-            .filter((run) => run.completedAt !== null && newestSuccess.get(run.notebookId) !== run)
-            .sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''));
-        removable.slice(0, Math.max(0, removable.length - this.limit)).forEach((run) => this.delete(run.runId));
-    }
 }
 
 /** The input check Deepnote's `POST /v2/runs` makes before it accepts a run. */

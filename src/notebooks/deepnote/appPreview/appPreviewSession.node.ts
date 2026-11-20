@@ -7,9 +7,9 @@ import { IDisposable } from '../../../platform/common/types';
 import { generateUuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import { extname, extUri } from '../../../platform/vscode-path/resources';
-import { createAppPreviewApi, type AppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
+import { createAppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
 import { findNotebookById } from './appPreviewWorkspace.node';
-import type { IAppPreviewRunner } from './types';
+import type { AppPreviewApi, IAppPreviewRunner } from './types';
 
 export interface AppPreviewProject {
     id: string;

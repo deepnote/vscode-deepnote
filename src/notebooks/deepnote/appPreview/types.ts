@@ -1,5 +1,6 @@
 import type { DeepnoteFile } from '@deepnote/blocks';
 import type { IOutput } from '@deepnote/runtime-core';
+import type { Router } from 'express';
 import type { CancellationToken, Uri } from 'vscode';
 
 /** An input value a page can pass to `run()`, as Deepnote's `POST /v2/runs` accepts it. */
@@ -26,6 +27,29 @@ export interface AppPreviewRunOutcome {
     error: string | null;
     snapshotBlocks: SnapshotBlock[] | null;
     status: 'success' | 'error' | 'internal_error' | 'stopped';
+}
+
+/** A run as Deepnote's `GET /v2/runs/:runId` answers it, without the snapshot fields a local run never has. */
+export interface PreviewRun {
+    completedAt: string | null;
+    createdAt: string;
+    error: string | null;
+    notebookId: string;
+    runId: string;
+    snapshotBlocks: AppPreviewRunOutcome['snapshotBlocks'];
+    snapshotStatus: 'pending' | 'available' | 'unavailable';
+    status: 'pending' | 'running' | AppPreviewRunOutcome['status'];
+}
+
+export interface AppPreviewApi {
+    router: Router;
+    /** The preview's runs by ID, trimmed as `PreviewRuns` describes. */
+    runs: Map<string, PreviewRun>;
+    /**
+     * Cancels every unfinished run, which stops its kernel once it has one. `POST /runs` starts no run from then on and
+     * answers 503 instead, also to a request that was still looking up its notebook.
+     */
+    dispose(): void;
 }
 
 export const IAppPreviewRunner = Symbol('IAppPreviewRunner');

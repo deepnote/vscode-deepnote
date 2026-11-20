@@ -39,7 +39,10 @@ export interface AppPreviewApi {
     router: Router;
     /** The preview's runs by ID, trimmed as {@link PreviewRuns} describes. */
     runs: Map<string, PreviewRun>;
-    /** Cancels every unfinished run, which stops its kernel once it has one. */
+    /**
+     * Cancels every unfinished run, which stops its kernel once it has one. `POST /runs` starts no run from then on and
+     * answers 503 instead, also to a request that was still looking up its notebook.
+     */
     dispose(): void;
 }
 
@@ -48,6 +51,7 @@ const UNAUTHORIZED_MESSAGE = 'Unauthorized';
 const NOT_AVAILABLE_MESSAGE = 'This endpoint is not available to app viewer tokens';
 const NOTEBOOK_NOT_FOUND_MESSAGE = 'Notebook not found';
 const RUN_NOT_FOUND_MESSAGE = 'Run not found';
+const PREVIEW_STOPPED_MESSAGE = 'The app preview has stopped';
 const INTERNAL_ERROR_MESSAGE = 'Internal server error';
 
 type AppViewerNotebook = operations['getNotebook']['responses'][200]['content']['application/json']['notebook'];
@@ -171,6 +175,7 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
     const router = express.Router();
     const runs = new PreviewRuns(MAX_FINISHED_RUNS);
     const unfinished = new Set<CancellationTokenSource>();
+    let isDisposed = false;
 
     const unsupported = (operation: AppPreviewOperation) => (_req: Request, res: Response) => {
         options.onUnsupported(operation);
@@ -237,6 +242,12 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
 
         const { notebookId, inputs = {} } = parsed.data;
         const found = await options.findNotebook(notebookId);
+        // Closing the server does not stop this handler, and a run started now would have nothing left to cancel it.
+        if (isDisposed) {
+            res.status(503).json({ message: PREVIEW_STOPPED_MESSAGE });
+
+            return;
+        }
         // Unlike its GET routes, Deepnote answers 400 here.
         if (!found) {
             res.status(400).json({ message: NOTEBOOK_NOT_FOUND_MESSAGE });
@@ -293,6 +304,9 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
     return {
         router,
         runs,
-        dispose: () => unfinished.forEach((cancellation) => cancellation.cancel())
+        dispose: () => {
+            isDisposed = true;
+            unfinished.forEach((cancellation) => cancellation.cancel());
+        }
     };
 }

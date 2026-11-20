@@ -347,6 +347,24 @@ suite('createAppPreviewApi', () => {
         assert.deepInclude(await waitForStatus(stopped.runId, 'stopped'), { snapshotStatus: 'unavailable' });
     });
 
+    test('dispose() keeps a request that is still looking up its notebook from starting a run', async () => {
+        const lookupStarted = createDeferred<void>();
+        const lookup = createDeferred<WorkspaceNotebook | undefined>();
+        findNotebook.callsFake(() => {
+            lookupStarted.resolve();
+
+            return lookup.promise;
+        });
+        const response = createRun({ notebookId: 'nb-1' });
+        await lookupStarted.promise;
+
+        api.dispose();
+        lookup.resolve({ file: SALES_FILE, fileUri: SALES_FILE_URI, notebook: SALES_FILE.project.notebooks[1] });
+
+        await assertJson(await response, 503, { message: 'The app preview has stopped' });
+        verify(runner.run(anything(), anything(), anything())).never();
+    });
+
     const invalidBodies: [string, unknown, string][] = [
         ['without notebookId', { inputs: {} }, 'notebookId is required'],
         [

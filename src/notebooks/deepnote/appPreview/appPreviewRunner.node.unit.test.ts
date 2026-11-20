@@ -1,4 +1,10 @@
-import { isExecutableBlock, isInputBlock, type DeepnoteBlock, type DeepnoteFile } from '@deepnote/blocks';
+import {
+    deserializeDeepnoteFile,
+    isExecutableBlock,
+    isInputBlock,
+    type DeepnoteBlock,
+    type DeepnoteFile
+} from '@deepnote/blocks';
 import type {
     BlockExecutionResult,
     ExecutionEngine,
@@ -171,7 +177,9 @@ suite('AppPreviewRunner', () => {
     }
 
     function run(fileUri: Uri, notebookId: string, inputs: AppPreviewRunRequest['inputs'] = {}) {
-        return runner.run({ fileUri, notebookId, inputs }, cancellation.token, () => steps.push('running'));
+        const file = deserializeDeepnoteFile(fs.readFileSync(fileUri.fsPath, 'utf8'));
+
+        return runner.run({ file, fileUri, notebookId, inputs }, cancellation.token, () => steps.push('running'));
     }
 
     function runProjectCalls(count: number) {
@@ -350,6 +358,26 @@ suite('AppPreviewRunner', () => {
             });
             assert.deepStrictEqual(notebookOptions?.inputs, { x: 'hello' });
             assert.strictEqual(fs.readFileSync(fileUri.fsPath, 'utf8'), onDisk);
+        });
+
+        test('runs the file in the request, not one saved since without its input', async () => {
+            const checked = projectFile([notebookOf('nb-1', [textInput('region', 'region', 'Europe')])]);
+            const fileUri = write(
+                'main.deepnote',
+                projectFile([notebookOf('nb-1', [createDeepnoteBlock({ id: 'chart' })])])
+            );
+
+            await runner.run(
+                { file: checked, fileUri, notebookId: 'nb-1', inputs: { region: 'Asia' } },
+                cancellation.token,
+                () => undefined
+            );
+
+            const [[file]] = runProjectCalls(1);
+            assert.deepStrictEqual(
+                file.project.notebooks[0].blocks.map((block) => block.id),
+                ['region']
+            );
         });
 
         test("runs the blocks in Deepnote's sorting key order, which runtime-core's localeCompare would not", async () => {

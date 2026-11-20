@@ -240,6 +240,7 @@ suite('createAppPreviewApi', () => {
         assert.deepStrictEqual(body, { runId: body.runId, status: 'pending', createdAt: NOW });
         verify(runner.run(anything(), anything(), anything())).once();
         assert.deepStrictEqual(capture(runner.run).last()[0], {
+            file: SALES_FILE,
             fileUri: SALES_FILE_URI,
             notebookId: 'nb-1',
             inputs: { region: 'Asia' }
@@ -252,6 +253,7 @@ suite('createAppPreviewApi', () => {
 
         verify(runner.run(anything(), anything(), anything())).once();
         assert.deepStrictEqual(capture(runner.run).last()[0], {
+            file: SALES_FILE,
             fileUri: SALES_FILE_URI,
             notebookId: 'nb-init',
             inputs: {}

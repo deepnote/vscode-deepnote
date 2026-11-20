@@ -1,3 +1,4 @@
+import type { DeepnoteFile } from '@deepnote/blocks';
 import type { IOutput } from '@deepnote/runtime-core';
 import type { CancellationToken, Uri } from 'vscode';
 
@@ -15,6 +16,7 @@ export interface SnapshotBlock {
 }
 
 export interface AppPreviewRunRequest {
+    file: DeepnoteFile;
     fileUri: Uri;
     inputs: Record<string, AppPreviewInputValue>;
     notebookId: string;
@@ -29,11 +31,11 @@ export interface AppPreviewRunOutcome {
 export const IAppPreviewRunner = Symbol('IAppPreviewRunner');
 export interface IAppPreviewRunner {
     /**
-     * Runs the notebook `notebookId` of the `.deepnote` file at `fileUri` in a new kernel on the toolkit server the
-     * extension runs for that file: the project's init notebook first, with its saved inputs, then the notebook with
-     * `inputs` applied. `onRunning` is called once the kernel is up, before the first block. Cancelling `token` ends
-     * the run as `stopped`, and once the kernel is up also stops the block that is executing and shuts the kernel down.
-     * Never rejects: failures are reported in the outcome.
+     * Runs the notebook `notebookId` of `file`, the `.deepnote` file the caller read from `fileUri`, in a new kernel on
+     * the toolkit server the extension runs for that file: the project's init notebook first, with its saved inputs,
+     * then the notebook with `inputs` applied. `onRunning` is called once the kernel is up, before the first block.
+     * Cancelling `token` ends the run as `stopped`, and once the kernel is up also stops the block that is executing
+     * and shuts the kernel down. Never rejects: failures are reported in the outcome.
      */
     run(request: AppPreviewRunRequest, token: CancellationToken, onRunning: () => void): Promise<AppPreviewRunOutcome>;
 }

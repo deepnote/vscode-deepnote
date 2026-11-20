@@ -11,7 +11,6 @@ import {
 import { Cancellation } from '../../../platform/common/cancellation';
 import { getDisplayPath, getFilePath } from '../../../platform/common/platform/fs-paths.node';
 import { DeepnoteAppPreview } from '../../../platform/common/utils/localize';
-import { readDeepnoteProjectFile } from '../../../platform/deepnote/deepnoteProjectFileReader';
 import type { DeepnoteNotebook } from '../../../platform/deepnote/deepnoteTypes';
 import { logger } from '../../../platform/logging';
 import * as path from '../../../platform/vscode-path/path';
@@ -159,11 +158,10 @@ export class AppPreviewRunner implements IAppPreviewRunner {
     }
 
     private async execute(
-        { fileUri, inputs, notebookId }: AppPreviewRunRequest,
+        { file, fileUri, inputs, notebookId }: AppPreviewRunRequest,
         token: CancellationToken,
         onRunning: () => void
     ): Promise<AppPreviewRunOutcome> {
-        const file = await readDeepnoteProjectFile(fileUri);
         const target = file.project.notebooks.find((notebook) => notebook.id === notebookId);
         if (!target) {
             throw new Error(DeepnoteAppPreview.notebookNotInFile(notebookId));

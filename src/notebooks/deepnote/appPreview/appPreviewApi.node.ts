@@ -272,7 +272,9 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
             completedAt: null
         };
         runs.set(run.runId, run);
-        startRun(run, { fileUri: found.fileUri, notebookId, inputs });
+        // Run the revision `inputs` were checked against: runtime-core doesn't reject an input no block declares, it
+        // sets it as a plain variable.
+        startRun(run, { file: found.file, fileUri: found.fileUri, notebookId, inputs });
         res.status(202).json({ runId: run.runId, status: run.status, createdAt: run.createdAt });
     });
     router.get('/runs/:runId', (req: Request<{ runId: string }>, res: Response) => {

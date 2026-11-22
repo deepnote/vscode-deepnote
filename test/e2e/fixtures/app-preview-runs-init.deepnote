@@ -1,0 +1,28 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-app-preview-runs-project
+  name: E2E App Preview Runs
+  initNotebookId: e2e-runs-init
+  notebooks:
+    # Its input shares the run notebook's input name, with another type, and keeps its saved value in a run.
+    - id: e2e-runs-init
+      name: Init
+      blocks:
+        - id: e2e-runs-init-region
+          blockGroup: e2e-runs-init-region
+          type: input-checkbox
+          sortingKey: a0
+          metadata:
+            deepnote_variable_name: region
+            deepnote_variable_value: false
+        - id: e2e-runs-init-code
+          blockGroup: e2e-runs-init-code
+          type: code
+          content: init_region = region
+          sortingKey: a1
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

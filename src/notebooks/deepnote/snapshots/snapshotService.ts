@@ -1,6 +1,5 @@
 import {
     isExecutableBlock,
-    serializeDeepnoteFile,
     type DeepnoteBlock,
     type DeepnoteFile,
     type Environment,
@@ -17,7 +16,6 @@ import fastDeepEqual from 'fast-deep-equal';
 import { inject, injectable, optional } from 'inversify';
 import {
     Disposable,
-    FileType,
     NotebookCell,
     NotebookCellKind,
     NotebookDocumentChangeEvent,
@@ -44,7 +42,7 @@ import { IDeepnoteNotebookManager } from '../../types';
 import { DeepnoteDataConverter } from '../deepnoteDataConverter';
 import { IEnvironmentCapture } from './environmentCapture.node';
 import { ExecutionMetadataTracker, type BlockExecutionMetadata } from './executionMetadataTracker';
-import { buildSnapshotPath } from './snapshotFiles';
+import { buildSnapshotPath, encodeSnapshotFile, ensureSnapshotsDirectory } from './snapshotFiles';
 
 /**
  * Platform-layer interface for snapshot metadata service.
@@ -529,34 +527,6 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         }
     }
 
-    private async ensureSnapshotsDirectory(snapshotsDir: Uri): Promise<boolean> {
-        try {
-            const stat = await workspace.fs.stat(snapshotsDir);
-
-            if (stat.type !== FileType.Directory) {
-                logger.error(
-                    `[Snapshot] Snapshots path exists but is not a directory: ${Utils.basename(snapshotsDir)}`
-                );
-
-                return false;
-            }
-
-            return true;
-        } catch {
-            logger.debug(`[Snapshot] Creating snapshots directory: ${Utils.basename(snapshotsDir)}`);
-
-            try {
-                await workspace.fs.createDirectory(snapshotsDir);
-
-                return true;
-            } catch (error) {
-                logger.error(`[Snapshot] Failed to create snapshots directory: ${Utils.basename(snapshotsDir)}`, error);
-
-                return false;
-            }
-        }
-    }
-
     private getComparableProjectContent(data: DeepnoteFile): object {
         return {
             version: data.version,
@@ -1014,7 +984,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
         }
 
         const snapshotsDir = Uri.joinPath(latestPath, '..');
-        const dirExists = await this.ensureSnapshotsDirectory(snapshotsDir);
+        const dirExists = await ensureSnapshotsDirectory(snapshotsDir);
 
         if (!dirExists) {
             return;
@@ -1049,8 +1019,7 @@ export class SnapshotService implements ISnapshotMetadataService, IExtensionSync
             }
         }
 
-        const yamlString = serializeDeepnoteFile(snapshotData);
-        const content = new TextEncoder().encode(yamlString);
+        const content = encodeSnapshotFile(snapshotData);
 
         return { latestPath, content };
     }

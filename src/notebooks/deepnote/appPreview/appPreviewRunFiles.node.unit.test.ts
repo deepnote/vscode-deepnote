@@ -13,12 +13,14 @@ import {
     createDeepnoteNotebook,
     createDeepnoteProject
 } from '../deepnoteTestHelpers';
+import { encodeSnapshotFile } from '../snapshots/snapshotFiles';
 import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 
 use(chaiAsPromised);
 
 const STORAGE = Uri.file('/storage');
 const RUN_FILE_PATH = '/storage/appPreview/runs/run-1.snapshot.deepnote';
+const LATEST_FILE_PATH = '/storage/appPreview/latest/nb%2F1.snapshot.deepnote';
 
 const RUN_FILE = createDeepnoteFile({
     execution: { startedAt: '2026-01-02T03:04:05.000Z', finishedAt: '2026-01-02T03:04:09.000Z' },
@@ -47,6 +49,12 @@ suite('AppPreviewRunFiles', () => {
         assert.strictEqual(capture(mockFs.writeFile).last()[0].fsPath, RUN_FILE_PATH);
     }
 
+    function copiedPaths(call: number): [string, string] {
+        const [source, target] = capture(mockFs.copy).byCallIndex(call);
+
+        return [source.fsPath, target.fsPath];
+    }
+
     setup(() => {
         resetVSCodeMocks();
         mockFs = mock<typeof import('vscode').workspace.fs>();
@@ -54,6 +62,7 @@ suite('AppPreviewRunFiles', () => {
         when(mockFs.stat(anything())).thenReject(FileSystemError.FileNotFound());
         when(mockFs.createDirectory(anything())).thenResolve();
         when(mockFs.writeFile(anything(), anything())).thenResolve();
+        when(mockFs.copy(anything(), anything(), anything())).thenResolve();
         when(mockFs.readFile(anything())).thenReject(FileSystemError.FileNotFound());
         when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
     });
@@ -151,5 +160,92 @@ suite('AppPreviewRunFiles', () => {
 
     test('rejects reading a run that has no file', async () => {
         await assert.isRejected(new AppPreviewRunFiles(STORAGE).read('run-unknown'));
+    });
+
+    test("copies a run's file over its notebook's latest copy, named by the encoded notebook ID", async () => {
+        await new AppPreviewRunFiles(STORAGE).updateLatest('nb/1', 'run-1', '2026-01-02T03:04:05.000Z');
+
+        verify(mockFs.copy(anything(), anything(), anything())).once();
+        assert.deepStrictEqual(copiedPaths(0), [RUN_FILE_PATH, LATEST_FILE_PATH]);
+        assert.deepStrictEqual(capture(mockFs.copy).last()[2], { overwrite: true });
+    });
+
+    test("keeps each notebook's run created last when an older run finishes after it, even while its copy is in flight", async () => {
+        const runFiles = new AppPreviewRunFiles(STORAGE);
+
+        await Promise.all([
+            runFiles.updateLatest('nb/1', 'run-newer', '2026-01-02T03:05:05.000Z'),
+            runFiles.updateLatest('nb/1', 'run-older', '2026-01-02T03:04:05.000Z'),
+            runFiles.updateLatest('nb-2', 'run-other-notebook', '2026-01-02T03:04:05.000Z')
+        ]);
+
+        verify(mockFs.copy(anything(), anything(), anything())).twice();
+        assert.deepStrictEqual(copiedPaths(0), [
+            '/storage/appPreview/runs/run-newer.snapshot.deepnote',
+            LATEST_FILE_PATH
+        ]);
+        assert.deepStrictEqual(copiedPaths(1), [
+            '/storage/appPreview/runs/run-other-notebook.snapshot.deepnote',
+            '/storage/appPreview/latest/nb-2.snapshot.deepnote'
+        ]);
+    });
+
+    test('logs an error naming the run when the copy fails, and still copies an older run of the notebook after it', async () => {
+        const logError = sinon.stub(logger, 'error');
+        const copyFailure = new Error('Disk full');
+        when(mockFs.copy(anything(), anything(), anything()))
+            .thenReject(copyFailure)
+            .thenResolve();
+        const runFiles = new AppPreviewRunFiles(STORAGE);
+
+        await runFiles.updateLatest('nb/1', 'run-newer', '2026-01-02T03:05:05.000Z');
+        await runFiles.updateLatest('nb/1', 'run-older', '2026-01-02T03:04:05.000Z');
+
+        sinon.assert.calledOnce(logError);
+        assert.include(logError.firstCall.args[0], 'run-newer');
+        assert.strictEqual(logError.firstCall.args[1], copyFailure);
+        verify(mockFs.copy(anything(), anything(), anything())).twice();
+        assert.deepStrictEqual(copiedPaths(1), [
+            '/storage/appPreview/runs/run-older.snapshot.deepnote',
+            LATEST_FILE_PATH
+        ]);
+    });
+
+    test('copies nothing when the latest folder cannot be created', async () => {
+        when(mockFs.createDirectory(anything())).thenReject(new Error('Permission denied'));
+
+        await new AppPreviewRunFiles(STORAGE).updateLatest('nb/1', 'run-1', '2026-01-02T03:04:05.000Z');
+
+        verify(mockFs.copy(anything(), anything(), anything())).never();
+    });
+
+    test("reads a notebook's latest copy, named by the encoded notebook ID", async () => {
+        when(mockFs.readFile(anything())).thenReturn(Promise.resolve(encodeSnapshotFile(RUN_FILE)));
+
+        const file = await new AppPreviewRunFiles(STORAGE).readLatest('nb/1');
+
+        assert.strictEqual(capture(mockFs.readFile).last()[0].fsPath, LATEST_FILE_PATH);
+        assert.deepStrictEqual(file?.execution, {
+            startedAt: '2026-01-02T03:04:05.000Z',
+            finishedAt: '2026-01-02T03:04:09.000Z'
+        });
+    });
+
+    test('keeps the latest copies of earlier windows when it deletes their runs', async () => {
+        await new AppPreviewRunFiles(STORAGE).write('run-1', RUN_FILE);
+
+        verify(mockFs.delete(anything(), anything())).once();
+        assert.strictEqual(capture(mockFs.delete).last()[0].fsPath, '/storage/appPreview/runs');
+    });
+
+    test('resolves undefined reading the latest copy of a notebook that has none', async () => {
+        assert.isUndefined(await new AppPreviewRunFiles(STORAGE).readLatest('nb/1'));
+    });
+
+    test('rejects reading a latest copy that cannot be read for another reason', async () => {
+        const readFailure = new Error('Permission denied');
+        when(mockFs.readFile(anything())).thenReject(readFailure);
+
+        await assert.isRejected(new AppPreviewRunFiles(STORAGE).readLatest('nb/1'), readFailure);
     });
 });

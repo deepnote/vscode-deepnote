@@ -385,7 +385,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         ]);
     });
 
-    it("answers appData() from the notebook's newest successful run: none before a run, then its JSON output", async function () {
+    it("answers appData() from the notebook's latest successful run: its JSON output and when the run started", async function () {
         const screenshot = createScreenshotter(this);
         const appDir = fs.mkdtempSync(path.join(workspaceDir, 'app-data-app-'));
         fs.cpSync(APP_DATA_FIXTURE_APP, appDir, { recursive: true });
@@ -404,10 +404,9 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
             return text.startsWith(APP_DATA_AFTER_RUN) ? JSON.parse(text.slice(APP_DATA_AFTER_RUN.length)) : text;
         });
-        const createdAt = /, created at (\S+)$/.exec(String(lines[2]))?.[1];
+        const createdAt = /, created at (\S+)$/.exec(String(lines[1]))?.[1];
         expect(lines).to.deep.equal([
             'Sales results',
-            `appData() before a run rejected: ${NO_RUN_RESULTS}`,
             `run({ region: 'Asia' }): success, created at ${createdAt}`,
             { appData: { region: 'Asia', init_region: false }, agentBlockSummary: null, runCreatedAt: createdAt }
         ]);

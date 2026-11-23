@@ -1,3 +1,5 @@
+import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+import type { IDisplayData, IOutput, IStream } from '@deepnote/runtime-core';
 import { assert } from 'chai';
 import express from 'express';
 import * as http from 'http';
@@ -92,6 +94,30 @@ const RUN_FILE = createDeepnoteFile({
     })
 });
 
+function codeBlock(id: string, outputs: IOutput[]): DeepnoteBlock {
+    return createDeepnoteBlock({ id, sortingKey: id, outputs });
+}
+
+function agentBlock(id: string, outputs: IOutput[]): DeepnoteBlock {
+    return {
+        id,
+        type: 'agent',
+        blockGroup: 'g',
+        sortingKey: id,
+        content: '',
+        metadata: { deepnote_agent_model: 'auto' },
+        outputs
+    };
+}
+
+function display(data: IDisplayData['data']): IDisplayData {
+    return { output_type: 'display_data', data, metadata: {} };
+}
+
+function stdout(text: string): IStream {
+    return { output_type: 'stream', name: 'stdout', text };
+}
+
 suite('createAppPreviewApi', () => {
     let server: http.Server;
     let baseUrl: string;
@@ -117,6 +143,8 @@ suite('createAppPreviewApi', () => {
         runFiles = mock(AppPreviewRunFiles);
         when(runFiles.write(anything(), anything())).thenResolve(true);
         when(runFiles.read(anything())).thenResolve(RUN_FILE);
+        when(runFiles.updateLatest(anything(), anything(), anything())).thenResolve();
+        when(runFiles.readLatest(anything())).thenResolve(undefined);
         api = createAppPreviewApi({
             token: TOKEN,
             findNotebook,
@@ -320,6 +348,7 @@ suite('createAppPreviewApi', () => {
             completedAt: '2026-01-02T03:05:10.000Z'
         });
         verify(runFiles.write(runId, RUN_FILE)).once();
+        verify(runFiles.updateLatest('nb-1', runId, NOW)).once();
         sinon.assert.notCalled(onUnsupported);
     });
 
@@ -343,6 +372,7 @@ suite('createAppPreviewApi', () => {
             });
             assert.isString(finished.completedAt);
             verify(runFiles.write(anything(), anything())).times(writes);
+            verify(runFiles.updateLatest(anything(), anything(), anything())).never();
         });
     }
 
@@ -374,6 +404,26 @@ suite('createAppPreviewApi', () => {
         });
     });
 
+    test("GET /runs/:runId reports a success as running until its notebook's latest results are updated", async () => {
+        const updateStarted = createDeferred<void>();
+        const updated = createDeferred<void>();
+        when(runFiles.updateLatest(anything(), anything(), anything())).thenCall(() => {
+            updateStarted.resolve();
+
+            return updated.promise;
+        });
+        const { runId, outcome } = await startRun();
+        const [, , onRunning] = capture(runner.run).last();
+        onRunning();
+
+        outcome.resolve({ status: 'success', error: null, file: RUN_FILE });
+        await updateStarted.promise;
+
+        assert.deepInclude(await getRun(runId), { status: 'running', snapshotStatus: 'pending', completedAt: null });
+        updated.resolve();
+        assert.deepInclude(await waitForStatus(runId, 'success'), { snapshotStatus: 'available' });
+    });
+
     test('GET /runs/:runId reports a success whose file could not be written with its snapshot unavailable', async () => {
         when(runFiles.write(anything(), anything())).thenResolve(false);
 
@@ -385,6 +435,7 @@ suite('createAppPreviewApi', () => {
             snapshotStatus: 'unavailable',
             snapshotBlocks: null
         });
+        verify(runFiles.updateLatest(anything(), anything(), anything())).never();
     });
 
     test('GET /runs/:runId answers a JSON 500, and logs the error, when the run file cannot be read', async () => {
@@ -509,6 +560,140 @@ suite('createAppPreviewApi', () => {
             sinon.assert.notCalled(logError);
         });
     }
+
+    suite('GET /notebooks/:notebookId/app-data', () => {
+        const NO_RUN_RESULTS = {
+            message: 'You have no run results for this notebook yet. Run the notebook to load them.'
+        };
+        const LATEST_STARTED_AT = '2026-01-01T09:00:00.000Z';
+
+        function latestFile(blocks: DeepnoteBlock[]): DeepnoteFile {
+            return createDeepnoteFile({
+                execution: { startedAt: LATEST_STARTED_AT, finishedAt: '2026-01-01T09:00:04.000Z' },
+                project: createDeepnoteProject({ notebooks: [createDeepnoteNotebook({ id: 'nb-1', blocks })] })
+            });
+        }
+
+        function jsonBlock(json: Record<string, number>): DeepnoteBlock {
+            return codeBlock('chart', [display({ 'application/json': json })]);
+        }
+
+        function getAppData(notebookId = 'nb-1'): Promise<Response> {
+            return call('GET', `/notebooks/${notebookId}/app-data`);
+        }
+
+        test('answers 404 when the notebook has no latest results, though this preview ran it', async () => {
+            await finishRun('success');
+
+            await assertJson(await getAppData(), 404, NO_RUN_RESULTS);
+        });
+
+        test("answers the latest results' first JSON object and when that run started, not this preview's own run", async () => {
+            await finishRun('success');
+            when(runFiles.readLatest('nb-1')).thenResolve(latestFile([jsonBlock({ total: 2 })]));
+
+            await assertJson(await getAppData(), 200, {
+                appData: { total: 2 },
+                agentBlockSummary: null,
+                runCreatedAt: LATEST_STARTED_AT
+            });
+            sinon.assert.notCalled(onUnsupported);
+        });
+
+        test('answers the first JSON object across blocks and their outputs, skipping a JSON array and null', async () => {
+            when(runFiles.readLatest('nb-1')).thenResolve(
+                latestFile([
+                    codeBlock('regions', [
+                        stdout('loading'),
+                        { output_type: 'display_data', data: { 'application/json': null }, metadata: {} },
+                        display({ 'application/json': ['north'] })
+                    ]),
+                    codeBlock('chart', [
+                        display({ 'text/plain': 'chart' }),
+                        display({ 'application/json': { total: 3 } }),
+                        display({ 'application/json': { total: 4 } })
+                    ]),
+                    jsonBlock({ total: 5 })
+                ])
+            );
+
+            await assertJson(await getAppData(), 200, {
+                appData: { total: 3 },
+                agentBlockSummary: null,
+                runCreatedAt: LATEST_STARTED_AT
+            });
+        });
+
+        test('answers 404 when the latest results have no JSON object, though their text and stream look like one', async () => {
+            when(runFiles.readLatest('nb-1')).thenResolve(
+                latestFile([
+                    codeBlock('chart', [
+                        stdout('{"total": 2}'),
+                        display({ 'text/plain': '{"total": 2}', 'application/json': ['total'] })
+                    ])
+                ])
+            );
+
+            await assertJson(await getAppData(), 404, { message: 'Your latest run has no JSON output.' });
+        });
+
+        const agentSummaries: [string, DeepnoteBlock[], string | null][] = [
+            [
+                'its first markdown output, ahead of its stream text',
+                [
+                    agentBlock('agent', [
+                        stdout('Looking at sales'),
+                        display({ 'text/markdown': '**Sales grew.**' }),
+                        display({ 'text/markdown': 'More detail' })
+                    ])
+                ],
+                '**Sales grew.**'
+            ],
+            [
+                "its stream text when it has no markdown output, not a later agent block's markdown",
+                [
+                    agentBlock('agent', [stdout('Sales grew '), stdout('by 5%.')]),
+                    agentBlock('second-agent', [display({ 'text/markdown': 'Second answer' })])
+                ],
+                'Sales grew by 5%.'
+            ],
+            [
+                'null when it has neither a markdown nor a stream output',
+                [agentBlock('agent', [display({ 'text/plain': 'Sales grew.' })])],
+                null
+            ],
+            [
+                'null when no block is an agent block, though a code block displays markdown',
+                [codeBlock('notes', [display({ 'text/markdown': '# Notes' })])],
+                null
+            ]
+        ];
+        for (const [condition, blocks, summary] of agentSummaries) {
+            test(`summarizes the first agent block as ${condition}`, async () => {
+                when(runFiles.readLatest('nb-1')).thenResolve(latestFile([...blocks, jsonBlock({ total: 3 })]));
+
+                await assertJson(await getAppData(), 200, {
+                    appData: { total: 3 },
+                    agentBlockSummary: summary,
+                    runCreatedAt: LATEST_STARTED_AT
+                });
+            });
+        }
+
+        test('answers 404 for an ID no workspace notebook has, without reading any results', async () => {
+            await assertJson(await getAppData('nb-deleted'), 404, { message: 'Notebook not found' });
+            verify(runFiles.readLatest(anything())).never();
+        });
+
+        test('answers a JSON 500, and logs the error, when the latest results cannot be read', async () => {
+            const logError = sinon.stub(logger, 'error');
+            const readFailure = new Error('The latest results do not parse');
+            when(runFiles.readLatest(anything())).thenReject(readFailure);
+
+            await assertJson(await getAppData(), 500, { message: 'Internal server error' });
+            sinon.assert.calledOnceWithExactly(logError, sinon.match.string, readFailure);
+        });
+    });
 
     const stubs: [string, string, AppPreviewOperation][] = [
         ['GET', '/projects/p-1/dataframes/sales%20by%20month', 'dataframe()']

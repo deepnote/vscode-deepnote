@@ -140,21 +140,6 @@ function mimeData(output: IOutput, mimeType: string): unknown {
     return isJsonObject(data) ? data[mimeType] : undefined;
 }
 
-function newestSuccessfulRun(runs: Map<string, PreviewRun>, notebookId: string): PreviewRun | undefined {
-    let newest: PreviewRun | undefined;
-    for (const run of runs.values()) {
-        if (
-            run.notebookId === notebookId &&
-            run.status === 'success' &&
-            (!newest || run.createdAt >= newest.createdAt)
-        ) {
-            newest = run;
-        }
-    }
-
-    return newest;
-}
-
 /** Deepnote's 400 message for a body that fails its schema. */
 function readableErrors(error: z.ZodError): string {
     return error.issues
@@ -201,10 +186,10 @@ function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook): AppViewerNo
  * The local stand-in for Deepnote's app viewer API, mounted at `/v2` on the preview server.
  * Requests without the preview's bearer token get 401. `GET /notebooks/:notebookId` answers from the workspace's
  * notebooks, and `POST /runs` runs one with `runner`, which `GET /runs/:runId` then reports on.
- * `GET /notebooks/:notebookId/app-data` answers from the notebook's newest successful run. The dataframe route, which
- * the version of Deepnote's client that adds `dataframe()` calls, gets 501, and every other route gets 403, as Deepnote
- * answers app viewer tokens. A body that cannot be read, such as malformed JSON, gets its 4xx; any other failure is
- * logged and gets a JSON 500.
+ * `GET /notebooks/:notebookId/app-data` answers from the notebook's latest successful run that `runFiles` saved. The
+ * dataframe route, which the version of Deepnote's client that adds `dataframe()` calls, gets 501, and every other
+ * route gets 403, as Deepnote answers app viewer tokens. A body that cannot be read, such as malformed JSON, gets its
+ * 4xx; any other failure is logged and gets a JSON 500.
  */
 export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewApi {
     const router = express.Router();
@@ -235,7 +220,11 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
                     outcome.file && (await options.runFiles.write(run.runId, outcome.file))
                         ? 'available'
                         : 'unavailable';
-                // Set after the write settles, so that a poll never sees a finished run whose file is being written.
+                if (outcome.status === 'success' && snapshotStatus === 'available') {
+                    await options.runFiles.updateLatest(run.notebookId, run.runId, run.createdAt);
+                }
+                // Set after the files settle, so that a poll never sees a finished run whose file is being written, nor
+                // a success that appData() does not answer from yet.
                 run.status = outcome.status;
                 run.error = outcome.error;
                 run.snapshotStatus = snapshotStatus;
@@ -275,20 +264,24 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
 
             return;
         }
-        const run = newestSuccessfulRun(runs, notebookId);
-        if (!run) {
+        const file = await options.runFiles.readLatest(notebookId);
+        if (!file) {
             res.status(404).json({ message: NO_RUN_RESULTS_MESSAGE });
 
             return;
         }
-        const blocks = run.snapshotStatus === 'available' ? toSnapshotBlocks(await options.runFiles.read(run.runId)) : [];
+        const blocks = toSnapshotBlocks(file);
         const appData = firstJsonObject(blocks);
         if (!appData) {
             res.status(404).json({ message: NO_JSON_OUTPUT_MESSAGE });
 
             return;
         }
-        res.json({ appData, agentBlockSummary: firstAgentBlockSummary(blocks), runCreatedAt: run.createdAt });
+        res.json({
+            appData,
+            agentBlockSummary: firstAgentBlockSummary(blocks),
+            runCreatedAt: file.execution?.startedAt ?? null
+        });
     });
     router.post('/runs', express.json(), async (req: Request, res: Response) => {
         const parsed = createRunBodySchema.safeParse(req.body, {

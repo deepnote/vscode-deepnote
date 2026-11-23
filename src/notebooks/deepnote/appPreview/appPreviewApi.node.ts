@@ -159,7 +159,7 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
     const startRun = (run: PreviewRun, request: AppPreviewRunRequest) => {
         const cancellation = new CancellationTokenSource();
         unfinished.add(cancellation);
-        void options.runner
+        options.runner
             .run(request, cancellation.token, () => {
                 run.status = 'running';
             })
@@ -179,6 +179,9 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
                 run.error = outcome.error;
                 run.snapshotStatus = snapshotStatus;
                 run.completedAt = completedAt;
+            })
+            .catch((error) => {
+                logger.error(`AppPreviewApi: Run ${run.runId} failed to finalize`, error);
             })
             .finally(() => {
                 unfinished.delete(cancellation);

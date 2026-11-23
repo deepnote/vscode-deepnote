@@ -41,26 +41,20 @@ const RUN_FILE = createDeepnoteFile({
 
 suite('AppPreviewRunFiles', () => {
     let mockFs: typeof import('vscode').workspace.fs;
-    let files: Map<string, Uint8Array>;
+
+    function assertWroteRunFile(): void {
+        verify(mockFs.writeFile(anything(), anything())).once();
+        assert.strictEqual(capture(mockFs.writeFile).last()[0].fsPath, RUN_FILE_PATH);
+    }
 
     setup(() => {
         resetVSCodeMocks();
-        files = new Map();
         mockFs = mock<typeof import('vscode').workspace.fs>();
         when(mockFs.delete(anything(), anything())).thenResolve();
         when(mockFs.stat(anything())).thenReject(FileSystemError.FileNotFound());
         when(mockFs.createDirectory(anything())).thenResolve();
-        when(mockFs.writeFile(anything(), anything())).thenCall(async (uri: Uri, content: Uint8Array) => {
-            files.set(uri.fsPath, content);
-        });
-        when(mockFs.readFile(anything())).thenCall(async (uri: Uri) => {
-            const content = files.get(uri.fsPath);
-            if (!content) {
-                throw FileSystemError.FileNotFound(uri);
-            }
-
-            return content;
-        });
+        when(mockFs.writeFile(anything(), anything())).thenResolve();
+        when(mockFs.readFile(anything())).thenReject(FileSystemError.FileNotFound());
         when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
     });
 
@@ -91,7 +85,7 @@ suite('AppPreviewRunFiles', () => {
         deleted.resolve();
 
         assert.isTrue(await written);
-        assert.deepStrictEqual([...files.keys()], [RUN_FILE_PATH]);
+        assertWroteRunFile();
     });
 
     test('logs no warning when there is no runs folder to delete', async () => {
@@ -109,7 +103,7 @@ suite('AppPreviewRunFiles', () => {
 
         assert.isTrue(await new AppPreviewRunFiles(STORAGE).write('run-1', RUN_FILE));
         sinon.assert.calledOnceWithExactly(warn, sinon.match.string, deleteFailure);
-        assert.deepStrictEqual([...files.keys()], [RUN_FILE_PATH]);
+        assertWroteRunFile();
     });
 
     test('resolves false and logs an error naming the run when the file cannot be written', async () => {
@@ -127,15 +121,18 @@ suite('AppPreviewRunFiles', () => {
         when(mockFs.createDirectory(anything())).thenReject(new Error('Permission denied'));
 
         assert.isFalse(await new AppPreviewRunFiles(STORAGE).write('run-1', RUN_FILE));
-        assert.deepStrictEqual([...files.keys()], []);
+        verify(mockFs.writeFile(anything(), anything())).never();
     });
 
     test('reads back the outputs and execution of a written run', async () => {
         const runFiles = new AppPreviewRunFiles(STORAGE);
         await runFiles.write('run-1', RUN_FILE);
+        const [, written] = capture(mockFs.writeFile).last();
+        when(mockFs.readFile(anything())).thenReturn(Promise.resolve(written));
 
         const file = await runFiles.read('run-1');
 
+        assert.strictEqual(capture(mockFs.readFile).last()[0].fsPath, RUN_FILE_PATH);
         assert.deepStrictEqual(
             file.project.notebooks[0].blocks.map((block) => ({
                 id: block.id,

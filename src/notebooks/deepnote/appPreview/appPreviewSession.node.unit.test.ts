@@ -3,9 +3,11 @@ import { assert } from 'chai';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as os from 'os';
-import { anything, instance, mock, when } from 'ts-mockito';
-import { Uri, type CancellationToken } from 'vscode';
+import * as sinon from 'sinon';
+import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
+import { Uri } from 'vscode';
 
+import { createDeferred } from '../../../platform/common/utils/async';
 import * as path from '../../../platform/vscode-path/path';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
@@ -92,16 +94,8 @@ suite('AppPreviewSession', () => {
     let appFolder: string;
     let clientScript: string;
     let sessions: AppPreviewSession[];
-    let unsupported: AppPreviewOperation[];
-    let runTokens: CancellationToken[];
-
-    const runner: IAppPreviewRunner = {
-        run: (_request, token) =>
-            new Promise<AppPreviewRunOutcome>((resolve) => {
-                runTokens.push(token);
-                token.onCancellationRequested(() => resolve({ status: 'stopped', error: null, file: null }));
-            })
-    };
+    let onUnsupported: sinon.SinonStub<[AppPreviewOperation], void>;
+    let runner: IAppPreviewRunner;
 
     async function startSession(
         options: { folder?: string; project?: AppPreviewProject | null } = {}
@@ -111,9 +105,9 @@ suite('AppPreviewSession', () => {
             folder: Uri.file(options.folder ?? appFolder),
             project: project ?? undefined,
             runFiles: instance(mock(AppPreviewRunFiles)),
-            runner,
+            runner: instance(runner),
             scripts: { appClient: Uri.file(clientScript) },
-            onUnsupported: (operation) => unsupported.push(operation)
+            onUnsupported
         });
         sessions.push(session);
         await session.start();
@@ -129,8 +123,8 @@ suite('AppPreviewSession', () => {
 
     setup(() => {
         resetVSCodeMocks();
-        unsupported = [];
-        runTokens = [];
+        onUnsupported = sinon.stub<[AppPreviewOperation], void>();
+        runner = mock<IAppPreviewRunner>();
         sessions = [];
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-'));
         appFolder = path.join(tmp, 'app');
@@ -381,7 +375,7 @@ suite('AppPreviewSession', () => {
             assert.deepStrictEqual(JSON.parse(stub.body.toString()), {
                 message: 'appData() is not supported in the local preview yet.'
             });
-            assert.deepStrictEqual(unsupported, ['appData()']);
+            sinon.assert.calledOnceWithExactly(onUnsupported, 'appData()');
 
             assert.strictEqual((await request(session, '/v2/notebooks/nb-1/app-data')).status, 401);
         });
@@ -422,6 +416,9 @@ suite('AppPreviewSession', () => {
             when(mockedVSCodeNamespaces.workspace.findFiles('**/*.deepnote')).thenCall(async () => [
                 Uri.file(path.join(tmp, 'main.deepnote'))
             ]);
+            when(runner.run(anything(), anything(), anything())).thenReturn(
+                createDeferred<AppPreviewRunOutcome>().promise
+            );
             const session = await startSession();
             const { token } = await requestToken(session);
 
@@ -431,17 +428,13 @@ suite('AppPreviewSession', () => {
                 body: JSON.stringify({ notebookId: 'nb-1' })
             });
             assert.strictEqual(created.status, 202);
-            assert.deepStrictEqual(
-                runTokens.map((runToken) => runToken.isCancellationRequested === true),
-                [false]
-            );
+            verify(runner.run(anything(), anything(), anything())).once();
+            const [, runToken] = capture(runner.run).last();
+            assert.isNotTrue(runToken.isCancellationRequested);
 
             session.dispose();
 
-            assert.deepStrictEqual(
-                runTokens.map((runToken) => runToken.isCancellationRequested === true),
-                [true]
-            );
+            assert.isTrue(runToken.isCancellationRequested);
         });
     });
 

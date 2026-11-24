@@ -12,7 +12,7 @@ import * as path from '../../../platform/vscode-path/path';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from '../deepnoteTestHelpers';
-import type { AppPreviewOperation } from './appPreviewApi.node';
+import { notSupportedMessage, type AppPreviewUnsupportedOperation } from './appPreviewApi.node';
 import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import { AppPreviewSession, type AppPreviewProject } from './appPreviewSession.node';
 import type { AppPreviewRunOutcome, IAppPreviewRunner } from './types';
@@ -94,7 +94,7 @@ suite('AppPreviewSession', () => {
     let appFolder: string;
     let clientScript: string;
     let sessions: AppPreviewSession[];
-    let onUnsupported: sinon.SinonStub<[AppPreviewOperation], void>;
+    let onUnsupported: sinon.SinonStub<[AppPreviewUnsupportedOperation], void>;
     let runner: IAppPreviewRunner;
 
     async function startSession(
@@ -123,7 +123,7 @@ suite('AppPreviewSession', () => {
 
     setup(() => {
         resetVSCodeMocks();
-        onUnsupported = sinon.stub<[AppPreviewOperation], void>();
+        onUnsupported = sinon.stub<[AppPreviewUnsupportedOperation], void>();
         runner = mock<IAppPreviewRunner>();
         sessions = [];
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-'));
@@ -368,16 +368,14 @@ suite('AppPreviewSession', () => {
             const session = await startSession();
             const { token } = await requestToken(session);
 
-            const stub = await request(session, '/v2/notebooks/nb-1/app-data', {
+            const stub = await request(session, '/v2/projects/project-1/dataframes/sales', {
                 headers: { authorization: `Bearer ${token}` }
             });
             assert.strictEqual(stub.status, 501);
-            assert.deepStrictEqual(JSON.parse(stub.body.toString()), {
-                message: 'appData() is not supported in the local preview yet.'
-            });
-            sinon.assert.calledOnceWithExactly(onUnsupported, 'appData()');
+            assert.deepStrictEqual(JSON.parse(stub.body.toString()), { message: notSupportedMessage('dataframe()') });
+            sinon.assert.calledOnceWithExactly(onUnsupported, 'dataframe()');
 
-            assert.strictEqual((await request(session, '/v2/notebooks/nb-1/app-data')).status, 401);
+            assert.strictEqual((await request(session, '/v2/projects/project-1/dataframes/sales')).status, 401);
         });
 
         test("answers a notebook that two files share from the session's current project folder", async () => {

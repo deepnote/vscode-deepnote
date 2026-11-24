@@ -2,11 +2,14 @@ import { getInputBlockValueOverrideValidationError, isInputBlock, type DeepnoteF
 // TODO: Import from `@deepnote/cloud` once it exports the API's generated types. The mock package is only a
 // devDependency, which is fine for a type-only import because the build erases it.
 import type { operations } from '@deepnote/cloud-mock';
+import type { IOutput, IStream } from '@deepnote/runtime-core';
 import { timingSafeEqual } from 'crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { CancellationTokenSource } from 'vscode';
 import { z } from 'zod';
 
+import { concatMultilineString } from '../../../platform/common/utils';
+import { isObject } from '../../../platform/common/utils/sysTypes';
 import { generateUuid } from '../../../platform/common/uuid';
 import type { DeepnoteNotebook } from '../../../platform/deepnote/deepnoteTypes';
 import { logger } from '../../../platform/logging';
@@ -22,23 +25,25 @@ import type {
     SnapshotBlock
 } from './types';
 
-export type AppPreviewOperation = 'appData()' | 'dataframe()';
+export type AppPreviewUnsupportedOperation = 'dataframe()';
 
 export interface AppPreviewApiOptions {
     token: string;
     findNotebook(notebookId: string): Promise<WorkspaceNotebook | undefined>;
-    onUnsupported(operation: AppPreviewOperation): void;
+    onUnsupported(operation: AppPreviewUnsupportedOperation): void;
     runFiles: AppPreviewRunFiles;
     runner: IAppPreviewRunner;
 }
 
 // Protocol strings: app code receives them, so they stay English like Deepnote's API messages.
-const UNAUTHORIZED_MESSAGE = 'Unauthorized';
-const NOT_AVAILABLE_MESSAGE = 'This endpoint is not available to app viewer tokens';
-const NOTEBOOK_NOT_FOUND_MESSAGE = 'Notebook not found';
-const RUN_NOT_FOUND_MESSAGE = 'Run not found';
-const PREVIEW_STOPPED_MESSAGE = 'The app preview has stopped';
-const INTERNAL_ERROR_MESSAGE = 'Internal server error';
+export const UNAUTHORIZED_MESSAGE = 'Unauthorized';
+export const NOT_AVAILABLE_MESSAGE = 'This endpoint is not available to app viewer tokens';
+export const NOTEBOOK_NOT_FOUND_MESSAGE = 'Notebook not found';
+export const NO_RUN_RESULTS_MESSAGE = 'You have no run results for this notebook yet. Run the notebook to load them.';
+export const NO_JSON_OUTPUT_MESSAGE = 'Your latest run has no JSON output.';
+export const RUN_NOT_FOUND_MESSAGE = 'Run not found';
+export const PREVIEW_STOPPED_MESSAGE = 'The app preview has stopped';
+export const INTERNAL_ERROR_MESSAGE = 'Internal server error';
 
 type AppViewerNotebook = operations['getNotebook']['responses'][200]['content']['application/json']['notebook'];
 
@@ -48,7 +53,7 @@ const createRunBodySchema = z.strictObject({
     detachedRunStorageMode: z.enum(['read_write', 'readonly']).optional()
 });
 
-function notSupportedMessage(operation: AppPreviewOperation): string {
+export function notSupportedMessage(operation: AppPreviewUnsupportedOperation): string {
     return `${operation} is not supported in the local preview yet.`;
 }
 
@@ -63,6 +68,35 @@ function clientErrorStatus(error: unknown): number | undefined {
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Deepnote's `agentBlockSummary`: the first agent block's first markdown output. runtime-core emits an agent's answer
+ * as stream output instead, so without markdown it is the block's stream text.
+ */
+function firstAgentBlockSummary(blocks: SnapshotBlock[]): string | null {
+    const agent = blocks.find((block) => block.type === 'agent');
+    if (!agent) {
+        return null;
+    }
+
+    const markdown = agent.outputs
+        .map((output) => mimeData(output, 'text/markdown'))
+        .find((data): data is string => typeof data === 'string');
+    if (markdown !== undefined) {
+        return markdown;
+    }
+    const streams = agent.outputs.filter((output): output is IStream => output.output_type === 'stream');
+
+    return streams.length > 0 ? streams.map((output) => concatMultilineString(output.text)).join('') : null;
+}
+
+/** Deepnote's `appData`: the first `application/json` output that is an object, not an array or `null`. */
+function firstJsonObject(blocks: SnapshotBlock[]): Record<string, unknown> | undefined {
+    return blocks
+        .flatMap((block) => block.outputs)
+        .map((output) => mimeData(output, 'application/json'))
+        .find(isJsonObject);
 }
 
 /** The input check Deepnote's `POST /v2/runs` makes before it accepts a run. */
@@ -93,6 +127,17 @@ function isAuthorized(authorizationHeader: string | undefined, token: string): b
     const actual = Buffer.from(authorizationHeader);
 
     return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+// isObject's own guard is `obj is any`, which would switch off type checking where it narrows.
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+    return isObject(value);
+}
+
+function mimeData(output: IOutput, mimeType: string): unknown {
+    const data: unknown = output.data;
+
+    return isJsonObject(data) ? data[mimeType] : undefined;
 }
 
 /** Deepnote's 400 message for a body that fails its schema. */
@@ -140,10 +185,11 @@ function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook): AppViewerNo
 /**
  * The local stand-in for Deepnote's app viewer API, mounted at `/v2` on the preview server.
  * Requests without the preview's bearer token get 401. `GET /notebooks/:notebookId` answers from the workspace's
- * notebooks, and `POST /runs` runs one with `runner`, which `GET /runs/:runId` then reports on. The other routes
- * Deepnote's client calls or is about to call get 501, and every other route gets 403, as Deepnote answers app viewer
- * tokens. A body that cannot be read, such as malformed JSON, gets its 4xx; any other failure is logged and gets a JSON
- * 500.
+ * notebooks, and `POST /runs` runs one with `runner`, which `GET /runs/:runId` then reports on.
+ * `GET /notebooks/:notebookId/app-data` answers from the notebook's latest successful run that `runFiles` saved. The
+ * dataframe route, which the version of Deepnote's client that adds `dataframe()` calls, gets 501, and every other
+ * route gets 403, as Deepnote answers app viewer tokens. A body that cannot be read, such as malformed JSON, gets its
+ * 4xx; any other failure is logged and gets a JSON 500.
  */
 export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewApi {
     const router = express.Router();
@@ -151,7 +197,7 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
     const unfinished = new Set<CancellationTokenSource>();
     let isDisposed = false;
 
-    const unsupported = (operation: AppPreviewOperation) => (_req: Request, res: Response) => {
+    const unsupported = (operation: AppPreviewUnsupportedOperation) => (_req: Request, res: Response) => {
         options.onUnsupported(operation);
         res.status(501).json({ message: notSupportedMessage(operation) });
     };
@@ -174,7 +220,11 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
                     outcome.file && (await options.runFiles.write(run.runId, outcome.file))
                         ? 'available'
                         : 'unavailable';
-                // Set after the write settles, so that a poll never sees a finished run whose file is being written.
+                if (outcome.status === 'success' && snapshotStatus === 'available') {
+                    await options.runFiles.updateLatest(run.notebookId, run.runId, run.createdAt);
+                }
+                // Set after the files settle, so that a poll never sees a finished run whose file is being written, nor
+                // a success that appData() does not answer from yet.
                 run.status = outcome.status;
                 run.error = outcome.error;
                 run.snapshotStatus = snapshotStatus;
@@ -207,7 +257,32 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
         }
         res.json({ notebook: toAppViewerNotebook(found) });
     });
-    router.get('/notebooks/:notebookId/app-data', unsupported('appData()'));
+    router.get('/notebooks/:notebookId/app-data', async (req: Request<{ notebookId: string }>, res: Response) => {
+        const { notebookId } = req.params;
+        if (!(await options.findNotebook(notebookId))) {
+            res.status(404).json({ message: NOTEBOOK_NOT_FOUND_MESSAGE });
+
+            return;
+        }
+        const file = await options.runFiles.readLatest(notebookId);
+        if (!file) {
+            res.status(404).json({ message: NO_RUN_RESULTS_MESSAGE });
+
+            return;
+        }
+        const blocks = toSnapshotBlocks(file);
+        const appData = firstJsonObject(blocks);
+        if (!appData) {
+            res.status(404).json({ message: NO_JSON_OUTPUT_MESSAGE });
+
+            return;
+        }
+        res.json({
+            appData,
+            agentBlockSummary: firstAgentBlockSummary(blocks),
+            runCreatedAt: file.execution?.startedAt ?? null
+        });
+    });
     router.post('/runs', express.json(), async (req: Request, res: Response) => {
         const parsed = createRunBodySchema.safeParse(req.body, {
             // Deepnote's error map, so a missing field reads `is required`.

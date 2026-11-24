@@ -1,3 +1,5 @@
+import type { DeepnoteBlock, DeepnoteFile } from '@deepnote/blocks';
+import type { IDisplayData, IOutput, IStream } from '@deepnote/runtime-core';
 import { assert } from 'chai';
 import express from 'express';
 import * as http from 'http';
@@ -15,7 +17,19 @@ import {
     createDeepnoteNotebook,
     createDeepnoteProject
 } from '../deepnoteTestHelpers';
-import { createAppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
+import {
+    createAppPreviewApi,
+    INTERNAL_ERROR_MESSAGE,
+    NO_JSON_OUTPUT_MESSAGE,
+    NO_RUN_RESULTS_MESSAGE,
+    NOT_AVAILABLE_MESSAGE,
+    NOTEBOOK_NOT_FOUND_MESSAGE,
+    notSupportedMessage,
+    PREVIEW_STOPPED_MESSAGE,
+    RUN_NOT_FOUND_MESSAGE,
+    UNAUTHORIZED_MESSAGE,
+    type AppPreviewUnsupportedOperation
+} from './appPreviewApi.node';
 import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import type { WorkspaceNotebook } from './appPreviewWorkspace.node';
 import type { AppPreviewApi, AppPreviewRunOutcome, IAppPreviewRunner, SnapshotBlock } from './types';
@@ -92,6 +106,30 @@ const RUN_FILE = createDeepnoteFile({
     })
 });
 
+function codeBlock(id: string, outputs: IOutput[]): DeepnoteBlock {
+    return createDeepnoteBlock({ id, sortingKey: id, outputs });
+}
+
+function agentBlock(id: string, outputs: IOutput[]): DeepnoteBlock {
+    return {
+        id,
+        type: 'agent',
+        blockGroup: 'g',
+        sortingKey: id,
+        content: '',
+        metadata: { deepnote_agent_model: 'auto' },
+        outputs
+    };
+}
+
+function display(data: IDisplayData['data']): IDisplayData {
+    return { output_type: 'display_data', data, metadata: {} };
+}
+
+function stdout(text: string): IStream {
+    return { output_type: 'stream', name: 'stdout', text };
+}
+
 suite('createAppPreviewApi', () => {
     let server: http.Server;
     let baseUrl: string;
@@ -99,7 +137,7 @@ suite('createAppPreviewApi', () => {
     let runner: IAppPreviewRunner;
     let runFiles: AppPreviewRunFiles;
     let findNotebook: sinon.SinonStub<[string], Promise<WorkspaceNotebook | undefined>>;
-    let onUnsupported: sinon.SinonStub<[AppPreviewOperation], void>;
+    let onUnsupported: sinon.SinonStub<[AppPreviewUnsupportedOperation], void>;
 
     setup(async () => {
         runner = mock<IAppPreviewRunner>();
@@ -113,10 +151,12 @@ suite('createAppPreviewApi', () => {
         findNotebook = sinon
             .stub<[string], Promise<WorkspaceNotebook | undefined>>()
             .callsFake(async (notebookId) => notebooks.get(notebookId));
-        onUnsupported = sinon.stub<[AppPreviewOperation], void>();
+        onUnsupported = sinon.stub<[AppPreviewUnsupportedOperation], void>();
         runFiles = mock(AppPreviewRunFiles);
         when(runFiles.write(anything(), anything())).thenResolve(true);
         when(runFiles.read(anything())).thenResolve(RUN_FILE);
+        when(runFiles.updateLatest(anything(), anything(), anything())).thenResolve();
+        when(runFiles.readLatest(anything())).thenResolve(undefined);
         api = createAppPreviewApi({
             token: TOKEN,
             findNotebook,
@@ -231,7 +271,7 @@ suite('createAppPreviewApi', () => {
     });
 
     test('GET /notebooks/:notebookId answers 404 for an ID no workspace notebook has', async () => {
-        await assertJson(await call('GET', '/notebooks/nb-missing'), 404, { message: 'Notebook not found' });
+        await assertJson(await call('GET', '/notebooks/nb-missing'), 404, { message: NOTEBOOK_NOT_FOUND_MESSAGE });
         sinon.assert.notCalled(onUnsupported);
     });
 
@@ -240,7 +280,7 @@ suite('createAppPreviewApi', () => {
         const lookupFailure = new Error('findFiles failed in /home/user/project');
         findNotebook.rejects(lookupFailure);
 
-        await assertJson(await call('GET', '/notebooks/nb-1'), 500, { message: 'Internal server error' });
+        await assertJson(await call('GET', '/notebooks/nb-1'), 500, { message: INTERNAL_ERROR_MESSAGE });
         assert.deepStrictEqual(
             logError.getCalls().map((logged) => logged.args[1]),
             [lookupFailure]
@@ -320,6 +360,7 @@ suite('createAppPreviewApi', () => {
             completedAt: '2026-01-02T03:05:10.000Z'
         });
         verify(runFiles.write(runId, RUN_FILE)).once();
+        verify(runFiles.updateLatest('nb-1', runId, NOW)).once();
         sinon.assert.notCalled(onUnsupported);
     });
 
@@ -343,6 +384,7 @@ suite('createAppPreviewApi', () => {
             });
             assert.isString(finished.completedAt);
             verify(runFiles.write(anything(), anything())).times(writes);
+            verify(runFiles.updateLatest(anything(), anything(), anything())).never();
         });
     }
 
@@ -374,6 +416,26 @@ suite('createAppPreviewApi', () => {
         });
     });
 
+    test("GET /runs/:runId reports a success as running until its notebook's latest results are updated", async () => {
+        const updateStarted = createDeferred<void>();
+        const updated = createDeferred<void>();
+        when(runFiles.updateLatest(anything(), anything(), anything())).thenCall(() => {
+            updateStarted.resolve();
+
+            return updated.promise;
+        });
+        const { runId, outcome } = await startRun();
+        const [, , onRunning] = capture(runner.run).last();
+        onRunning();
+
+        outcome.resolve({ status: 'success', error: null, file: RUN_FILE });
+        await updateStarted.promise;
+
+        assert.deepInclude(await getRun(runId), { status: 'running', snapshotStatus: 'pending', completedAt: null });
+        updated.resolve();
+        assert.deepInclude(await waitForStatus(runId, 'success'), { snapshotStatus: 'available' });
+    });
+
     test('GET /runs/:runId reports a success whose file could not be written with its snapshot unavailable', async () => {
         when(runFiles.write(anything(), anything())).thenResolve(false);
 
@@ -385,6 +447,7 @@ suite('createAppPreviewApi', () => {
             snapshotStatus: 'unavailable',
             snapshotBlocks: null
         });
+        verify(runFiles.updateLatest(anything(), anything(), anything())).never();
     });
 
     test('GET /runs/:runId answers a JSON 500, and logs the error, when the run file cannot be read', async () => {
@@ -393,7 +456,7 @@ suite('createAppPreviewApi', () => {
         const readFailure = new Error('The run file does not parse');
         when(runFiles.read(anything())).thenReject(readFailure);
 
-        await assertJson(await call('GET', `/runs/${runId}`), 500, { message: 'Internal server error' });
+        await assertJson(await call('GET', `/runs/${runId}`), 500, { message: INTERNAL_ERROR_MESSAGE });
         assert.deepStrictEqual(
             logError.getCalls().map((logged) => logged.args[1]),
             [readFailure]
@@ -419,7 +482,7 @@ suite('createAppPreviewApi', () => {
     });
 
     test('GET /runs/:runId answers 404 for a run ID the preview has not started', async () => {
-        await assertJson(await call('GET', '/runs/run-1'), 404, { message: 'Run not found' });
+        await assertJson(await call('GET', '/runs/run-1'), 404, { message: RUN_NOT_FOUND_MESSAGE });
     });
 
     test('dispose() cancels the unfinished runs, and records how the runner ended them', async () => {
@@ -452,7 +515,7 @@ suite('createAppPreviewApi', () => {
         api.dispose();
         lookup.resolve({ file: SALES_FILE, fileUri: SALES_FILE_URI, notebook: SALES_FILE.project.notebooks[1] });
 
-        await assertJson(await response, 503, { message: 'The app preview has stopped' });
+        await assertJson(await response, 503, { message: PREVIEW_STOPPED_MESSAGE });
         verify(runner.run(anything(), anything(), anything())).never();
     });
 
@@ -466,7 +529,7 @@ suite('createAppPreviewApi', () => {
         ['with an empty input name', { notebookId: 'nb-1', inputs: { '': 'x' } }, 'inputs. invalid key in record'],
         ['with a number as an input value', { notebookId: 'nb-1', inputs: { a: 1 } }, 'inputs.a invalid input'],
         ['with an unknown key', { notebookId: 'nb-1', x: 1 }, 'Unrecognized key: "x"'],
-        ['for an unknown notebook', { notebookId: 'nb-missing' }, 'Notebook not found'],
+        ['for an unknown notebook', { notebookId: 'nb-missing' }, NOTEBOOK_NOT_FOUND_MESSAGE],
         [
             'with an input only another notebook of the file defines',
             { notebookId: 'nb-1', inputs: { limit: '5' } },
@@ -510,15 +573,143 @@ suite('createAppPreviewApi', () => {
         });
     }
 
-    const stubs: [string, string, AppPreviewOperation][] = [
-        ['GET', '/notebooks/nb-1/app-data', 'appData()'],
+    suite('GET /notebooks/:notebookId/app-data', () => {
+        const LATEST_STARTED_AT = '2026-01-01T09:00:00.000Z';
+
+        function latestFile(blocks: DeepnoteBlock[]): DeepnoteFile {
+            return createDeepnoteFile({
+                execution: { startedAt: LATEST_STARTED_AT, finishedAt: '2026-01-01T09:00:04.000Z' },
+                project: createDeepnoteProject({ notebooks: [createDeepnoteNotebook({ id: 'nb-1', blocks })] })
+            });
+        }
+
+        function jsonBlock(json: Record<string, number>): DeepnoteBlock {
+            return codeBlock('chart', [display({ 'application/json': json })]);
+        }
+
+        function getAppData(notebookId = 'nb-1'): Promise<Response> {
+            return call('GET', `/notebooks/${notebookId}/app-data`);
+        }
+
+        test('answers 404 when the notebook has no latest results, though this preview ran it', async () => {
+            await finishRun('success');
+
+            await assertJson(await getAppData(), 404, { message: NO_RUN_RESULTS_MESSAGE });
+        });
+
+        test("answers the latest results' first JSON object and when that run started, not this preview's own run", async () => {
+            await finishRun('success');
+            when(runFiles.readLatest('nb-1')).thenResolve(latestFile([jsonBlock({ total: 2 })]));
+
+            await assertJson(await getAppData(), 200, {
+                appData: { total: 2 },
+                agentBlockSummary: null,
+                runCreatedAt: LATEST_STARTED_AT
+            });
+            sinon.assert.notCalled(onUnsupported);
+        });
+
+        test('answers the first JSON object across blocks and their outputs, skipping a JSON array and null', async () => {
+            when(runFiles.readLatest('nb-1')).thenResolve(
+                latestFile([
+                    codeBlock('regions', [
+                        stdout('loading'),
+                        { output_type: 'display_data', data: { 'application/json': null }, metadata: {} },
+                        display({ 'application/json': ['north'] })
+                    ]),
+                    codeBlock('chart', [
+                        display({ 'text/plain': 'chart' }),
+                        display({ 'application/json': { total: 3 } }),
+                        display({ 'application/json': { total: 4 } })
+                    ]),
+                    jsonBlock({ total: 5 })
+                ])
+            );
+
+            await assertJson(await getAppData(), 200, {
+                appData: { total: 3 },
+                agentBlockSummary: null,
+                runCreatedAt: LATEST_STARTED_AT
+            });
+        });
+
+        test('answers 404 when the latest results have no JSON object, though their text and stream look like one', async () => {
+            when(runFiles.readLatest('nb-1')).thenResolve(
+                latestFile([
+                    codeBlock('chart', [
+                        stdout('{"total": 2}'),
+                        display({ 'text/plain': '{"total": 2}', 'application/json': ['total'] })
+                    ])
+                ])
+            );
+
+            await assertJson(await getAppData(), 404, { message: NO_JSON_OUTPUT_MESSAGE });
+        });
+
+        const agentSummaries: [string, DeepnoteBlock[], string | null][] = [
+            [
+                'its first markdown output, ahead of its stream text',
+                [
+                    agentBlock('agent', [
+                        stdout('Looking at sales'),
+                        display({ 'text/markdown': '**Sales grew.**' }),
+                        display({ 'text/markdown': 'More detail' })
+                    ])
+                ],
+                '**Sales grew.**'
+            ],
+            [
+                "its stream text when it has no markdown output, not a later agent block's markdown",
+                [
+                    agentBlock('agent', [stdout('Sales grew '), stdout('by 5%.')]),
+                    agentBlock('second-agent', [display({ 'text/markdown': 'Second answer' })])
+                ],
+                'Sales grew by 5%.'
+            ],
+            [
+                'null when it has neither a markdown nor a stream output',
+                [agentBlock('agent', [display({ 'text/plain': 'Sales grew.' })])],
+                null
+            ],
+            [
+                'null when no block is an agent block, though a code block displays markdown',
+                [codeBlock('notes', [display({ 'text/markdown': '# Notes' })])],
+                null
+            ]
+        ];
+        for (const [condition, blocks, summary] of agentSummaries) {
+            test(`summarizes the first agent block as ${condition}`, async () => {
+                when(runFiles.readLatest('nb-1')).thenResolve(latestFile([...blocks, jsonBlock({ total: 3 })]));
+
+                await assertJson(await getAppData(), 200, {
+                    appData: { total: 3 },
+                    agentBlockSummary: summary,
+                    runCreatedAt: LATEST_STARTED_AT
+                });
+            });
+        }
+
+        test('answers 404 for an ID no workspace notebook has, without reading any results', async () => {
+            await assertJson(await getAppData('nb-deleted'), 404, { message: NOTEBOOK_NOT_FOUND_MESSAGE });
+            verify(runFiles.readLatest(anything())).never();
+        });
+
+        test('answers a JSON 500, and logs the error, when the latest results cannot be read', async () => {
+            const logError = sinon.stub(logger, 'error');
+            const readFailure = new Error('The latest results do not parse');
+            when(runFiles.readLatest(anything())).thenReject(readFailure);
+
+            await assertJson(await getAppData(), 500, { message: INTERNAL_ERROR_MESSAGE });
+            sinon.assert.calledOnceWithExactly(logError, sinon.match.string, readFailure);
+        });
+    });
+
+    const stubs: [string, string, AppPreviewUnsupportedOperation][] = [
         ['GET', '/projects/p-1/dataframes/sales%20by%20month', 'dataframe()']
     ];
     for (const [method, path, operation] of stubs) {
         test(`${method} ${path} answers 501 for ${operation}`, async () => {
-            await assertJson(await call(method, path), 501, {
-                message: `${operation} is not supported in the local preview yet.`
-            });
+            await assertJson(await call(method, path), 501, { message: notSupportedMessage(operation) });
             sinon.assert.calledOnceWithExactly(onUnsupported, operation);
         });
     }
@@ -531,15 +722,17 @@ suite('createAppPreviewApi', () => {
     ];
     for (const [condition, authorization] of rejectedAuthorizations) {
         test(`answers 401 to ${condition}, without reaching a handler`, async () => {
-            await assertJson(await call('GET', '/notebooks/nb-1', authorization), 401, { message: 'Unauthorized' });
-            await assertJson(await call('POST', '/runs', authorization), 401, { message: 'Unauthorized' });
+            await assertJson(await call('GET', '/notebooks/nb-1', authorization), 401, {
+                message: UNAUTHORIZED_MESSAGE
+            });
+            await assertJson(await call('POST', '/runs', authorization), 401, { message: UNAUTHORIZED_MESSAGE });
             sinon.assert.notCalled(findNotebook);
             sinon.assert.notCalled(onUnsupported);
         });
     }
 
     test('answers 403 to every other route', async () => {
-        const notAvailable = { message: 'This endpoint is not available to app viewer tokens' };
+        const notAvailable = { message: NOT_AVAILABLE_MESSAGE };
         await assertJson(await call('GET', '/projects/p-1'), 403, notAvailable);
         await assertJson(await call('DELETE', '/runs/run-1'), 403, notAvailable);
         await assertJson(await call('POST', '/notebooks/nb-1'), 403, notAvailable);

@@ -9,6 +9,7 @@ import { Commands } from '../../../platform/common/constants';
 import { IDisposable, IExtensionContext } from '../../../platform/common/types';
 import { createDeferred } from '../../../platform/common/utils/async';
 import { dispose } from '../../../platform/common/utils/lifecycle';
+import { DeepnoteAppPreview } from '../../../platform/common/utils/localize';
 import * as path from '../../../platform/vscode-path/path';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
@@ -191,8 +192,8 @@ suite('AppPreviewCommandHandler', () => {
                 canSelectFiles: false,
                 canSelectMany: false,
                 defaultUri: Uri.file(tmp).fsPath,
-                title: 'Choose the app folder to preview',
-                openLabel: 'Preview'
+                title: DeepnoteAppPreview.chooseFolderTitle,
+                openLabel: DeepnoteAppPreview.preview
             }
         );
         verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).once();
@@ -276,7 +277,7 @@ suite('AppPreviewCommandHandler', () => {
 
         await previewApp(Uri.file(appFolder));
 
-        verify(win().showErrorMessage('Could not start the app preview: listen EACCES')).once();
+        verify(win().showErrorMessage(DeepnoteAppPreview.startFailed('listen EACCES'))).once();
         verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).never();
         verify(env().openExternal(anything())).never();
 
@@ -316,16 +317,10 @@ suite('AppPreviewCommandHandler', () => {
             fetch(`${serverUrl()}v2${urlPath}`, { headers: { authorization: `Bearer ${token}` } });
         const dataframe = () => api('/projects/project-1/dataframes/sales');
 
-        assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
         assert.strictEqual((await dataframe()).status, 501);
         // A repeated call must not warn again.
         assert.strictEqual((await dataframe()).status, 501);
 
-        verify(
-            win().showWarningMessage('The app in app called appData(), which the local preview does not support yet.')
-        ).once();
-        verify(
-            win().showWarningMessage('The app in app called dataframe(), which the local preview does not support yet.')
-        ).once();
+        verify(win().showWarningMessage(DeepnoteAppPreview.operationNotSupported('dataframe()', 'app'))).once();
     });
 });

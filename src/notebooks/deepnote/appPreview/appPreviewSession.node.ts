@@ -7,7 +7,7 @@ import { IDisposable } from '../../../platform/common/types';
 import { generateUuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import { extname, extUri } from '../../../platform/vscode-path/resources';
-import { createAppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
+import { createAppPreviewApi, type AppPreviewUnsupportedOperation } from './appPreviewApi.node';
 import type { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import { findNotebookById } from './appPreviewWorkspace.node';
 import type { AppPreviewApi, IAppPreviewRunner } from './types';
@@ -23,7 +23,7 @@ export interface AppPreviewSessionOptions {
     runFiles: AppPreviewRunFiles;
     runner: IAppPreviewRunner;
     scripts: { appClient: Uri };
-    onUnsupported(operation: AppPreviewOperation): void;
+    onUnsupported(operation: AppPreviewUnsupportedOperation): void;
 }
 
 const LOOPBACK_HOSTNAMES = ['127.0.0.1', 'localhost', '[::1]'];

@@ -12,7 +12,7 @@ import * as path from '../../../platform/vscode-path/path';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from '../deepnoteTestHelpers';
-import type { AppPreviewOperation } from './appPreviewApi.node';
+import type { AppPreviewUnsupportedOperation } from './appPreviewApi.node';
 import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import { AppPreviewSession, type AppPreviewProject } from './appPreviewSession.node';
 import type { AppPreviewRunOutcome, IAppPreviewRunner } from './types';
@@ -94,7 +94,7 @@ suite('AppPreviewSession', () => {
     let appFolder: string;
     let clientScript: string;
     let sessions: AppPreviewSession[];
-    let onUnsupported: sinon.SinonStub<[AppPreviewOperation], void>;
+    let onUnsupported: sinon.SinonStub<[AppPreviewUnsupportedOperation], void>;
     let runner: IAppPreviewRunner;
 
     async function startSession(
@@ -123,7 +123,7 @@ suite('AppPreviewSession', () => {
 
     setup(() => {
         resetVSCodeMocks();
-        onUnsupported = sinon.stub<[AppPreviewOperation], void>();
+        onUnsupported = sinon.stub<[AppPreviewUnsupportedOperation], void>();
         runner = mock<IAppPreviewRunner>();
         sessions = [];
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-'));

@@ -17,7 +17,7 @@ import {
     createDeepnoteNotebook,
     createDeepnoteProject
 } from '../deepnoteTestHelpers';
-import { createAppPreviewApi, type AppPreviewOperation } from './appPreviewApi.node';
+import { createAppPreviewApi, type AppPreviewUnsupportedOperation } from './appPreviewApi.node';
 import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import type { WorkspaceNotebook } from './appPreviewWorkspace.node';
 import type { AppPreviewApi, AppPreviewRunOutcome, IAppPreviewRunner, SnapshotBlock } from './types';
@@ -125,7 +125,7 @@ suite('createAppPreviewApi', () => {
     let runner: IAppPreviewRunner;
     let runFiles: AppPreviewRunFiles;
     let findNotebook: sinon.SinonStub<[string], Promise<WorkspaceNotebook | undefined>>;
-    let onUnsupported: sinon.SinonStub<[AppPreviewOperation], void>;
+    let onUnsupported: sinon.SinonStub<[AppPreviewUnsupportedOperation], void>;
 
     setup(async () => {
         runner = mock<IAppPreviewRunner>();
@@ -139,7 +139,7 @@ suite('createAppPreviewApi', () => {
         findNotebook = sinon
             .stub<[string], Promise<WorkspaceNotebook | undefined>>()
             .callsFake(async (notebookId) => notebooks.get(notebookId));
-        onUnsupported = sinon.stub<[AppPreviewOperation], void>();
+        onUnsupported = sinon.stub<[AppPreviewUnsupportedOperation], void>();
         runFiles = mock(AppPreviewRunFiles);
         when(runFiles.write(anything(), anything())).thenResolve(true);
         when(runFiles.read(anything())).thenResolve(RUN_FILE);
@@ -695,7 +695,7 @@ suite('createAppPreviewApi', () => {
         });
     });
 
-    const stubs: [string, string, AppPreviewOperation][] = [
+    const stubs: [string, string, AppPreviewUnsupportedOperation][] = [
         ['GET', '/projects/p-1/dataframes/sales%20by%20month', 'dataframe()']
     ];
     for (const [method, path, operation] of stubs) {

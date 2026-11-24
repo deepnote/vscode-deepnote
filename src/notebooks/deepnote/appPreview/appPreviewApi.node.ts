@@ -25,12 +25,12 @@ import type {
     SnapshotBlock
 } from './types';
 
-export type AppPreviewOperation = 'dataframe()';
+export type AppPreviewUnsupportedOperation = 'dataframe()';
 
 export interface AppPreviewApiOptions {
     token: string;
     findNotebook(notebookId: string): Promise<WorkspaceNotebook | undefined>;
-    onUnsupported(operation: AppPreviewOperation): void;
+    onUnsupported(operation: AppPreviewUnsupportedOperation): void;
     runFiles: AppPreviewRunFiles;
     runner: IAppPreviewRunner;
 }
@@ -53,7 +53,7 @@ const createRunBodySchema = z.strictObject({
     detachedRunStorageMode: z.enum(['read_write', 'readonly']).optional()
 });
 
-function notSupportedMessage(operation: AppPreviewOperation): string {
+function notSupportedMessage(operation: AppPreviewUnsupportedOperation): string {
     return `${operation} is not supported in the local preview yet.`;
 }
 
@@ -197,7 +197,7 @@ export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewAp
     const unfinished = new Set<CancellationTokenSource>();
     let isDisposed = false;
 
-    const unsupported = (operation: AppPreviewOperation) => (_req: Request, res: Response) => {
+    const unsupported = (operation: AppPreviewUnsupportedOperation) => (_req: Request, res: Response) => {
         options.onUnsupported(operation);
         res.status(501).json({ message: notSupportedMessage(operation) });
     };

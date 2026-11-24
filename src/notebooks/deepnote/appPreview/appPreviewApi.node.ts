@@ -36,14 +36,14 @@ export interface AppPreviewApiOptions {
 }
 
 // Protocol strings: app code receives them, so they stay English like Deepnote's API messages.
-const UNAUTHORIZED_MESSAGE = 'Unauthorized';
-const NOT_AVAILABLE_MESSAGE = 'This endpoint is not available to app viewer tokens';
-const NOTEBOOK_NOT_FOUND_MESSAGE = 'Notebook not found';
-const NO_RUN_RESULTS_MESSAGE = 'You have no run results for this notebook yet. Run the notebook to load them.';
-const NO_JSON_OUTPUT_MESSAGE = 'Your latest run has no JSON output.';
-const RUN_NOT_FOUND_MESSAGE = 'Run not found';
-const PREVIEW_STOPPED_MESSAGE = 'The app preview has stopped';
-const INTERNAL_ERROR_MESSAGE = 'Internal server error';
+export const UNAUTHORIZED_MESSAGE = 'Unauthorized';
+export const NOT_AVAILABLE_MESSAGE = 'This endpoint is not available to app viewer tokens';
+export const NOTEBOOK_NOT_FOUND_MESSAGE = 'Notebook not found';
+export const NO_RUN_RESULTS_MESSAGE = 'You have no run results for this notebook yet. Run the notebook to load them.';
+export const NO_JSON_OUTPUT_MESSAGE = 'Your latest run has no JSON output.';
+export const RUN_NOT_FOUND_MESSAGE = 'Run not found';
+export const PREVIEW_STOPPED_MESSAGE = 'The app preview has stopped';
+export const INTERNAL_ERROR_MESSAGE = 'Internal server error';
 
 type AppViewerNotebook = operations['getNotebook']['responses'][200]['content']['application/json']['notebook'];
 
@@ -53,7 +53,7 @@ const createRunBodySchema = z.strictObject({
     detachedRunStorageMode: z.enum(['read_write', 'readonly']).optional()
 });
 
-function notSupportedMessage(operation: AppPreviewUnsupportedOperation): string {
+export function notSupportedMessage(operation: AppPreviewUnsupportedOperation): string {
     return `${operation} is not supported in the local preview yet.`;
 }
 

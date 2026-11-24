@@ -27,6 +27,7 @@ import {
     type IDeepnoteToolkitDependencyService
 } from '../../../kernels/deepnote/types';
 import { createDeferred, type Deferred } from '../../../platform/common/utils/async';
+import { DeepnoteAppPreview } from '../../../platform/common/utils/localize';
 import type { DeepnoteNotebook } from '../../../platform/deepnote/deepnoteTypes';
 import { logger } from '../../../platform/logging';
 import type { PythonEnvironment } from '../../../platform/pythonEnvironments/info';
@@ -43,7 +44,7 @@ import {
     DEEPNOTE_CLOUD_INIT_BLOCK,
     WINDOWS_INIT_BLOCK
 } from '../deepnoteTestHelpers';
-import { AppPreviewRunner } from './appPreviewRunner.node';
+import { AppPreviewRunner, INIT_NOTEBOOK_FAILED_PREFIX } from './appPreviewRunner.node';
 import type { AppPreviewRunOutcome, AppPreviewRunRequest } from './types';
 
 const CREATED_AT = '2026-11-22T10:00:00.000Z';
@@ -517,7 +518,7 @@ suite('AppPreviewRunner', () => {
                 { success: false, outputs: [errorOutput], error: new Error('The kernel died') },
                 'The kernel died'
             ],
-            ['no error', { success: false, outputs: [] }, 'Block table failed.']
+            ['no error', { success: false, outputs: [] }, DeepnoteAppPreview.blockFailed('table')]
         ];
         for (const [condition, tableResult, message] of failures) {
             test(`fails with the block's message for ${condition}, keeping the outputs so far`, async () => {
@@ -564,7 +565,7 @@ suite('AppPreviewRunner', () => {
             assert.isNull(outcome.error);
         });
 
-        test('fails with the init block\'s message after "Init notebook failed: ", without running the notebook', async () => {
+        test("fails with the init block's message after Deepnote's init failure prefix, without running the notebook", async () => {
             const withInit = write(
                 'with-init.deepnote',
                 projectFile(
@@ -583,7 +584,7 @@ suite('AppPreviewRunner', () => {
             const outcome = await run(withInit, 'nb-1');
 
             assert.strictEqual(outcome.status, 'error');
-            assert.strictEqual(outcome.error, 'Init notebook failed: ValueError: no data');
+            assert.strictEqual(outcome.error, `${INIT_NOTEBOOK_FAILED_PREFIX}ValueError: no data`);
             assert.deepStrictEqual(outcome.file?.execution, { startedAt: CREATED_AT, finishedAt: FINISHED_AT });
             assert.deepStrictEqual(runFileBlocks(outcome), [{ id: 'chart', type: 'code', outputs: [], metadata: {} }]);
             assert.deepStrictEqual(notebookIdsPerCall(1), [['nb-init']]);
@@ -597,21 +598,19 @@ suite('AppPreviewRunner', () => {
 
             assert.deepStrictEqual(outcome, {
                 status: 'internal_error',
-                error: 'No Python interpreter is selected for the notebook. Select one in VS Code, then run the app again.',
+                error: DeepnoteAppPreview.noInterpreter,
                 file: null
             });
             sinon.assert.notCalled(createEngine);
         });
 
-        const toolkitNotInstalled =
-            "deepnote-toolkit is not installed in the notebook's Python interpreter. Install it from VS Code, then run the app again.";
         const declined: [DeepnoteToolkitDependencyResponse, string][] = [
-            [DeepnoteToolkitDependencyResponse.cancel, toolkitNotInstalled],
+            [DeepnoteToolkitDependencyResponse.cancel, DeepnoteAppPreview.toolkitNotInstalled],
             [
                 DeepnoteToolkitDependencyResponse.selectDifferentInterpreter,
-                'Open the notebook in VS Code and run Deepnote: Select Interpreter for Notebook, then run the app again.'
+                DeepnoteAppPreview.selectDifferentInterpreter
             ],
-            [DeepnoteToolkitDependencyResponse.failed, toolkitNotInstalled]
+            [DeepnoteToolkitDependencyResponse.failed, DeepnoteAppPreview.toolkitNotInstalled]
         ];
         for (const [response, message] of declined) {
             test(`is an internal error, without a server, when the toolkit install answers ${DeepnoteToolkitDependencyResponse[response]}`, async () => {

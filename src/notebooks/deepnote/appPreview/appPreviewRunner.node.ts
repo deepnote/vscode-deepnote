@@ -21,7 +21,7 @@ import { blocksInNotebookOrder } from './appPreviewWorkspace.node';
 import type { AppPreviewInputValue, AppPreviewRunOutcome, AppPreviewRunRequest, IAppPreviewRunner } from './types';
 
 // Deepnote's run error for a failing init block, so app code sees the same message as in Deepnote.
-const INIT_NOTEBOOK_FAILED_PREFIX = 'Init notebook failed: ';
+export const INIT_NOTEBOOK_FAILED_PREFIX = 'Init notebook failed: ';
 
 const STOPPED: AppPreviewRunOutcome = { status: 'stopped', error: null, file: null };
 

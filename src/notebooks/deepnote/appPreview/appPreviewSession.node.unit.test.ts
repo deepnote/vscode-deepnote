@@ -12,7 +12,7 @@ import * as path from '../../../platform/vscode-path/path';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from '../deepnoteTestHelpers';
-import type { AppPreviewUnsupportedOperation } from './appPreviewApi.node';
+import { notSupportedMessage, type AppPreviewUnsupportedOperation } from './appPreviewApi.node';
 import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import { AppPreviewSession, type AppPreviewProject } from './appPreviewSession.node';
 import type { AppPreviewRunOutcome, IAppPreviewRunner } from './types';
@@ -372,9 +372,7 @@ suite('AppPreviewSession', () => {
                 headers: { authorization: `Bearer ${token}` }
             });
             assert.strictEqual(stub.status, 501);
-            assert.deepStrictEqual(JSON.parse(stub.body.toString()), {
-                message: 'dataframe() is not supported in the local preview yet.'
-            });
+            assert.deepStrictEqual(JSON.parse(stub.body.toString()), { message: notSupportedMessage('dataframe()') });
             sinon.assert.calledOnceWithExactly(onUnsupported, 'dataframe()');
 
             assert.strictEqual((await request(session, '/v2/projects/project-1/dataframes/sales')).status, 401);

@@ -21,10 +21,8 @@ import type { AppPreviewRunOutcome, IAppPreviewRunner } from './types';
 
 const CSP = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:";
 const CLIENT_SCRIPT = '/* the bundled client */\n';
-const DATAFRAME_SCRIPT = '/* the dataframe() shim */\n';
 const HOSTED = 'https://deepnote.com/static/app-client/v1.js';
-const SHIM_TAGS = '</script><script src="/__deepnote/dataframe.js">';
-const SWAPPED = `<script src="/__deepnote/client.js">${SHIM_TAGS}`;
+const SWAPPED = '<script src="/__deepnote/client.js">';
 
 interface TokenReply {
     token: string;
@@ -96,6 +94,7 @@ async function requestToken(session: AppPreviewSession): Promise<TokenReply> {
 suite('AppPreviewSession', () => {
     let tmp: string;
     let appFolder: string;
+    let clientScript: string;
     let sessions: AppPreviewSession[];
     let runner: IAppPreviewRunner;
 
@@ -108,10 +107,7 @@ suite('AppPreviewSession', () => {
             project: project ?? undefined,
             runFiles: instance(mock(AppPreviewRunFiles)),
             runner: instance(runner),
-            scripts: {
-                appClient: Uri.file(path.join(tmp, '.ext', 'v1.js')),
-                dataframeShim: Uri.file(path.join(tmp, '.ext', 'dataframeShim.js'))
-            }
+            scripts: { appClient: Uri.file(clientScript) }
         });
         sessions.push(session);
         await session.start();
@@ -131,8 +127,8 @@ suite('AppPreviewSession', () => {
         sessions = [];
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-'));
         appFolder = path.join(tmp, 'app');
+        clientScript = path.join(tmp, '.ext', 'v1.js');
         write('.ext/v1.js', CLIENT_SCRIPT, tmp);
-        write('.ext/dataframeShim.js', DATAFRAME_SCRIPT, tmp);
         write('index.html', '<h1>home</h1>');
         write('sub/index.html', '<h1>sub</h1>');
         write('my file #1.txt', 'spaced');
@@ -299,30 +295,15 @@ suite('AppPreviewSession', () => {
     });
 
     suite('client and API', () => {
-        const scripts: [string, string, string][] = [
-            ['the client script', '/__deepnote/client.js', CLIENT_SCRIPT],
-            ['the dataframe() shim', '/__deepnote/dataframe.js', DATAFRAME_SCRIPT]
-        ];
-        for (const [script, urlPath, contents] of scripts) {
-            test(`serves ${script} from a dot-named folder`, async () => {
-                const session = await startSession();
-
-                const response = await request(session, urlPath);
-
-                assert.strictEqual(response.status, 200);
-                assert.strictEqual(response.body.toString(), contents);
-                assert.strictEqual(response.headers['content-type'], 'text/javascript; charset=utf-8');
-                assert.strictEqual(response.headers['cache-control'], 'no-cache');
-            });
-        }
-
-        test('answers 404 to a script missing from the extension', async () => {
-            fs.rmSync(path.join(tmp, '.ext', 'dataframeShim.js'));
+        test('serves the client script from a dot-named folder', async () => {
             const session = await startSession();
 
-            const response = await request(session, '/__deepnote/dataframe.js');
+            const response = await request(session, '/__deepnote/client.js');
 
-            assert.strictEqual(response.status, 404);
+            assert.strictEqual(response.status, 200);
+            assert.strictEqual(response.body.toString(), CLIENT_SCRIPT);
+            assert.strictEqual(response.headers['content-type'], 'text/javascript; charset=utf-8');
+            assert.strictEqual(response.headers['cache-control'], 'no-cache');
         });
 
         test("hands the client the session's token and project, with the page's origin as the API origin", async () => {
@@ -507,7 +488,7 @@ suite('AppPreviewSession', () => {
                     '<!doctype html><html><head>',
                     `${SWAPPED}</script>`,
                     `${SWAPPED}</script>`,
-                    `<script async src="/__deepnote/client.js"  crossorigin=anonymous onload="start()">${SHIM_TAGS}</SCRIPT>`,
+                    '<script async src="/__deepnote/client.js"  crossorigin=anonymous onload="start()"></SCRIPT>',
                     '<script src="https://cdn.example.com/lib.js"></script>',
                     '<script src="https://deepnote.com/static/app-client/v2.js"></script>',
                     `<script data-src="${HOSTED}" src="main.js" onload="if (a > b) run()"></script>`,
@@ -525,7 +506,7 @@ suite('AppPreviewSession', () => {
 
             assert.strictEqual(
                 await getText(session, '/page.html'),
-                `<script data-note=it's src="/__deepnote/client.js">${SHIM_TAGS}${rest}`
+                `<script data-note=it's src="/__deepnote/client.js">${rest}`
             );
         });
 
@@ -541,8 +522,8 @@ suite('AppPreviewSession', () => {
             assert.strictEqual(
                 await getText(session, '/page.html'),
                 [
-                    `<script src="/__deepnote/client.js" onload=start("src")>${SHIM_TAGS}</script>`,
-                    `<script onload=start('src') src="/__deepnote/client.js">${SHIM_TAGS}</script>`,
+                    `<script src="/__deepnote/client.js" onload=start("src")></script>`,
+                    `<script onload=start('src') src="/__deepnote/client.js"></script>`,
                     `${SWAPPED}</script>`
                 ].join('\n')
             );

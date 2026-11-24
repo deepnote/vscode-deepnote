@@ -211,7 +211,6 @@ function createConfig(
 ): SameShape<BuildOptions, BuildOptions> {
     const inject: string[] = [];
     const isWebTestSource = source.endsWith(path.join('web', 'index.ts'));
-    const isAppPreviewScript = source.endsWith(path.join('appPreview', 'dataframeShim.ts'));
     const plugins: Plugin[] = [];
     let define: SameShape<BuildOptions, BuildOptions>['define'] = undefined;
     if (target === 'web') {
@@ -287,15 +286,14 @@ function createConfig(
         );
     }
     // Desktop builds use CommonJS for VS Code/Cursor compatibility
-    // Web builds use ESM for browser compatibility, except the dataframe() shim: app pages load it as a classic script,
-    // where an ESM bundle's top-level names would become globals.
+    // Web builds use ESM for browser compatibility
     const config: SameShape<BuildOptions, BuildOptions> = {
         entryPoints: [source],
         outfile,
         bundle: true,
         external,
         alias,
-        format: target === 'desktop' ? 'cjs' : isAppPreviewScript ? 'iife' : 'esm',
+        format: target === 'desktop' ? 'cjs' : 'esm',
         metafile: isDevbuild && !watch,
         define,
         target: target === 'desktop' ? 'node18' : 'es2018',
@@ -447,11 +445,6 @@ async function buildAll() {
         build(
             path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'bigNumberComparisonSettings', 'index.tsx'),
             path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'bigNumberComparisonSettings', 'index.js'),
-            { target: 'web', watch: watchAll }
-        ),
-        build(
-            path.join(extensionFolder, 'src', 'webviews', 'webview-side', 'appPreview', 'dataframeShim.ts'),
-            path.join(extensionFolder, 'dist', 'webviews', 'webview-side', 'appPreview', 'dataframeShim.js'),
             { target: 'web', watch: watchAll }
         ),
         // Notebook renderers (integrated from jupyter-renderers)

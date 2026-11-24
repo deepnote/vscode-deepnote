@@ -56,8 +56,7 @@ const INPUTS_RESOLVED = 'inputs() resolved: ';
 const APP_DATA_AFTER_RUN = 'appData() after the run: ';
 
 const NO_RUN_RESULTS = 'You have no run results for this notebook yet. Run the notebook to load them.';
-const NO_PROJECT_DATAFRAME =
-    "This app folder is not next to or inside the folder of a Deepnote project's .deepnote files, so it has no stored dataframes. After adding one, run Deepnote: Preview App again.";
+const NO_PROJECT_DATAFRAME = 'Reload the page to read dataframes.';
 
 const NOTEBOOK_INPUTS = [
     { blockId: 'e2e-region-input', name: 'region', type: 'input-text', value: 'Europe', label: 'Region' },

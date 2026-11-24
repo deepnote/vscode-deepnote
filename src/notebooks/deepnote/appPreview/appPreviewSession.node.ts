@@ -22,7 +22,7 @@ export interface AppPreviewSessionOptions {
     project: AppPreviewProject | undefined;
     runFiles: AppPreviewRunFiles;
     runner: IAppPreviewRunner;
-    scripts: { appClient: Uri; dataframeShim: Uri };
+    scripts: { appClient: Uri };
 }
 
 const LOOPBACK_HOSTNAMES = ['127.0.0.1', 'localhost', '[::1]'];
@@ -38,10 +38,6 @@ const FILE_HEADERS = {
 
 const HOSTED_CLIENT_PATH = '/static/app-client/v1.js';
 const CLIENT_SRC_ATTRIBUTE = 'src="/__deepnote/client.js"';
-// The page's own closing tag closes the shim's. The shim needs `window.Deepnote` when it runs and adds dataframe() only
-// to connections made after that, so a client tag with defer, async or type=module, or an onload that connects,
-// leaves the app without it.
-const DATAFRAME_SHIM_TAGS = '</script><script src="/__deepnote/dataframe.js">';
 // The token is valid for the whole session; when this runs out, the client asks again and gets the same token.
 const TOKEN_LIFETIME_SECONDS = 60 * 60;
 // As in HTML, a quote opens a value only right after `=`; the lookahead and backreference consume a quoted value
@@ -61,16 +57,6 @@ function onSendError(res: Response): (error: Error | undefined) => void {
             notFound(res);
         }
     };
-}
-
-function sendScript(res: Response, script: Uri): void {
-    res.set({ 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
-    res.sendFile(script.fsPath, { dotfiles: 'allow' }, (error) => {
-        if (error) {
-            logger.warn('AppPreviewSession: Could not send an app preview script', error);
-        }
-        onSendError(res)(error);
-    });
 }
 
 function decodePathSegments(urlPath: string): string[] | undefined {
@@ -128,15 +114,14 @@ function swapClientScriptTags(page: string): string {
         const src = srcAttribute(attributes);
 
         return src !== undefined && isHostedClientUrl(src)
-            ? `<script${attributes.replace(TAG_ATTRIBUTE, clientAttribute)}>${DATAFRAME_SHIM_TAGS}`
+            ? `<script${attributes.replace(TAG_ATTRIBUTE, clientAttribute)}>`
             : tag;
     });
 }
 
 /**
  * Serves one data app folder on a loopback port the way Deepnote serves a published app, with the extension's copy of
- * Deepnote's client and a `dataframe()` for it in place of the hosted client, the token endpoint the client asks
- * first, and a local API at `/v2`.
+ * Deepnote's client in place of the hosted one, the token endpoint the client asks first, and a local API at `/v2`.
  */
 export class AppPreviewSession implements IDisposable {
     private api: AppPreviewApi | undefined;
@@ -251,8 +236,15 @@ export class AppPreviewSession implements IDisposable {
         const app = express();
 
         app.use((req, res, next) => this.checkHost(req, res, next));
-        app.get('/__deepnote/client.js', (_req, res) => sendScript(res, this.options.scripts.appClient));
-        app.get('/__deepnote/dataframe.js', (_req, res) => sendScript(res, this.options.scripts.dataframeShim));
+        app.get('/__deepnote/client.js', (_req, res) => {
+            res.set({ 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
+            res.sendFile(this.options.scripts.appClient.fsPath, { dotfiles: 'allow' }, (error) => {
+                if (error) {
+                    logger.warn('AppPreviewSession: Could not send the app preview client script', error);
+                }
+                onSendError(res)(error);
+            });
+        });
         app.post('/__deepnote/api-token', (req, res) => this.sendToken(req, res));
         app.use('/__deepnote', (_req, res) => notFound(res));
         this.api = createAppPreviewApi({
@@ -301,8 +293,7 @@ export class AppPreviewSession implements IDisposable {
             token: this.token,
             apiOrigin: pageOrigin,
             expiresAtSeconds: Math.floor(Date.now() / 1000) + TOKEN_LIFETIME_SECONDS,
-            // The bundled client ignores this; the `dataframe()` shim reads the project from here, as the version of
-            // the client that adds `dataframe()` will.
+            // The client's `dataframe()` reads the project from here.
             ...(this.project ? { projectId: this.project.id } : {})
         });
     }

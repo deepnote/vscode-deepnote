@@ -142,17 +142,9 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
             project: await resolvePreviewProject(folder),
             runFiles: this.runFiles,
             runner: this.runner,
+            // A copy of https://deepnote.com/static/app-client/v1.js, so that previews work offline.
             scripts: {
-                // A copy of https://deepnote.com/static/app-client/v1.js, so that previews work offline.
-                appClient: Uri.joinPath(this.extensionContext.extensionUri, 'resources', 'appPreview', 'v1.js'),
-                dataframeShim: Uri.joinPath(
-                    this.extensionContext.extensionUri,
-                    'dist',
-                    'webviews',
-                    'webview-side',
-                    'appPreview',
-                    'dataframeShim.js'
-                )
+                appClient: Uri.joinPath(this.extensionContext.extensionUri, 'resources', 'appPreview', 'v1.js')
             }
         });
 

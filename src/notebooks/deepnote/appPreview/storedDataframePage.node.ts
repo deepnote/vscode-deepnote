@@ -79,9 +79,9 @@ export const DATAFRAME_NAME_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 // Protocol strings: app code receives them, so they stay English like Deepnote's API messages.
 export const DATAFRAME_NOT_FOUND_MESSAGE = 'Dataframe not found';
-const DATE_OUT_OF_RANGE_MESSAGE =
+export const DATE_OUT_OF_RANGE_MESSAGE =
     'The page holds a date or timestamp outside the years 0 to 9999, which the server cannot format.';
-const LZ4_MESSAGE = 'The stored dataframe is compressed with lz4, which the server cannot decode.';
+export const LZ4_MESSAGE = 'The stored dataframe is compressed with lz4, which the server cannot decode.';
 
 // deepnote-toolkit's FRAMES_DIR, relative to the folder it stores frames under.
 const DATAFRAMES_DIRECTORY = 'deepnote_dataframes';

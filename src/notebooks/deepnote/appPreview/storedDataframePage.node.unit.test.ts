@@ -51,10 +51,17 @@ import * as sinon from 'sinon';
 import { Uri } from 'vscode';
 import zlib from 'zlib';
 
+import { DeepnoteAppPreview } from '../../../platform/common/utils/localize';
 import { platformUtils } from '../../../platform/common/utils/platform.node';
 import * as path from '../../../platform/vscode-path/path';
 import { EXTENSION_ROOT_DIR_FOR_TESTS } from '../../../test/constants.node';
-import { DataframePageError, readStoredDataframePage } from './storedDataframePage.node';
+import {
+    DATAFRAME_NOT_FOUND_MESSAGE,
+    DataframePageError,
+    DATE_OUT_OF_RANGE_MESSAGE,
+    LZ4_MESSAGE,
+    readStoredDataframePage
+} from './storedDataframePage.node';
 
 const REFERENCE_ID = '0b5c1f2e-3d4a-4b6c-8d7e-9f0a1b2c3d4e';
 const LZ4_FRAME_HEADER = Uint8Array.of(0x04, 0x22, 0x4d, 0x18, 0x40, 0x40, 0xc0);
@@ -572,8 +579,7 @@ suite('readStoredDataframePage', () => {
                 assert.deepStrictEqual((await read('frame', 0, 1)).rows, firstPage);
                 assert.deepStrictEqual(await rejection(read('frame', 1, 1)), {
                     status: 422,
-                    message:
-                        'The page holds a date or timestamp outside the years 0 to 9999, which the server cannot format.'
+                    message: DATE_OUT_OF_RANGE_MESSAGE
                 });
             });
         }
@@ -656,7 +662,7 @@ suite('readStoredDataframePage', () => {
             assert.deepStrictEqual((await read('frame', 1, 2)).rows, [[3], [4]]);
             assert.deepStrictEqual(await rejection(read('frame', 0, 2)), {
                 status: 404,
-                message: 'Dataframe not found'
+                message: DATAFRAME_NOT_FOUND_MESSAGE
             });
         });
     });
@@ -739,7 +745,7 @@ suite('readStoredDataframePage', () => {
 
                 assert.deepStrictEqual(await rejection(read('frame')), {
                     status: 404,
-                    message: 'Dataframe not found'
+                    message: DATAFRAME_NOT_FOUND_MESSAGE
                 });
             });
         }
@@ -781,7 +787,10 @@ suite('readStoredDataframePage', () => {
             moveFramesToHome();
             writeManifest('frame', '{"file":');
 
-            assert.deepStrictEqual(await rejection(read('frame')), { status: 404, message: 'Dataframe not found' });
+            assert.deepStrictEqual(await rejection(read('frame')), {
+                status: 404,
+                message: DATAFRAME_NOT_FOUND_MESSAGE
+            });
         });
 
         test('answers 404 for a name that is not a single safe path segment', async () => {
@@ -789,7 +798,7 @@ suite('readStoredDataframePage', () => {
 
             assert.deepStrictEqual(await rejection(read('../deepnote_dataframes/frame')), {
                 status: 404,
-                message: 'Dataframe not found'
+                message: DATAFRAME_NOT_FOUND_MESSAGE
             });
         });
 
@@ -814,7 +823,7 @@ suite('readStoredDataframePage', () => {
 
             assert.deepStrictEqual(await rejection(read('frame')), {
                 status: 422,
-                message: 'The stored dataframe is compressed with lz4, which the server cannot decode.'
+                message: LZ4_MESSAGE
             });
         });
 
@@ -824,8 +833,7 @@ suite('readStoredDataframePage', () => {
 
             assert.deepStrictEqual(await rejection(read('frame')), {
                 status: 422,
-                message:
-                    "The editor's Node.js cannot decompress the stored dataframe, which is compressed with zstd. Update the editor to read it."
+                message: DeepnoteAppPreview.zstdUnavailable
             });
         });
     });

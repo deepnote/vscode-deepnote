@@ -12,6 +12,7 @@ import { Uri } from 'vscode';
 import zlib from 'zlib';
 
 import { createDeferred, type Deferred } from '../../../platform/common/utils/async';
+import { DeepnoteAppPreview } from '../../../platform/common/utils/localize';
 import { platformUtils } from '../../../platform/common/utils/platform.node';
 import { isUUID } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
@@ -37,6 +38,7 @@ import {
 import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import type { AppPreviewProject } from './appPreviewSession.node';
 import type { WorkspaceNotebook } from './appPreviewWorkspace.node';
+import { DATAFRAME_NOT_FOUND_MESSAGE } from './storedDataframePage.node';
 import type { AppPreviewApi, AppPreviewRunOutcome, IAppPreviewRunner, SnapshotBlock } from './types';
 
 const TOKEN = 'preview-token';
@@ -706,7 +708,7 @@ suite('createAppPreviewApi', () => {
 
     suite('GET /projects/:projectId/dataframes/:name', () => {
         const PROJECT_ID = '5b0d4a8e-2f1c-4e3b-9a6d-7c8e9f0a1b2c';
-        const NOT_FOUND = { message: 'Dataframe not found' };
+        const NOT_FOUND = { message: DATAFRAME_NOT_FOUND_MESSAGE };
         // Holds deepnote_dataframes/toolkit_frame, three rows that deepnote-toolkit 2.9.1 stored.
         const FRAMES_PROJECT: AppPreviewProject = {
             id: PROJECT_ID,
@@ -838,10 +840,7 @@ suite('createAppPreviewApi', () => {
             const logError = sinon.stub(logger, 'error');
             sinon.stub(zlib, 'zstdDecompressSync').value(undefined);
 
-            await assertJson(await getDataframe(), 422, {
-                message:
-                    "The editor's Node.js cannot decompress the stored dataframe, which is compressed with zstd. Update the editor to read it."
-            });
+            await assertJson(await getDataframe(), 422, { message: DeepnoteAppPreview.zstdUnavailable });
             sinon.assert.notCalled(logError);
         });
     });

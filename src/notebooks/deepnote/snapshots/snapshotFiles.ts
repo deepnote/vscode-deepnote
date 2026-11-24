@@ -1,7 +1,10 @@
+import { serializeDeepnoteFile, type DeepnoteFile } from '@deepnote/blocks';
 import { generateSnapshotFilename, parseSnapshotFilename, slugifyProjectName } from '@deepnote/convert';
-import { Uri } from 'vscode';
+import { FileType, Uri, workspace } from 'vscode';
+import { Utils } from 'vscode-uri';
 
 import { InvalidProjectNameError } from '../../../platform/errors/invalidProjectNameError';
+import { logger } from '../../../platform/logging';
 
 /** File suffix for snapshot files */
 export const SNAPSHOT_FILE_SUFFIX = '.snapshot.deepnote';
@@ -54,4 +57,36 @@ export function extractProjectIdFromSnapshotUri(uri: Uri): string | undefined {
     const parsed = parseSnapshotFilename(basename);
 
     return parsed?.projectId;
+}
+
+/** Encodes `file` as the UTF-8 YAML that snapshot files hold. */
+export function encodeSnapshotFile(file: DeepnoteFile): Uint8Array {
+    return new TextEncoder().encode(serializeDeepnoteFile(file));
+}
+
+/** Creates `snapshotsDir` if missing; logs an error and resolves `false` if it is not or cannot become a directory. */
+export async function ensureSnapshotsDirectory(snapshotsDir: Uri): Promise<boolean> {
+    try {
+        const stat = await workspace.fs.stat(snapshotsDir);
+
+        if (stat.type !== FileType.Directory) {
+            logger.error(`[Snapshot] Snapshots path exists but is not a directory: ${Utils.basename(snapshotsDir)}`);
+
+            return false;
+        }
+
+        return true;
+    } catch {
+        logger.debug(`[Snapshot] Creating snapshots directory: ${Utils.basename(snapshotsDir)}`);
+
+        try {
+            await workspace.fs.createDirectory(snapshotsDir);
+
+            return true;
+        } catch (error) {
+            logger.error(`[Snapshot] Failed to create snapshots directory: ${Utils.basename(snapshotsDir)}`, error);
+
+            return false;
+        }
+    }
 }

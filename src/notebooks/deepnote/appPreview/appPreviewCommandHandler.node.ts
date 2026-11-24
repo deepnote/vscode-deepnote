@@ -8,8 +8,10 @@ import { DeepnoteAppPreview } from '../../../platform/common/utils/localize';
 import { logger } from '../../../platform/logging';
 import { basename } from '../../../platform/vscode-path/resources';
 import type { AppPreviewOperation } from './appPreviewApi.node';
+import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import { AppPreviewSession } from './appPreviewSession.node';
 import { resolvePreviewProject } from './appPreviewWorkspace.node';
+import { IAppPreviewRunner } from './types';
 
 const INTEGRATED_BROWSER_OPEN_COMMAND = 'workbench.action.browser.open';
 const SIMPLE_BROWSER_OPEN_COMMAND = 'simpleBrowser.api.open';
@@ -20,11 +22,13 @@ function errorMessage(error: unknown): string {
 
 @injectable()
 export class AppPreviewCommandHandler implements IExtensionSyncActivationService {
+    private runFiles: AppPreviewRunFiles | undefined;
     private readonly sessions = new Map<string, Promise<AppPreviewSession>>();
 
     constructor(
         @inject(IExtensionContext) private readonly extensionContext: IExtensionContext,
-        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry
+        @inject(IDisposableRegistry) private readonly disposables: IDisposableRegistry,
+        @inject(IAppPreviewRunner) private readonly runner: IAppPreviewRunner
     ) {}
 
     public activate(): void {
@@ -133,9 +137,14 @@ export class AppPreviewCommandHandler implements IExtensionSyncActivationService
 
     private async startSession(folder: Uri): Promise<AppPreviewSession> {
         const warned = new Set<AppPreviewOperation>();
+        this.runFiles ??= new AppPreviewRunFiles(
+            this.extensionContext.storageUri ?? this.extensionContext.globalStorageUri
+        );
         const session = new AppPreviewSession({
             folder,
             project: await resolvePreviewProject(folder),
+            runFiles: this.runFiles,
+            runner: this.runner,
             // A copy of https://deepnote.com/static/app-client/v1.js, so that previews work offline.
             scripts: {
                 appClient: Uri.joinPath(this.extensionContext.extensionUri, 'resources', 'appPreview', 'v1.js')

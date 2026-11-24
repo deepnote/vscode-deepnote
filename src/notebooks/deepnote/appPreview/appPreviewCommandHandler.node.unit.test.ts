@@ -3,10 +3,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as sinon from 'sinon';
 import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
-import { Uri, ViewColumn, type WorkspaceConfiguration, type WorkspaceFolder } from 'vscode';
+import { Uri, ViewColumn, workspace, type WorkspaceConfiguration, type WorkspaceFolder } from 'vscode';
 
 import { Commands } from '../../../platform/common/constants';
 import { IDisposable, IExtensionContext } from '../../../platform/common/types';
+import { createDeferred } from '../../../platform/common/utils/async';
 import { dispose } from '../../../platform/common/utils/lifecycle';
 import * as path from '../../../platform/vscode-path/path';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
@@ -14,6 +15,7 @@ import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-m
 import { serializeProjectFile } from '../deepnoteTestHelpers';
 import { AppPreviewCommandHandler } from './appPreviewCommandHandler.node';
 import { AppPreviewSession } from './appPreviewSession.node';
+import type { IAppPreviewRunner } from './types';
 
 const HOSTED = 'https://deepnote.com/static/app-client/v1.js';
 const SIMPLE_BROWSER_OPEN = 'simpleBrowser.api.open';
@@ -24,6 +26,7 @@ suite('AppPreviewCommandHandler', () => {
     let tmp: string;
     let appFolder: string;
     let disposables: IDisposable[];
+    let mockFs: typeof workspace.fs;
     let previewApp: (arg?: unknown) => Promise<void>;
     let simpleBrowserConfig: WorkspaceConfiguration;
 
@@ -56,6 +59,13 @@ suite('AppPreviewCommandHandler', () => {
     setup(async () => {
         resetVSCodeMocks();
         stubWorkspaceFsOnDisk();
+        // The on-disk stub keeps its mock to itself, so `delete` is stubbed on one that forwards the reads to it.
+        const onDisk = workspace.fs;
+        mockFs = mock<typeof workspace.fs>();
+        when(mockFs.readDirectory(anything())).thenCall((uri: Uri) => onDisk.readDirectory(uri));
+        when(mockFs.readFile(anything())).thenCall((uri: Uri) => onDisk.readFile(uri));
+        when(mockFs.delete(anything(), anything())).thenResolve();
+        when(mockedVSCodeNamespaces.workspace.fs).thenReturn(instance(mockFs));
         tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'deepnote-app-preview-handler-'));
         appFolder = path.join(tmp, 'project', 'app');
         await fs.promises.mkdir(appFolder, { recursive: true });
@@ -92,7 +102,8 @@ suite('AppPreviewCommandHandler', () => {
         const context = mock<IExtensionContext>();
         when(context.subscriptions).thenReturn([]);
         when(context.extensionUri).thenReturn(Uri.file(path.join(tmp, 'extension')));
-        new AppPreviewCommandHandler(instance(context), disposables).activate();
+        when(context.storageUri).thenReturn(Uri.file('/storage'));
+        new AppPreviewCommandHandler(instance(context), disposables, instance(mock<IAppPreviewRunner>())).activate();
         const [command, handler] = capture(commands().registerCommand).last();
         assert.strictEqual(command, Commands.PreviewApp);
         previewApp = handler;
@@ -276,24 +287,45 @@ suite('AppPreviewCommandHandler', () => {
         assert.include(await page(), '<h1>app</h1>');
     });
 
+    test('deletes the runs of earlier windows once, for previews of two folders', async () => {
+        const otherFolder = path.join(tmp, 'project', 'other-app');
+        await fs.promises.mkdir(otherFolder);
+
+        await previewApp(Uri.file(appFolder));
+        await previewApp(Uri.file(otherFolder));
+
+        const forwarded = capture(env().asExternalUri);
+        assert.notStrictEqual(forwarded.second()[0].toString(true), forwarded.first()[0].toString(true));
+        verify(mockFs.delete(anything(), anything())).once();
+        assert.strictEqual(capture(mockFs.delete).last()[0].fsPath, '/storage/appPreview/runs');
+    });
+
+    test('starts the preview without waiting for the runs of earlier windows to be deleted', async () => {
+        when(mockFs.delete(anything(), anything())).thenReturn(createDeferred<void>().promise);
+
+        await previewApp(Uri.file(appFolder));
+
+        verify(commands().executeCommand(SIMPLE_BROWSER_OPEN, anything(), anything())).once();
+        assert.include(await page(), '<h1>app</h1>');
+    });
+
     test('warns once per unsupported operation, naming the operation and the folder', async () => {
         await previewApp(Uri.file(appFolder));
         const { token } = await requestToken();
-        const api = (urlPath: string, method = 'GET') =>
-            fetch(`${serverUrl()}v2${urlPath}`, {
-                method,
-                headers: { authorization: `Bearer ${token}` }
-            });
+        const api = (urlPath: string) =>
+            fetch(`${serverUrl()}v2${urlPath}`, { headers: { authorization: `Bearer ${token}` } });
+        const dataframe = () => api('/projects/project-1/dataframes/sales');
 
         assert.strictEqual((await api('/notebooks/nb-1/app-data')).status, 501);
-        assert.strictEqual((await api('/runs', 'POST')).status, 501);
-        assert.strictEqual((await api('/runs/run-1')).status, 501);
+        assert.strictEqual((await dataframe()).status, 501);
+        // A repeated call must not warn again.
+        assert.strictEqual((await dataframe()).status, 501);
 
         verify(
             win().showWarningMessage('The app in app called appData(), which the local preview does not support yet.')
         ).once();
         verify(
-            win().showWarningMessage('The app in app called run(), which the local preview does not support yet.')
+            win().showWarningMessage('The app in app called dataframe(), which the local preview does not support yet.')
         ).once();
     });
 });

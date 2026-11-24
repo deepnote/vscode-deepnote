@@ -1,0 +1,40 @@
+version: '1.0.0'
+metadata:
+  createdAt: '2025-01-01T00:00:00.000Z'
+project:
+  id: e2e-app-preview-runs-project
+  name: E2E App Preview Runs
+  initNotebookId: e2e-runs-init
+  notebooks:
+    # Sorting keys as Deepnote writes them: Deepnote runs V, Z0j, a0 in that order, while localeCompare would put a0
+    # first.
+    - id: e2e-runs-notebook
+      name: Sales run
+      blocks:
+        - id: e2e-runs-check
+          blockGroup: e2e-runs-check
+          type: code
+          content: |-
+            if not region:
+                raise ValueError('Choose a region first')
+          sortingKey: a0
+          metadata: {}
+        - id: e2e-runs-region
+          blockGroup: e2e-runs-region
+          type: input-text
+          sortingKey: V
+          metadata:
+            deepnote_variable_name: region
+            deepnote_variable_value: Europe
+            deepnote_input_label: Region
+        - id: e2e-runs-summary
+          blockGroup: e2e-runs-summary
+          type: code
+          content: |-
+            from IPython.display import display
+            display({'application/json': {'region': region, 'init_region': init_region}}, raw=True)
+          sortingKey: Z0j
+          metadata: {}
+      executionMode: block
+      isModule: false
+  settings: {}

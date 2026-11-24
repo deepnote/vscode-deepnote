@@ -52,6 +52,57 @@ else:
     print("There's no requirements.txt, so nothing to install.")`.trim();
 
 /**
+ * The content to run for an init block. On Windows, Deepnote Cloud's default `%%bash` block becomes a Python block
+ * that installs `requirements.txt` into the kernel's interpreter; any other content is returned unchanged.
+ */
+export function adaptInitBlockContent(content: string): string {
+    return process.platform === 'win32' && content.trim() === DEEPNOTE_CLOUD_INIT_NOTEBOOK_BLOCK_CONTENT
+        ? VSCODE_INIT_NOTEBOOK_BLOCK_CONTENT
+        : content;
+}
+
+/**
+ * Scans the `.deepnote` files next to `deepnoteFileUri` (skipping snapshots) and returns the single notebook of the
+ * first valid init source (same `project.id`, one notebook matching `initNotebookId`), or undefined if none.
+ */
+export async function findSiblingInitNotebook(
+    deepnoteFileUri: Uri,
+    projectId: string,
+    initNotebookId: string
+): Promise<DeepnoteNotebook | undefined> {
+    const dirUri = Uri.joinPath(deepnoteFileUri, '..');
+
+    let entries: [string, number][];
+    try {
+        entries = await workspace.fs.readDirectory(dirUri);
+    } catch (error) {
+        logger.warn(`Failed to read directory ${getDisplayPath(dirUri)} while looking for init notebook:`, error);
+        return undefined;
+    }
+
+    for (const [name] of entries) {
+        if (!name.endsWith(DEEPNOTE_FILE_EXTENSION) || name.endsWith(SNAPSHOT_FILE_SUFFIX)) {
+            continue;
+        }
+
+        const candidateUri = Uri.joinPath(dirUri, name);
+        try {
+            const candidate: DeepnoteFile = await readDeepnoteProjectFile(candidateUri);
+            const validation = isValidSiblingInitCandidate(candidate, projectId, initNotebookId);
+
+            if (validation.valid) {
+                return candidate.project.notebooks[0];
+            }
+        } catch (error) {
+            // One unreadable/invalid file must not stop the scan of the rest.
+            logger.warn(`Failed to read candidate init file ${getDisplayPath(candidateUri)}:`, error);
+        }
+    }
+
+    return undefined;
+}
+
+/**
  * Runs a project's init notebook (from its sibling `.deepnote` file, referenced by
  * `project.initNotebookId`) in the kernel on start, and again on restart. Tracked per kernel — not
  * per project/URI — so a same-environment restart re-initializes correctly.
@@ -141,7 +192,7 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
                 return;
             }
 
-            const initNotebook = await this.findSiblingInitNotebook(notebook, projectId, initNotebookId);
+            const initNotebook = await findSiblingInitNotebook(notebook.uri, projectId, initNotebookId);
             if (!initNotebook) {
                 logger.warn(
                     `No valid sibling init file found for project ${projectId} (initNotebookId ${initNotebookId}), skipping init`
@@ -185,48 +236,6 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
             // Log error but don't throw - we want to let the user continue anyway.
             logger.error(`Error running init notebook for ${getDisplayPath(notebook.uri)}:`, error);
         }
-    }
-
-    /**
-     * Scans sibling `.deepnote` files (skipping snapshots) and returns the single notebook of the
-     * first valid init source (same `project.id`, one notebook matching `initNotebookId`), or
-     * undefined if none.
-     */
-    private async findSiblingInitNotebook(
-        notebook: NotebookDocument,
-        projectId: string,
-        initNotebookId: string
-    ): Promise<DeepnoteNotebook | undefined> {
-        const dirUri = Uri.joinPath(notebook.uri, '..');
-
-        let entries: [string, number][];
-        try {
-            entries = await workspace.fs.readDirectory(dirUri);
-        } catch (error) {
-            logger.warn(`Failed to read directory ${getDisplayPath(dirUri)} while looking for init notebook:`, error);
-            return undefined;
-        }
-
-        for (const [name] of entries) {
-            if (!name.endsWith(DEEPNOTE_FILE_EXTENSION) || name.endsWith(SNAPSHOT_FILE_SUFFIX)) {
-                continue;
-            }
-
-            const candidateUri = Uri.joinPath(dirUri, name);
-            try {
-                const candidate: DeepnoteFile = await readDeepnoteProjectFile(candidateUri);
-                const validation = isValidSiblingInitCandidate(candidate, projectId, initNotebookId);
-
-                if (validation.valid) {
-                    return candidate.project.notebooks[0];
-                }
-            } catch (error) {
-                // One unreadable/invalid file must not stop the scan of the rest.
-                logger.warn(`Failed to read candidate init file ${getDisplayPath(candidateUri)}:`, error);
-            }
-        }
-
-        return undefined;
     }
 
     /**
@@ -371,11 +380,8 @@ export class DeepnoteInitNotebookRunner implements IDeepnoteInitNotebookRunner, 
                 logger.info(`Executing init notebook block ${i + 1}/${codeBlocks.length}`);
 
                 try {
-                    // Make sure the init notebook execution works cross-platform
-                    let blockContent = block.content ?? '';
-                    const isWindows = process.platform === 'win32';
-                    if (isWindows && blockContent.trim() === DEEPNOTE_CLOUD_INIT_NOTEBOOK_BLOCK_CONTENT) {
-                        blockContent = VSCODE_INIT_NOTEBOOK_BLOCK_CONTENT;
+                    const blockContent = adaptInitBlockContent(block.content ?? '');
+                    if (blockContent !== (block.content ?? '')) {
                         logger.info(
                             `Replacing Deepnote Cloud init notebook block ${
                                 i + 1

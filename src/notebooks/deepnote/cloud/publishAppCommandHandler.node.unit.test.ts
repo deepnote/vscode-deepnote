@@ -1,3 +1,4 @@
+import type { SyncProject } from '@deepnote/cloud';
 import {
     findSyncManifestRoot,
     PublishDivergedError,
@@ -21,14 +22,14 @@ import * as path from '../../../platform/vscode-path/path';
 import { MockMemento } from '../../../test/mocks/mementos';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { DeepnoteCloudOperationLock } from './deepnoteCloudOperationLock';
-import { PublishAppCommandHandler, type ListedProject } from './publishAppCommandHandler.node';
+import { PublishAppCommandHandler } from './publishAppCommandHandler.node';
 import { IDeepnoteApiTokenService } from './types';
 
 class TestableHandler extends PublishAppCommandHandler {
-    public readonly listProjectsStub = sinon.stub<[string, string], Promise<ListedProject[]>>();
+    public readonly listProjectsStub = sinon.stub<[string, string], Promise<SyncProject[]>>();
     public readonly runPublishAppStub = sinon.stub<[PublishAppOptions], Promise<PublishAppResult>>();
 
-    protected override listProjects(baseUrl: string, token: string): Promise<ListedProject[]> {
+    protected override listProjects(baseUrl: string, token: string): Promise<SyncProject[]> {
         return this.listProjectsStub(baseUrl, token);
     }
 
@@ -40,7 +41,7 @@ class TestableHandler extends PublishAppCommandHandler {
 type Severity = 'Information' | 'Warning' | 'Error';
 type Answer = string | undefined | (() => string | undefined);
 
-const PROJECTS: ListedProject[] = [
+const PROJECTS: SyncProject[] = [
     { id: 'p-ops', name: 'Ops', projectType: 'data_app', folder: null },
     { id: 'p-notebooks', name: 'Notebooks', projectType: 'standard' },
     { id: 'p-untyped', name: 'Untyped' },

@@ -3,15 +3,19 @@ import { assert } from 'chai';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as os from 'os';
-import { anything, when } from 'ts-mockito';
+import * as sinon from 'sinon';
+import { anything, capture, instance, mock, verify, when } from 'ts-mockito';
 import { Uri } from 'vscode';
 
+import { createDeferred } from '../../../platform/common/utils/async';
 import * as path from '../../../platform/vscode-path/path';
 import { stubWorkspaceFsOnDisk } from '../../../test/mocks/vscodeFs';
 import { mockedVSCodeNamespaces, resetVSCodeMocks } from '../../../test/vscode-mock';
 import { createDeepnoteFile, createDeepnoteNotebook, createDeepnoteProject } from '../deepnoteTestHelpers';
 import type { AppPreviewOperation } from './appPreviewApi.node';
+import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import { AppPreviewSession, type AppPreviewProject } from './appPreviewSession.node';
+import type { AppPreviewRunOutcome, IAppPreviewRunner } from './types';
 
 const CSP = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:";
 const CLIENT_SCRIPT = '/* the bundled client */\n';
@@ -35,7 +39,7 @@ interface RawResponse {
 function request(
     session: AppPreviewSession,
     urlPath: string,
-    options: { method?: string; host?: string; headers?: http.OutgoingHttpHeaders } = {}
+    options: { method?: string; host?: string; headers?: http.OutgoingHttpHeaders; body?: string } = {}
 ): Promise<RawResponse> {
     const port = Number(new URL(session.serverUrl.toString(true)).port);
 
@@ -60,7 +64,7 @@ function request(
             }
         );
         req.on('error', reject);
-        req.end();
+        req.end(options.body);
     });
 }
 
@@ -90,7 +94,8 @@ suite('AppPreviewSession', () => {
     let appFolder: string;
     let clientScript: string;
     let sessions: AppPreviewSession[];
-    let unsupported: AppPreviewOperation[];
+    let onUnsupported: sinon.SinonStub<[AppPreviewOperation], void>;
+    let runner: IAppPreviewRunner;
 
     async function startSession(
         options: { folder?: string; project?: AppPreviewProject | null } = {}
@@ -99,8 +104,10 @@ suite('AppPreviewSession', () => {
         const session = new AppPreviewSession({
             folder: Uri.file(options.folder ?? appFolder),
             project: project ?? undefined,
+            runFiles: instance(mock(AppPreviewRunFiles)),
+            runner: instance(runner),
             scripts: { appClient: Uri.file(clientScript) },
-            onUnsupported: (operation) => unsupported.push(operation)
+            onUnsupported
         });
         sessions.push(session);
         await session.start();
@@ -116,7 +123,8 @@ suite('AppPreviewSession', () => {
 
     setup(() => {
         resetVSCodeMocks();
-        unsupported = [];
+        onUnsupported = sinon.stub<[AppPreviewOperation], void>();
+        runner = mock<IAppPreviewRunner>();
         sessions = [];
         tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'deepnote-app-preview-'));
         appFolder = path.join(tmp, 'app');
@@ -367,7 +375,7 @@ suite('AppPreviewSession', () => {
             assert.deepStrictEqual(JSON.parse(stub.body.toString()), {
                 message: 'appData() is not supported in the local preview yet.'
             });
-            assert.deepStrictEqual(unsupported, ['appData()']);
+            sinon.assert.calledOnceWithExactly(onUnsupported, 'appData()');
 
             assert.strictEqual((await request(session, '/v2/notebooks/nb-1/app-data')).status, 401);
         });
@@ -398,6 +406,35 @@ suite('AppPreviewSession', () => {
             session.setProject({ id: 'project-1', folder: Uri.file(path.join(tmp, 'a')) });
 
             assert.strictEqual(await notebookName(), 'Copy a');
+        });
+
+        test('cancels its unfinished runs when it is disposed', async () => {
+            const notebook = createDeepnoteNotebook({ id: 'nb-1' });
+            const file = createDeepnoteFile({ project: createDeepnoteProject({ notebooks: [notebook] }) });
+            write('main.deepnote', serializeDeepnoteFile(file), tmp);
+            stubWorkspaceFsOnDisk();
+            when(mockedVSCodeNamespaces.workspace.findFiles('**/*.deepnote')).thenCall(async () => [
+                Uri.file(path.join(tmp, 'main.deepnote'))
+            ]);
+            when(runner.run(anything(), anything(), anything())).thenReturn(
+                createDeferred<AppPreviewRunOutcome>().promise
+            );
+            const session = await startSession();
+            const { token } = await requestToken(session);
+
+            const created = await request(session, '/v2/runs', {
+                method: 'POST',
+                headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+                body: JSON.stringify({ notebookId: 'nb-1' })
+            });
+            assert.strictEqual(created.status, 202);
+            verify(runner.run(anything(), anything(), anything())).once();
+            const [, runToken] = capture(runner.run).last();
+            assert.isNotTrue(runToken.isCancellationRequested);
+
+            session.dispose();
+
+            assert.isTrue(runToken.isCancellationRequested);
         });
     });
 

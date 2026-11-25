@@ -276,7 +276,7 @@ suite('readStoredDataframePage', () => {
             const page = await read('toolkit_frame', 0, 10, FIXTURE_PROJECT);
 
             assert.deepStrictEqual(page, {
-                referenceId: '937dcee4-b07d-4ee0-9ee9-4793acaaf0a7',
+                referenceId: '4f988928-3050-43ab-ab95-15554633d002',
                 rowCount: 3,
                 columnCount: 4,
                 pageIndex: 0,
@@ -291,7 +291,7 @@ suite('readStoredDataframePage', () => {
                 rows: [
                     ['9007199254740993', 1.5, '2024-01-02T03:04:05.678Z', 'alpha'],
                     ['-7', null, '1969-12-31T23:59:59.999Z', null],
-                    ['0', -0.25, null, 'žluťoučký']
+                    ['0', -0.25, null, 'café']
                 ]
             });
         });

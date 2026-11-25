@@ -754,7 +754,7 @@ suite('createAppPreviewApi', () => {
                 'rows'
             ]);
             assert.deepStrictEqual(body, {
-                referenceId: '937dcee4-b07d-4ee0-9ee9-4793acaaf0a7',
+                referenceId: '4f988928-3050-43ab-ab95-15554633d002',
                 rowCount: 3,
                 columnCount: 4,
                 pageIndex: 1,
@@ -766,7 +766,7 @@ suite('createAppPreviewApi', () => {
                     { name: 'seen_at', type: 'timestamp', timezone: 'Europe/Prague' },
                     { name: 'label', type: 'string', timezone: null }
                 ],
-                rows: [['0', -0.25, null, 'žluťoučký']]
+                rows: [['0', -0.25, null, 'café']]
             });
         });
 

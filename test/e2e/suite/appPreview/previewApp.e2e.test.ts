@@ -84,12 +84,7 @@ const NOTEBOOK_INPUTS = [
 // The frame is stored in the developer's own home folder on a local run, so under a name no notebook of theirs uses.
 const FRAME_NAME = 'app_preview_e2e_customers';
 const FRAME_FILE = '3f2b8c1e-6d4a-4e9b-9a7c-0d5e1f2a3b4c.arrow';
-const STORE_FRAME_SCRIPT = [
-    'import sys',
-    'import pyarrow as pa',
-    'from deepnote_toolkit.artifacts import store_dataframe',
-    'store_dataframe(pa.ipc.open_file(sys.argv[1]).read_all().to_pandas(), sys.argv[2])'
-].join('\n');
+const STORE_FRAME_SCRIPT = path.join(DATAFRAMES_FIXTURE, 'store_frame.py');
 const STORE_FRAME_TIMEOUT = 60_000;
 const FIRST_ROW = [
     '0',
@@ -368,11 +363,9 @@ function storeFrameWithToolkit(): () => void {
         }
     };
     try {
-        execFileSync(
-            venvPython(),
-            ['-I', '-c', STORE_FRAME_SCRIPT, path.join(DATAFRAMES_FIXTURE, FRAME_FILE), FRAME_NAME],
-            { timeout: STORE_FRAME_TIMEOUT }
-        );
+        execFileSync(venvPython(), ['-I', STORE_FRAME_SCRIPT, path.join(DATAFRAMES_FIXTURE, FRAME_FILE), FRAME_NAME], {
+            timeout: STORE_FRAME_TIMEOUT
+        });
     } catch (error) {
         removeFrame();
         throw error;

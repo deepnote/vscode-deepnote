@@ -38,7 +38,7 @@ import {
 import { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import type { AppPreviewProject } from './appPreviewSession.node';
 import type { WorkspaceNotebook } from './appPreviewWorkspace.node';
-import { DATAFRAME_NOT_FOUND_MESSAGE } from './storedDataframePage.node';
+import { DATAFRAME_NOT_FOUND_MESSAGE } from './dataframePage';
 import type { AppPreviewApi, AppPreviewRunOutcome, IAppPreviewRunner, SnapshotBlock } from './types';
 
 const TOKEN = 'preview-token';

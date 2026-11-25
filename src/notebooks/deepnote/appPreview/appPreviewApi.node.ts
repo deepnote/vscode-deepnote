@@ -16,12 +16,8 @@ import { logger } from '../../../platform/logging';
 import type { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import type { AppPreviewProject } from './appPreviewSession.node';
 import { blocksInNotebookOrder, toNotebookInputs, type WorkspaceNotebook } from './appPreviewWorkspace.node';
-import {
-    DATAFRAME_NAME_PATTERN,
-    DATAFRAME_NOT_FOUND_MESSAGE,
-    DataframePageError,
-    readStoredDataframePage
-} from './storedDataframePage.node';
+import { DATAFRAME_NAME_PATTERN, DATAFRAME_NOT_FOUND_MESSAGE, DataframePageError } from './dataframePage';
+import { readStoredDataframePage } from './storedDataframePage.node';
 import type {
     AppPreviewApi,
     AppPreviewInputValue,

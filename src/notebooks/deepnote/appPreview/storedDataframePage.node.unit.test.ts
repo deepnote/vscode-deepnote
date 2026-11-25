@@ -1,46 +1,19 @@
 import {
-    Binary,
-    Bool,
     CompressionType,
     compressionRegistry,
     DateDay,
-    DateMillisecond,
-    Decimal,
     Dictionary,
-    Duration,
     Field,
     FixedSizeBinary,
-    FixedSizeList,
-    Float16,
-    Float64,
     Int32,
     Int64,
-    Int8,
-    IntervalDayTime,
-    LargeBinary,
-    LargeList,
-    LargeUtf8,
-    List,
     makeData,
-    Map_,
-    Null,
     RecordBatch,
     RecordBatchFileWriter,
     Schema,
     Struct,
-    TimeMillisecond,
-    TimeNanosecond,
-    TimeSecond,
-    TimestampMicrosecond,
-    TimestampNanosecond,
-    TimestampSecond,
-    TimeUnit,
-    Uint64,
     Utf8,
-    Vector,
-    vectorFromArray,
-    type Data,
-    type DataType
+    vectorFromArray
 } from 'apache-arrow';
 import { assert } from 'chai';
 import * as fs from 'fs';
@@ -59,9 +32,9 @@ import {
     DATAFRAME_NOT_FOUND_MESSAGE,
     DataframePageError,
     DATE_OUT_OF_RANGE_MESSAGE,
-    LZ4_MESSAGE,
-    readStoredDataframePage
-} from './storedDataframePage.node';
+    LZ4_MESSAGE
+} from './dataframePage';
+import { readStoredDataframePage } from './storedDataframePage.node';
 
 const REFERENCE_ID = '0b5c1f2e-3d4a-4b6c-8d7e-9f0a1b2c3d4e';
 const LZ4_FRAME_HEADER = Uint8Array.of(0x04, 0x22, 0x4d, 0x18, 0x40, 0x40, 0xc0);
@@ -75,43 +48,8 @@ const FIXTURE_PROJECT = Uri.joinPath(
     'frames'
 );
 
-function column(name: string, data: Data, metadata: Record<string, string> = {}): [Field, Data] {
-    return [new Field(name, data.type, true, new Map(Object.entries(metadata))), data];
-}
-
-function vector(values: unknown[], type: DataType): Data {
-    return vectorFromArray(values, type).data[0];
-}
-
-function recordBatch(...columns: [Field, Data][]): RecordBatch {
-    const schema = new Schema(columns.map(([field]) => field));
-
-    return new RecordBatch(
-        schema,
-        makeData({
-            type: new Struct(schema.fields),
-            length: columns[0][1].length,
-            children: columns.map(([, data]) => data)
-        })
-    );
-}
-
 function numbers(...values: number[]): RecordBatch {
-    return recordBatch(column('n', vector(values, new Int32())));
-}
-
-/** The little-endian 32-bit words of each value's two's complement, as Arrow stores a decimal. */
-function decimalWords(values: bigint[], bitWidth: number): Uint32Array {
-    const words = new Uint32Array((values.length * bitWidth) / 32);
-    values.forEach((value, index) => {
-        let bits = BigInt.asUintN(bitWidth, value);
-        for (let word = 0; word < bitWidth / 32; word++) {
-            words[(index * bitWidth) / 32 + word] = Number(bits & 0xffffffffn);
-            bits >>= 32n;
-        }
-    });
-
-    return words;
+    return new RecordBatch({ n: vectorFromArray(values, new Int32()).data[0] });
 }
 
 async function rejection(promise: Promise<unknown>): Promise<{ status: number; message: string }> {
@@ -189,400 +127,63 @@ suite('readStoredDataframePage', () => {
         return readStoredDataframePage(folder, name, { pageIndex, pageSize });
     }
 
-    async function readColumnsAndRows(batch: RecordBatch): Promise<{ columns: unknown; rows: unknown }> {
-        writeFrame('frame', [batch]);
-        const { columns, rows } = await read('frame');
-
-        return { columns, rows };
-    }
-
     suite('encoding', () => {
-        test('encodes 8- to 32-bit integers as numbers, 64-bit integers as decimal strings, and NaN and infinities as null', async () => {
-            const batch = recordBatch(
-                column('int8', vector([-128, 7, null], new Int8())),
-                column('int64', vector([9007199254740993n, -1n, null], new Int64())),
-                column(
-                    'uint64',
-                    makeData({ type: new Uint64(), length: 3, data: BigUint64Array.of(2n ** 64n - 1n, 0n, 1n) })
-                ),
-                column('float64', vector([1.5, NaN, null], new Float64())),
-                column('float16', vector([0.5, Infinity, -Infinity], new Float16()))
-            );
+        test('answers 422 for a page that holds a date outside the years 0 to 9999, and serves the pages without it', async () => {
+            const dates = makeData({ type: new DateDay(), length: 2, data: Int32Array.of(0, 2_932_897) });
+            writeFrame('frame', [new RecordBatch({ when: dates })]);
 
-            assert.deepStrictEqual(await readColumnsAndRows(batch), {
-                columns: [
-                    { name: 'int8', type: 'integer', timezone: null },
-                    { name: 'int64', type: 'int64', timezone: null },
-                    { name: 'uint64', type: 'int64', timezone: null },
-                    { name: 'float64', type: 'float', timezone: null },
-                    { name: 'float16', type: 'float', timezone: null }
-                ],
-                rows: [
-                    [-128, '9007199254740993', '18446744073709551615', 1.5, 0.5],
-                    [7, '-1', '0', null, null],
-                    [null, null, '1', null, null]
-                ]
-            });
-        });
-
-        test('encodes booleans, strings, null columns, and dictionary columns by their values', async () => {
-            const batch = recordBatch(
-                column('bool', vector([true, false, null], new Bool())),
-                column('utf8', vector(['a', null, 'ž'], new Utf8())),
-                column('large_utf8', vector(['x', 'y', null], new LargeUtf8())),
-                column('null', makeData({ type: new Null(), length: 3 })),
-                column('dictionary', vector(['b', 'b', null], new Dictionary(new Utf8(), new Int32()))),
-                column(
-                    'dictionary_timestamp',
-                    makeData({
-                        type: new Dictionary(new TimestampNanosecond(), new Int32()),
-                        length: 3,
-                        data: Int32Array.of(1, 0, 1),
-                        dictionary: new Vector([
-                            makeData({ type: new TimestampNanosecond(), length: 2, data: BigInt64Array.of(-500n, 0n) })
-                        ])
-                    })
-                )
-            );
-
-            assert.deepStrictEqual(await readColumnsAndRows(batch), {
-                columns: [
-                    { name: 'bool', type: 'boolean', timezone: null },
-                    { name: 'utf8', type: 'string', timezone: null },
-                    { name: 'large_utf8', type: 'string', timezone: null },
-                    { name: 'null', type: 'null', timezone: null },
-                    { name: 'dictionary', type: 'string', timezone: null },
-                    { name: 'dictionary_timestamp', type: 'timestamp', timezone: null }
-                ],
-                rows: [
-                    [true, 'a', 'x', null, 'b', '1970-01-01T00:00:00.000'],
-                    [false, null, 'y', null, 'b', '1969-12-31T23:59:59.999'],
-                    [null, 'ž', null, null, null, '1970-01-01T00:00:00.000']
-                ]
-            });
-        });
-
-        test('encodes an arrow.uuid as a lowercase UUID, and other binary values as padded base64', async () => {
-            // A column of its own bytes each: apache-arrow's writer garbles a column that shares another's buffer.
-            const sixteenBytes = () =>
-                makeData({
-                    type: new FixedSizeBinary(16),
-                    length: 1,
-                    data: Uint8Array.from(Buffer.from('0B5C1F2E3D4A4B6C8D7E9F0A1B2C3D4E', 'hex'))
-                });
-            const batch = recordBatch(
-                column('uuid', sixteenBytes(), { 'ARROW:extension:name': 'arrow.uuid' }),
-                column('fixed', sixteenBytes()),
-                column('binary', vector([Uint8Array.of(0xfb, 0xff)], new Binary())),
-                column('large_binary', vector([Uint8Array.of(1)], new LargeBinary()))
-            );
-
-            assert.deepStrictEqual(await readColumnsAndRows(batch), {
-                columns: [
-                    { name: 'uuid', type: 'string', timezone: null },
-                    { name: 'fixed', type: 'binary', timezone: null },
-                    { name: 'binary', type: 'binary', timezone: null },
-                    { name: 'large_binary', type: 'binary', timezone: null }
-                ],
-                rows: [['0b5c1f2e-3d4a-4b6c-8d7e-9f0a1b2c3d4e', 'C1wfLj1KS2yNfp8KGyw9Tg==', '+/8=', 'AQ==']]
-            });
-        });
-
-        test('encodes decimals as plain strings with exactly the scale of fraction digits', async () => {
-            const decimal = (scale: number, precision: number, bitWidth: number, values: bigint[]) =>
-                makeData({
-                    type: new Decimal(scale, precision, bitWidth),
-                    length: values.length,
-                    data: decimalWords(values, bitWidth)
-                });
-            const batch = recordBatch(
-                column('scale_2', decimal(2, 38, 128, [12345n, 0n, -1n])),
-                column('scale_7', decimal(7, 18, 64, [-5n, 10_000_000n, 1n])),
-                column('scale_minus_2', decimal(-2, 9, 32, [12n, 0n, -3n])),
-                column('wide', decimal(0, 76, 256, [2n ** 200n, -(2n ** 200n), 7n]))
-            );
-
-            assert.deepStrictEqual(await readColumnsAndRows(batch), {
-                columns: [
-                    { name: 'scale_2', type: 'decimal', timezone: null },
-                    { name: 'scale_7', type: 'decimal', timezone: null },
-                    { name: 'scale_minus_2', type: 'decimal', timezone: null },
-                    { name: 'wide', type: 'decimal', timezone: null }
-                ],
-                rows: [
-                    ['123.45', '-0.0000005', '1200', '1606938044258990275541962092341162602522202993782792835301376'],
-                    ['0.00', '1.0000000', '0', '-1606938044258990275541962092341162602522202993782792835301376'],
-                    ['-0.01', '0.0000001', '-300', '7']
-                ]
-            });
-        });
-
-        test('encodes dates as UTC days, and timestamps floored to milliseconds, with Z only when zoned', async () => {
-            const batch = recordBatch(
-                column('date32', makeData({ type: new DateDay(), length: 2, data: Int32Array.of(0, 19_723) })),
-                column(
-                    'date64',
-                    makeData({ type: new DateMillisecond(), length: 2, data: BigInt64Array.of(-1n, 86_400_000n) })
-                ),
-                column(
-                    'nanoseconds',
-                    makeData({
-                        type: new TimestampNanosecond(),
-                        length: 2,
-                        data: BigInt64Array.of(-500n, 1_735_689_604_123_999_999n)
-                    })
-                ),
-                column(
-                    'microseconds_zoned',
-                    makeData({
-                        type: new TimestampMicrosecond('America/New_York'),
-                        length: 2,
-                        data: BigInt64Array.of(0n, 253_402_300_799_999_999n)
-                    })
-                ),
-                column(
-                    'seconds',
-                    makeData({
-                        type: new TimestampSecond(),
-                        length: 2,
-                        data: BigInt64Array.of(1_700_000_000n, -62_167_219_200n)
-                    })
-                )
-            );
-
-            assert.deepStrictEqual(await readColumnsAndRows(batch), {
-                columns: [
-                    { name: 'date32', type: 'date', timezone: null },
-                    { name: 'date64', type: 'date', timezone: null },
-                    { name: 'nanoseconds', type: 'timestamp', timezone: null },
-                    { name: 'microseconds_zoned', type: 'timestamp', timezone: 'America/New_York' },
-                    { name: 'seconds', type: 'timestamp', timezone: null }
-                ],
-                rows: [
-                    [
-                        '1970-01-01',
-                        '1969-12-31',
-                        '1969-12-31T23:59:59.999',
-                        '1970-01-01T00:00:00.000Z',
-                        '2023-11-14T22:13:20.000'
-                    ],
-                    [
-                        '2024-01-01',
-                        '1970-01-02',
-                        '2025-01-01T00:00:04.123',
-                        '9999-12-31T23:59:59.999Z',
-                        '0000-01-01T00:00:00.000'
-                    ]
-                ]
-            });
-        });
-
-        test('encodes times truncated to milliseconds without wrapping the hours, and durations as seconds', async () => {
-            const batch = recordBatch(
-                column('time_seconds', makeData({ type: new TimeSecond(), length: 2, data: Int32Array.of(90_061, 0) })),
-                column(
-                    'time_milliseconds',
-                    makeData({ type: new TimeMillisecond(), length: 2, data: Int32Array.of(45_296_789, 1) })
-                ),
-                column(
-                    'time_nanoseconds',
-                    makeData({ type: new TimeNanosecond(), length: 2, data: BigInt64Array.of(1_999_999n, 999_999n) })
-                ),
-                column(
-                    'duration_milliseconds',
-                    makeData({
-                        type: new Duration(TimeUnit.MILLISECOND),
-                        length: 2,
-                        data: BigInt64Array.of(1500n, -1n)
-                    })
-                ),
-                column(
-                    'duration_nanoseconds',
-                    makeData({ type: new Duration(TimeUnit.NANOSECOND), length: 2, data: BigInt64Array.of(3n, 0n) })
-                )
-            );
-
-            assert.deepStrictEqual(await readColumnsAndRows(batch), {
-                columns: [
-                    { name: 'time_seconds', type: 'time', timezone: null },
-                    { name: 'time_milliseconds', type: 'time', timezone: null },
-                    { name: 'time_nanoseconds', type: 'time', timezone: null },
-                    { name: 'duration_milliseconds', type: 'duration', timezone: null },
-                    { name: 'duration_nanoseconds', type: 'duration', timezone: null }
-                ],
-                rows: [
-                    ['25:01:01.000', '12:34:56.789', '00:00:00.001', 1.5, 3e-9],
-                    ['00:00:00.000', '00:00:00.001', '00:00:00.000', -0.001, 0]
-                ]
-            });
-        });
-
-        test('encodes lists as arrays, structs as objects in field order, and maps as key-value pairs, with each value by its type', async () => {
-            const timestamps = new Field('item', new TimestampNanosecond('UTC'), true);
-            const structFields = [new Field('z', new Int64(), true), new Field('a', new List(timestamps), true)];
-            const batch = recordBatch(
-                column('list', vector([[1, null], [], null], new List(new Field('item', new Int32(), true)))),
-                column(
-                    'large_list',
-                    vector([['a'], ['b', 'c'], []], new LargeList(new Field('item', new Utf8(), true)))
-                ),
-                column(
-                    'fixed_list',
-                    vector([[1.5, NaN], null, [0, 2]], new FixedSizeList(2, new Field('item', new Float64(), true)))
-                ),
-                column(
-                    'struct',
-                    makeData({
-                        type: new Struct(structFields),
-                        length: 3,
-                        nullCount: 1,
-                        nullBitmap: Uint8Array.of(0b011),
-                        children: [
-                            vector([1n, null, 0n], new Int64()),
-                            makeData({
-                                type: new List(timestamps),
-                                length: 3,
-                                valueOffsets: Int32Array.of(0, 1, 1, 1),
-                                child: makeData({
-                                    type: timestamps.type,
-                                    length: 1,
-                                    data: BigInt64Array.of(-500n)
-                                })
-                            })
-                        ]
-                    })
-                ),
-                column(
-                    'map',
-                    vector(
-                        [
-                            new Map([
-                                [2n, 1.5],
-                                [1n, NaN]
-                            ]),
-                            new Map(),
-                            null
-                        ],
-                        new Map_(
-                            new Field(
-                                'entries',
-                                new Struct<{ key: Int64; value: Float64 }>([
-                                    new Field('key', new Int64(), false),
-                                    new Field('value', new Float64(), true)
-                                ]),
-                                false
-                            )
-                        )
-                    )
-                )
-            );
-
-            assert.deepStrictEqual(await readColumnsAndRows(batch), {
-                columns: [
-                    { name: 'list', type: 'list', timezone: null },
-                    { name: 'large_list', type: 'list', timezone: null },
-                    { name: 'fixed_list', type: 'list', timezone: null },
-                    { name: 'struct', type: 'struct', timezone: null },
-                    { name: 'map', type: 'map', timezone: null }
-                ],
-                rows: [
-                    [
-                        [1, null],
-                        ['a'],
-                        [1.5, null],
-                        { z: '1', a: ['1969-12-31T23:59:59.999Z'] },
-                        [
-                            ['2', 1.5],
-                            ['1', null]
-                        ]
-                    ],
-                    [[], ['b', 'c'], null, { z: null, a: [] }, []],
-                    [null, [], [0, 2], null, null]
-                ]
-            });
-        });
-
-        test('answers 422 for a column type it has no encoding for, also nested in another type', async () => {
-            writeFrame('top', [recordBatch(column('interval', vector([], new IntervalDayTime())))]);
-            writeFrame('nested', [
-                recordBatch(
-                    column('list', vector([], new List(new Field('item', new IntervalDayTime(), true)))),
-                    column('ok', vector([], new Int32()))
-                )
-            ]);
-
-            assert.deepStrictEqual(await rejection(read('top')), {
+            assert.deepStrictEqual((await read('frame', 0, 1)).rows, [['1970-01-01']]);
+            assert.deepStrictEqual(await rejection(read('frame', 1, 1)), {
                 status: 422,
-                message: 'The dataframe has an unsupported column type Interval<DAY_TIME>.'
-            });
-            assert.deepStrictEqual(await rejection(read('nested')), {
-                status: 422,
-                message: 'The dataframe has an unsupported column type Interval<DAY_TIME>.'
+                message: DATE_OUT_OF_RANGE_MESSAGE
             });
         });
 
-        test('answers 422 for a struct with two fields of the same name, also nested in another type', async () => {
-            const duplicates = new Struct([new Field('a', new Int64(), true), new Field('a', new Int64(), true)]);
-            writeFrame('top', [recordBatch(column('struct', vector([], duplicates)))]);
-            writeFrame('nested', [
-                recordBatch(column('list', vector([], new List(new Field('item', duplicates, true)))))
-            ]);
+        test('answers 422 for a column it cannot encode, before it encodes any value', async () => {
+            // apache-arrow's TKeys leaves out 64-bit indices, and its getters throw a TypeError on them, so only a reader
+            // that describes the columns before it encodes a value answers 422.
+            const dictionary = makeData({
+                type: new Dictionary<Utf8, any>(new Utf8(), new Int64()),
+                length: 1,
+                data: BigInt64Array.of(0n),
+                dictionary: vectorFromArray(['a'], new Utf8())
+            });
+            writeFrame('frame', [new RecordBatch({ dictionary })]);
 
-            assert.deepStrictEqual(await rejection(read('top')), {
-                status: 422,
-                message: 'The dataframe has a struct with two fields of the same name, Struct<{a:Int64, a:Int64}>.'
-            });
-            assert.deepStrictEqual(await rejection(read('nested')), {
-                status: 422,
-                message: 'The dataframe has a struct with two fields of the same name, Struct<{a:Int64, a:Int64}>.'
-            });
-        });
-
-        test('answers 422 for a dictionary with 64-bit indices, also nested in another type', async () => {
-            // apache-arrow's TKeys leaves out the 64-bit indices the Arrow format allows and its reader decodes.
-            const signed = new Dictionary<Utf8, any>(new Utf8(), new Int64());
-            const unsigned = new Dictionary<Utf8, any>(new Utf8(), new Uint64());
-            writeFrame('signed', [recordBatch(column('dictionary', vector([], signed)))]);
-            writeFrame('unsigned', [recordBatch(column('dictionary', vector([], unsigned)))]);
-            writeFrame('nested', [recordBatch(column('list', vector([], new List(new Field('item', signed, true)))))]);
-
-            assert.deepStrictEqual(await rejection(read('signed')), {
-                status: 422,
-                message: 'The dataframe has an unsupported column type Dictionary<Int64, Utf8>.'
-            });
-            assert.deepStrictEqual(await rejection(read('unsigned')), {
-                status: 422,
-                message: 'The dataframe has an unsupported column type Dictionary<Uint64, Utf8>.'
-            });
-            assert.deepStrictEqual(await rejection(read('nested')), {
+            assert.deepStrictEqual(await rejection(read('frame')), {
                 status: 422,
                 message: 'The dataframe has an unsupported column type Dictionary<Int64, Utf8>.'
             });
         });
 
-        const outOfRange: [string, Data, unknown[][]][] = [
-            [
-                'a date in the year 10000',
-                makeData({ type: new DateDay(), length: 2, data: Int32Array.of(0, 2_932_897) }),
-                [['1970-01-01']]
-            ],
-            [
-                'a timestamp before the year 0',
-                makeData({ type: new TimestampSecond(), length: 2, data: BigInt64Array.of(0n, -62_167_219_201n) }),
-                [['1970-01-01T00:00:00.000']]
-            ]
-        ];
-        for (const [condition, data, firstPage] of outOfRange) {
-            test(`answers 422 for a page that holds ${condition}, and serves the pages without it`, async () => {
-                writeFrame('frame', [recordBatch(column('when', data))]);
-
-                assert.deepStrictEqual((await read('frame', 0, 1)).rows, firstPage);
-                assert.deepStrictEqual(await rejection(read('frame', 1, 1)), {
-                    status: 422,
-                    message: DATE_OUT_OF_RANGE_MESSAGE
-                });
+        test('answers an arrow.uuid column as UUIDs, by the extension name the frame file keeps on the column', async () => {
+            const field = new Field(
+                'id',
+                new FixedSizeBinary(16),
+                true,
+                new Map([['ARROW:extension:name', 'arrow.uuid']])
+            );
+            const ids = makeData({
+                type: field.type,
+                length: 1,
+                data: Uint8Array.from(Buffer.from('6F1D2C3B4A594E8D9C7B0A1B2C3D4E5F', 'hex'))
             });
-        }
+            writeFrame('frame', [
+                new RecordBatch(
+                    new Schema([field]),
+                    makeData({ type: new Struct([field]), length: 1, children: [ids] })
+                )
+            ]);
+            const { columns, rows } = await read('frame');
+
+            assert.deepStrictEqual(
+                { columns, rows },
+                {
+                    columns: [{ name: 'id', type: 'string', timezone: null }],
+                    rows: [['6f1d2c3b-4a59-4e8d-9c7b-0a1b2c3d4e5f']]
+                }
+            );
+        });
     });
 
     suite('paging', () => {

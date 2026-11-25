@@ -54,6 +54,18 @@ const DATAFRAMES_TITLE = 'Customers';
 const PREVIEW_URL = /^http:\/\/127\.0\.0\.1:\d+\//;
 const INPUTS_RESOLVED = 'inputs() resolved: ';
 const APP_DATA_AFTER_RUN = 'appData() after the run: ';
+const PREVIEW_REPORT_IDS = [
+    'title',
+    'client',
+    'styles',
+    'logo-status',
+    'inputs',
+    'missing-inputs',
+    'app-data',
+    'dataframe',
+    'network'
+];
+const APP_DATA_REPORT_IDS = ['title', 'run', 'after-run'];
 
 const NO_RUN_RESULTS = 'You have no run results for this notebook yet. Run the notebook to load them.';
 const NO_PROJECT_DATAFRAME = 'Reload the page to read dataframes.';
@@ -133,7 +145,7 @@ function withParsedInputs(report: string[]): unknown[] {
     );
 }
 
-async function readReport(timeout = WORKBENCH_TIMEOUT): Promise<unknown[]> {
+async function readReport(ids = PREVIEW_REPORT_IDS, timeout = WORKBENCH_TIMEOUT): Promise<unknown[]> {
     const driver = VSBrowser.instance.driver;
     let report: string[] = [];
     try {
@@ -141,7 +153,8 @@ async function readReport(timeout = WORKBENCH_TIMEOUT): Promise<unknown[]> {
             async () => {
                 report = await driver
                     .executeScript<string[]>(
-                        "return Array.from(document.querySelectorAll('h1, li'), (element) => element.textContent)"
+                        'return arguments[0].map((id) => document.getElementById(id).textContent)',
+                        ids
                     )
                     .catch(() => []);
 
@@ -170,10 +183,10 @@ async function readDataframePage(indicator: string): Promise<DataframeSitePage> 
                 page = await driver
                     .executeScript<DataframeSitePage>(
                         `return {
-                            error: document.querySelector('[role="alert"]').textContent,
-                            indicator: document.querySelector('[role="status"]').textContent,
+                            error: document.getElementById('error').textContent,
+                            indicator: document.getElementById('indicator').textContent,
                             isNextDisabled: document.getElementById('next').disabled,
-                            rows: Array.from(document.querySelectorAll('tbody tr'), (row) =>
+                            rows: Array.from(document.getElementById('rows').rows, (row) =>
                                 Array.from(row.cells, (cell) => cell.textContent)
                             ),
                             summary: document.getElementById('summary').textContent
@@ -224,11 +237,11 @@ async function onIntegratedBrowserPage<T>(title: string, read: () => Promise<T>)
 }
 
 async function runWithRegion(
-    region: string,
+    regionOptionId: string,
     timeout = WORKBENCH_TIMEOUT
 ): Promise<{ status: string; result: unknown }> {
     const driver = VSBrowser.instance.driver;
-    await driver.findElement(By.css(`#region option[value="${region}"]`)).click();
+    await driver.findElement(By.id(regionOptionId)).click();
     await driver.findElement(By.id('run')).click();
     let status = '';
     await driver.wait(
@@ -238,7 +251,7 @@ async function runWithRegion(
             return status !== 'running';
         },
         timeout,
-        `the run with region "${region}" did not finish`
+        `the run with ${regionOptionId} chosen did not finish`
     );
     const result = await driver.findElement(By.id('result')).getText();
 
@@ -512,9 +525,9 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
         // The first run starts the notebook file's toolkit server and a kernel.
         const runs = await onIntegratedBrowserPage(RUNS_TITLE, async () => {
-            const asia = await runWithRegion('Asia', KERNEL_CONNECT_TIMEOUT);
-            const americas = await runWithRegion('Americas');
-            const noRegion = await runWithRegion('');
+            const asia = await runWithRegion('region-asia', KERNEL_CONNECT_TIMEOUT);
+            const americas = await runWithRegion('region-americas');
+            const noRegion = await runWithRegion('region-none');
             await screenshot('run-results');
 
             return [asia, americas, noRegion];
@@ -536,7 +549,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
         await selectDeepnoteContextMenu(await findRootExplorerItem(path.basename(appDir)), 'Preview App');
 
         const report = await onIntegratedBrowserPage(APP_DATA_TITLE, async () => {
-            const read = await readReport(KERNEL_CONNECT_TIMEOUT);
+            const read = await readReport(APP_DATA_REPORT_IDS, KERNEL_CONNECT_TIMEOUT);
             await screenshot('app-data-after-run');
 
             return read;
@@ -564,8 +577,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
 
             await onIntegratedBrowserPage(DATAFRAMES_TITLE, async () => {
                 const driver = VSBrowser.instance.driver;
-                const clickButton = (name: string) =>
-                    driver.findElement(By.xpath(`//button[normalize-space()='${name}']`)).click();
+                const clickButton = (id: string) => driver.findElement(By.id(id)).click();
                 const ids = (page: DataframeSitePage) => page.rows.map(([id]) => id);
 
                 const first = await readDataframePage('Page 1 of 20,000');
@@ -574,19 +586,19 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
                 expect(ids(first)).to.deep.equal(consecutiveIds(0, 10));
                 await screenshot('first-page');
 
-                await clickButton('Next');
+                await clickButton('next');
                 expect(ids(await readDataframePage('Page 2 of 20,000'))).to.deep.equal(consecutiveIds(10, 10));
                 await screenshot('next-page');
 
                 // deepnote-toolkit caps a record batch at 65,536 rows, so rows 65,530 to 65,539 straddle two batches.
-                const pageNumber = driver.findElement(By.css('input[type="number"]'));
+                const pageNumber = driver.findElement(By.id('page-number'));
                 await pageNumber.clear();
                 await pageNumber.sendKeys('6554');
-                await clickButton('Go');
+                await clickButton('go');
                 expect(ids(await readDataframePage('Page 6,554 of 20,000'))).to.deep.equal(consecutiveIds(65_530, 10));
                 await screenshot('across-record-batches');
 
-                await clickButton('Last');
+                await clickButton('last');
                 const last = await readDataframePage('Page 20,000 of 20,000');
                 expect(last.rows.at(-1)).to.deep.equal(LAST_ROW);
                 expect(last.isNextDisabled).to.equal(true);
@@ -620,7 +632,7 @@ describe('Deepnote: Preview App — serve a data app folder in the built-in brow
             driver.wait(
                 async () =>
                     (await driver
-                        .executeScript<string>("return document.querySelector('h1')?.textContent")
+                        .executeScript<string>("return document.getElementById('title')?.textContent")
                         .catch(() => '')) === 'Sales dashboard, edited',
                 WORKBENCH_TIMEOUT,
                 'the reused tab did not reload'

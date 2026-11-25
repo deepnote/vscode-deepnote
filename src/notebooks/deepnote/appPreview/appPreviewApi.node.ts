@@ -191,16 +191,7 @@ function toAppViewerNotebook({ file, notebook }: WorkspaceNotebook): AppViewerNo
     };
 }
 
-/**
- * The local stand-in for Deepnote's app viewer API, mounted at `/v2` on the preview server.
- * Requests without the preview's bearer token get 401. `GET /notebooks/:notebookId` answers from the workspace's
- * notebooks, and `POST /runs` runs one with `runner`, which `GET /runs/:runId` then reports on.
- * `GET /notebooks/:notebookId/app-data` answers from the notebook's latest successful run that `runFiles` saved, and
- * `GET /projects/:projectId/dataframes/:name` from the dataframes stored in the folder of `getProject()`'s project, or
- * under `$HOME/work` for a name that folder has none under.
- * Every other route gets 403, as Deepnote answers app viewer tokens. A body that cannot be read, such as malformed
- * JSON, gets its 4xx; any other failure is logged and gets a JSON 500.
- */
+/** The local stand-in for Deepnote's app viewer API, mounted at `/v2` on the preview server. */
 export function createAppPreviewApi(options: AppPreviewApiOptions): AppPreviewApi {
     const router = express.Router();
     const runs = new Map<string, PreviewRun>();

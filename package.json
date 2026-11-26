@@ -2818,6 +2818,7 @@
         "@vscode/jupyter-ipywidgets8": "^1.0.9",
         "@vscode/python-extension": "^1.0.4",
         "ansi-to-html": "^0.6.7",
+        "apache-arrow": "^21.2.0",
         "bootstrap": "^5.0.0",
         "bootstrap-less": "^3.3.8",
         "clsx": "^2.1.1",

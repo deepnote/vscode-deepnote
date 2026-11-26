@@ -7,7 +7,7 @@ import { IDisposable } from '../../../platform/common/types';
 import { generateUuid } from '../../../platform/common/uuid';
 import { logger } from '../../../platform/logging';
 import { extname, extUri } from '../../../platform/vscode-path/resources';
-import { createAppPreviewApi, type AppPreviewUnsupportedOperation } from './appPreviewApi.node';
+import { createAppPreviewApi } from './appPreviewApi.node';
 import type { AppPreviewRunFiles } from './appPreviewRunFiles.node';
 import { findNotebookById } from './appPreviewWorkspace.node';
 import type { AppPreviewApi, IAppPreviewRunner } from './types';
@@ -23,7 +23,6 @@ export interface AppPreviewSessionOptions {
     runFiles: AppPreviewRunFiles;
     runner: IAppPreviewRunner;
     scripts: { appClient: Uri };
-    onUnsupported(operation: AppPreviewUnsupportedOperation): void;
 }
 
 const LOOPBACK_HOSTNAMES = ['127.0.0.1', 'localhost', '[::1]'];
@@ -251,7 +250,7 @@ export class AppPreviewSession implements IDisposable {
         this.api = createAppPreviewApi({
             token: this.token,
             findNotebook: (notebookId) => findNotebookById(notebookId, this.project?.folder),
-            onUnsupported: (operation) => this.options.onUnsupported(operation),
+            getProject: () => this.project,
             runFiles: this.options.runFiles,
             runner: this.options.runner
         });
@@ -294,7 +293,7 @@ export class AppPreviewSession implements IDisposable {
             token: this.token,
             apiOrigin: pageOrigin,
             expiresAtSeconds: Math.floor(Date.now() / 1000) + TOKEN_LIFETIME_SECONDS,
-            // The bundled client ignores this; the version that adds `dataframe()` will read the project from here.
+            // The client's `dataframe()` reads the project from here.
             ...(this.project ? { projectId: this.project.id } : {})
         });
     }

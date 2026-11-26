@@ -128,6 +128,10 @@ Run `Deepnote: Preview App` from the Command Palette, or right-click a folder in
   - A run keeps going until its notebook finishes, even after you close the preview. Reloading or closing the VS Code window stops it.
   - Each run's results are saved as a `.snapshot.deepnote` file in VS Code's storage for the workspace, outside the project, and are cleared the first time the app preview starts after the window reloads.
 - `appData()` answers from that notebook's last successful `run()`: the first JSON object the run displayed (an `application/json` output), the first agent block's answer, and when the run started. Until a run succeeds, it rejects with Deepnote's message. A copy of each notebook's last successful run is saved in the same storage and kept when the window reloads, so `appData()` still answers after a reload.
+- `dataframe(name, { pageIndex, pageSize })` pages through the frame stored under that name in `deepnote_dataframes/<name>/` in the app's project folder, the folder of the `.deepnote` file nearest at or above the app folder. Pages and values match Deepnote's, but the preview does not apply Deepnote's limits on how much one page may hold.
+  - When the preview finds no project for the app folder (no `.deepnote` file at or above it, or the nearest folder with one holds files of more than one project), `dataframe()` rejects with Deepnote's `Reload the page to read dataframes.` Reloading does not change that: add or move the `.deepnote` file, then run `Deepnote: Preview App` again.
+  - The deepnote-toolkit version the extension installs does not store frames there yet: `store_dataframe(df, name)` writes them to `<home>/work/deepnote_dataframes/`, which every project shares. The preview reads a frame from there when the project folder has none under that name.
+  - Reading a frame that deepnote-toolkit compressed with zstd needs an editor whose Node.js has zstd (22.15 or later).
 - Previewing needs a trusted workspace and the desktop app.
 
 ### Database integrations

@@ -40,8 +40,6 @@ jobs:
           private-key: ${{ secrets.GH_TOKEN_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
-          # Rebuilding the branch on a newer main carries main's workflow changes, which GitHub refuses to push without it.
-          permission-workflows: write
 
       - name: Open or update the pull request
         env:

@@ -176,6 +176,8 @@ Update only the documentation your change actually affects.
 
 Keep each pull request as simple and clean as possible: one purpose per pull request, the smallest diff that achieves it, and no drive-by refactors, formatting churn, or unrelated changes to inherited upstream code.
 
+The `automation/sync-app-client` branch and its pull requests belong to `.github/workflows/sync-app-client.yml`, which may overwrite or delete them. Don't push to that branch or build on it; make related changes in a separate pull request.
+
 ## Common Tasks
 
 ### Adding Tests

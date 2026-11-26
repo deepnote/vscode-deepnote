@@ -1,8 +1,6 @@
 name: Sync Deepnote app client
 
 on:
-  push:
-    branches: [tomaskislan/blu-6770-check-that-the-app-previews-bundled]
   schedule:
     - cron: '0 8 * * *'
   workflow_dispatch:

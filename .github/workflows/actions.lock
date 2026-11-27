@@ -11,7 +11,7 @@ workflows:
         - 'actions/checkout@v7.0.1'
         - 'actions/setup-node@v7.1.0'
         - 'codecov/codecov-action@v7.1.1'
-        - 'qltysh/qlty-action@v2.8.0'
+        - 'qltysh/qlty-action@v2.8.1'
     '.github/workflows/deps.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/setup-node@v7.1.0'
@@ -68,8 +68,8 @@ dependencies:
         repo_id: 200299178
         uses:
             - 'actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd'
-    'qltysh/qlty-action@v2.8.0':
-        ref: 'v2.8.0'
-        commit: 'sha1-a46e29cfd54065ae8a2c6b1fd3446aed1b1a4257'
+    'qltysh/qlty-action@v2.8.1':
+        ref: 'v2.8.1'
+        commit: 'sha1-56bee2d751c94b7bd8de22f64c9b5f398048e13f'
         owner_id: 184769278
         repo_id: 873940193

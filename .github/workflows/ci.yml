@@ -77,7 +77,7 @@ jobs:
           persist-credentials: false
 
       - name: Install qlty
-        uses: qltysh/qlty-action/install@v2.8.0
+        uses: qltysh/qlty-action/install@v2.8.1
 
       - name: Run qlty check (pull request)
         if: github.event_name == 'pull_request'
